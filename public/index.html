@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>GoodLift</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
+      <h2 style="text-align:left; margin-top:16px; margin-bottom:8px;flex:1;">GoodLift</h2>
+      <button id="logoutBtn" title="로그아웃" style="background:none;border:none;font-size:1.7rem;color:#1976d2;cursor:pointer;outline:none;margin-right:12px;display:none;">🚪</button>
+    </div>
+    <div id="authSection">
+        <div class="form-box">
+            <form id="loginForm">
+                <label for="login-username">아이디:</label>
+                <input type="text" id="login-username" name="username" required><br><br>
+                <label for="login-password">비밀번호:</label>
+                <input type="password" id="login-password" name="password" required><br><br>
+                <button type="submit">로그인</button>
+            </form>
+            <div id="login-result"></div>
+        </div>
+        <button id="showSignupBtn" style="display:block; margin:0 auto 20px auto;">회원가입</button>
+        <div id="signupSection" class="form-box">
+            <h3>회원가입</h3>
+            <form id="signupForm">
+                <label for="signup-username">아이디:</label>
+                <input type="text" id="signup-username" name="username" required><br><br>
+                <label for="signup-password">비밀번호:</label>
+                <input type="password" id="signup-password" name="password" required><br><br>
+                <label for="signup-name">이름:</label>
+                <input type="text" id="signup-name" name="name" required><br><br>
+                <label for="signup-role">역할:</label>
+                <select id="signup-role" name="role" required>
+                    <option value="admin">관리자</option>
+                    <option value="trainer">트레이너</option>
+                </select><br><br>
+                <button type="submit">회원가입</button>
+            </form>
+            <div id="signup-result"></div>
+        </div>
+    </div>
+    <div id="mainSection">
+        <div id="tabBar" class="tab-bar"></div>
+        <div id="tabContent" class="tab-content"></div>
+    </div>
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+[
+  {
+    "username": "albertelmo",
+    "password": "123",
+    "name": "김재식",
+    "role": "admin"
+  },
+  {
+    "username": "shk",
+    "password": "123",
+    "name": "김성현",
+    "role": "trainer"
+  }
+]
