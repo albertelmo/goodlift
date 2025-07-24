@@ -10,5 +10,29 @@
     "password": "123",
     "name": "김성현",
     "role": "trainer"
+  },
+  {
+    "username": "ssc",
+    "password": "123",
+    "name": "천성식",
+    "role": "trainer"
+  },
+  {
+    "username": "shy",
+    "password": "123",
+    "name": "윤승환",
+    "role": "trainer"
+  },
+  {
+    "username": "sjl",
+    "password": "123",
+    "name": "이승준",
+    "role": "trainer"
+  },
+  {
+    "username": "jyl",
+    "password": "123",
+    "name": "이주영",
+    "role": "trainer"
   }
 ]

@@ -12,6 +12,24 @@ const CENTERS_PATH = path.join(DATA_DIR, 'centers.json');
 const MEMBERS_PATH = path.join(DATA_DIR, 'members.json');
 const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
 
+// 데이터 파일 자동 생성 기능 수정: 디렉토리가 없으면 에러만 출력
+const DATA_FILES = [
+  { path: DATA_PATH, name: 'accounts.json' },
+  { path: CENTERS_PATH, name: 'centers.json' },
+  { path: MEMBERS_PATH, name: 'members.json' },
+  { path: SESSIONS_PATH, name: 'sessions.json' }
+];
+if (!fs.existsSync(DATA_DIR)) {
+  console.error(`[GoodLift] 데이터 디렉토리가 존재하지 않습니다: ${DATA_DIR}`);
+} else {
+  DATA_FILES.forEach(f => {
+    if (!fs.existsSync(f.path)) {
+      fs.writeFileSync(f.path, '[]');
+      console.log(`[GoodLift] 데이터 파일 생성: ${f.path}`);
+    }
+  });
+}
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));

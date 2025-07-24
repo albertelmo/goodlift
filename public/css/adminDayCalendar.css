@@ -1,0 +1,104 @@
+/* 날짜별 세션 캘린더 (관리자용) */
+.adc-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.adc-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 1.18rem;
+  font-weight: 700;
+}
+.adc-date-nav button {
+  background: #f4f8fd;
+  color: #1976d2;
+  border: 1.5px solid #e3eaf5;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.adc-date-nav button:hover {
+  background: #1976d2;
+  color: #fff;
+}
+.adc-date {
+  font-size: 1.22rem;
+  color: #1976d2;
+  font-weight: 700;
+  margin: 0 8px;
+}
+.adc-table-scroll {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 16px #1976d220;
+  padding: 0 0 18px 0;
+  max-width: 100%;
+}
+.adc-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 900px;
+  width: 100%;
+  table-layout: fixed;
+}
+.adc-table th, .adc-table td {
+  border: 1px solid #e3eaf5;
+  text-align: center;
+  padding: 0;
+  background: #fff;
+  font-size: 1.01rem;
+  min-width: 120px;
+  height: 28px;
+  position: relative;
+}
+.adc-table th {
+  background: #f4f8fd;
+  font-weight: 700;
+  color: #1976d2;
+  font-size: 1.08rem;
+  height: 28px;
+}
+.adc-time {
+  background: #f4f8fd;
+  color: #888;
+  font-weight: 600;
+  width: 70px;
+  min-width: 70px;
+  font-size: 1.01rem;
+}
+.adc-session {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #e3f7e6;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px #1976d210;
+  padding: 4px 6px 4px 6px;
+  margin: 2px 3px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  min-height: 20px;
+  max-width: 98%;
+  overflow: hidden;
+  border-left: 5px solid #1de9b6;
+  transition: box-shadow 0.15s, border 0.15s;
+}
+.adc-status-예정 { background: #e3f0ff; border-left-color: #1976d2; }
+.adc-status-완료 { background: #e8f5e9; border-left-color: #81c784; }
+.adc-status-label {
+  font-size: 0.97em;
+  color: #1976d2;
+  font-weight: 700;
+  margin-top: 2px;
+}
+.adc-table tr:nth-child(odd) td {
+  border-bottom: 1px dashed #b6c6e3;
+} 

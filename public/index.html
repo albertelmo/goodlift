@@ -5,10 +5,11 @@
     <title>GoodLift</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/adminDayCalendar.css">
 </head>
 <body>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
-      <h2 style="text-align:left; margin-top:16px; margin-bottom:8px;flex:1;">GoodLift</h2>
+      <h2 id="mainTitle" style="text-align:left; margin-top:16px; margin-bottom:8px;flex:1;">GoodLift</h2>
       <button id="logoutBtn" title="로그아웃" style="background:none;border:none;font-size:1.7rem;color:#1976d2;cursor:pointer;outline:none;margin-right:12px;display:none;">🚪</button>
     </div>
     <div id="authSection">
@@ -47,5 +48,6 @@
         <div id="tabContent" class="tab-content"></div>
     </div>
     <script type="module" src="js/main.js"></script>
+    <script type="module" src="js/adminDayCalendar.js"></script>
 </body>
 </html>
