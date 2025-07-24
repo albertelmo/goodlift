@@ -130,6 +130,9 @@ function renderTabs(tabs) {
                 const username = localStorage.getItem('username');
                 trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);
             }
+            if (tab.label === '📅') {
+                trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
+            }
         };
         tabBar.appendChild(btn);
     });
@@ -149,6 +152,9 @@ function renderTabs(tabs) {
     if (tabs[0].label === '내 회원 리스트' || tabs[0].label === '👤') {
         const username = localStorage.getItem('username');
         trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);
+    }
+    if (tabs[0].label === '📅') {
+        trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
     }
 }
 
