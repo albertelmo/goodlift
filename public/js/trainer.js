@@ -130,7 +130,7 @@ function renderCalUI(container, forceDate) {
         container.innerHTML = html;
         // 세션 추가 모달: 회원 드롭다운 로딩
         fetch('/api/members').then(r=>r.json()).then(members=>{
-          const myMembers = members.filter(m=>m.trainer===username && m.remainSessions > 0);
+          const myMembers = members.filter(m=>m.trainer===username && m.remainSessions > 0 && m.status === '유효');
           const sel = document.getElementById('tmc-member-select');
           sel.innerHTML = myMembers.length ? myMembers.map(m=>`<option value=\"${m.name}\">${m.name}</option>`).join('') : '<option value=\"\">담당 회원 없음</option>';
         });

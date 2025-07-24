@@ -8,7 +8,7 @@ let trainerMap = {};
 function renderAddForm(container) {
   if (!container) return;
   container.innerHTML = `
-    <form id="member-add-form" class="form-box" style="max-width:420px;margin:0 auto;">
+    <form id="member-add-form" class="form-box" style="margin:0 auto;">
       <h3>회원 추가</h3>
       <label>이름 <input type="text" name="name" required></label>
       <label>성별
@@ -65,53 +65,164 @@ function renderAddForm(container) {
       if (res.ok) {
         resultDiv.style.color = '#1976d2';
         resultDiv.innerText = result.message;
+        setTimeout(() => { resultDiv.innerText = ''; }, 1500);
         form.reset();
         document.getElementById('member-regdate').value = new Date().toISOString().slice(0, 10);
         member.renderList(document.getElementById('member-list'));
       } else {
         resultDiv.style.color = '#d32f2f';
         resultDiv.innerText = result.message;
+        setTimeout(() => { resultDiv.innerText = ''; }, 1500);
       }
     } catch {
       resultDiv.style.color = '#d32f2f';
       resultDiv.innerText = '회원 추가에 실패했습니다.';
+      setTimeout(() => { resultDiv.innerText = ''; }, 1500);
     }
   };
 }
 
 function renderList(container) {
   if (!container) return;
-  container.innerHTML = '<div style="color:#888;text-align:center;">불러오는 중...</div>';
+  container.innerHTML = `
+    <div style="margin-bottom:10px;text-align:right;">
+      <input id="member-search-input" type="text" placeholder="이름 검색" style="padding:6px 10px;font-size:0.97rem;border:1.2px solid #bbb;border-radius:6px;width:160px;">
+    </div>
+    <div id="member-table-wrap"></div>
+    <div id="member-edit-modal-bg" style="display:none;"></div>
+  `;
+  const tableWrap = container.querySelector('#member-table-wrap');
+  let allMembers = [];
+  let trainers = [];
+  // 데이터 불러오기
   Promise.all([
     fetch('/api/members').then(r=>r.json()),
     fetch('/api/trainers').then(r=>r.json())
-  ]).then(([members, trainers]) => {
+  ]).then(([members, trs]) => {
+    allMembers = members;
+    trainers = trs;
+    renderTable(allMembers);
+  }).catch(()=>{
+    tableWrap.innerHTML = '<div style="color:#d32f2f;text-align:center;">회원 목록을 불러오지 못했습니다.</div>';
+  });
+  // 테이블 렌더링 함수
+  function renderTable(members) {
     const tMap = {};
     trainers.forEach(t => { tMap[t.username] = t.name; });
     if (!members.length) {
-      container.innerHTML = '<div style="color:#888;text-align:center;">등록된 회원이 없습니다.</div>';
+      tableWrap.innerHTML = '<div style="color:#888;text-align:center;">등록된 회원이 없습니다.</div>';
       return;
     }
     let html = `<table style="width:100%;border-collapse:collapse;margin-top:18px;">
       <thead><tr>
-        <th>이름</th><th>성별</th><th>전화번호</th><th>담당 트레이너</th><th>센터</th><th>등록일</th><th>세션 수</th><th>잔여세션</th><th>상태</th>
+        <th style="text-align:center;">이름</th><th style="text-align:center;">성별</th><th style="text-align:center;">전화번호</th><th style="text-align:center;">담당 트레이너</th><th style="text-align:center;">센터</th><th style="text-align:center;">등록일</th><th style="text-align:center;">세션 수</th><th style="text-align:center;">잔여세션</th><th style="text-align:center;">상태</th>
       </tr></thead><tbody>`;
-    members.forEach(m => {
-      html += `<tr>
-        <td>${m.name}</td>
-        <td>${m.gender === 'male' ? '남' : m.gender === 'female' ? '여' : ''}</td>
-        <td>${m.phone}</td>
-        <td>${tMap[m.trainer] || m.trainer}</td>
-        <td>${m.center}</td>
-        <td>${m.regdate}</td>
-        <td>${m.sessions}</td>
-        <td>${m.remainSessions !== undefined ? m.remainSessions : ''}</td>
-        <td>${m.status || ''}</td>
+    members.forEach((m, idx) => {
+      html += `<tr class="member-row" data-idx="${idx}" style="cursor:pointer;">
+        <td style="text-align:center;">${m.name}</td>
+        <td style="text-align:center;">${m.gender === 'male' ? '👨' : m.gender === 'female' ? '👩' : ''}</td>
+        <td style="text-align:center;">${m.phone}</td>
+        <td style="text-align:center;">${tMap[m.trainer] || m.trainer}</td>
+        <td style="text-align:center;">${m.center}</td>
+        <td style="text-align:center;">${m.regdate}</td>
+        <td style="text-align:center;">${m.sessions}</td>
+        <td style="text-align:center;">${m.remainSessions !== undefined ? m.remainSessions : ''}</td>
+        <td style="text-align:center;">${m.status || ''}</td>
       </tr>`;
     });
     html += '</tbody></table>';
-    container.innerHTML = html;
-  }).catch(()=>{
-    container.innerHTML = '<div style="color:#d32f2f;text-align:center;">회원 목록을 불러오지 못했습니다.</div>';
+    tableWrap.innerHTML = html;
+    // 행 클릭 이벤트(모달)
+    tableWrap.querySelectorAll('.member-row').forEach(row => {
+      row.addEventListener('click', function() {
+        const idx = this.getAttribute('data-idx');
+        showEditModal(members[idx]);
+      });
+    });
+  }
+  // 검색 이벤트
+  container.querySelector('#member-search-input').addEventListener('input', function() {
+    const keyword = this.value.trim();
+    if (!keyword) {
+      renderTable(allMembers);
+    } else {
+      const filtered = allMembers.filter(m => m.name.includes(keyword));
+      renderTable(filtered);
+    }
   });
+  // 회원 정보 수정 모달
+  function showEditModal(member) {
+    const modalBg = document.getElementById('member-edit-modal-bg');
+    modalBg.style.display = 'block';
+    modalBg.innerHTML = `
+      <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:32px 24px;z-index:1002;min-width:260px;max-width:96vw;min-height:120px;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">회원 정보 수정</h3>
+        <div style="margin-bottom:14px;"><b>이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:7px 10px;margin-top:2px;"></div>
+        <div style="margin-bottom:14px;"><b>상태</b><br>
+          <select id="edit-status" style="width:100%;padding:7px 10px;border-radius:6px;margin-top:2px;">
+            <option value="유효"${member.status==='유효'?' selected':''}>유효</option>
+            <option value="정지"${member.status==='정지'?' selected':''}>정지</option>
+            <option value="만료"${member.status==='만료'?' selected':''}>만료</option>
+          </select>
+        </div>
+        <div style="margin-bottom:14px;"><b>담당 트레이너</b><br>
+          <select id="edit-trainer" style="width:100%;padding:7px 10px;border-radius:6px;margin-top:2px;">
+            ${trainers.map(t=>`<option value="${t.username}"${member.trainer===t.username?' selected':''}>${t.name}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-bottom:14px;"><b>추가 세션</b><br><input id="edit-add-sessions" type="number" min="0" value="0" style="width:100%;border-radius:6px;padding:7px 10px;margin-top:2px;"></div>
+        <div id="edit-modal-result" style="min-height:22px;margin-bottom:8px;color:#1976d2;"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+          <button id="edit-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;">저장</button>
+          <button id="edit-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;">닫기</button>
+        </div>
+      </div>
+    `;
+    // 닫기 버튼
+    document.getElementById('edit-modal-cancel').onclick = function() {
+      modalBg.style.display = 'none';
+      modalBg.innerHTML = '';
+    };
+    // 저장 버튼
+    document.getElementById('edit-modal-save').onclick = async function() {
+      const status = document.getElementById('edit-status').value;
+      const trainer = document.getElementById('edit-trainer').value;
+      const addSessions = Number(document.getElementById('edit-add-sessions').value)||0;
+      const resultDiv = document.getElementById('edit-modal-result');
+      resultDiv.style.color = '#1976d2';
+      resultDiv.innerText = '처리 중...';
+      try {
+        const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, trainer, addSessions })
+        });
+        const result = await res.json();
+        if (res.ok) {
+          resultDiv.innerText = '저장되었습니다.';
+          setTimeout(() => {
+            modalBg.style.display = 'none';
+            modalBg.innerHTML = '';
+            // 회원 관리 탭을 강제로 다시 렌더링
+            const tabBar = document.getElementById('tabBar');
+            const memberTabBtn = Array.from(tabBar.children).find(btn => btn.textContent === '회원 관리');
+            if (memberTabBtn) memberTabBtn.click();
+          }, 900);
+        } else {
+          resultDiv.style.color = '#d32f2f';
+          resultDiv.innerText = result.message;
+        }
+      } catch {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '수정에 실패했습니다.';
+      }
+    };
+    // 바깥 클릭 시 닫기
+    modalBg.onclick = function(e) {
+      if (e.target === modalBg) {
+        modalBg.style.display = 'none';
+        modalBg.innerHTML = '';
+      }
+    };
+  }
 } 

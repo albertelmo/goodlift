@@ -155,6 +155,30 @@ app.post('/api/members', (req, res) => {
     res.json({ message: '회원이 추가되었습니다.', member: newMember });
 });
 
+// 회원 정보 수정 (상태, 담당 트레이너, 세션수/잔여세션 추가)
+app.patch('/api/members/:name', (req, res) => {
+    const name = req.params.name;
+    const { status, trainer, addSessions } = req.body; // addSessions: 추가할 세션 수(숫자)
+    let members = [];
+    if (fs.existsSync(MEMBERS_PATH)) {
+        const raw = fs.readFileSync(MEMBERS_PATH, 'utf-8');
+        if (raw) members = JSON.parse(raw);
+    }
+    const member = members.find(m => m.name === name);
+    if (!member) {
+        return res.status(404).json({ message: '회원을 찾을 수 없습니다.' });
+    }
+    if (status) member.status = status;
+    if (trainer) member.trainer = trainer;
+    if (addSessions && !isNaN(Number(addSessions))) {
+        const add = Number(addSessions);
+        member.sessions += add;
+        member.remainSessions += add;
+    }
+    fs.writeFileSync(MEMBERS_PATH, JSON.stringify(members, null, 2));
+    res.json({ message: '회원 정보가 수정되었습니다.', member });
+});
+
 // 세션 목록 조회 (트레이너, 날짜별 필터)
 app.get('/api/sessions', (req, res) => {
     let sessions = [];

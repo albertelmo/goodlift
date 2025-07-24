@@ -6,8 +6,8 @@
     "trainer": "shk",
     "center": "스탠다드PT 위례점",
     "regdate": "2025-07-24",
-    "sessions": 20,
-    "remainSessions": 16,
+    "sessions": 35,
+    "remainSessions": 31,
     "status": "유효"
   },
   {
@@ -19,6 +19,28 @@
     "regdate": "2025-07-24",
     "sessions": 1,
     "remainSessions": 0,
+    "status": "유효"
+  },
+  {
+    "name": "임지은",
+    "gender": "female",
+    "phone": "01066406317",
+    "trainer": "shk",
+    "center": "스탠다드PT 위례점",
+    "regdate": "2025-07-24",
+    "sessions": 20,
+    "remainSessions": 20,
+    "status": "유효"
+  },
+  {
+    "name": "백인재",
+    "gender": "male",
+    "phone": "01066406317",
+    "trainer": "shk",
+    "center": "스탠다드PT 위례점",
+    "regdate": "2025-07-24",
+    "sessions": 10,
+    "remainSessions": 10,
     "status": "유효"
   }
 ]

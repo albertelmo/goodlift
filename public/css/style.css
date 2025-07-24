@@ -341,12 +341,43 @@ li, td, th {
     max-width: 1000px;
 }
 .member-flex-wrap > #member-add {
-    flex: 0 0 370px;
-    min-width: 320px;
+    flex: 0 0 200px;
+    min-width: 120px;
+    max-width: 200px;
 }
 .member-flex-wrap > #member-list {
     flex: 1 1 0;
     min-width: 0;
+}
+.member-flex-wrap #member-add .form-box {
+  padding: 12px 8px 8px 8px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.member-flex-wrap #member-add input,
+.member-flex-wrap #member-add select {
+  padding: 6px 8px;
+  font-size: 0.97rem;
+}
+.member-flex-wrap #member-add label {
+  font-size: 0.97rem;
+  margin-bottom: 2px;
+}
+.member-flex-wrap #member-add h3 {
+  font-size: 1.05rem;
+  margin-bottom: 10px;
+}
+.member-flex-wrap #member-add input[type="text"],
+.member-flex-wrap #member-add input[type="tel"],
+.member-flex-wrap #member-add input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0;
+}
+.member-flex-wrap #member-list th {
+  color: var(--primary);
 }
 @media (max-width: 900px) {
     .member-flex-wrap {
