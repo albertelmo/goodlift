@@ -11,14 +11,35 @@ window.addEventListener('DOMContentLoaded', function() {
     if (savedRole && savedName) {
         showMainSection(savedRole, savedName);
         document.getElementById('logoutBtn').style.display = 'inline-block';
+        document.getElementById('settingsBtn').style.display = 'inline-block';
     } else {
         document.getElementById('logoutBtn').style.display = 'none';
+        document.getElementById('settingsBtn').style.display = 'none';
     }
-    document.getElementById('showSignupBtn').onclick = function() {
+    document.getElementById('showSignupBtn').onclick = async function() {
+        document.getElementById('loginSection').style.display = 'none';
         document.getElementById('signupSection').style.display = 'block';
-        this.style.display = 'none';
+        // 관리자 계정 존재 여부 확인
+        const roleSelect = document.getElementById('signup-role');
+        const res = await fetch('/api/admin-exists');
+        const data = await res.json();
+        if (data.exists) {
+            roleSelect.value = 'trainer';
+            roleSelect.querySelector('option[value="admin"]').disabled = true;
+            roleSelect.querySelector('option[value="trainer"]').disabled = false;
+        } else {
+            roleSelect.value = 'admin';
+            roleSelect.querySelector('option[value="admin"]').disabled = false;
+            roleSelect.querySelector('option[value="trainer"]').disabled = false;
+        }
     };
-    document.getElementById('mainTitle').onclick = function() { location.reload(); };
+    document.getElementById('backToLoginBtn').onclick = function() {
+        document.getElementById('signupSection').style.display = 'none';
+        document.getElementById('loginSection').style.display = 'block';
+        document.getElementById('signupForm').reset();
+        document.getElementById('signup-result').innerText = '';
+    };
+    document.getElementById('mainLogo').onclick = function() { location.reload(); };
     // 로그인 폼 처리
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
         e.preventDefault();
@@ -38,6 +59,7 @@ window.addEventListener('DOMContentLoaded', function() {
             localStorage.setItem('username', data.username);
             showMainSection(result.role, result.name);
             document.getElementById('logoutBtn').style.display = 'inline-block';
+            document.getElementById('settingsBtn').style.display = 'inline-block';
         } else {
             document.getElementById('login-result').innerText = result.message;
         }
@@ -45,9 +67,15 @@ window.addEventListener('DOMContentLoaded', function() {
     // 회원가입 폼 처리
     document.getElementById('signupForm').addEventListener('submit', async function(e) {
         e.preventDefault();
+        const password = document.getElementById('signup-password').value;
+        const password2 = document.getElementById('signup-password2').value;
+        if (password !== password2) {
+            document.getElementById('signup-result').innerText = '비밀번호가 일치하지 않습니다.';
+            return;
+        }
         const data = {
             username: document.getElementById('signup-username').value,
-            password: document.getElementById('signup-password').value,
+            password,
             name: document.getElementById('signup-name').value,
             role: document.getElementById('signup-role').value
         };
@@ -58,6 +86,17 @@ window.addEventListener('DOMContentLoaded', function() {
         });
         const result = await res.json();
         document.getElementById('signup-result').innerText = result.message;
+        // 회원가입 성공 시 로그인 폼으로 자동 전환
+        if (res.ok) {
+            setTimeout(() => {
+                document.getElementById('signupSection').style.display = 'none';
+                document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('signupForm').reset();
+                document.getElementById('signup-result').innerText = '';
+                document.getElementById('loginForm').reset(); // 로그인 폼도 초기화
+                document.getElementById('login-result').innerText = '';
+            }, 1200);
+        }
     });
     // 로그아웃 처리
     document.getElementById('logoutBtn').innerText = '🚪';
@@ -70,6 +109,11 @@ window.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('name');
         localStorage.removeItem('username');
         document.getElementById('logoutBtn').style.display = 'none';
+        document.getElementById('settingsBtn').style.display = 'none';
+    };
+    document.getElementById('settingsBtn').onclick = function() {
+        // 계정 정보 변경 모달 띄우기 (아래에서 구현)
+        showAccountSettingsModal();
     };
 });
 // 역할별 탭 및 내용 정의
@@ -189,4 +233,54 @@ function renderSampleScheduler() {
             <table class="scheduler-table">
                 <thead><tr><th class="time-col"></th></tr></thead><tbody></tbody></table></div></div>`;
     root.innerHTML = html;
-} 
+}
+
+function showAccountSettingsModal() {
+    const modal = document.getElementById('accountSettingsModal');
+    const bg = document.getElementById('accountSettingsModalBg');
+    modal.style.display = 'block';
+    bg.style.display = 'block';
+    document.getElementById('changePwForm').reset();
+    document.getElementById('changePwResult').innerText = '';
+}
+document.getElementById('closeAccountSettingsBtn').onclick = function() {
+    document.getElementById('accountSettingsModal').style.display = 'none';
+    document.getElementById('accountSettingsModalBg').style.display = 'none';
+};
+document.getElementById('accountSettingsModalBg').onclick = function() {
+    document.getElementById('accountSettingsModal').style.display = 'none';
+    document.getElementById('accountSettingsModalBg').style.display = 'none';
+};
+document.getElementById('changePwForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const currentPw = document.getElementById('currentPw').value;
+    const newPw = document.getElementById('newPw').value;
+    const newPw2 = document.getElementById('newPw2').value;
+    if (!currentPw || !newPw || !newPw2) {
+        document.getElementById('changePwResult').innerText = '모든 항목을 입력하세요.';
+        return;
+    }
+    if (newPw !== newPw2) {
+        document.getElementById('changePwResult').innerText = '새 비밀번호가 일치하지 않습니다.';
+        return;
+    }
+    // 서버에 비밀번호 변경 요청 (API는 추후 구현 필요)
+    const username = localStorage.getItem('username');
+    const res = await fetch('/api/change-password', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, currentPw, newPw })
+    });
+    const result = await res.json();
+    if (res.ok) {
+        document.getElementById('changePwResult').style.color = '#1976d2';
+        document.getElementById('changePwResult').innerText = '비밀번호가 변경되었습니다.';
+        setTimeout(() => {
+            document.getElementById('accountSettingsModal').style.display = 'none';
+            document.getElementById('accountSettingsModalBg').style.display = 'none';
+        }, 1200);
+    } else {
+        document.getElementById('changePwResult').style.color = '#d32f2f';
+        document.getElementById('changePwResult').innerText = result.message || '비밀번호 변경에 실패했습니다.';
+    }
+}; 

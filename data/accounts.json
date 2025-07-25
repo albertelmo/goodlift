@@ -34,5 +34,11 @@
     "password": "123",
     "name": "이주영",
     "role": "trainer"
+  },
+  {
+    "username": "wti",
+    "password": "123",
+    "name": "임우택",
+    "role": "trainer"
   }
 ]

@@ -9,39 +9,84 @@
 </head>
 <body>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
-      <h2 id="mainTitle" style="text-align:left; margin-top:16px; margin-bottom:8px;flex:1;">GoodLift</h2>
-      <button id="logoutBtn" title="로그아웃" style="background:none;border:none;font-size:1.7rem;color:#1976d2;cursor:pointer;outline:none;margin-right:12px;display:none;">🚪</button>
+      <img id="mainLogo" src="img/logo.jpg" alt="GoodLift 로고" style="height:38px;cursor:pointer; margin-top:16px; margin-bottom:8px;" />
+      <div class="header-btns">
+        <button id="settingsBtn" title="설정" style="display:none;" aria-label="설정">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 5 15.4a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 5 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19 8.6a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/></svg>
+        </button>
+        <button id="logoutBtn" title="로그아웃" style="display:none;" aria-label="로그아웃">🚪</button>
+      </div>
     </div>
     <div id="authSection">
-        <div class="form-box">
+        <div id="loginSection" class="form-box">
             <form id="loginForm">
-                <label for="login-username">아이디:</label>
-                <input type="text" id="login-username" name="username" required><br><br>
-                <label for="login-password">비밀번호:</label>
-                <input type="password" id="login-password" name="password" required><br><br>
+                <div class="form-row">
+                    <label for="login-username">아이디:</label>
+                    <input type="text" id="login-username" name="username" required>
+                </div>
+                <div class="form-row">
+                    <label for="login-password">비밀번호:</label>
+                    <input type="password" id="login-password" name="password" required>
+                </div>
                 <button type="submit">로그인</button>
             </form>
             <div id="login-result"></div>
+            <button id="showSignupBtn" style="display:block; margin:0 auto 20px auto;">회원가입</button>
         </div>
-        <button id="showSignupBtn" style="display:block; margin:0 auto 20px auto;">회원가입</button>
-        <div id="signupSection" class="form-box">
+        <div id="signupSection" class="form-box" style="display:none;">
             <h3>회원가입</h3>
             <form id="signupForm">
-                <label for="signup-username">아이디:</label>
-                <input type="text" id="signup-username" name="username" required><br><br>
-                <label for="signup-password">비밀번호:</label>
-                <input type="password" id="signup-password" name="password" required><br><br>
-                <label for="signup-name">이름:</label>
-                <input type="text" id="signup-name" name="name" required><br><br>
-                <label for="signup-role">역할:</label>
-                <select id="signup-role" name="role" required>
-                    <option value="admin">관리자</option>
-                    <option value="trainer">트레이너</option>
-                </select><br><br>
+                <div class="form-row">
+                    <label for="signup-username">아이디:</label>
+                    <input type="text" id="signup-username" name="username" required>
+                </div>
+                <div class="form-row">
+                    <label for="signup-password">비밀번호:</label>
+                    <input type="password" id="signup-password" name="password" required>
+                </div>
+                <div class="form-row">
+                    <label for="signup-password2">비밀번호 확인:</label>
+                    <input type="password" id="signup-password2" name="password2" required>
+                </div>
+                <div class="form-row">
+                    <label for="signup-name">이름:</label>
+                    <input type="text" id="signup-name" name="name" required>
+                </div>
+                <div class="form-row">
+                    <label for="signup-role">역할:</label>
+                    <select id="signup-role" name="role" required>
+                        <option value="admin">관리자</option>
+                        <option value="trainer">트레이너</option>
+                    </select>
+                </div>
                 <button type="submit">회원가입</button>
             </form>
             <div id="signup-result"></div>
+            <button id="backToLoginBtn" style="display:block; margin:0 auto 10px auto;">로그인으로 돌아가기</button>
         </div>
+    </div>
+    <div id="accountSettingsModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="accountSettingsModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:32px 28px 24px 28px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:320px;max-width:90vw;">
+      <h3 style="margin-top:0;margin-bottom:18px;color:#1976d2;font-size:1.15rem;">계정 정보 변경</h3>
+      <form id="changePwForm">
+        <div class="form-row">
+          <label for="currentPw">현재 비밀번호</label>
+          <input type="password" id="currentPw" name="currentPw" required>
+        </div>
+        <div class="form-row">
+          <label for="newPw">새 비밀번호</label>
+          <input type="password" id="newPw" name="newPw" required>
+        </div>
+        <div class="form-row">
+          <label for="newPw2">새 비밀번호 확인</label>
+          <input type="password" id="newPw2" name="newPw2" required>
+        </div>
+        <div id="changePwResult" style="min-height:22px;color:#d32f2f;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" id="closeAccountSettingsBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="submit">비밀번호 변경</button>
+        </div>
+      </form>
     </div>
     <div id="mainSection">
         <div id="tabBar" class="tab-bar"></div>

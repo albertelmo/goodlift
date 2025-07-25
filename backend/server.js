@@ -83,6 +83,17 @@ app.get('/api/trainers', (req, res) => {
     res.json(trainers);
 });
 
+// 관리자 계정 존재 여부 확인 API
+app.get('/api/admin-exists', (req, res) => {
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        if (raw) accounts = JSON.parse(raw);
+    }
+    const exists = accounts.some(acc => acc.role === 'admin');
+    res.json({ exists });
+});
+
 // 센터 목록 조회
 app.get('/api/centers', (req, res) => {
     let centers = [];
@@ -291,6 +302,29 @@ app.delete('/api/sessions/:id', (req, res) => {
     sessions.splice(idx, 1);
     fs.writeFileSync(SESSIONS_PATH, JSON.stringify(sessions, null, 2));
     res.json({ message: '세션이 삭제되었습니다.' });
+});
+
+// 비밀번호 변경 API
+app.patch('/api/change-password', (req, res) => {
+    const { username, currentPw, newPw } = req.body;
+    if (!username || !currentPw || !newPw) {
+        return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
+    }
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        if (raw) accounts = JSON.parse(raw);
+    }
+    const user = accounts.find(acc => acc.username === username);
+    if (!user) {
+        return res.status(404).json({ message: '계정을 찾을 수 없습니다.' });
+    }
+    if (user.password !== currentPw) {
+        return res.status(401).json({ message: '현재 비밀번호가 올바르지 않습니다.' });
+    }
+    user.password = newPw;
+    fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+    res.json({ message: '비밀번호가 변경되었습니다.' });
 });
 
 app.listen(PORT, () => {

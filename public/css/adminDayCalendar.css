@@ -99,6 +99,9 @@
   font-weight: 700;
   margin-top: 2px;
 }
+.adc-status-완료 .adc-status-label {
+  color: #388e3c;
+}
 .adc-table tr:nth-child(odd) td {
   border-bottom: 1px dashed #b6c6e3;
 } 

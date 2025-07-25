@@ -38,5 +38,21 @@
     "date": "2025-07-24",
     "time": "11:30",
     "status": "예정"
+  },
+  {
+    "id": "eee1fd16-4f44-402e-bcae-9d708a1a176b",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-25",
+    "time": "10:30",
+    "status": "예정"
+  },
+  {
+    "id": "49f2ac07-ad7f-4625-b4d4-6f7d74e90e3b",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-25",
+    "time": "22:00",
+    "status": "예정"
   }
 ]
