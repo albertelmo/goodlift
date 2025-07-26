@@ -42,5 +42,27 @@
     "sessions": 10,
     "remainSessions": 10,
     "status": "유효"
+  },
+  {
+    "name": "조선아",
+    "gender": "female",
+    "phone": "01066406317",
+    "trainer": "sjl",
+    "center": "스탠다드PT 위례점",
+    "regdate": "2025-07-26",
+    "sessions": 10,
+    "remainSessions": 9,
+    "status": "유효"
+  },
+  {
+    "name": "서지현",
+    "gender": "female",
+    "phone": "01066406317",
+    "trainer": "shy",
+    "center": "스탠다드PT 위례점",
+    "regdate": "2025-07-26",
+    "sessions": 10,
+    "remainSessions": 10,
+    "status": "유효"
   }
 ]

@@ -2,6 +2,7 @@ import { center } from './center.js';
 import { trainer } from './trainer.js';
 import { member } from './member.js';
 import { adminDayCalendar } from './adminDayCalendar.js';
+import { adminWeekCalendar } from './adminWeekCalendar.js';
 
 // 회원가입 폼 표시 및 자동 로그인 처리
 window.addEventListener('DOMContentLoaded', function() {
@@ -119,7 +120,7 @@ window.addEventListener('DOMContentLoaded', function() {
 // 역할별 탭 및 내용 정의
 const adminTabs = [
     { label: '오늘 세션', content: '<div id="admin-day-calendar-root"></div>' },
-    { label: '주간 세션', content: '관리자 - 주간 세션 (샘플)' },
+    { label: '주간 세션', content: '<div id="admin-week-calendar-root"></div>' },
     { label: '회원 관리', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
     { label: '센터 관리', content: `<div style='max-width:400px;margin:0 auto;'>
         <form id="center-add-form" style="display:flex;gap:8px;margin-bottom:18px;">
@@ -166,6 +167,9 @@ function renderTabs(tabs) {
             if (tab.label === '오늘 세션') {
                 adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
             }
+            if (tab.label === '주간 세션') {
+                adminWeekCalendar.render(document.getElementById('admin-week-calendar-root'));
+            }
             if (tab.label === '회원 관리') {
                 member.renderAddForm(document.getElementById('member-add'));
                 member.renderList(document.getElementById('member-list'));
@@ -188,6 +192,9 @@ function renderTabs(tabs) {
     }
     if (tabs[0].label === '오늘 세션') {
         adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
+    }
+    if (tabs[0].label === '주간 세션') {
+        adminWeekCalendar.render(document.getElementById('admin-week-calendar-root'));
     }
     if (tabs[0].label === '회원 관리') {
         member.renderAddForm(document.getElementById('member-add'));

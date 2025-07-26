@@ -1,0 +1,237 @@
+/* 주간 세션 캘린더 (관리자용) */
+.awc-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.awc-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 1.18rem;
+  font-weight: 700;
+}
+
+.awc-date-nav button {
+  background: #f4f8fd;
+  color: #1976d2;
+  border: 1.5px solid #e3eaf5;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.awc-date-nav button:hover {
+  background: #1976d2;
+  color: #fff;
+}
+
+.awc-date {
+  font-size: 1.22rem;
+  color: #1976d2;
+  font-weight: 700;
+  margin: 0 8px;
+}
+
+.awc-table-scroll {
+  overflow-x: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 2px 16px #1976d220;
+  padding: 0 0 18px 0;
+  max-width: 100%;
+}
+
+.awc-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1200px;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.awc-table th, .awc-table td {
+  border: 1px solid #e3eaf5;
+  text-align: center;
+  padding: 0;
+  background: #fff;
+  font-size: 1.01rem;
+  min-width: 140px;
+  height: 28px;
+  position: relative;
+  vertical-align: top;
+}
+
+/* 세션 컨테이너 */
+.awc-session-container {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+}
+
+.awc-table th {
+  background: #f4f8fd;
+  font-weight: 700;
+  color: #1976d2;
+  font-size: 1.08rem;
+  height: 28px;
+}
+
+.awc-time {
+  background: #f4f8fd;
+  color: #888;
+  font-weight: 600;
+  width: 70px;
+  min-width: 70px;
+  font-size: 1.01rem;
+}
+
+.awc-session {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  background: #e3f7e6;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px #1976d210;
+  padding: 3px 4px;
+  margin: 1px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  min-height: 32px;
+  max-width: 45%;
+  overflow: hidden;
+  border-left: 3px solid #1de9b6;
+  transition: box-shadow 0.15s, border 0.15s;
+  text-align: left;
+  flex-shrink: 1;
+  min-width: 0;
+  flex: 1;
+}
+
+.awc-status-reserved { 
+  background: #e3f0ff !important; 
+  border-left-color: #1976d2 !important; 
+}
+
+.awc-status-pre { 
+  background: #e1f5fe !important; 
+  border-left-color: #4fc3f7 !important; 
+}
+
+.awc-status-attend { 
+  background: #e8f5e9 !important; 
+  border-left-color: #81c784 !important; 
+}
+
+.awc-status-absent { 
+  background: #ffebee !important; 
+  border-left-color: #e57373 !important; 
+}
+
+.awc-status-cancel { 
+  background: #f5f5f5 !important; 
+  border-left-color: #bdbdbd !important; 
+}
+
+.awc-status-allcancel { 
+  background: #fffde7 !important; 
+  border-left-color: #ffe082 !important; 
+}
+
+.awc-session strong { 
+  font-weight: 700; 
+  font-size: 0.8rem;
+}
+
+.awc-session .awc-trainer {
+  font-size: 0.7rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.awc-session .awc-status-label {
+  font-size: 0.65rem;
+  color: #1976d2;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.awc-status-reserved .awc-status-label {
+  color: #1976d2 !important;
+}
+
+.awc-status-attend .awc-status-label {
+  color: #388e3c !important;
+}
+
+.awc-status-absent .awc-status-label {
+  color: #d32f2f !important;
+}
+
+.awc-status-cancel .awc-status-label,
+.awc-status-allcancel .awc-status-label {
+  color: #666 !important;
+}
+
+.awc-table tr:nth-child(odd) td {
+  border-bottom: 1px dashed #b6c6e3;
+}
+
+/* 오늘 날짜 강조 */
+.awc-table th.awc-today {
+  background: #e3f7e6;
+  color: #1976d2;
+  font-weight: 800;
+}
+
+/* 주말 스타일 */
+.awc-table th.awc-weekend {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+/* 세션 카드 호버 효과 */
+.awc-session:hover {
+  box-shadow: 0 4px 12px #1976d230;
+  transform: translateY(-1px);
+}
+
+/* 반응형 */
+@media (max-width: 1200px) {
+  .awc-table { 
+    min-width: 900px; 
+  }
+  .awc-table th, .awc-table td { 
+    min-width: 120px; 
+    font-size: 0.95rem;
+  }
+  .awc-session {
+    font-size: 0.8rem;
+    padding: 2px 4px;
+  }
+}
+
+@media (max-width: 900px) {
+  .awc-table { 
+    min-width: 700px; 
+  }
+  .awc-table th, .awc-table td { 
+    min-width: 100px; 
+    font-size: 0.9rem;
+  }
+  .awc-session {
+    font-size: 0.75rem;
+    padding: 1px 3px;
+  }
+}

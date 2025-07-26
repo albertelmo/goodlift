@@ -54,5 +54,101 @@
     "date": "2025-07-25",
     "time": "22:00",
     "status": "예정"
+  },
+  {
+    "id": "3e62a539-0483-4557-89a0-588a2cab83cf",
+    "member": "임지은",
+    "trainer": "shk",
+    "date": "2025-07-26",
+    "time": "09:00",
+    "status": "예정"
+  },
+  {
+    "id": "1adeffba-3da5-420d-a731-ee2ee3af58e7",
+    "member": "백인재",
+    "trainer": "shk",
+    "date": "2025-07-26",
+    "time": "10:00",
+    "status": "예정"
+  },
+  {
+    "id": "0bf56468-59b0-4802-8771-e969068db5dd",
+    "member": "임지은",
+    "trainer": "shk",
+    "date": "2025-07-29",
+    "time": "11:00",
+    "status": "예정"
+  },
+  {
+    "id": "4f0a1bf8-9d90-40b7-a535-58dc11f6294c",
+    "member": "임지은",
+    "trainer": "shk",
+    "date": "2025-07-28",
+    "time": "08:00",
+    "status": "예정"
+  },
+  {
+    "id": "3193601a-5879-4890-8a20-0c16f9048e19",
+    "member": "백인재",
+    "trainer": "shk",
+    "date": "2025-07-28",
+    "time": "09:00",
+    "status": "예정"
+  },
+  {
+    "id": "614ed964-4323-4327-9e50-befefd1bd0c1",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-28",
+    "time": "09:00",
+    "status": "예정"
+  },
+  {
+    "id": "c85abf15-59e9-4374-93de-328436021fb7",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-28",
+    "time": "10:00",
+    "status": "예정"
+  },
+  {
+    "id": "2fb96bb0-c68b-4c21-a95f-8f7b94f01e79",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-29",
+    "time": "09:00",
+    "status": "예정"
+  },
+  {
+    "id": "534efd0f-f6f2-4dc4-937e-1dbfe85c06ae",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-29",
+    "time": "10:00",
+    "status": "예정"
+  },
+  {
+    "id": "a0e0749e-fab4-488a-b075-30a124fcb4ff",
+    "member": "조선아",
+    "trainer": "sjl",
+    "date": "2025-07-28",
+    "time": "10:00",
+    "status": "예정"
+  },
+  {
+    "id": "89de8dc8-74a0-4e04-88f3-e98bda22023b",
+    "member": "조선아",
+    "trainer": "sjl",
+    "date": "2025-07-28",
+    "time": "09:00",
+    "status": "완료"
+  },
+  {
+    "id": "f63be7f2-9b9d-4537-927f-d348742736b7",
+    "member": "서지현",
+    "trainer": "shy",
+    "date": "2025-07-28",
+    "time": "09:00",
+    "status": "예정"
   }
 ]
