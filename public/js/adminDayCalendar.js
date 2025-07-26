@@ -78,12 +78,8 @@ async function renderTable(tableWrap) {
     const hour = hours[i];
     const [h, m] = hour.split(':').map(Number);
     html += '<tr>';
-    // 왼쪽 시간 칼럼: 1시간 단위만 텍스트, 30분 단위는 빈 칸
-    if (m === 0) {
-      html += `<td class="adc-time">${hour}</td>`;
-    } else {
-      html += '<td class="adc-time"></td>';
-    }
+    // 왼쪽 시간 칼럼: 30분 단위로 모든 시간 표시
+    html += `<td class="adc-time">${hour}</td>`;
     trainers.forEach(t => {
       // 세션이 이 시간에 시작하면 rowspan=2로 카드 표시
       const session = sessions.find(s => s.trainer === t.username && s.time === hour);
