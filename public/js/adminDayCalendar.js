@@ -23,15 +23,13 @@ function renderHeader(headerEl) {
   const d = new Date(state.date);
   headerEl.innerHTML = `
     <div class="adc-date-nav">
-      <button id="adc-prev">&#60;</button>
+      <button id="adc-prev" class="adc-nav-btn adc-prev-btn"></button>
       <span class="adc-date">${d.getFullYear()}.${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')} (${['일','월','화','수','목','금','토'][d.getDay()]})</span>
-      <button id="adc-next">&#62;</button>
-      <button id="adc-today">오늘</button>
+      <button id="adc-next" class="adc-nav-btn adc-next-btn"></button>
     </div>
   `;
   headerEl.querySelector('#adc-prev').onclick = () => moveDate(-1);
   headerEl.querySelector('#adc-next').onclick = () => moveDate(1);
-  headerEl.querySelector('#adc-today').onclick = () => moveDate(0);
 }
 
 function moveDate(delta) {
@@ -97,7 +95,19 @@ async function renderTable(tableWrap) {
         prevSession = sessions.find(s => s.trainer === t.username && s.time === prevHour);
       }
       if (session) {
-        html += `<td rowspan="2"><div class="adc-session adc-status-${session.status}">${session.member}<br><span class="adc-status-label">${session.status}</span></div></td>`;
+        // 상태를 영어 클래스명으로 변환
+        let statusClass = 'reserved'; // 기본값
+        if (session.status === '예정') statusClass = 'reserved';
+        else if (session.status === '완료') statusClass = 'attend';
+        else if (session.status === '사전') statusClass = 'pre';
+        else if (session.status === '결석') statusClass = 'absent';
+        else if (session.status === '취소') statusClass = 'cancel';
+        else if (session.status === '전체취소') statusClass = 'allcancel';
+        
+        html += `<td rowspan="2"><div class="adc-session adc-status-${statusClass}">
+          <strong>${session.member}</strong>
+          <div class="adc-status-label">${session.status}</div>
+        </div></td>`;
       } else if (prevSession) {
         html += '<td style="display:none"></td>';
       } else {

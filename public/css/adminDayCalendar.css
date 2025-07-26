@@ -1,107 +1,267 @@
-/* 날짜별 세션 캘린더 (관리자용) */
+/* 날짜별 세션 캘린더 (관리자용) - 현대적인 디자인 */
 .adc-header {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
 }
+
 .adc-date-nav {
   display: flex;
   align-items: center;
-  gap: 18px;
-  font-size: 1.18rem;
-  font-weight: 700;
+  gap: 15px;
+  justify-content: center;
 }
+
 .adc-date-nav button {
-  background: #f4f8fd;
-  color: #1976d2;
-  border: 1.5px solid #e3eaf5;
-  border-radius: 6px;
-  padding: 6px 16px;
-  font-size: 1rem;
-  font-weight: 600;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  background: white;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  border-radius: 4px;
+  transition: all 0.2s;
 }
+
 .adc-date-nav button:hover {
-  background: #1976d2;
-  color: #fff;
+  background: #f5f5f5;
 }
+
+/* 화살표 버튼 스타일 - 더 높은 우선순위 */
+.adc-date-nav .adc-nav-btn {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.adc-prev-btn::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-left: 2px solid #666;
+  border-bottom: 2px solid #666;
+  transform: rotate(45deg);
+  margin-left: 6px;
+}
+
+.adc-next-btn::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-right: 2px solid #666;
+  border-top: 2px solid #666;
+  transform: rotate(45deg);
+  margin-right: 6px;
+}
+
+.adc-nav-btn:hover::before {
+  border-color: #333;
+}
+
 .adc-date {
-  font-size: 1.22rem;
-  color: #1976d2;
-  font-weight: 700;
-  margin: 0 8px;
+  font-weight: bold;
+  font-size: 16px;
 }
+
 .adc-table-scroll {
   overflow-x: auto;
   background: #fff;
-  border-radius: 14px;
-  box-shadow: 0 2px 16px #1976d220;
-  padding: 0 0 18px 0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding: 0;
   max-width: 100%;
 }
+
 .adc-table {
   border-collapse: separate;
   border-spacing: 0;
   min-width: 900px;
   width: 100%;
   table-layout: fixed;
+  border-radius: 8px;
+  overflow: hidden;
 }
+
 .adc-table th, .adc-table td {
-  border: 1px solid #e3eaf5;
+  border: 1px solid #e0e0e0;
   text-align: center;
   padding: 0;
   background: #fff;
-  font-size: 1.01rem;
+  font-size: 14px;
   min-width: 120px;
-  height: 28px;
+  height: 24px;
   position: relative;
+  vertical-align: top;
 }
+
 .adc-table th {
-  background: #f4f8fd;
-  font-weight: 700;
-  color: #1976d2;
-  font-size: 1.08rem;
-  height: 28px;
+  background: #f8f9fa;
+  font-weight: bold;
+  color: #333;
+  font-size: 14px;
+  height: 40px;
+  border-bottom: 2px solid #e0e0e0;
+  vertical-align: middle;
 }
+
 .adc-time {
-  background: #f4f8fd;
-  color: #888;
-  font-weight: 600;
+  background: #f8f9fa;
+  color: #666;
+  font-weight: 500;
   width: 70px;
   min-width: 70px;
-  font-size: 1.01rem;
+  font-size: 12px;
+  border-right: 2px solid #e0e0e0;
+  vertical-align: bottom;
 }
+
 .adc-session {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #e3f7e6;
-  border-radius: 10px;
-  box-shadow: 0 2px 8px #1976d210;
-  padding: 4px 6px 4px 6px;
-  margin: 2px 3px;
-  font-size: 0.95rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 4px 6px;
+  margin: 2px;
+  font-size: 12px;
   font-weight: 500;
-  min-height: 20px;
+  min-height: 40px;
   max-width: 98%;
   overflow: hidden;
-  border-left: 5px solid #1de9b6;
-  transition: box-shadow 0.15s, border 0.15s;
+  border-left: 3px solid #1976d2;
+  transition: all 0.2s;
+  cursor: pointer;
 }
-.adc-status-예정 { background: #e3f0ff; border-left-color: #1976d2; }
-.adc-status-완료 { background: #e8f5e9; border-left-color: #81c784; }
+
+.adc-session:hover {
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+.adc-session strong {
+  font-size: 13px;
+  font-weight: bold;
+  margin-bottom: 2px;
+  color: #333;
+}
+
 .adc-status-label {
-  font-size: 0.97em;
-  color: #1976d2;
-  font-weight: 700;
-  margin-top: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  text-align: center;
+  padding: 1px 3px;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.05);
 }
-.adc-status-완료 .adc-status-label {
-  color: #388e3c;
+
+/* 세션 상태별 색상 */
+.adc-status-reserved {
+  background: #e3f0ff !important;
+  border-left: 3px solid #1976d2 !important;
 }
+
+.adc-status-attend {
+  background: #e8f5e9 !important;
+  border-left: 3px solid #388e3c !important;
+}
+
+.adc-status-pre {
+  background: #fff3e0 !important;
+  border-left: 3px solid #f57c00 !important;
+}
+
+.adc-status-absent {
+  background: #ffebee !important;
+  border-left: 3px solid #d32f2f !important;
+}
+
+.adc-status-cancel {
+  background: #f3e5f5 !important;
+  border-left: 3px solid #7b1fa2 !important;
+}
+
+.adc-status-allcancel {
+  background: #fafafa !important;
+  border-left: 3px solid #757575 !important;
+}
+
+.adc-status-reserved .adc-status-label {
+  color: #1976d2 !important;
+}
+
+.adc-status-attend .adc-status-label {
+  color: #388e3c !important;
+}
+
+.adc-status-pre .adc-status-label {
+  color: #f57c00 !important;
+}
+
+.adc-status-absent .adc-status-label {
+  color: #d32f2f !important;
+}
+
+.adc-status-cancel .adc-status-label {
+  color: #7b1fa2 !important;
+}
+
+.adc-status-allcancel .adc-status-label {
+  color: #757575 !important;
+}
+
 .adc-table tr:nth-child(odd) td {
-  border-bottom: 1px dashed #b6c6e3;
+  border-bottom: 1px dashed #f5f5f5;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 1200px) {
+  .adc-table {
+    min-width: 700px;
+  }
+  
+  .adc-table th, .adc-table td {
+    min-width: 100px;
+    font-size: 13px;
+  }
+  
+  .adc-session {
+    font-size: 11px;
+    padding: 3px 4px;
+  }
+  
+  .adc-session strong {
+    font-size: 12px;
+  }
+  
+  .adc-status-label {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 768px) {
+  .adc-table {
+    min-width: 600px;
+  }
+  
+  .adc-table th, .adc-table td {
+    min-width: 80px;
+    font-size: 12px;
+  }
+  
+  .adc-session {
+    font-size: 10px;
+    padding: 2px 3px;
+    min-height: 42px;
+  }
+  
+  .adc-session strong {
+    font-size: 11px;
+  }
+  
+  .adc-status-label {
+    font-size: 8px;
+  }
 } 
