@@ -28,16 +28,16 @@
   font-size: 16px;
 }
 
-/* CSS Grid 캘린더 컨테이너 */
+/* 주간 캘린더 그리드 (30분 단위) */
 .awc-calendar-grid {
   display: grid;
-  grid-template-columns: 80px repeat(7, 1fr); /* 시간 라벨 + 7일 */
-  grid-template-rows: 40px repeat(17, 60px); /* 헤더 + 17개 1시간 슬롯 */
+  grid-template-columns: 60px repeat(7, 1fr); /* 시간 라벨 + 7일 */
+  grid-template-rows: 50px repeat(34, 30px); /* 헤더 + 30분 단위 34개 (06:00~22:00) */
   gap: 1px;
   background: #f0f0f0;
   border: 1px solid #ddd;
-  border-radius: 8px;
-  overflow: hidden;
+  font-size: 12px;
+  position: relative; /* 세션 카드의 절대 위치 기준 */
 }
 
 /* 헤더 스타일 */
@@ -93,7 +93,7 @@
   min-height: 60px;
 }
 
-/* 세션 카드 (시간 경계를 넘어서 표시, 가로 배치) */
+/* 세션 카드 (1시간 고정, 가로 배치) */
 .awc-session-card {
   background: white;
   border: 1px solid #ddd;
@@ -110,18 +110,9 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
   position: absolute; /* 절대 위치로 가로 배치 */
   z-index: 5;
-  height: 100%; /* 1시간 세션의 높이 */
+  height: 100%; /* 1시간 세션의 높이 (2개 30분 슬롯) */
   margin: 1px;
   box-sizing: border-box;
-}
-
-/* 시간 경계를 넘는 세션 카드 */
-.awc-session-card.awc-spanning {
-  position: absolute;
-  z-index: 8; /* 다른 세션 카드보다 위에 표시 */
-  width: 100%; /* 컨테이너 내에서의 너비 */
-  left: 0;
-  height: 50%; /* 30분 높이 */
 }
 
 .awc-session-card:hover {

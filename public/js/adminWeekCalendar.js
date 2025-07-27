@@ -1,4 +1,4 @@
-// 주간 세션 캘린더 (관리자용) - 시간 경계를 넘는 세션 구조
+// 주간 세션 캘린더 (관리자용) - 30분 단위 구조
 export const adminWeekCalendar = {
   render
 };
@@ -92,10 +92,11 @@ async function renderTable(tableWrap) {
     fetch(`/api/sessions?week=${state.weekStart}`).then(r => r.json())
   ]);
   
-  // 시간대 생성 (06:00 ~ 22:00, 1시간 단위)
-  const hours = [];
+  // 30분 단위 시간대 생성 (06:00 ~ 22:00)
+  const timeSlots = [];
   for (let h = 6; h <= 22; h++) {
-    hours.push(`${String(h).padStart(2, '0')}:00`);
+    timeSlots.push(`${String(h).padStart(2, '0')}:00`);
+    timeSlots.push(`${String(h).padStart(2, '0')}:30`);
   }
   
   // CSS Grid 기반 캘린더 생성
@@ -117,50 +118,92 @@ async function renderTable(tableWrap) {
     html += `<div class="${className}">${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}<br>(${dayName})</div>`;
   });
   
-  // 시간별 행 생성 (시간 라벨만)
-  hours.forEach((hour, hourIndex) => {
-    const gridRow = hourIndex + 2; // +2는 헤더 행 때문
-    html += `<div class="awc-time-label" style="grid-row: ${gridRow}; grid-column: 1;">${hour}</div>`;
+  // 30분 단위 시간 라벨 생성
+  timeSlots.forEach((timeSlot, slotIndex) => {
+    const gridRow = slotIndex + 2; // +2는 헤더 행 때문
+    html += `<div class="awc-time-label" style="grid-row: ${gridRow}; grid-column: 1;">${timeSlot}</div>`;
   });
   
-  // 각 날짜별로 세션들을 시간대별로 그룹화하여 배치
+  // 각 날짜별로 세션들을 30분 단위로 그룹화하여 배치
   weekDates.forEach((dateStr, dateIndex) => {
     const gridColumn = dateIndex + 2; // +2는 시간 라벨 열 때문
     
     // 해당 날짜의 세션들만 필터링
     const dateSessions = sessions.filter(s => s.date === dateStr);
     
-    // 각 시간대별로 세션 컨테이너 생성
-    hours.forEach((hour, hourIndex) => {
-      const startHour = parseInt(hour.split(':')[0]);
-      const startRow = startHour - 6 + 2; // 06:00이 첫 번째 행이므로 -6, +2는 헤더 행 때문
-      const endRow = startHour - 6 + 3; // 1시간 세션
+    // 각 30분 단위별로 세션 컨테이너 생성
+    timeSlots.forEach((timeSlot, slotIndex) => {
+      const [slotHour, slotMinute] = timeSlot.split(':').map(Number);
+      const startRow = slotIndex + 2; // +2는 헤더 행 때문
       
-      // 현재 시간대에 표시될 세션들 찾기
-      const currentHourSessions = [];
-      const spanningSessions = [];
+      // 현재 슬롯에서 시작하는 1시간 세션들 찾기
+      const currentSlotSessions = [];
       
       dateSessions.forEach(session => {
         const [sessionHour, sessionMinute] = session.time.split(':').map(Number);
         
-        // 정각 시작 세션 (예: 9:00 시작 → 9:00~10:00에 표시)
-        if (sessionHour === startHour && sessionMinute === 0) {
-          currentHourSessions.push({ ...session, position: 'full' });
-        }
-        // 30분 시작 세션 (예: 9:30 시작 → 9:00~10:00에 하단에 표시)
-        else if (sessionHour === startHour && sessionMinute === 30) {
-          spanningSessions.push({ ...session, position: 'bottom' });
-        }
-        // 이전 시간대 30분 시작 세션 (예: 8:30 시작 → 9:00~10:00에 상단에 표시)
-        else if (sessionHour === startHour - 1 && sessionMinute === 30) {
-          spanningSessions.push({ ...session, position: 'top' });
+        // 현재 슬롯에서 시작하는 1시간 세션만 표시
+        if (sessionHour === slotHour && sessionMinute === slotMinute) {
+          currentSlotSessions.push(session);
         }
       });
       
-      // 세션 컨테이너 생성
-      html += `<div class="awc-session-container" style="grid-row: ${startRow} / ${endRow}; grid-column: ${gridColumn};">
-        ${renderSessions(currentHourSessions, trainers)}
-        ${renderSpanningSessions(spanningSessions, trainers)}
+      // 이전 30분과 이후 30분의 세션 수 계산
+      const prevSlotSessions = [];
+      const nextSlotSessions = [];
+      
+      // 이전 30분 계산
+      let prevSlotHour = slotHour;
+      let prevSlotMinute = slotMinute - 30;
+      if (prevSlotMinute < 0) {
+        prevSlotHour = slotHour - 1;
+        prevSlotMinute = 30;
+      }
+      
+      // 이후 30분 계산
+      let nextSlotHour = slotHour;
+      let nextSlotMinute = slotMinute + 30;
+      if (nextSlotMinute >= 60) {
+        nextSlotHour = slotHour + 1;
+        nextSlotMinute = 0;
+      }
+      
+      // 이전 30분과 이후 30분의 세션들 찾기
+      dateSessions.forEach(session => {
+        const [sessionHour, sessionMinute] = session.time.split(':').map(Number);
+        
+        // 이전 30분 세션들
+        if (sessionHour === prevSlotHour && sessionMinute === prevSlotMinute) {
+          prevSlotSessions.push(session);
+        }
+        
+        // 이후 30분 세션들
+        if (sessionHour === nextSlotHour && sessionMinute === nextSlotMinute) {
+          nextSlotSessions.push(session);
+        }
+      });
+      
+      // 가로 크기 계산: max(이전 30분, 이후 30분) + 현재 세션 수
+      const maxAdjacentSessions = Math.max(prevSlotSessions.length, nextSlotSessions.length);
+      const totalSessionsForWidth = maxAdjacentSessions + currentSlotSessions.length;
+      
+      // 30분 단위로 번갈아가며 왼쪽/오른쪽 배치
+      // 짝수 슬롯(0, 2, 4...)은 왼쪽부터, 홀수 슬롯(1, 3, 5...)은 오른쪽부터
+      const isEvenSlot = slotIndex % 2 === 0;
+      let offsetFromPrev = 0;
+      
+      if (isEvenSlot) {
+        // 짝수 슬롯: 왼쪽부터 배치 (오프셋 없음)
+        offsetFromPrev = 0;
+      } else {
+        // 홀수 슬롯: 이전 30분의 세션 수만큼 오프셋해서 오른쪽에 배치
+        offsetFromPrev = prevSlotSessions.length;
+      }
+      
+      // 세션 컨테이너 생성 (1시간 세션은 2개 행에 걸쳐 표시)
+      const rowSpan = currentSlotSessions.length > 0 ? 2 : 1; // 1시간 세션은 2개 행
+      html += `<div class="awc-session-container" style="grid-row: ${startRow} / ${startRow + rowSpan}; grid-column: ${gridColumn};">
+        ${renderSessions(currentSlotSessions, trainers, totalSessionsForWidth, offsetFromPrev)}
       </div>`;
     });
   });
@@ -169,11 +212,11 @@ async function renderTable(tableWrap) {
   tableWrap.innerHTML = html;
 }
 
-function renderSessions(sessions, trainers) {
+function renderSessions(sessions, trainers, totalSessionsForWidth, offsetFromPrev) {
   if (sessions.length === 0) return '';
   
-  // 세션 개수에 따라 카드 너비 계산
-  const cardWidth = Math.max(100 / sessions.length, 20); // 최소 20% 너비
+  // 겹치는 세션들의 총 개수로 카드 너비 계산
+  const cardWidth = Math.max(100 / totalSessionsForWidth, 20); // 최소 20% 너비
   
   return sessions.map((session, index) => {
     const trainer = trainers.find(t => t.username === session.trainer);
@@ -183,42 +226,12 @@ function renderSessions(sessions, trainers) {
     let statusClass = 'reserved'; // 기본값
     if (session.status === '예정') statusClass = 'reserved';
     else if (session.status === '완료') statusClass = 'attend';
+    
+    // 현재 세션들의 순서에 따른 left 위치 계산
+    const leftPosition = index * cardWidth + offsetFromPrev * cardWidth;
     
     return `<div class="awc-session-card awc-status-${statusClass}" 
-                  style="width: ${cardWidth}%; left: ${index * cardWidth}%; top: 0%;">
-      <div class="awc-session-time">${session.time}</div>
-      <div class="awc-session-member">${session.member}</div>
-      <div class="awc-session-trainer">${trainerName}</div>
-      <div class="awc-session-status">${session.status}</div>
-    </div>`;
-  }).join('');
-}
-
-function renderSpanningSessions(sessions, trainers) {
-  if (sessions.length === 0) return '';
-  
-  // 세션 개수에 따라 카드 너비 계산
-  const cardWidth = Math.max(100 / sessions.length, 20); // 최소 20% 너비
-  
-  return sessions.map((session, index) => {
-    const trainer = trainers.find(t => t.username === session.trainer);
-    const trainerName = trainer ? trainer.name : session.trainer;
-    
-    // 상태를 영어 클래스명으로 변환
-    let statusClass = 'reserved'; // 기본값
-    if (session.status === '예정') statusClass = 'reserved';
-    else if (session.status === '완료') statusClass = 'attend';
-    
-    // 위치에 따른 top 값 설정
-    let topValue = 0;
-    if (session.position === 'bottom') {
-      topValue = 50; // 하단에 배치
-    } else if (session.position === 'top') {
-      topValue = 0; // 상단에 배치
-    }
-    
-    return `<div class="awc-session-card awc-status-${statusClass} awc-spanning" 
-                  style="width: ${cardWidth}%; left: ${index * cardWidth}%; top: ${topValue}%;">
+                  style="width: ${cardWidth}%; left: ${leftPosition}%; top: 0%;">
       <div class="awc-session-time">${session.time}</div>
       <div class="awc-session-member">${session.member}</div>
       <div class="awc-session-trainer">${trainerName}</div>
