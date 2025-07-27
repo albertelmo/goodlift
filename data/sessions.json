@@ -182,5 +182,45 @@
     "date": "2025-07-28",
     "time": "12:00",
     "status": "예정"
+  },
+  {
+    "id": "57ec6724-1d99-4a99-bae8-6664e9741087",
+    "member": "김재식",
+    "trainer": "ssc",
+    "date": "2025-07-27",
+    "time": "10:00",
+    "status": "예정"
+  },
+  {
+    "id": "b6899525-62ff-480e-8276-9e37ce7425eb",
+    "member": "김재식",
+    "trainer": "ssc",
+    "date": "2025-07-27",
+    "time": "14:00",
+    "status": "예정"
+  },
+  {
+    "id": "f95a5e46-2d6f-4196-aea6-09b1d4efd944",
+    "member": "김재식",
+    "trainer": "ssc",
+    "date": "2025-07-30",
+    "time": "08:00",
+    "status": "예정"
+  },
+  {
+    "id": "5b41161c-35f8-4dae-aa93-85d6c7e0a6a2",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-23",
+    "time": "10:00",
+    "status": "예정"
+  },
+  {
+    "id": "04a15524-6f29-4971-b2b1-5bde1639c9a3",
+    "member": "피석훈",
+    "trainer": "ssc",
+    "date": "2025-07-24",
+    "time": "10:00",
+    "status": "예정"
   }
 ]
