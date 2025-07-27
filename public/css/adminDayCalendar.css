@@ -106,16 +106,15 @@
 
 .adc-time {
   background: #f8f9fa;
-  color: #333;
+  padding: 4px 8px;
+  text-align: right;
+  font-size: 11px;
+  color: #666;
+  border-right: 1px solid #ddd;
   font-weight: 500;
   width: 50px;
   min-width: 50px;
-  font-size: 12px;
-  border-right: 2px solid #e0e0e0;
   vertical-align: middle;
-  text-align: right;
-  border-bottom: 2px solid #e0e0e0;
-  padding-right: 8px;
 }
 
 .adc-session {

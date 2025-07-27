@@ -40,16 +40,14 @@ function renderHeader(headerEl) {
   
   headerEl.innerHTML = `
     <div class="awc-date-nav">
-      <button id="awc-prev">&#60;</button>
+      <button id="awc-prev" class="awc-nav-btn awc-prev-btn"></button>
       <span class="awc-date">${formatDate(monday)} ~ ${formatDate(sunday)}</span>
-      <button id="awc-next">&#62;</button>
-      <button id="awc-today">이번 주</button>
+      <button id="awc-next" class="awc-nav-btn awc-next-btn"></button>
     </div>
   `;
   
   headerEl.querySelector('#awc-prev').onclick = () => moveWeek(-1);
   headerEl.querySelector('#awc-next').onclick = () => moveWeek(1);
-  headerEl.querySelector('#awc-today').onclick = () => moveWeek(0);
 }
 
 function moveWeek(delta) {
@@ -202,7 +200,12 @@ async function renderTable(tableWrap) {
       
       // 세션 컨테이너 생성 (1시간 세션은 2개 행에 걸쳐 표시)
       const rowSpan = currentSlotSessions.length > 0 ? 2 : 1; // 1시간 세션은 2개 행
-      html += `<div class="awc-session-container" style="grid-row: ${startRow} / ${startRow + rowSpan}; grid-column: ${gridColumn};">
+      
+      // 1시간 단위(정각)인지 확인하여 구분선 추가
+      const isHourDivider = slotMinute === 0;
+      const hourDividerClass = isHourDivider ? 'hour-divider' : '';
+      
+      html += `<div class="awc-session-container ${hourDividerClass}" style="grid-row: ${startRow} / ${startRow + rowSpan}; grid-column: ${gridColumn};">
         ${renderSessions(currentSlotSessions, trainers, totalSessionsForWidth, offsetFromPrev)}
       </div>`;
     });
@@ -230,12 +233,14 @@ function renderSessions(sessions, trainers, totalSessionsForWidth, offsetFromPre
     // 현재 세션들의 순서에 따른 left 위치 계산
     const leftPosition = index * cardWidth + offsetFromPrev * cardWidth;
     
-    return `<div class="awc-session-card awc-status-${statusClass}" 
+    // 카드 크기에 따라 레이아웃 결정
+    const isNarrow = cardWidth < 25; // 25% 미만이면 좁은 카드로 판단
+    const layoutClass = isNarrow ? 'narrow' : '';
+    
+    return `<div class="awc-session-card awc-status-${statusClass} ${layoutClass}" 
                   style="width: ${cardWidth}%; left: ${leftPosition}%; top: 0%;">
-      <div class="awc-session-time">${session.time}</div>
       <div class="awc-session-member">${session.member}</div>
       <div class="awc-session-trainer">${trainerName}</div>
-      <div class="awc-session-status">${session.status}</div>
     </div>`;
   }).join('');
 }
