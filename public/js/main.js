@@ -102,6 +102,11 @@ window.addEventListener('DOMContentLoaded', function() {
     // 로그아웃 처리
     document.getElementById('logoutBtn').innerText = '🚪';
     document.getElementById('logoutBtn').onclick = function() {
+        // 로그아웃 확인 메시지
+        if (!confirm('정말 로그아웃 하시겠습니까?')) {
+            return; // 취소하면 로그아웃하지 않음
+        }
+        
         document.getElementById('mainSection').style.display = 'none';
         document.getElementById('authSection').style.display = 'block';
         document.getElementById('loginForm').reset();

@@ -720,7 +720,6 @@ li, td, th {
 
 .header-btns button svg {
     display: block;
-    vertical-align: middle;
     stroke: #1976d2;
     transition: stroke 0.15s;
     outline: none;
