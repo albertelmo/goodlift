@@ -1,4 +1,4 @@
-// 주간 세션 캘린더 (관리자용)
+// 주간 세션 캘린더 (관리자용) - 시간 경계를 넘는 세션 구조
 export const adminWeekCalendar = {
   render
 };
@@ -92,12 +92,11 @@ async function renderTable(tableWrap) {
     fetch(`/api/sessions?week=${state.weekStart}`).then(r => r.json())
   ]);
   
-  // 고정된 시간대 설정 (30분 단위)
-  const hours = [
-    '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-    '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-    '15:00', '15:30', '16:00', '16:30', '17:00', '17:30'
-  ];
+  // 시간대 생성 (06:00 ~ 22:00, 1시간 단위)
+  const hours = [];
+  for (let h = 6; h <= 22; h++) {
+    hours.push(`${String(h).padStart(2, '0')}:00`);
+  }
   
   // CSS Grid 기반 캘린더 생성
   let html = '<div class="awc-calendar-grid">';
@@ -118,71 +117,112 @@ async function renderTable(tableWrap) {
     html += `<div class="${className}">${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}<br>(${dayName})</div>`;
   });
   
-  // 시간 라벨들을 먼저 생성 (정확한 위치에 배치)
+  // 시간별 행 생성 (시간 라벨만)
   hours.forEach((hour, hourIndex) => {
     const gridRow = hourIndex + 2; // +2는 헤더 행 때문
     html += `<div class="awc-time-label" style="grid-row: ${gridRow}; grid-column: 1;">${hour}</div>`;
   });
   
-  // 세션 카드들 생성
-  hours.forEach((hour, hourIndex) => {
-    const [h, m] = hour.split(':').map(Number);
+  // 각 날짜별로 세션들을 시간대별로 그룹화하여 배치
+  weekDates.forEach((dateStr, dateIndex) => {
+    const gridColumn = dateIndex + 2; // +2는 시간 라벨 열 때문
     
-    // 각 날짜별 셀
-    weekDates.forEach((dateStr, dateIndex) => {
-      // 현재 시간에 시작하는 세션들 찾기
-      const currentSessions = sessions.filter(s => s.date === dateStr && s.time === hour);
+    // 해당 날짜의 세션들만 필터링
+    const dateSessions = sessions.filter(s => s.date === dateStr);
+    
+    // 각 시간대별로 세션 컨테이너 생성
+    hours.forEach((hour, hourIndex) => {
+      const startHour = parseInt(hour.split(':')[0]);
+      const startRow = startHour - 6 + 2; // 06:00이 첫 번째 행이므로 -6, +2는 헤더 행 때문
+      const endRow = startHour - 6 + 3; // 1시간 세션
       
-      // 다음 30분에 시작하는 세션들도 찾기 (09:00 셀에 09:30 세션도 포함)
-      const nextHour = hours[hourIndex + 1];
-      const nextSessions = nextHour ? sessions.filter(s => s.date === dateStr && s.time === nextHour) : [];
+      // 현재 시간대에 표시될 세션들 찾기
+      const currentHourSessions = [];
+      const spanningSessions = [];
       
-      // 모든 세션 합치기 (현재 시간 + 다음 30분)
-      const allSessions = [...currentSessions, ...nextSessions];
-      
-      if (allSessions.length > 0) {
-        // 최대 6개까지만 표시
-        const limitedSessions = allSessions.slice(0, 6);
-        const hasMoreSessions = allSessions.length > 6;
+      dateSessions.forEach(session => {
+        const [sessionHour, sessionMinute] = session.time.split(':').map(Number);
         
-        // 세션 카드들 생성 (최대 6개)
-        limitedSessions.forEach((session, sessionIndex) => {
-          const trainer = trainers.find(t => t.username === session.trainer);
-          const trainerName = trainer ? trainer.name : session.trainer;
-          
-          // 상태를 영어 클래스명으로 변환
-          let statusClass = 'reserved'; // 기본값
-          if (session.status === '예정') statusClass = 'reserved';
-          else if (session.status === '완료') statusClass = 'attend';
-          
-          // CSS Grid 위치 계산
-          const gridRow = hourIndex + 2; // +2는 헤더 행 때문
-          const gridColumn = dateIndex + 2; // +2는 시간 라벨 열 때문
-          
-          // 세션 카드를 개별적으로 배치하되, 가로로 나란히 배치
-          html += `<div class="awc-session-card awc-status-${statusClass}" 
-                        style="grid-row: ${gridRow} / ${gridRow + 2}; grid-column: ${gridColumn}; 
-                               --session-index: ${sessionIndex};">
-            <strong>${session.member}</strong>
-            <div class="awc-trainer">${trainerName}</div>
-            <div class="awc-status-label">${session.status}</div>
-          </div>`;
-        });
-        
-        // 6개 초과 시 추가 세션 표시
-        if (hasMoreSessions) {
-          const gridRow = hourIndex + 2;
-          const gridColumn = dateIndex + 2;
-          
-          html += `<div class="awc-more-sessions" 
-                        style="grid-row: ${gridRow} / ${gridRow + 2}; grid-column: ${gridColumn};">
-            +${allSessions.length - 6}
-          </div>`;
+        // 정각 시작 세션 (예: 9:00 시작 → 9:00~10:00에 표시)
+        if (sessionHour === startHour && sessionMinute === 0) {
+          currentHourSessions.push({ ...session, position: 'full' });
         }
-      }
+        // 30분 시작 세션 (예: 9:30 시작 → 9:00~10:00에 하단에 표시)
+        else if (sessionHour === startHour && sessionMinute === 30) {
+          spanningSessions.push({ ...session, position: 'bottom' });
+        }
+        // 이전 시간대 30분 시작 세션 (예: 8:30 시작 → 9:00~10:00에 상단에 표시)
+        else if (sessionHour === startHour - 1 && sessionMinute === 30) {
+          spanningSessions.push({ ...session, position: 'top' });
+        }
+      });
+      
+      // 세션 컨테이너 생성
+      html += `<div class="awc-session-container" style="grid-row: ${startRow} / ${endRow}; grid-column: ${gridColumn};">
+        ${renderSessions(currentHourSessions, trainers)}
+        ${renderSpanningSessions(spanningSessions, trainers)}
+      </div>`;
     });
   });
   
   html += '</div>';
   tableWrap.innerHTML = html;
+}
+
+function renderSessions(sessions, trainers) {
+  if (sessions.length === 0) return '';
+  
+  // 세션 개수에 따라 카드 너비 계산
+  const cardWidth = Math.max(100 / sessions.length, 20); // 최소 20% 너비
+  
+  return sessions.map((session, index) => {
+    const trainer = trainers.find(t => t.username === session.trainer);
+    const trainerName = trainer ? trainer.name : session.trainer;
+    
+    // 상태를 영어 클래스명으로 변환
+    let statusClass = 'reserved'; // 기본값
+    if (session.status === '예정') statusClass = 'reserved';
+    else if (session.status === '완료') statusClass = 'attend';
+    
+    return `<div class="awc-session-card awc-status-${statusClass}" 
+                  style="width: ${cardWidth}%; left: ${index * cardWidth}%; top: 0%;">
+      <div class="awc-session-time">${session.time}</div>
+      <div class="awc-session-member">${session.member}</div>
+      <div class="awc-session-trainer">${trainerName}</div>
+      <div class="awc-session-status">${session.status}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderSpanningSessions(sessions, trainers) {
+  if (sessions.length === 0) return '';
+  
+  // 세션 개수에 따라 카드 너비 계산
+  const cardWidth = Math.max(100 / sessions.length, 20); // 최소 20% 너비
+  
+  return sessions.map((session, index) => {
+    const trainer = trainers.find(t => t.username === session.trainer);
+    const trainerName = trainer ? trainer.name : session.trainer;
+    
+    // 상태를 영어 클래스명으로 변환
+    let statusClass = 'reserved'; // 기본값
+    if (session.status === '예정') statusClass = 'reserved';
+    else if (session.status === '완료') statusClass = 'attend';
+    
+    // 위치에 따른 top 값 설정
+    let topValue = 0;
+    if (session.position === 'bottom') {
+      topValue = 50; // 하단에 배치
+    } else if (session.position === 'top') {
+      topValue = 0; // 상단에 배치
+    }
+    
+    return `<div class="awc-session-card awc-status-${statusClass} awc-spanning" 
+                  style="width: ${cardWidth}%; left: ${index * cardWidth}%; top: ${topValue}%;">
+      <div class="awc-session-time">${session.time}</div>
+      <div class="awc-session-member">${session.member}</div>
+      <div class="awc-session-trainer">${trainerName}</div>
+      <div class="awc-session-status">${session.status}</div>
+    </div>`;
+  }).join('');
 }

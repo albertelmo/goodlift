@@ -1,4 +1,4 @@
-/* 주간 세션 캘린더 스타일 (CSS Grid 기반) */
+/* 주간 세션 캘린더 스타일 (시간 경계를 넘는 세션 구조) */
 
 .awc-header {
   margin-bottom: 20px;
@@ -32,7 +32,7 @@
 .awc-calendar-grid {
   display: grid;
   grid-template-columns: 80px repeat(7, 1fr); /* 시간 라벨 + 7일 */
-  grid-template-rows: 40px repeat(18, 28px); /* 헤더 + 18개 30분 슬롯 */
+  grid-template-rows: 40px repeat(17, 60px); /* 헤더 + 17개 1시간 슬롯 */
   gap: 1px;
   background: #f0f0f0;
   border: 1px solid #ddd;
@@ -52,6 +52,7 @@
   align-items: center;
   justify-content: center;
   border-bottom: 1px solid #ddd;
+  z-index: 10;
 }
 
 .awc-date-header {
@@ -80,82 +81,92 @@
   justify-content: flex-end;
   border-right: 1px solid #ddd;
   font-weight: 500;
+  z-index: 10;
 }
 
-/* 세션 컨테이너 (Flexbox로 가로 배치) */
+/* 세션 컨테이너 */
 .awc-session-container {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  padding: 2px;
-  width: 100%;
-  height: 100%;
+  background: white;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  position: relative; /* 세션 카드의 절대 위치 기준 */
+  min-height: 60px;
 }
 
-/* 세션 카드 */
+/* 세션 카드 (시간 경계를 넘어서 표시, 가로 배치) */
 .awc-session-card {
   background: white;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 4px 6px;
-  margin: 1px;
-  font-size: 11px;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 9px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 50px; /* 1시간 높이 (28px * 2 - 여백) */
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  width: 16.66%; /* 고정 너비 (100% ÷ 6) */
-  transform: translateX(calc(var(--session-index, 0) * 16.66%)); /* 고정 위치 */
+  min-width: 0; /* 텍스트 오버플로우 허용 */
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  position: absolute; /* 절대 위치로 가로 배치 */
+  z-index: 5;
+  height: 100%; /* 1시간 세션의 높이 */
+  margin: 1px;
+  box-sizing: border-box;
 }
 
-/* 추가 세션 표시 */
-.awc-more-sessions {
-  background: #f0f0f0;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 4px 6px;
-  font-size: 10px;
-  color: #666;
-  text-align: center;
-  width: 16.66%;
-  transform: translateX(calc(5 * 16.66%)); /* 6번째 위치 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 50px;
+/* 시간 경계를 넘는 세션 카드 */
+.awc-session-card.awc-spanning {
+  position: absolute;
+  z-index: 8; /* 다른 세션 카드보다 위에 표시 */
+  width: 100%; /* 컨테이너 내에서의 너비 */
+  left: 0;
+  height: 50%; /* 30분 높이 */
 }
 
 .awc-session-card:hover {
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
   transform: translateY(-1px);
+  z-index: 15; /* 호버 시 최상단으로 */
 }
 
-.awc-session-card strong {
-  font-size: 12px;
-  font-weight: bold;
-  margin-bottom: 2px;
-  color: #333;
-}
-
-.awc-trainer {
-  font-size: 10px;
+/* 세션 카드 내부 요소들 */
+.awc-session-time {
+  font-size: 8px;
   color: #666;
-  margin-bottom: 2px;
+  font-weight: bold;
+  margin-bottom: 1px;
 }
 
-.awc-status-label {
-  font-size: 9px;
+.awc-session-member {
+  font-size: 10px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.awc-session-trainer {
+  font-size: 8px;
+  color: #666;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.awc-session-status {
+  font-size: 7px;
   font-weight: bold;
   text-align: center;
-  padding: 1px 3px;
+  padding: 1px 2px;
   border-radius: 2px;
   background: rgba(0,0,0,0.05);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 세션 상태별 색상 */
@@ -189,27 +200,27 @@
   border-left: 3px solid #757575 !important;
 }
 
-.awc-status-reserved .awc-status-label {
+.awc-status-reserved .awc-session-status {
   color: #1976d2 !important;
 }
 
-.awc-status-attend .awc-status-label {
+.awc-status-attend .awc-session-status {
   color: #388e3c !important;
 }
 
-.awc-status-pre .awc-status-label {
+.awc-status-pre .awc-session-status {
   color: #f57c00 !important;
 }
 
-.awc-status-absent .awc-status-label {
+.awc-status-absent .awc-session-status {
   color: #d32f2f !important;
 }
 
-.awc-status-cancel .awc-status-label {
+.awc-status-cancel .awc-session-status {
   color: #7b1fa2 !important;
 }
 
-.awc-status-allcancel .awc-status-label {
+.awc-status-allcancel .awc-session-status {
   color: #757575 !important;
 }
 
@@ -225,27 +236,27 @@
   }
   
   .awc-session-card {
-    font-size: 10px;
-    padding: 3px 4px;
+    font-size: 8px;
+    padding: 1px 3px;
   }
   
-  .awc-session-card strong {
-    font-size: 11px;
-  }
-  
-  .awc-trainer {
+  .awc-session-member {
     font-size: 9px;
   }
   
-  .awc-status-label {
-    font-size: 8px;
+  .awc-session-trainer {
+    font-size: 7px;
+  }
+  
+  .awc-session-status {
+    font-size: 6px;
   }
 }
 
 @media (max-width: 768px) {
   .awc-calendar-grid {
     grid-template-columns: 50px repeat(7, 1fr);
-    grid-template-rows: 35px repeat(18, 24px);
+    grid-template-rows: 35px repeat(17, 50px);
   }
   
   .awc-time-header,
@@ -259,21 +270,24 @@
     padding: 1px 2px;
   }
   
+  .awc-session-container {
+    min-height: 50px;
+  }
+  
   .awc-session-card {
-    font-size: 9px;
-    padding: 2px 3px;
-    min-height: 42px;
+    font-size: 7px;
+    padding: 1px 2px;
   }
   
-  .awc-session-card strong {
-    font-size: 10px;
-  }
-  
-  .awc-trainer {
+  .awc-session-member {
     font-size: 8px;
   }
   
-  .awc-status-label {
-    font-size: 7px;
+  .awc-session-trainer {
+    font-size: 6px;
+  }
+  
+  .awc-session-status {
+    font-size: 5px;
   }
 }

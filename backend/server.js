@@ -208,7 +208,7 @@ app.patch('/api/members/:name', (req, res) => {
     res.json({ message: '회원 정보가 수정되었습니다.', member });
 });
 
-// 세션 목록 조회 (트레이너, 날짜별, 주간별 필터)
+// 세션 목록 조회 (트레이너, 날짜별, 주간 필터)
 app.get('/api/sessions', (req, res) => {
     let sessions = [];
     if (fs.existsSync(SESSIONS_PATH)) {
@@ -216,17 +216,22 @@ app.get('/api/sessions', (req, res) => {
         if (raw) sessions = JSON.parse(raw);
     }
     const { trainer, date, week } = req.query;
+    
     if (trainer) sessions = sessions.filter(s => s.trainer === trainer);
     if (date) sessions = sessions.filter(s => s.date === date);
+    
+    // 주간 필터링
     if (week) {
-        // 주간 필터: 해당 주의 월요일부터 일요일까지
         const weekStart = new Date(week);
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekStart.getDate() + 6);
-        const weekStartStr = weekStart.toISOString().slice(0, 10);
-        const weekEndStr = weekEnd.toISOString().slice(0, 10);
-        sessions = sessions.filter(s => s.date >= weekStartStr && s.date <= weekEndStr);
+        
+        sessions = sessions.filter(s => {
+            const sessionDate = new Date(s.date);
+            return sessionDate >= weekStart && sessionDate <= weekEnd;
+        });
     }
+    
     res.json(sessions);
 });
 // 세션 추가
