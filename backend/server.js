@@ -3,6 +3,10 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+require('dotenv').config();
+
+// PostgreSQL 세션 데이터베이스 모듈
+const sessionsDB = require('./sessions-db');
 
 const app = express();
 const PORT = 3000;
@@ -10,14 +14,12 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const DATA_PATH = path.join(DATA_DIR, 'accounts.json');
 const CENTERS_PATH = path.join(DATA_DIR, 'centers.json');
 const MEMBERS_PATH = path.join(DATA_DIR, 'members.json');
-const SESSIONS_PATH = path.join(DATA_DIR, 'sessions.json');
 
 // 데이터 파일 자동 생성 기능 수정: 디렉토리가 없으면 에러만 출력
 const DATA_FILES = [
   { path: DATA_PATH, name: 'accounts.json' },
   { path: CENTERS_PATH, name: 'centers.json' },
-  { path: MEMBERS_PATH, name: 'members.json' },
-  { path: SESSIONS_PATH, name: 'sessions.json' }
+  { path: MEMBERS_PATH, name: 'members.json' }
 ];
 if (!fs.existsSync(DATA_DIR)) {
   console.error(`[GoodLift] 데이터 디렉토리가 존재하지 않습니다: ${DATA_DIR}`);
@@ -29,6 +31,9 @@ if (!fs.existsSync(DATA_DIR)) {
     }
   });
 }
+
+// PostgreSQL 데이터베이스 초기화
+sessionsDB.initializeDatabase();
 
 app.use(cors());
 app.use(express.json());
@@ -209,113 +214,106 @@ app.patch('/api/members/:name', (req, res) => {
 });
 
 // 세션 목록 조회 (트레이너, 날짜별, 주간 필터)
-app.get('/api/sessions', (req, res) => {
-    let sessions = [];
-    if (fs.existsSync(SESSIONS_PATH)) {
-        const raw = fs.readFileSync(SESSIONS_PATH, 'utf-8');
-        if (raw) sessions = JSON.parse(raw);
-    }
-    const { trainer, date, week } = req.query;
-    
-    if (trainer) sessions = sessions.filter(s => s.trainer === trainer);
-    if (date) sessions = sessions.filter(s => s.date === date);
-    
-    // 주간 필터링
-    if (week) {
-        const weekStart = new Date(week);
-        const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6);
+app.get('/api/sessions', async (req, res) => {
+    try {
+        const { trainer, date, week } = req.query;
+        const filters = {};
+        if (trainer) filters.trainer = trainer;
+        if (date) filters.date = date;
+        if (week) filters.week = week;
         
-        sessions = sessions.filter(s => {
-            const sessionDate = new Date(s.date);
-            return sessionDate >= weekStart && sessionDate <= weekEnd;
-        });
+        const sessions = await sessionsDB.getSessions(filters);
+        res.json(sessions);
+    } catch (error) {
+        console.error('[API] 세션 조회 오류:', error);
+        res.status(500).json({ message: '세션 목록을 불러오지 못했습니다.' });
     }
-    
-    res.json(sessions);
 });
 // 세션 추가
-app.post('/api/sessions', (req, res) => {
-    const { member, trainer, date, time } = req.body;
-    if (!member || !trainer || !date || !time) {
-        return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
+app.post('/api/sessions', async (req, res) => {
+    try {
+        const { member, trainer, date, time } = req.body;
+        if (!member || !trainer || !date || !time) {
+            return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
+        }
+        
+        const newSession = {
+            id: uuidv4(),
+            member,
+            trainer,
+            date,
+            time,
+            status: '예정'
+        };
+        
+        const session = await sessionsDB.addSession(newSession);
+        res.json({ message: '세션이 추가되었습니다.', session });
+    } catch (error) {
+        console.error('[API] 세션 추가 오류:', error);
+        res.status(500).json({ message: '세션 추가에 실패했습니다.' });
     }
-    let sessions = [];
-    if (fs.existsSync(SESSIONS_PATH)) {
-        const raw = fs.readFileSync(SESSIONS_PATH, 'utf-8');
-        if (raw) sessions = JSON.parse(raw);
-    }
-    const newSession = {
-        id: uuidv4(),
-        member,
-        trainer,
-        date,
-        time,
-        status: '예정'
-    };
-    sessions.push(newSession);
-    fs.writeFileSync(SESSIONS_PATH, JSON.stringify(sessions, null, 2));
-    res.json({ message: '세션이 추가되었습니다.', session: newSession });
 });
 
 // 세션 출석(완료) 처리 및 회원 잔여세션 감소
-app.patch('/api/sessions/:id/attend', (req, res) => {
-    const sessionId = req.params.id;
-    let sessions = [];
-    if (fs.existsSync(SESSIONS_PATH)) {
-        const raw = fs.readFileSync(SESSIONS_PATH, 'utf-8');
-        if (raw) sessions = JSON.parse(raw);
+app.patch('/api/sessions/:id/attend', async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const session = await sessionsDB.getSessionById(sessionId);
+        if (!session) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
+        if (session.status === '완료') return res.status(400).json({ message: '이미 완료된 세션입니다.' });
+        
+        // 세션 상태를 완료로 변경
+        const updatedSession = await sessionsDB.updateSession(sessionId, { status: '완료' });
+        
+        // 회원 잔여세션 감소 (JSON 파일 유지)
+        let members = [];
+        if (fs.existsSync(MEMBERS_PATH)) {
+            const raw = fs.readFileSync(MEMBERS_PATH, 'utf-8');
+            if (raw) members = JSON.parse(raw);
+        }
+        const member = members.find(m => m.name === session.member);
+        if (member && member.remainSessions > 0) {
+            member.remainSessions -= 1;
+            fs.writeFileSync(MEMBERS_PATH, JSON.stringify(members, null, 2));
+        }
+        
+        res.json({ message: '출석 처리되었습니다.', session: updatedSession });
+    } catch (error) {
+        console.error('[API] 출석 처리 오류:', error);
+        res.status(500).json({ message: '출석 처리에 실패했습니다.' });
     }
-    const session = sessions.find(s => s.id === sessionId);
-    if (!session) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
-    if (session.status === '완료') return res.status(400).json({ message: '이미 완료된 세션입니다.' });
-    session.status = '완료';
-    fs.writeFileSync(SESSIONS_PATH, JSON.stringify(sessions, null, 2));
-    // 회원 잔여세션 감소
-    let members = [];
-    if (fs.existsSync(MEMBERS_PATH)) {
-        const raw = fs.readFileSync(MEMBERS_PATH, 'utf-8');
-        if (raw) members = JSON.parse(raw);
-    }
-    const member = members.find(m => m.name === session.member);
-    if (member && member.remainSessions > 0) {
-        member.remainSessions -= 1;
-        fs.writeFileSync(MEMBERS_PATH, JSON.stringify(members, null, 2));
-    }
-    res.json({ message: '출석 처리되었습니다.', session });
 });
 
 // 세션 변경(날짜, 시간)
-app.patch('/api/sessions/:id', (req, res) => {
-    const sessionId = req.params.id;
-    const { date, time } = req.body;
-    if (!date || !time) return res.status(400).json({ message: '날짜와 시간을 입력해주세요.' });
-    let sessions = [];
-    if (fs.existsSync(SESSIONS_PATH)) {
-        const raw = fs.readFileSync(SESSIONS_PATH, 'utf-8');
-        if (raw) sessions = JSON.parse(raw);
+app.patch('/api/sessions/:id', async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const { date, time } = req.body;
+        if (!date || !time) return res.status(400).json({ message: '날짜와 시간을 입력해주세요.' });
+        
+        const session = await sessionsDB.getSessionById(sessionId);
+        if (!session) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
+        
+        const updatedSession = await sessionsDB.updateSession(sessionId, { date, time });
+        res.json({ message: '세션이 변경되었습니다.', session: updatedSession });
+    } catch (error) {
+        console.error('[API] 세션 변경 오류:', error);
+        res.status(500).json({ message: '세션 변경에 실패했습니다.' });
     }
-    const session = sessions.find(s => s.id === sessionId);
-    if (!session) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
-    session.date = date;
-    session.time = time;
-    fs.writeFileSync(SESSIONS_PATH, JSON.stringify(sessions, null, 2));
-    res.json({ message: '세션이 변경되었습니다.', session });
 });
 // 세션 삭제
-app.delete('/api/sessions/:id', (req, res) => {
-    const sessionId = req.params.id;
-    let sessions = [];
-    if (fs.existsSync(SESSIONS_PATH)) {
-        const raw = fs.readFileSync(SESSIONS_PATH, 'utf-8');
-        if (raw) sessions = JSON.parse(raw);
+app.delete('/api/sessions/:id', async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const session = await sessionsDB.getSessionById(sessionId);
+        if (!session) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
+        
+        await sessionsDB.deleteSession(sessionId);
+        res.json({ message: '세션이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 세션 삭제 오류:', error);
+        res.status(500).json({ message: '세션 삭제에 실패했습니다.' });
     }
-    const idx = sessions.findIndex(s => s.id === sessionId);
-    if (idx === -1) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
-    // 세션 삭제만, 회원 잔여세션은 변경하지 않음
-    sessions.splice(idx, 1);
-    fs.writeFileSync(SESSIONS_PATH, JSON.stringify(sessions, null, 2));
-    res.json({ message: '세션이 삭제되었습니다.' });
 });
 
 // 비밀번호 변경 API

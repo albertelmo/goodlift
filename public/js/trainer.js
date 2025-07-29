@@ -79,11 +79,16 @@ function renderCalUI(container, forceDate) {
       .then(r=>r.json())
       .then(allSessions => {
         const sessionDays = new Set(
-          allSessions.filter(s => s.date && s.date.startsWith(`${yyyy}-${mm}`)).map(s => s.date.split('-')[2])
+          allSessions.filter(s => s.date && s.date.startsWith(`${yyyy}-${mm}`)).map(s => {
+            const dateStr = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
+            return dateStr.split('-')[2];
+          })
         );
         // 선택 날짜의 세션만 추출 (시간순 정렬)
-        const sessions = allSessions.filter(s => s.date === selectedDate)
-          .sort((a, b) => a.time.localeCompare(b.time));
+        const sessions = allSessions.filter(s => {
+          const sessionDate = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
+          return sessionDate === selectedDate;
+        }).sort((a, b) => a.time.localeCompare(b.time));
         let html = `<div class="trainer-mobile-cal-wrap">
             <div class="tmc-header"></div>
             <div class="tmc-calendar">

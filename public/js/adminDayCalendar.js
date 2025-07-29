@@ -49,10 +49,16 @@ async function renderTable(tableWrap) {
     fetch('/api/trainers').then(r=>r.json()),
     fetch(`/api/sessions?date=${state.date}`).then(r=>r.json())
   ]);
+  
+  // PostgreSQL에서 반환되는 날짜 형식 처리 (ISO 날짜에서 날짜 부분만 추출)
+  const processedSessions = sessions.map(s => ({
+    ...s,
+    date: s.date.split('T')[0] // ISO 날짜에서 날짜 부분만 추출
+  }));
   // === 동적으로 시간대 계산 (30분 단위, 최소 09:00~17:00) ===
   let minTime = 9 * 60, maxTime = 17 * 60; // 분 단위
-  if (sessions.length) {
-    const times = sessions.map(s => {
+  if (processedSessions.length) {
+    const times = processedSessions.map(s => {
       const [h, m] = s.time.split(':').map(Number);
       return h * 60 + m;
     });
@@ -82,13 +88,14 @@ async function renderTable(tableWrap) {
     html += `<td class="adc-time">${hour}</td>`;
     trainers.forEach(t => {
       // 세션이 이 시간에 시작하면 rowspan=2로 카드 표시
-      const session = sessions.find(s => s.trainer === t.username && s.time === hour);
+      const session = processedSessions.find(s => s.trainer === t.username && s.time === hour);
+      
       // 이전 30분 셀에서 이미 rowspan=2로 표시된 경우, 이 셀은 display:none
       const prevIdx = i - 1;
       let prevSession = null;
       if (prevIdx >= 0) {
         const prevHour = hours[prevIdx];
-        prevSession = sessions.find(s => s.trainer === t.username && s.time === prevHour);
+        prevSession = processedSessions.find(s => s.trainer === t.username && s.time === prevHour);
       }
       if (session) {
         // 상태를 영어 클래스명으로 변환
