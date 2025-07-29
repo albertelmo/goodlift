@@ -68,27 +68,56 @@ export function renderSessionCalendar(container) {
     renderCalUI(container);
 }
 
-function renderCalUI(container, forceDate) {
+async function renderCalUI(container, forceDate) {
     const yyyy = calState.year;
     const mm = String(calState.month).padStart(2, '0');
     let dd = String(calState.today).padStart(2, '0');
     if (forceDate) dd = forceDate;
     const selectedDate = `${yyyy}-${mm}-${dd}`;
     const username = localStorage.getItem('username');
-    fetch(`/api/sessions?trainer=${encodeURIComponent(username)}`)
-      .then(r=>r.json())
-      .then(allSessions => {
+    
+    try {
+        // 세션 정보 가져오기
+        const sessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}`);
+        const allSessions = await sessionsRes.json();
+        
         const sessionDays = new Set(
           allSessions.filter(s => s.date && s.date.startsWith(`${yyyy}-${mm}`)).map(s => {
             const dateStr = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
             return dateStr.split('-')[2];
           })
         );
+        
         // 선택 날짜의 세션만 추출 (시간순 정렬)
         const sessions = allSessions.filter(s => {
           const sessionDate = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
           return sessionDate === selectedDate;
         }).sort((a, b) => a.time.localeCompare(b.time));
+        
+        // 회원 정보 가져오기
+        const membersRes = await fetch('/api/members');
+        const members = await membersRes.json();
+        
+        // 세션별로 회원 정보 매핑
+        const sessionsWithMemberInfo = sessions.map(s => {
+          const member = members.find(m => m.name === s.member);
+          const remainSessions = member ? member.remainSessions : 0;
+          const hasNoRemainingSessions = remainSessions <= 0;
+          
+          // 완료된 세션은 잔여세션과 관계없이 "완료" 상태 유지
+          let displayStatus = s.status;
+          if (s.status !== '완료' && hasNoRemainingSessions) {
+            displayStatus = '잔여세션 부족';
+          }
+          
+          return {
+            ...s,
+            remainSessions,
+            hasNoRemainingSessions,
+            displayStatus
+          };
+        });
+        
         let html = `<div class="trainer-mobile-cal-wrap">
             <div class="tmc-header"></div>
             <div class="tmc-calendar">
@@ -101,14 +130,34 @@ function renderCalUI(container, forceDate) {
                 </table>
             </div>
             <div class="tmc-session-list">`;
-        html += sessions.length ? sessions.map(s => `
-            <div class="tmc-session-item${s.status==='완료'?' done':''}" data-id="${s.id}" ${s.status==='완료'?'style="pointer-events:none;opacity:0.6;"':''}>
+        
+        if (sessionsWithMemberInfo.length) {
+          sessionsWithMemberInfo.forEach(s => {
+            let itemClass = 'tmc-session-item';
+            if (s.status === '완료') itemClass += ' done';
+            // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
+            if (s.hasNoRemainingSessions && s.status !== '완료') itemClass += ' no-remaining';
+            
+            let itemStyle = '';
+            if (s.status === '완료') itemStyle = 'style="pointer-events:none;opacity:0.6;"';
+            
+            let statusClass = '';
+            if (s.status === '완료') statusClass = 'attend';
+            else if (s.status === '예정') statusClass = 'scheduled';
+            // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
+            if (s.hasNoRemainingSessions && s.status !== '완료') statusClass += ' no-remaining';
+            
+            html += `<div class="${itemClass}" data-id="${s.id}" data-no-remaining="${s.hasNoRemainingSessions && s.status !== '완료'}" ${itemStyle}>
                 <span class="tmc-session-time">${s.time}</span>
                 <span class="tmc-session-type">PT</span>
                 <span class="tmc-session-member">${s.member}</span>
-                <span class="tmc-session-status ${s.status === '완료' ? 'attend' : ''}">${s.status}</span>
-            </div>
-        `).join('') : '<div class="tmc-no-session">세션이 없습니다.</div>';
+                <span class="tmc-session-status ${statusClass}">${s.displayStatus}</span>
+                ${s.hasNoRemainingSessions && s.status !== '완료' ? '<span style="color:#d32f2f;font-size:1.2em;margin-left:4px;">⚠️</span>' : ''}
+            </div>`;
+          });
+        } else {
+          html += '<div class="tmc-no-session">세션이 없습니다.</div>';
+        }
         html += `</div>
             <button class="tmc-fab" id="tmc-add-btn">+</button>
             <div class="tmc-modal-bg" id="tmc-modal-bg" style="display:none;"></div>
@@ -133,48 +182,48 @@ function renderCalUI(container, forceDate) {
             </div>
         </div>`;
         container.innerHTML = html;
+        
         // 세션 추가 모달: 회원 드롭다운 로딩
-        fetch('/api/members').then(r=>r.json()).then(members=>{
-          const myMembers = members.filter(m=>m.trainer===username && m.remainSessions > 0 && m.status === '유효');
-          const sel = document.getElementById('tmc-member-select');
-          sel.innerHTML = myMembers.length ? myMembers.map(m=>`<option value=\"${m.name}\">${m.name}</option>`).join('') : '<option value=\"\">담당 회원 없음</option>';
-        });
+        const myMembers = members.filter(m=>m.trainer===username && m.remainSessions > 0 && m.status === '유효');
+        const sel = document.getElementById('tmc-member-select');
+        sel.innerHTML = myMembers.length ? myMembers.map(m=>`<option value=\"${m.name}\">${m.name}</option>`).join('') : '<option value=\"\">담당 회원 없음</option>';
+        
         // 시간 드롭다운 06:00~22:00 30분 단위 생성 (중복 방지, 1시간 단위)
         const timeSel = document.getElementById('tmc-time-input');
-        fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${yyyy}-${mm}-${dd}`)
-          .then(r=>r.json())
-          .then(daySessions => {
-            // 예약된 시간대(이전 30분, 해당, 다음 30분) 모두 disabled 처리
-            const disabledTimes = new Set();
-            daySessions.forEach(s => {
-              const [h, m] = s.time.split(':').map(Number);
-              // 이전 30분
-              if (!(h === 6 && m === 0)) {
-                let prevH = h, prevM = m - 30;
-                if (prevM < 0) { prevH--; prevM = 30; }
-                if (prevH >= 6) disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
-              }
-              // 해당 시간
-              disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-              // 다음 30분
-              if (!(h === 22 && m === 0)) {
-                let nextH = h, nextM = m + 30;
-                if (nextM >= 60) { nextH++; nextM = 0; }
-                if (nextH <= 22) disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
-              }
-            });
-            let timeOpts = '';
-            for(let h=6; h<=22; h++) {
-              for(let m=0; m<60; m+=30) {
-                if(h===22 && m>0) break;
-                const hh = String(h).padStart(2,'0');
-                const mm = String(m).padStart(2,'0');
-                const val = `${hh}:${mm}`;
-                timeOpts += `<option value="${val}"${disabledTimes.has(val)?' disabled':''}>${val}${disabledTimes.has(val)?' (예약불가)':''}</option>`;
-              }
-            }
-            timeSel.innerHTML = timeOpts;
-          });
+        const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${yyyy}-${mm}-${dd}`);
+        const daySessions = await daySessionsRes.json();
+        
+        // 예약된 시간대(이전 30분, 해당, 다음 30분) 모두 disabled 처리
+        const disabledTimes = new Set();
+        daySessions.forEach(s => {
+          const [h, m] = s.time.split(':').map(Number);
+          // 이전 30분
+          if (!(h === 6 && m === 0)) {
+            let prevH = h, prevM = m - 30;
+            if (prevM < 0) { prevH--; prevM = 30; }
+            if (prevH >= 6) disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
+          }
+          // 해당 시간
+          disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+          // 다음 30분
+          if (!(h === 22 && m === 0)) {
+            let nextH = h, nextM = m + 30;
+            if (nextM >= 60) { nextH++; nextM = 0; }
+            if (nextH <= 22) disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+          }
+        });
+        let timeOpts = '';
+        for(let h=6; h<=22; h++) {
+          for(let m=0; m<60; m+=30) {
+            if(h===22 && m>0) break;
+            const hh = String(h).padStart(2,'0');
+            const mm = String(m).padStart(2,'0');
+            const val = `${hh}:${mm}`;
+            timeOpts += `<option value="${val}"${disabledTimes.has(val)?' disabled':''}>${val}${disabledTimes.has(val)?' (예약불가)':''}</option>`;
+          }
+        }
+        timeSel.innerHTML = timeOpts;
+        
         document.getElementById('tmc-date-input').value = `${yyyy}-${mm}-${dd}`;
         document.getElementById('tmc-add-btn').onclick = function() {
             document.getElementById('tmc-modal-bg').style.display = 'block';
@@ -264,10 +313,14 @@ function renderCalUI(container, forceDate) {
           if(card.classList.contains('done')) return;
           card.onclick = function() {
             const sessionId = card.getAttribute('data-id');
-            showAttendModal(sessionId, container);
+            const hasNoRemaining = card.getAttribute('data-no-remaining') === 'true';
+            showAttendModal(sessionId, container, hasNoRemaining);
           };
         });
-      });
+      } catch (e) {
+        console.error("Error rendering calendar UI:", e);
+        if (container) container.innerHTML = '<div style="color:#d32f2f;">달력을 불러오지 못했습니다.</div>';
+      }
 }
 
 function renderSimpleMonth(year, month, today) {
@@ -318,19 +371,25 @@ function renderSimpleMonthWithDots(year, month, today, sessionDays) {
 
 export const trainer = { loadList, renderMyMembers, renderSessionCalendar };
 
-function showAttendModal(sessionId, container) {
+function showAttendModal(sessionId, container, hasNoRemaining = false) {
   let modalBg = document.createElement('div');
   modalBg.className = 'tmc-modal-bg';
   modalBg.style.display = 'block';
   let modal = document.createElement('div');
   modal.className = 'tmc-modal';
   modal.style.display = 'block';
+  
+  // 버튼 disabled 속성 설정
+  const attendDisabled = hasNoRemaining ? 'disabled' : '';
+  const changeDisabled = hasNoRemaining ? 'disabled' : '';
+  
   modal.innerHTML = `
     <div class="tmc-modal-content" id="attend-modal-content">
       <h3>세션 관리</h3>
+      ${hasNoRemaining ? '<div style="color:#d32f2f;font-size:0.9rem;margin-bottom:12px;text-align:center;">⚠️ 잔여세션이 부족하여 출석/변경이 불가능합니다.</div>' : ''}
       <div class="tmc-modal-btn-row" id="attend-btn-row">
-        <button id="attend-btn">출석</button>
-        <button id="change-btn">변경</button>
+        <button id="attend-btn" ${attendDisabled}>출석</button>
+        <button id="change-btn" ${changeDisabled}>변경</button>
         <button id="delete-btn">취소</button>
       </div>
       <div id="attend-modal-body"></div>
@@ -343,21 +402,23 @@ function showAttendModal(sessionId, container) {
   document.getElementById('attend-modal-close').onclick = close;
   // 출석 버튼
   document.getElementById('attend-btn').onclick = function() {
+    if (hasNoRemaining) return;
     document.getElementById('attend-btn-row').style.display = 'none';
-    renderSignBody();
+    renderSignBody(sessionId, hasNoRemaining);
   };
   // 변경 버튼
   document.getElementById('change-btn').onclick = function() {
+    if (hasNoRemaining) return;
     document.getElementById('attend-btn-row').style.display = 'none';
-    renderChangeBody();
+    renderChangeBody(sessionId);
   };
   // 삭제 버튼
   document.getElementById('delete-btn').onclick = function() {
     document.getElementById('attend-btn-row').style.display = 'none';
-    renderDeleteBody();
+    renderDeleteBody(sessionId);
   };
   // 출석(사인) 화면
-  function renderSignBody() {
+  function renderSignBody(sessionId, hasNoRemaining) {
     // 잔여세션 표시를 위해 세션 정보와 회원 정보 불러오기
     fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}`)
       .then(r=>r.json())
@@ -443,7 +504,7 @@ function showAttendModal(sessionId, container) {
       });
   }
   // 변경 화면
-  function renderChangeBody() {
+  function renderChangeBody(sessionId) {
     document.getElementById('attend-modal-body').innerHTML = `
       <form id="change-session-form" style="display:flex;flex-direction:column;gap:12px;align-items:center;">
         <label style="width:100%;text-align:left;">날짜
@@ -561,7 +622,7 @@ function showAttendModal(sessionId, container) {
       });
   }
   // 삭제 화면
-  function renderDeleteBody() {
+  function renderDeleteBody(sessionId) {
     document.getElementById('attend-modal-body').innerHTML = `
       <div style="margin-bottom:12px;">정말 이 세션을 삭제하시겠습니까?</div>
       <button id="delete-session-ok" style="background:#d32f2f;color:#fff;">삭제</button>
