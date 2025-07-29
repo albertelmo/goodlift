@@ -3,6 +3,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+
 require('dotenv').config();
 
 // PostgreSQL 세션 데이터베이스 모듈
@@ -31,6 +32,8 @@ if (!fs.existsSync(DATA_DIR)) {
     }
   });
 }
+
+
 
 // PostgreSQL 데이터베이스 초기화
 sessionsDB.initializeDatabase();
