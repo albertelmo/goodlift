@@ -149,6 +149,23 @@ const getSessionById = async (id) => {
   }
 };
 
+// 날짜 범위로 세션 조회
+async function getSessionsByDateRange(startDate, endDate) {
+  try {
+    const query = `
+      SELECT * FROM sessions 
+      WHERE date >= $1 AND date <= $2 
+      ORDER BY date ASC, time ASC
+    `;
+    
+    const result = await pool.query(query, [startDate, endDate]);
+    return result.rows;
+  } catch (error) {
+    console.error('날짜 범위 세션 조회 오류:', error);
+    throw error;
+  }
+}
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -166,5 +183,6 @@ module.exports = {
   updateSession,
   deleteSession,
   getSessionById,
+  getSessionsByDateRange,
   pool
 }; 

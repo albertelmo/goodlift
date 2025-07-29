@@ -3,6 +3,7 @@ import { trainer } from './trainer.js';
 import { member } from './member.js';
 import { adminDayCalendar } from './adminDayCalendar.js';
 import { adminWeekCalendar } from './adminWeekCalendar.js';
+import { adminStats } from './adminStats.js';
 
 // 회원가입 폼 표시 및 자동 로그인 처리
 window.addEventListener('DOMContentLoaded', function() {
@@ -137,7 +138,7 @@ const adminTabs = [
         <div id="center-list"></div>
     </div>` },
     { label: '트레이너 관리', content: '<div id="trainer-list-loading">트레이너 목록을 불러오는 중...</div><div id="trainer-list"></div>' },
-    { label: '통계', content: '관리자 - 통계 (샘플)' }
+    { label: '통계', content: '<div id="admin-stats-root"></div>' }
 ];
 const trainerTabs = [
     { label: '📅', content: '<div id="session-calendar"></div>' },
@@ -186,6 +187,9 @@ function renderTabs(tabs) {
             if (tab.label === '📅') {
                 trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
             }
+            if (tab.label === '통계') {
+                adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
+            }
         };
         tabBar.appendChild(btn);
     });
@@ -211,6 +215,9 @@ function renderTabs(tabs) {
     }
     if (tabs[0].label === '📅') {
         trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
+    }
+    if (tabs[0].label === '통계') {
+        adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
     }
 }
 

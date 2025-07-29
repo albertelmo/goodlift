@@ -342,6 +342,61 @@ app.patch('/api/change-password', (req, res) => {
     res.json({ message: '비밀번호가 변경되었습니다.' });
 });
 
+// 통계 API
+app.get('/api/stats', async (req, res) => {
+  try {
+    const { period, startDate, endDate } = req.query;
+    
+    if (!period || !startDate || !endDate) {
+      return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
+    }
+    
+    // 세션 데이터 조회
+    const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
+    
+    // 통계 계산
+    const stats = {
+      totalSessions: sessions.length,
+      completedSessions: sessions.filter(s => s.status === '완료').length,
+      scheduledSessions: sessions.filter(s => s.status === '예정').length,
+      trainerStats: []
+    };
+    
+    // 트레이너별 통계 계산
+    const trainerMap = new Map();
+    
+    sessions.forEach(session => {
+      if (!trainerMap.has(session.trainer)) {
+        trainerMap.set(session.trainer, {
+          name: session.trainer,
+          total: 0,
+          completed: 0,
+          scheduled: 0
+        });
+      }
+      
+      const trainer = trainerMap.get(session.trainer);
+      trainer.total++;
+      
+      switch (session.status) {
+        case '완료':
+          trainer.completed++;
+          break;
+        case '예정':
+          trainer.scheduled++;
+          break;
+      }
+    });
+    
+    stats.trainerStats = Array.from(trainerMap.values());
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('통계 API 오류:', error);
+    res.status(500).json({ error: '통계를 불러오지 못했습니다.' });
+  }
+});
+
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
 });
