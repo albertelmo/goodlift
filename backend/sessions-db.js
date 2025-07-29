@@ -3,12 +3,8 @@ require('dotenv').config();
 
 // PostgreSQL 연결 풀 생성
 const pool = new Pool({
-  user: 'fms_user',
-  host: 'localhost',
-  database: 'fms_db',
-  password: 'password',
-  port: 5432,
-  ssl: false
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
 // 세션 테이블 생성
