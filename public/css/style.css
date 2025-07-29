@@ -916,6 +916,11 @@ li, td, th {
   border-bottom: 1px solid var(--border);
 }
 
+.trainer-stats-table th:not(:first-child),
+.trainer-stats-table td:not(:first-child) {
+  text-align: center;
+}
+
 .trainer-stats-table th {
   background: var(--bg);
   font-weight: 600;
