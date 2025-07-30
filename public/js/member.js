@@ -352,6 +352,7 @@ function renderList(container) {
         </div>
       </div>
     `;
+
     // 닫기 버튼
     document.getElementById('edit-modal-cancel').onclick = function() {
       modalBg.style.display = 'none';

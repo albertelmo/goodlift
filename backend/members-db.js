@@ -119,6 +119,7 @@ const updateMember = async (name, updates) => {
       const add = Number(updates.addSessions);
       fields.push(`sessions = sessions + $${paramIndex++}`);
       fields.push(`remain_sessions = remain_sessions + $${paramIndex++}`);
+      fields.push(`regdate = CURRENT_DATE`);
       values.push(add, add);
     }
 

@@ -204,6 +204,7 @@ function renderTrainerStats(trainerStats) {
       <thead>
         <tr>
           <th>트레이너</th>
+          <th>담당 회원수</th>
           <th>총 세션</th>
           <th>완료</th>
           <th>예정</th>
@@ -213,6 +214,7 @@ function renderTrainerStats(trainerStats) {
         ${trainerStats.map(trainer => `
           <tr>
             <td>${trainer.name}</td>
+            <td>${trainer.memberCount || 0}</td>
             <td>${trainer.total}</td>
             <td>${trainer.completed}</td>
             <td>${trainer.scheduled}</td>

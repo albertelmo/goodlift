@@ -212,10 +212,9 @@ async function renderCalUI(container, forceDate) {
                       <label style="width:100%;text-align:left;">시간
                         <select name="time" id="tmc-time-input" required style="width:180px;"></select>
                       </label>
-                      <button type="submit" style="width:180px;">등록</button>
-                      <div id="tmc-session-add-result" style="min-height:20px;font-size:0.97rem;"></div>
-                    </form>
-                    <button id="tmc-modal-close">닫기</button>
+                                          <button type="submit" style="width:180px;">등록</button>
+                    <div id="tmc-session-add-result" style="min-height:20px;font-size:0.97rem;"></div>
+                  </form>
                 </div>
             </div>
         </div>`;
@@ -267,10 +266,7 @@ async function renderCalUI(container, forceDate) {
             document.getElementById('tmc-modal-bg').style.display = 'block';
             document.getElementById('tmc-modal').style.display = 'block';
         };
-        document.getElementById('tmc-modal-close').onclick = function() {
-            document.getElementById('tmc-modal-bg').style.display = 'none';
-            document.getElementById('tmc-modal').style.display = 'none';
-        };
+
         document.getElementById('tmc-modal-bg').onclick = function() {
             document.getElementById('tmc-modal-bg').style.display = 'none';
             document.getElementById('tmc-modal').style.display = 'none';

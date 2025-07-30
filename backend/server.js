@@ -492,6 +492,9 @@ app.get('/api/stats', async (req, res) => {
     // 세션 데이터와 트레이너 데이터 조회
     const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
     
+    // 회원 데이터 조회 (담당 회원 수 계산용)
+    const members = await membersDB.getMembers();
+    
     // 트레이너 데이터 직접 읽기
     let accounts = [];
     if (fs.existsSync(DATA_PATH)) {
@@ -507,6 +510,15 @@ app.get('/api/stats', async (req, res) => {
       trainerNameMap[trainer.username] = trainer.name;
     });
     
+    // 트레이너별 담당 회원 수 계산
+    const trainerMemberCount = {};
+    members.forEach(member => {
+      if (member.status === '유효') { // 유효한 회원만 카운트
+        const trainerName = trainerNameMap[member.trainer] || member.trainer;
+        trainerMemberCount[trainerName] = (trainerMemberCount[trainerName] || 0) + 1;
+      }
+    });
+    
     // 통계 계산
     const stats = {
       totalSessions: sessions.length,
@@ -518,6 +530,18 @@ app.get('/api/stats', async (req, res) => {
     // 트레이너별 통계 계산
     const trainerMap = new Map();
     
+    // 먼저 담당 회원이 있는 모든 트레이너를 추가
+    Object.keys(trainerMemberCount).forEach(trainerName => {
+      trainerMap.set(trainerName, {
+        name: trainerName,
+        total: 0,
+        completed: 0,
+        scheduled: 0,
+        memberCount: trainerMemberCount[trainerName] || 0
+      });
+    });
+    
+    // 세션 데이터로 통계 업데이트
     sessions.forEach(session => {
       const trainerName = trainerNameMap[session.trainer] || session.trainer; // 이름이 없으면 ID 사용
       
@@ -526,7 +550,8 @@ app.get('/api/stats', async (req, res) => {
           name: trainerName,
           total: 0,
           completed: 0,
-          scheduled: 0
+          scheduled: 0,
+          memberCount: trainerMemberCount[trainerName] || 0
         });
       }
       
