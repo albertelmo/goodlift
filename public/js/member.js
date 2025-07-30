@@ -85,8 +85,11 @@ function renderAddForm(container) {
 function renderList(container) {
   if (!container) return;
   container.innerHTML = `
-    <div style="margin-bottom:10px;text-align:right;">
-      <select id="search-type" style="padding:6px 6px;font-size:0.9rem;border:1.2px solid #bbb;border-radius:6px;margin-right:8px;width:90px;">
+    <div style="margin-bottom:10px;display:flex;justify-content:flex-end;align-items:flex-start;gap:8px;">
+      <button id="export-members-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:1.2rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="엑셀 다운로드">
+        ⬇️
+      </button>
+      <select id="search-type" style="padding:6px 6px;font-size:0.9rem;border:1.2px solid #bbb;border-radius:6px;width:90px;">
         <option value="name">이름</option>
         <option value="trainer">트레이너</option>
         <option value="center">센터</option>
@@ -101,6 +104,7 @@ function renderList(container) {
   let trainers = [];
   let sortColumn = null;
   let sortDirection = 'asc'; // 'asc' 또는 'desc'
+  let currentDisplayedMembers = []; // 현재 표시된 회원 목록 추적
   // 데이터 불러오기
   Promise.all([
     fetch('/api/members').then(r=>r.json()),
@@ -199,6 +203,9 @@ function renderList(container) {
     html += '</tbody></table>';
     tableWrap.innerHTML = html;
     
+    // 현재 표시된 회원 목록 업데이트
+    currentDisplayedMembers = members;
+    
     // 헤더 클릭 이벤트 (정렬)
     tableWrap.querySelectorAll('.sortable-header').forEach(header => {
       header.addEventListener('click', function() {
@@ -280,6 +287,41 @@ function renderList(container) {
         }
       });
       renderTable(filtered);
+    }
+  });
+  
+  // 엑셀 다운로드 버튼 이벤트
+  container.querySelector('#export-members-btn').addEventListener('click', async function() {
+    if (currentDisplayedMembers.length === 0) {
+      alert('다운로드할 회원이 없습니다.');
+      return;
+    }
+    
+    try {
+      const res = await fetch('/api/members/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ members: currentDisplayedMembers })
+      });
+      
+      if (res.ok) {
+        // CSV 파일 다운로드
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '회원목록.csv';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        const result = await res.json();
+        alert(result.message || '다운로드에 실패했습니다.');
+      }
+    } catch (error) {
+      console.error('다운로드 오류:', error);
+      alert('다운로드에 실패했습니다.');
     }
   });
   // 회원 정보 수정 모달

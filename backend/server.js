@@ -174,23 +174,37 @@ app.post('/api/centers', (req, res) => {
 });
 
 // 센터 삭제
-app.delete('/api/centers/:name', (req, res) => {
-    const name = decodeURIComponent(req.params.name);
-    if (!name) {
-        return res.status(400).json({ message: '센터 이름이 필요합니다.' });
+app.delete('/api/centers/:name', async (req, res) => {
+    try {
+        const name = decodeURIComponent(req.params.name);
+        if (!name) {
+            return res.status(400).json({ message: '센터 이름이 필요합니다.' });
+        }
+        
+        // 센터에 회원이 있는지 확인
+        const members = await membersDB.getMembers();
+        const hasMembers = members.some(member => member.center === name);
+        
+        if (hasMembers) {
+            return res.status(400).json({ message: '해당 센터에 등록된 회원이 있어 삭제할 수 없습니다.' });
+        }
+        
+        let centers = [];
+        if (fs.existsSync(CENTERS_PATH)) {
+            const raw = fs.readFileSync(CENTERS_PATH, 'utf-8');
+            if (raw) centers = JSON.parse(raw);
+        }
+        const idx = centers.findIndex(c => c.name === name);
+        if (idx === -1) {
+            return res.status(404).json({ message: '센터를 찾을 수 없습니다.' });
+        }
+        centers.splice(idx, 1);
+        fs.writeFileSync(CENTERS_PATH, JSON.stringify(centers, null, 2));
+        res.json({ message: '센터가 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 센터 삭제 오류:', error);
+        res.status(500).json({ message: '센터 삭제에 실패했습니다.' });
     }
-    let centers = [];
-    if (fs.existsSync(CENTERS_PATH)) {
-        const raw = fs.readFileSync(CENTERS_PATH, 'utf-8');
-        if (raw) centers = JSON.parse(raw);
-    }
-    const idx = centers.findIndex(c => c.name === name);
-    if (idx === -1) {
-        return res.status(404).json({ message: '센터를 찾을 수 없습니다.' });
-    }
-    centers.splice(idx, 1);
-    fs.writeFileSync(CENTERS_PATH, JSON.stringify(centers, null, 2));
-    res.json({ message: '센터가 삭제되었습니다.' });
 });
 
 // 회원 목록 조회
@@ -237,6 +251,53 @@ app.post('/api/members', async (req, res) => {
         } else {
             res.status(500).json({ message: '회원 추가에 실패했습니다.' });
         }
+    }
+});
+
+// 회원 목록 CSV 다운로드
+app.post('/api/members/export', async (req, res) => {
+    try {
+        const { members } = req.body; // 프론트엔드에서 전송한 회원 목록
+        
+        if (!members || !Array.isArray(members)) {
+            return res.status(400).json({ message: '회원 목록이 필요합니다.' });
+        }
+        
+        // 트레이너 정보 가져오기
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const trainers = accounts.filter(acc => acc.role === 'trainer')
+            .map(({ username, name }) => ({ username, name }));
+        const trainerMap = {};
+        trainers.forEach(t => { trainerMap[t.username] = t.name; });
+        
+        // BOM 추가 (한글 깨짐 방지)
+        const BOM = '\uFEFF';
+        
+        // CSV 헤더
+        let csv = BOM + '이름,성별,전화번호,담당 트레이너,센터,등록일,세션 수,잔여세션,상태\n';
+        
+        // CSV 데이터
+        members.forEach(member => {
+            const gender = member.gender === 'male' ? '남성' : member.gender === 'female' ? '여성' : '';
+            const trainerName = trainerMap[member.trainer] || member.trainer;
+            const remainSessions = member.remainSessions !== undefined ? member.remainSessions : '';
+            
+            // 전화번호 앞에 = 추가하여 텍스트로 강제 변환 (엑셀에서 0이 사라지는 것 방지)
+            const phoneForExcel = `="${member.phone}"`;
+            
+            csv += `"${member.name}","${gender}",${phoneForExcel},"${trainerName}","${member.center}","${member.regdate}",${member.sessions},${remainSessions},"${member.status || ''}"\n`;
+        });
+        
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', 'attachment; filename="members.csv"');
+        res.send(csv);
+    } catch (error) {
+        console.error('[API] 회원 목록 내보내기 오류:', error);
+        res.status(500).json({ message: '회원 목록 내보내기에 실패했습니다.' });
     }
 });
 
