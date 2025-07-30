@@ -92,6 +92,47 @@ app.get('/api/trainers', (req, res) => {
     res.json(trainers);
 });
 
+// 트레이너 삭제 API
+app.delete('/api/trainers/:username', async (req, res) => {
+    try {
+        const username = req.params.username;
+        const { currentUser } = req.body; // 현재 로그인한 사용자 정보
+        
+        // 관리자 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!currentUserAccount || currentUserAccount.role !== 'admin') {
+            return res.status(403).json({ message: '관리자만 트레이너를 삭제할 수 있습니다.' });
+        }
+        
+        // 트레이너가 담당 회원이 있는지 확인
+        const members = await membersDB.getMembers();
+        const hasMembers = members.some(member => member.trainer === username);
+        
+        if (hasMembers) {
+            return res.status(400).json({ message: '담당 회원이 있는 트레이너는 삭제할 수 없습니다.' });
+        }
+        
+        const trainerIndex = accounts.findIndex(acc => acc.username === username && acc.role === 'trainer');
+        if (trainerIndex === -1) {
+            return res.status(404).json({ message: '트레이너를 찾을 수 없습니다.' });
+        }
+        
+        accounts.splice(trainerIndex, 1);
+        fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        
+        res.json({ message: '트레이너가 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 트레이너 삭제 오류:', error);
+        res.status(500).json({ message: '트레이너 삭제에 실패했습니다.' });
+    }
+});
+
 // 관리자 계정 존재 여부 확인 API
 app.get('/api/admin-exists', (req, res) => {
     let accounts = [];
@@ -350,8 +391,23 @@ app.get('/api/stats', async (req, res) => {
       return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
     }
     
-    // 세션 데이터 조회
+    // 세션 데이터와 트레이너 데이터 조회
     const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
+    
+    // 트레이너 데이터 직접 읽기
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    const trainers = accounts.filter(acc => acc.role === 'trainer')
+      .map(({ username, name, role }) => ({ username, name, role }));
+    
+    // 트레이너 ID를 이름으로 매핑
+    const trainerNameMap = {};
+    trainers.forEach(trainer => {
+      trainerNameMap[trainer.username] = trainer.name;
+    });
     
     // 통계 계산
     const stats = {
@@ -365,16 +421,18 @@ app.get('/api/stats', async (req, res) => {
     const trainerMap = new Map();
     
     sessions.forEach(session => {
-      if (!trainerMap.has(session.trainer)) {
-        trainerMap.set(session.trainer, {
-          name: session.trainer,
+      const trainerName = trainerNameMap[session.trainer] || session.trainer; // 이름이 없으면 ID 사용
+      
+      if (!trainerMap.has(trainerName)) {
+        trainerMap.set(trainerName, {
+          name: trainerName,
           total: 0,
           completed: 0,
           scheduled: 0
         });
       }
       
-      const trainer = trainerMap.get(session.trainer);
+      const trainer = trainerMap.get(trainerName);
       trainer.total++;
       
       switch (session.status) {

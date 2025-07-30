@@ -11,12 +11,50 @@ async function loadList() {
             if (listDiv) listDiv.innerHTML = '<div style="color:#888;">등록된 트레이너가 없습니다.</div>';
         } else {
             let html = '<table style="width:100%;border-collapse:collapse;margin-top:10px;">';
-            html += '<thead><tr><th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">아이디</th><th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">이름</th></tr></thead><tbody>';
+            html += '<thead><tr><th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">아이디</th><th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">이름</th><th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">삭제</th></tr></thead><tbody>';
             trainers.forEach(tr => {
-                html += `<tr><td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.username}</td><td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.name}</td></tr>`;
+                html += `<tr>
+                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.username}</td>
+                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.name}</td>
+                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
+                        <button class="delete-trainer-btn" data-username="${tr.username}" data-name="${tr.name}" style="background:#d32f2f;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.9rem;">삭제</button>
+                    </td>
+                </tr>`;
             });
             html += '</tbody></table>';
             if (listDiv) listDiv.innerHTML = html;
+            
+            // 삭제 버튼 이벤트 리스너 추가
+            listDiv.querySelectorAll('.delete-trainer-btn').forEach(btn => {
+                btn.addEventListener('click', async function() {
+                    const username = this.getAttribute('data-username');
+                    const name = this.getAttribute('data-name');
+                    
+                    if (!confirm(`정말 트레이너 "${name}"을(를) 삭제하시겠습니까?`)) {
+                        return;
+                    }
+                    
+                    try {
+                        const currentUser = localStorage.getItem('username');
+                        const res = await fetch(`/api/trainers/${encodeURIComponent(username)}`, {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ currentUser })
+                        });
+                        const result = await res.json();
+                        
+                        if (res.ok) {
+                            alert('트레이너가 삭제되었습니다.');
+                            loadList(); // 목록 새로고침
+                        } else {
+                            alert(result.message || '트레이너 삭제에 실패했습니다.');
+                        }
+                    } catch (error) {
+                        console.error('트레이너 삭제 오류:', error);
+                        alert('트레이너 삭제에 실패했습니다.');
+                    }
+                });
+            });
         }
     } catch (e) {
         if (loading) loading.style.display = 'none';

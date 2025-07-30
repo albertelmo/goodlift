@@ -86,7 +86,12 @@ function renderList(container) {
   if (!container) return;
   container.innerHTML = `
     <div style="margin-bottom:10px;text-align:right;">
-      <input id="member-search-input" type="text" placeholder="이름 검색" style="padding:6px 10px;font-size:0.97rem;border:1.2px solid #bbb;border-radius:6px;width:160px;">
+      <select id="search-type" style="padding:6px 6px;font-size:0.9rem;border:1.2px solid #bbb;border-radius:6px;margin-right:8px;width:90px;">
+        <option value="name">이름</option>
+        <option value="trainer">트레이너</option>
+        <option value="center">센터</option>
+      </select>
+      <input id="member-search-input" type="text" placeholder="검색어 입력" style="padding:6px 10px;font-size:0.97rem;border:1.2px solid #bbb;border-radius:6px;width:160px;">
     </div>
     <div id="member-table-wrap"></div>
     <div id="member-edit-modal-bg" style="display:none;"></div>
@@ -94,6 +99,8 @@ function renderList(container) {
   const tableWrap = container.querySelector('#member-table-wrap');
   let allMembers = [];
   let trainers = [];
+  let sortColumn = null;
+  let sortDirection = 'asc'; // 'asc' 또는 'desc'
   // 데이터 불러오기
   Promise.all([
     fetch('/api/members').then(r=>r.json()),
@@ -113,9 +120,68 @@ function renderList(container) {
       tableWrap.innerHTML = '<div style="color:#888;text-align:center;">등록된 회원이 없습니다.</div>';
       return;
     }
+    
+    // 정렬 적용
+    if (sortColumn) {
+      members.sort((a, b) => {
+        let aVal = a[sortColumn];
+        let bVal = b[sortColumn];
+        
+        // 특별한 처리
+        if (sortColumn === 'trainer') {
+          aVal = tMap[a.trainer] || a.trainer;
+          bVal = tMap[b.trainer] || b.trainer;
+        } else if (sortColumn === 'gender') {
+          aVal = a.gender === 'male' ? '남성' : a.gender === 'female' ? '여성' : '';
+          bVal = b.gender === 'male' ? '남성' : b.gender === 'female' ? '여성' : '';
+        } else if (sortColumn === 'remainSessions') {
+          aVal = a.remainSessions !== undefined ? a.remainSessions : -1;
+          bVal = b.remainSessions !== undefined ? b.remainSessions : -1;
+        }
+        
+        // 숫자 정렬
+        if (['sessions', 'remainSessions'].includes(sortColumn)) {
+          return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        
+        // 문자열 정렬
+        if (typeof aVal === 'string' && typeof bVal === 'string') {
+          return sortDirection === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+        }
+        
+        return 0;
+      });
+    }
+    
     let html = `<table style="width:100%;border-collapse:collapse;margin-top:18px;">
       <thead><tr>
-        <th style="text-align:center;">이름</th><th style="text-align:center;">성별</th><th style="text-align:center;">전화번호</th><th style="text-align:center;">담당 트레이너</th><th style="text-align:center;">센터</th><th style="text-align:center;">등록일</th><th style="text-align:center;">세션 수</th><th style="text-align:center;">잔여세션</th><th style="text-align:center;">상태</th>
+        <th class="sortable-header" data-column="name" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          이름 ${getSortIcon('name')}
+        </th>
+        <th class="sortable-header" data-column="gender" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          성별 ${getSortIcon('gender')}
+        </th>
+        <th class="sortable-header" data-column="phone" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          전화번호 ${getSortIcon('phone')}
+        </th>
+        <th class="sortable-header" data-column="trainer" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          담당 트레이너 ${getSortIcon('trainer')}
+        </th>
+        <th class="sortable-header" data-column="center" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          센터 ${getSortIcon('center')}
+        </th>
+        <th class="sortable-header" data-column="regdate" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          등록일 ${getSortIcon('regdate')}
+        </th>
+        <th class="sortable-header" data-column="sessions" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          세션 수 ${getSortIcon('sessions')}
+        </th>
+        <th class="sortable-header" data-column="remainSessions" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          잔여세션 ${getSortIcon('remainSessions')}
+        </th>
+        <th class="sortable-header" data-column="status" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          상태 ${getSortIcon('status')}
+        </th>
       </tr></thead><tbody>`;
     members.forEach((m, idx) => {
       html += `<tr class="member-row" data-idx="${idx}" style="cursor:pointer;">
@@ -132,6 +198,23 @@ function renderList(container) {
     });
     html += '</tbody></table>';
     tableWrap.innerHTML = html;
+    
+    // 헤더 클릭 이벤트 (정렬)
+    tableWrap.querySelectorAll('.sortable-header').forEach(header => {
+      header.addEventListener('click', function() {
+        const column = this.getAttribute('data-column');
+        if (sortColumn === column) {
+          // 같은 칼럼 클릭 시 방향 전환
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          // 다른 칼럼 클릭 시 오름차순으로 설정
+          sortColumn = column;
+          sortDirection = 'asc';
+        }
+        renderTable(members);
+      });
+    });
+    
     // 행 클릭 이벤트(모달)
     tableWrap.querySelectorAll('.member-row').forEach(row => {
       row.addEventListener('click', function() {
@@ -140,13 +223,62 @@ function renderList(container) {
       });
     });
   }
+  
+  // 정렬 아이콘 생성 함수
+  function getSortIcon(column) {
+    if (sortColumn !== column) {
+      return '<span style="color:#ccc;font-size:0.8em;">↕</span>';
+    }
+    return sortDirection === 'asc' 
+      ? '<span style="color:#1976d2;font-size:0.8em;">↑</span>' 
+      : '<span style="color:#1976d2;font-size:0.8em;">↓</span>';
+  }
   // 검색 이벤트
   container.querySelector('#member-search-input').addEventListener('input', function() {
     const keyword = this.value.trim();
+    const searchType = container.querySelector('#search-type').value;
+    
     if (!keyword) {
       renderTable(allMembers);
     } else {
-      const filtered = allMembers.filter(m => m.name.includes(keyword));
+      const filtered = allMembers.filter(m => {
+        switch (searchType) {
+          case 'name':
+            return m.name.includes(keyword);
+          case 'trainer':
+            const trainerName = trainers.find(t => t.username === m.trainer)?.name || m.trainer;
+            return trainerName.includes(keyword);
+          case 'center':
+            return m.center.includes(keyword);
+          default:
+            return m.name.includes(keyword);
+        }
+      });
+      renderTable(filtered);
+    }
+  });
+  
+  // 검색 타입 변경 이벤트
+  container.querySelector('#search-type').addEventListener('change', function() {
+    const searchInput = container.querySelector('#member-search-input');
+    const keyword = searchInput.value.trim();
+    
+    if (keyword) {
+      // 검색어가 있으면 즉시 재검색
+      const searchType = this.value;
+      const filtered = allMembers.filter(m => {
+        switch (searchType) {
+          case 'name':
+            return m.name.includes(keyword);
+          case 'trainer':
+            const trainerName = trainers.find(t => t.username === m.trainer)?.name || m.trainer;
+            return trainerName.includes(keyword);
+          case 'center':
+            return m.center.includes(keyword);
+          default:
+            return m.name.includes(keyword);
+        }
+      });
       renderTable(filtered);
     }
   });
