@@ -122,6 +122,8 @@ async function loadStats() {
     if (loadingElement) loadingElement.style.display = 'none';
     if (resultsElement) {
       resultsElement.innerHTML = renderStatsResults(stats);
+      // 월별 통계 로드
+      loadMonthlyStats();
     }
     
     updateDateDisplay();
@@ -183,6 +185,12 @@ function renderStatsResults(stats) {
         ${renderTrainerStats(stats.trainerStats || [])}
       </div>
     </div>
+    <div class="stats-details">
+      <h4>월별 세션 통계</h4>
+      <div id="monthly-stats-container">
+        <div style="text-align:center;color:#888;padding:20px;">월별 통계를 불러오는 중...</div>
+      </div>
+    </div>
   `;
 }
 
@@ -210,6 +218,59 @@ function renderTrainerStats(trainerStats) {
             <td>${trainer.scheduled}</td>
           </tr>
         `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// 월별 통계 로드
+async function loadMonthlyStats() {
+  try {
+    const response = await fetch('/api/monthly-stats/all');
+    const monthlyStats = await response.json();
+    
+    const container = document.querySelector('#monthly-stats-container');
+    if (container) {
+      container.innerHTML = renderMonthlyStats(monthlyStats);
+    }
+  } catch (error) {
+    console.error('월별 통계 로드 오류:', error);
+    const container = document.querySelector('#monthly-stats-container');
+    if (container) {
+      container.innerHTML = '<div style="color:#d32f2f;text-align:center;padding:20px;">월별 통계를 불러오지 못했습니다.</div>';
+    }
+  }
+}
+
+// 월별 통계 렌더링
+function renderMonthlyStats(monthlyStats) {
+  if (!monthlyStats.length) {
+    return '<div style="color:#888;text-align:center;padding:20px;">월별 데이터가 없습니다.</div>';
+  }
+  
+  return `
+    <table class="monthly-stats-table" style="width:100%;border-collapse:collapse;margin-top:10px;">
+      <thead>
+        <tr style="background:#f5f5f5;">
+          <th style="padding:12px;text-align:left;border-bottom:2px solid #ddd;color:#1976d2;">월</th>
+          <th style="padding:12px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;">신규 세션</th>
+          <th style="padding:12px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;">재등록 세션</th>
+          <th style="padding:12px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;">총 세션</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${monthlyStats.map(stat => {
+          const yearMonth = stat.year_month;
+          const displayMonth = yearMonth ? `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월` : '';
+          return `
+            <tr style="border-bottom:1px solid #eee;">
+              <td style="padding:12px;text-align:left;">${displayMonth}</td>
+              <td style="padding:12px;text-align:center;">${stat.new_sessions || 0}</td>
+              <td style="padding:12px;text-align:center;">${stat.re_registration_sessions || 0}</td>
+              <td style="padding:12px;text-align:center;font-weight:bold;">${stat.total_sessions || 0}</td>
+            </tr>
+          `;
+        }).join('')}
       </tbody>
     </table>
   `;

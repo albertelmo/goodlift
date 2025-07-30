@@ -9,6 +9,7 @@ require('dotenv').config();
 // PostgreSQL 세션 데이터베이스 모듈
 const sessionsDB = require('./sessions-db');
 const membersDB = require('./members-db');
+const monthlyStatsDB = require('./monthly-stats-db');
 
 const app = express();
 const PORT = 3000;
@@ -38,6 +39,7 @@ if (!fs.existsSync(DATA_DIR)) {
 // PostgreSQL 데이터베이스 초기화
 sessionsDB.initializeDatabase();
 membersDB.initializeDatabase();
+monthlyStatsDB.initializeDatabase();
 
 app.use(cors());
 app.use(express.json());
@@ -243,6 +245,12 @@ app.post('/api/members', async (req, res) => {
         };
         
         const member = await membersDB.addMember(newMember);
+        
+        // 신규 세션 통계 추가
+        if (numSessions > 0) {
+          await monthlyStatsDB.addNewSessions(numSessions);
+        }
+        
         res.json({ message: '회원이 추가되었습니다.', member });
     } catch (error) {
         console.error('[API] 회원 추가 오류:', error);
@@ -315,6 +323,12 @@ app.patch('/api/members/:name', async (req, res) => {
         }
         
         const member = await membersDB.updateMember(name, updates);
+        
+        // 재등록 세션 통계 추가
+        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) > 0) {
+          await monthlyStatsDB.addReRegistrationSessions(Number(addSessions));
+        }
+        
         res.json({ message: '회원 정보가 수정되었습니다.', member });
     } catch (error) {
         console.error('[API] 회원 수정 오류:', error);
@@ -441,6 +455,29 @@ app.patch('/api/change-password', (req, res) => {
     user.password = newPw;
     fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
     res.json({ message: '비밀번호가 변경되었습니다.' });
+});
+
+// 월별 통계 API
+app.get('/api/monthly-stats', async (req, res) => {
+    try {
+        const { yearMonth } = req.query;
+        const stats = await monthlyStatsDB.getMonthlyStats(yearMonth);
+        res.json(stats);
+    } catch (error) {
+        console.error('[API] 월별 통계 조회 오류:', error);
+        res.status(500).json({ message: '월별 통계 조회에 실패했습니다.' });
+    }
+});
+
+// 전체 월별 통계 API (최근 12개월)
+app.get('/api/monthly-stats/all', async (req, res) => {
+    try {
+        const stats = await monthlyStatsDB.getAllMonthlyStats();
+        res.json(stats);
+    } catch (error) {
+        console.error('[API] 전체 월별 통계 조회 오류:', error);
+        res.status(500).json({ message: '전체 월별 통계 조회에 실패했습니다.' });
+    }
 });
 
 // 통계 API
