@@ -84,11 +84,32 @@ async function renderTable(tableWrap) {
     weekDates.push(date.toISOString().slice(0, 10));
   }
   
-  // 트레이너, 세션 데이터 fetch
-  const [trainers, sessions] = await Promise.all([
+  // 트레이너, 세션, 회원 데이터 fetch
+  const [trainers, sessions, members] = await Promise.all([
     fetch('/api/trainers').then(r => r.json()),
-    fetch(`/api/sessions?week=${state.weekStart}`).then(r => r.json())
+    fetch(`/api/sessions?week=${state.weekStart}`).then(r => r.json()),
+    fetch('/api/members').then(r => r.json())
   ]);
+  
+  // 세션별로 회원 정보 매핑
+  const processedSessions = sessions.map(s => {
+    const member = members.find(m => m.name === s.member);
+    const remainSessions = member ? member.remainSessions : 0;
+    const hasNoRemainingSessions = remainSessions <= 0;
+    
+    // 완료된 세션은 잔여세션과 관계없이 원래 상태 유지
+    let displayStatus = s.status;
+    if (s.status !== '완료' && hasNoRemainingSessions) {
+      displayStatus = '잔여세션 부족';
+    }
+    
+    return {
+      ...s,
+      remainSessions,
+      hasNoRemainingSessions,
+      displayStatus
+    };
+  });
   
   // 30분 단위 시간대 생성 (06:00 ~ 22:00)
   const timeSlots = [];
@@ -127,7 +148,7 @@ async function renderTable(tableWrap) {
     const gridColumn = dateIndex + 2; // +2는 시간 라벨 열 때문
     
     // 해당 날짜의 세션들만 필터링
-    const dateSessions = sessions.filter(s => s.date === dateStr);
+    const dateSessions = processedSessions.filter(s => s.date === dateStr);
     
     // 각 30분 단위별로 세션 컨테이너 생성
     timeSlots.forEach((timeSlot, slotIndex) => {
@@ -227,8 +248,9 @@ function renderSessions(sessions, trainers, totalSessionsForWidth, offsetFromPre
     
     // 상태를 영어 클래스명으로 변환
     let statusClass = 'reserved'; // 기본값
-    if (session.status === '예정') statusClass = 'reserved';
-    else if (session.status === '완료') statusClass = 'attend';
+    if (session.displayStatus === '예정') statusClass = 'reserved';
+    else if (session.displayStatus === '완료') statusClass = 'attend';
+    else if (session.displayStatus === '잔여세션 부족') statusClass = 'no-remaining';
     
     // 현재 세션들의 순서에 따른 left 위치 계산
     const leftPosition = index * cardWidth + offsetFromPrev * cardWidth;
@@ -237,10 +259,16 @@ function renderSessions(sessions, trainers, totalSessionsForWidth, offsetFromPre
     const isNarrow = cardWidth < 25; // 25% 미만이면 좁은 카드로 판단
     const layoutClass = isNarrow ? 'narrow' : '';
     
-    return `<div class="awc-session-card awc-status-${statusClass} ${layoutClass}" 
+    let cardClass = `awc-session-card awc-status-${statusClass} ${layoutClass}`;
+    if (session.hasNoRemainingSessions && session.status !== '완료') {
+      cardClass += ' awc-no-remaining';
+    }
+    
+    return `<div class="${cardClass}" 
                   style="width: ${cardWidth}%; left: ${leftPosition}%; top: 0%;">
       <div class="awc-session-member">${session.member}</div>
       <div class="awc-session-trainer">${trainerName}</div>
+      ${session.hasNoRemainingSessions && session.status !== '완료' ? '<div style="color:#d32f2f;font-size:0.7em;">⚠️</div>' : ''}
     </div>`;
   }).join('');
 }

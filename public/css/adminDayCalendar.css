@@ -214,6 +214,33 @@
   color: #757575 !important;
 }
 
+/* 잔여세션 부족 상태 스타일 */
+.adc-status-no-remaining {
+  background: #fff3e0 !important;
+  border-left: 3px solid #ff9800 !important;
+}
+
+.adc-status-no-remaining .adc-status-label {
+  color: #e65100 !important;
+}
+
+.adc-no-remaining {
+  background: #fff3e0 !important;
+  border-left: 3px solid #ff9800 !important;
+  position: relative;
+}
+
+.adc-no-remaining::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 8px;
+  height: 8px;
+  background: #d32f2f;
+  border-radius: 50%;
+}
+
 .adc-table tr:nth-child(odd) td {
   border-bottom: 1px dashed #f5f5f5;
 }

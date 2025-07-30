@@ -281,6 +281,33 @@
   color: #757575 !important;
 }
 
+/* 잔여세션 부족 상태 스타일 */
+.awc-status-no-remaining {
+  background: #fff3e0 !important;
+  border-left: 3px solid #ff9800 !important;
+}
+
+.awc-status-no-remaining .awc-session-status {
+  color: #e65100 !important;
+}
+
+.awc-no-remaining {
+  background: #fff3e0 !important;
+  border-left: 3px solid #ff9800 !important;
+  position: relative;
+}
+
+.awc-no-remaining::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background: #d32f2f;
+  border-radius: 50%;
+}
+
 /* 반응형 디자인 */
 @media (max-width: 1200px) {
   .awc-calendar-grid {

@@ -44,17 +44,33 @@ function moveDate(delta) {
 async function renderTable(tableWrap) {
   if (!tableWrap) return;
   tableWrap.innerHTML = '<div style="color:#888;text-align:center;">불러오는 중...</div>';
-  // 트레이너, 세션 데이터 fetch
-  const [trainers, sessions] = await Promise.all([
+  // 트레이너, 세션, 회원 데이터 fetch
+  const [trainers, sessions, members] = await Promise.all([
     fetch('/api/trainers').then(r=>r.json()),
-    fetch(`/api/sessions?date=${state.date}`).then(r=>r.json())
+    fetch(`/api/sessions?date=${state.date}`).then(r=>r.json()),
+    fetch('/api/members').then(r=>r.json())
   ]);
   
   // PostgreSQL에서 반환되는 날짜 형식 처리 (ISO 날짜에서 날짜 부분만 추출)
-  const processedSessions = sessions.map(s => ({
-    ...s,
-    date: s.date.split('T')[0] // ISO 날짜에서 날짜 부분만 추출
-  }));
+  const processedSessions = sessions.map(s => {
+    const member = members.find(m => m.name === s.member);
+    const remainSessions = member ? member.remainSessions : 0;
+    const hasNoRemainingSessions = remainSessions <= 0;
+    
+    // 완료된 세션은 잔여세션과 관계없이 원래 상태 유지
+    let displayStatus = s.status;
+    if (s.status !== '완료' && hasNoRemainingSessions) {
+      displayStatus = '잔여세션 부족';
+    }
+    
+    return {
+      ...s,
+      date: s.date.split('T')[0], // ISO 날짜에서 날짜 부분만 추출
+      remainSessions,
+      hasNoRemainingSessions,
+      displayStatus
+    };
+  });
   // === 동적으로 시간대 계산 (30분 단위, 최소 09:00~17:00) ===
   let minTime = 9 * 60, maxTime = 17 * 60; // 분 단위
   if (processedSessions.length) {
@@ -100,16 +116,23 @@ async function renderTable(tableWrap) {
       if (session) {
         // 상태를 영어 클래스명으로 변환
         let statusClass = 'reserved'; // 기본값
-        if (session.status === '예정') statusClass = 'reserved';
-        else if (session.status === '완료') statusClass = 'attend';
-        else if (session.status === '사전') statusClass = 'pre';
-        else if (session.status === '결석') statusClass = 'absent';
-        else if (session.status === '취소') statusClass = 'cancel';
-        else if (session.status === '전체취소') statusClass = 'allcancel';
+        if (session.displayStatus === '예정') statusClass = 'reserved';
+        else if (session.displayStatus === '완료') statusClass = 'attend';
+        else if (session.displayStatus === '사전') statusClass = 'pre';
+        else if (session.displayStatus === '결석') statusClass = 'absent';
+        else if (session.displayStatus === '취소') statusClass = 'cancel';
+        else if (session.displayStatus === '전체취소') statusClass = 'allcancel';
+        else if (session.displayStatus === '잔여세션 부족') statusClass = 'no-remaining';
         
-        html += `<td rowspan="2"><div class="adc-session adc-status-${statusClass}">
+        let sessionClass = `adc-session adc-status-${statusClass}`;
+        if (session.hasNoRemainingSessions && session.status !== '완료') {
+          sessionClass += ' adc-no-remaining';
+        }
+        
+        html += `<td rowspan="2"><div class="${sessionClass}">
           <strong>${session.member}</strong>
-          <div class="adc-status-label">${session.status}</div>
+          <div class="adc-status-label">${session.displayStatus}</div>
+          ${session.hasNoRemainingSessions && session.status !== '완료' ? '<div style="color:#d32f2f;font-size:0.8em;">⚠️</div>' : ''}
         </div></td>`;
       } else if (prevSession) {
         html += '<td style="display:none"></td>';
