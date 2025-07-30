@@ -104,17 +104,29 @@
   vertical-align: middle;
 }
 
+/* 시간 열 헤더 특별 스타일 */
+.adc-table th:first-child {
+  width: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+}
+
+/* 시간 열 셀 특별 스타일 */
+.adc-table td:first-child,
 .adc-time {
-  background: #f8f9fa;
+  background: #f8f9fa !important;
   padding: 4px 8px;
-  text-align: right;
   font-size: 11px;
   color: #666;
   border-right: 1px solid #ddd;
   font-weight: 500;
-  width: 50px;
-  min-width: 50px;
+  width: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  text-align: right;
   vertical-align: middle;
+  position: relative;
+  box-sizing: border-box;
 }
 
 .adc-session {
