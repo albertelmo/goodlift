@@ -90,6 +90,9 @@ function renderList(container) {
         <button id="send-contract-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:0.9rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="계약서 전송">
           📄
         </button>
+        <button id="import-excel-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:0.9rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="엑셀 파일 업로드">
+          📊
+        </button>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
         <button id="export-members-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:1.2rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="엑셀 다운로드">
@@ -413,6 +416,11 @@ function renderList(container) {
     showContractModal();
   };
 
+  // 엑셀 업로드 버튼 이벤트
+  document.getElementById('import-excel-btn').onclick = function() {
+    showExcelImportModal();
+  };
+
   // 계약서 전송 모달
   function showContractModal() {
     const modalBg = document.getElementById('member-edit-modal-bg');
@@ -497,6 +505,129 @@ function renderList(container) {
     document.getElementById('contract-email').onkeypress = function(e) {
       if (e.key === 'Enter') {
         document.getElementById('contract-modal-send').click();
+      }
+    };
+  }
+
+  // 엑셀 파일 업로드 모달
+  function showExcelImportModal() {
+    const modalBg = document.getElementById('member-edit-modal-bg');
+    modalBg.style.display = 'block';
+    modalBg.innerHTML = `
+      <div id="excel-import-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:32px 24px;z-index:1002;min-width:400px;max-width:96vw;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">📊 엑셀 파일 업로드</h3>
+        <div style="margin-bottom:14px;">
+          <p style="margin:0 0 10px 0;font-size:0.9rem;color:#666;"><strong>필수 컬럼:</strong> 이름, 전화번호, 담당트레이너, 세션수</p>
+          <p style="margin:0 0 10px 0;font-size:0.9rem;color:#666;"><strong>선택 컬럼:</strong> 성별, 센터, 등록일</p>
+          <p style="margin:0 0 10px 0;font-size:0.9rem;color:#666;"><strong>기본값:</strong> 성별(여성), 센터(첫번째센터), 등록일(오늘)</p>
+          <p style="margin:0 0 10px 0;font-size:0.9rem;color:#666;">성별: 남성/여성 또는 male/female</p>
+          <p style="margin:0 0 10px 0;font-size:0.9rem;color:#666;">등록일: YYYY-MM-DD 형식</p>
+          <p style="margin:0 0 10px 0;font-size:0.9rem;color:#666;"><strong>주의:</strong> 담당트레이너는 시스템에 등록된 트레이너명과 정확히 일치해야 합니다.</p>
+        </div>
+        <div style="margin-bottom:14px;">
+          <input type="file" id="excel-file" accept=".xlsx,.xls" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;">
+        </div>
+        <div id="excel-import-result" style="min-height:22px;margin-bottom:8px;color:#1976d2;"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+          <button id="excel-import-upload" style="flex:1 1 0;background:var(--primary);color:#fff;">업로드</button>
+          <button id="excel-import-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;">취소</button>
+        </div>
+      </div>
+    `;
+
+    // 취소 버튼
+    document.getElementById('excel-import-cancel').onclick = function() {
+      modalBg.style.display = 'none';
+      modalBg.innerHTML = '';
+    };
+
+    // 업로드 버튼
+    document.getElementById('excel-import-upload').onclick = async function() {
+      const fileInput = document.getElementById('excel-file');
+      const resultDiv = document.getElementById('excel-import-result');
+      
+      if (!fileInput.files[0]) {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '파일을 선택해주세요.';
+        return;
+      }
+
+      const file = fileInput.files[0];
+      if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '엑셀 파일(.xlsx, .xls)만 업로드 가능합니다.';
+        return;
+      }
+
+      resultDiv.style.color = '#1976d2';
+      resultDiv.innerText = '파일을 업로드 중입니다...';
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        const res = await fetch('/api/members/import', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+          resultDiv.style.color = '#2e7d32';
+          resultDiv.innerHTML = `
+            <div>✅ ${result.message}</div>
+            <div style="font-size:0.9rem;margin-top:5px;">
+              총 ${result.summary.total}개 중 ${result.summary.success}개 성공, ${result.summary.failed}개 실패
+            </div>
+          `;
+          
+          setTimeout(() => {
+            modalBg.style.display = 'none';
+            modalBg.innerHTML = '';
+            // 회원 목록 새로고침
+            member.renderList(document.getElementById('member-list'));
+          }, 3000);
+        } else {
+          resultDiv.style.color = '#d32f2f';
+          if (result.failedMembers && result.failedMembers.length > 0) {
+            // 중복 회원명 등 실패한 회원들 표시
+            const errorMessages = result.failedMembers.map(failed => 
+              `❌ ${failed.error}`
+            );
+            resultDiv.innerHTML = `
+              <div>❌ ${result.message}</div>
+              <div style="font-size:0.8rem;margin-top:5px;max-height:150px;overflow-y:auto;border:1px solid #ffcdd2;padding:8px;background:#ffebee;border-radius:4px;">
+                <strong>실패한 회원들:</strong><br>
+                ${errorMessages.slice(0, 10).join('<br>')}
+                ${errorMessages.length > 10 ? `<br>... 외 ${errorMessages.length - 10}개 실패` : ''}
+              </div>
+            `;
+          } else if (result.errors && result.errors.length > 0) {
+            // 기존 데이터 검증 에러들 표시
+            resultDiv.innerHTML = `
+              <div>❌ ${result.message}</div>
+              <div style="font-size:0.8rem;margin-top:5px;max-height:100px;overflow-y:auto;">
+                ${result.errors.slice(0, 5).join('<br>')}
+                ${result.errors.length > 5 ? `<br>... 외 ${result.errors.length - 5}개 오류` : ''}
+              </div>
+            `;
+          } else {
+            resultDiv.innerText = result.message || '업로드에 실패했습니다.';
+          }
+        }
+      } catch (error) {
+        console.error('엑셀 업로드 오류:', error);
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '업로드에 실패했습니다.';
+      }
+    };
+
+    // 바깥 클릭 시 닫기
+    modalBg.onclick = function(e) {
+      if (e.target === modalBg) {
+        modalBg.style.display = 'none';
+        modalBg.innerHTML = '';
       }
     };
   }

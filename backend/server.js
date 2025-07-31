@@ -3,6 +3,8 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const multer = require('multer');
+const ExcelJS = require('exceljs');
 
 require('dotenv').config();
 
@@ -43,6 +45,22 @@ if (!fs.existsSync(DATA_DIR)) {
 sessionsDB.initializeDatabase();
 membersDB.initializeDatabase();
 monthlyStatsDB.initializeDatabase();
+
+// 파일 업로드 설정
+const storage = multer.memoryStorage();
+const upload = multer({ 
+    storage: storage,
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || 
+            file.mimetype === 'application/vnd.ms-excel' ||
+            file.originalname.endsWith('.xlsx') ||
+            file.originalname.endsWith('.xls')) {
+            cb(null, true);
+        } else {
+            cb(new Error('엑셀 파일만 업로드 가능합니다.'), false);
+        }
+    }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -622,6 +640,249 @@ app.post('/api/email/contract', async (req, res) => {
     } catch (error) {
         console.error('[API] 계약서 이메일 전송 오류:', error);
         res.status(500).json({ message: '계약서 이메일 전송에 실패했습니다.' });
+    }
+});
+
+// 엑셀 파일 업로드 및 회원 일괄 추가 API
+app.post('/api/members/import', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: '파일을 선택해주세요.' });
+        }
+
+        // 파일 크기 검증 (10MB 제한)
+        if (req.file.size > 10 * 1024 * 1024) {
+            return res.status(400).json({ message: '파일 크기는 10MB 이하여야 합니다.' });
+        }
+
+        // 엑셀 파일 읽기
+        let data = [];
+        try {
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(req.file.buffer);
+            
+            if (workbook.worksheets.length === 0) {
+                return res.status(400).json({ message: '엑셀 파일에 시트가 없습니다.' });
+            }
+            
+            const worksheet = workbook.worksheets[0];
+            const rows = [];
+            
+            worksheet.eachRow((row, rowNumber) => {
+                const rowData = [];
+                row.eachCell((cell, colNumber) => {
+                    rowData.push(cell.value);
+                });
+                rows.push(rowData);
+            });
+            
+            data = rows;
+        } catch (excelError) {
+            console.error('[API] 엑셀 파일 읽기 오류:', excelError);
+            return res.status(400).json({ message: '엑셀 파일을 읽을 수 없습니다. 파일이 손상되었거나 지원하지 않는 형식입니다.' });
+        }
+
+        // 데이터가 비어있는지 확인
+        if (!data || data.length < 2) {
+            return res.status(400).json({ message: '엑셀 파일에 데이터가 없습니다. (헤더 제외 최소 1개 행 필요)' });
+        }
+
+        // 헤더 확인 (첫 번째 행)
+        const headers = data[0];
+        if (!headers || headers.length === 0) {
+            return res.status(400).json({ message: '엑셀 파일의 첫 번째 행(헤더)을 읽을 수 없습니다.' });
+        }
+
+        const requiredHeaders = ['이름', '전화번호', '담당트레이너', '세션수'];
+        
+        // 필수 헤더 검증
+        const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
+        if (missingHeaders.length > 0) {
+            return res.status(400).json({ 
+                message: `필수 컬럼이 누락되었습니다: ${missingHeaders.join(', ')}` 
+            });
+        }
+
+        // 기본값 설정을 위한 데이터 준비
+        let defaultCenter = '';
+        let trainerMap = {}; // 트레이너 username -> name 매핑
+        
+        try {
+            // 센터 목록에서 첫 번째 센터 가져오기
+            let centers = [];
+            if (fs.existsSync(CENTERS_PATH)) {
+                const raw = fs.readFileSync(CENTERS_PATH, 'utf-8');
+                if (raw) centers = JSON.parse(raw);
+            }
+            defaultCenter = centers.length > 0 ? centers[0].name : '';
+            
+            // 트레이너 목록 가져오기
+            let accounts = [];
+            if (fs.existsSync(DATA_PATH)) {
+                const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+                if (raw) accounts = JSON.parse(raw);
+            }
+            const trainers = accounts.filter(acc => acc.role === 'trainer');
+            trainers.forEach(trainer => {
+                trainerMap[trainer.name] = trainer.username; // name -> username 매핑
+            });
+        } catch (error) {
+            console.error('[API] 센터/트레이너 정보 읽기 오류:', error);
+        }
+
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD 형식
+
+        // 데이터 처리 (헤더 제외)
+        const members = [];
+        const errors = [];
+        
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            if (row.length === 0 || row.every(cell => !cell)) continue; // 빈 행 스킵
+            
+            try {
+                // 필수 데이터 추출
+                const name = String(row[headers.indexOf('이름')] || '').trim();
+                const phone = String(row[headers.indexOf('전화번호')] || '').trim();
+                const trainer = String(row[headers.indexOf('담당트레이너')] || '').trim();
+                const sessions = Number(row[headers.indexOf('세션수')] || 0);
+
+                // 선택적 데이터 추출 (기본값 적용)
+                const genderInput = String(row[headers.indexOf('성별')] || '').trim();
+                const centerInput = String(row[headers.indexOf('센터')] || '').trim();
+                const regdateInput = String(row[headers.indexOf('등록일')] || '').trim();
+
+                // 기본값 설정
+                let gender = 'female'; // 기본값: 여성
+                if (genderInput && ['남성', '여성', 'male', 'female'].includes(genderInput)) {
+                    gender = genderInput === '남성' || genderInput === 'male' ? 'male' : 'female';
+                }
+
+                let center = defaultCenter; // 기본값: 첫 번째 센터
+                if (centerInput) {
+                    center = centerInput;
+                }
+
+                let regdate = today; // 기본값: 오늘
+                if (regdateInput) {
+                    // 등록일 형식 검증
+                    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                    if (dateRegex.test(regdateInput)) {
+                        regdate = regdateInput;
+                    } else {
+                        errors.push(`행 ${i + 1}: 등록일 형식이 올바르지 않습니다. (YYYY-MM-DD) - 기본값(오늘) 사용`);
+                    }
+                }
+
+                // 트레이너명 검증
+                if (!trainerMap[trainer]) {
+                    errors.push(`행 ${i + 1}: 존재하지 않는 트레이너입니다: ${trainer}`);
+                    continue;
+                }
+
+                const member = {
+                    name,
+                    gender,
+                    phone,
+                    trainer, // 트레이너 이름 그대로 저장
+                    center,
+                    regdate,
+                    sessions
+                };
+
+                // 필수 데이터 검증
+                if (!member.name) {
+                    errors.push(`행 ${i + 1}: 이름이 비어있습니다.`);
+                    continue;
+                }
+                if (!member.phone) {
+                    errors.push(`행 ${i + 1}: 전화번호가 비어있습니다.`);
+                    continue;
+                }
+                if (!member.trainer) {
+                    errors.push(`행 ${i + 1}: 담당트레이너가 비어있습니다.`);
+                    continue;
+                }
+                if (member.sessions < 0) {
+                    errors.push(`행 ${i + 1}: 세션수는 0 이상이어야 합니다.`);
+                    continue;
+                }
+                if (!member.center) {
+                    errors.push(`행 ${i + 1}: 센터 정보를 찾을 수 없습니다. (기본 센터 설정 필요)`);
+                    continue;
+                }
+
+                members.push(member);
+            } catch (error) {
+                errors.push(`행 ${i + 1}: 데이터 처리 중 오류가 발생했습니다.`);
+            }
+        }
+
+        // 에러가 있으면 중단
+        if (errors.length > 0) {
+            return res.status(400).json({ 
+                message: '엑셀 파일에 오류가 있습니다.', 
+                errors: errors 
+            });
+        }
+
+        // 기존 회원 목록 조회 (중복 체크용)
+        const existingMembers = await membersDB.getMembers();
+        const existingNames = new Set(existingMembers.map(m => m.name));
+
+        // 회원 일괄 추가
+        const addedMembers = [];
+        const failedMembers = [];
+
+        for (const member of members) {
+            try {
+                // 중복 이름 체크
+                if (existingNames.has(member.name)) {
+                    failedMembers.push({
+                        member: member,
+                        error: `이미 존재하는 회원명입니다: ${member.name}`
+                    });
+                    continue;
+                }
+
+                const newMember = {
+                    ...member,
+                    remainSessions: member.sessions,
+                    status: '유효'
+                };
+                
+                const addedMember = await membersDB.addMember(newMember);
+                addedMembers.push(addedMember);
+                
+                // 성공한 회원명을 기존 목록에 추가 (같은 파일 내 중복 방지)
+                existingNames.add(member.name);
+                
+                // 신규 세션 통계 추가
+                if (member.sessions > 0) {
+                    await monthlyStatsDB.addNewSessions(member.sessions);
+                }
+            } catch (error) {
+                failedMembers.push({
+                    member: member,
+                    error: error.message
+                });
+            }
+        }
+
+        res.json({
+            message: `회원 일괄 추가가 완료되었습니다.`,
+            summary: {
+                total: members.length,
+                success: addedMembers.length,
+                failed: failedMembers.length
+            },
+            addedMembers: addedMembers,
+            failedMembers: failedMembers
+        });
+
+    } catch (error) {
+        console.error('[API] 엑셀 파일 업로드 오류:', error);
+        res.status(500).json({ message: '엑셀 파일 처리에 실패했습니다.' });
     }
 });
 
