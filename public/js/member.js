@@ -85,16 +85,23 @@ function renderAddForm(container) {
 function renderList(container) {
   if (!container) return;
   container.innerHTML = `
-    <div style="margin-bottom:10px;display:flex;justify-content:flex-end;align-items:flex-start;gap:8px;">
-      <button id="export-members-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:1.2rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="엑셀 다운로드">
-        ⬇️
-      </button>
-      <select id="search-type" style="padding:6px 6px;font-size:0.9rem;border:1.2px solid #bbb;border-radius:6px;width:90px;">
-        <option value="name">이름</option>
-        <option value="trainer">트레이너</option>
-        <option value="center">센터</option>
-      </select>
-      <input id="member-search-input" type="text" placeholder="검색어 입력" style="padding:6px 10px;font-size:0.97rem;border:1.2px solid #bbb;border-radius:6px;width:160px;">
+    <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="send-contract-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:0.9rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="계약서 전송">
+          📄
+        </button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button id="export-members-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:1.2rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="엑셀 다운로드">
+          ⬇️
+        </button>
+        <select id="search-type" style="padding:6px 6px;font-size:0.9rem;border:1.2px solid #bbb;border-radius:6px;width:90px;">
+          <option value="name">이름</option>
+          <option value="trainer">트레이너</option>
+          <option value="center">센터</option>
+        </select>
+        <input id="member-search-input" type="text" placeholder="검색어 입력" style="padding:6px 10px;font-size:0.97rem;border:1.2px solid #bbb;border-radius:6px;width:160px;">
+      </div>
     </div>
     <div id="member-table-wrap"></div>
     <div id="member-edit-modal-bg" style="display:none;"></div>
@@ -397,6 +404,99 @@ function renderList(container) {
       if (e.target === modalBg) {
         modalBg.style.display = 'none';
         modalBg.innerHTML = '';
+      }
+    };
+  }
+
+  // 계약서 전송 버튼 이벤트
+  document.getElementById('send-contract-btn').onclick = function() {
+    showContractModal();
+  };
+
+  // 계약서 전송 모달
+  function showContractModal() {
+    const modalBg = document.getElementById('member-edit-modal-bg');
+    modalBg.style.display = 'block';
+    modalBg.innerHTML = `
+      <div id="contract-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:32px 24px;z-index:1002;min-width:300px;max-width:96vw;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">📄 계약서 전송</h3>
+        <div style="margin-bottom:14px;">
+          <b>이메일 주소</b><br>
+          <input type="email" id="contract-email" placeholder="example@email.com" style="width:100%;border-radius:6px;padding:7px 10px;margin-top:2px;border:1.2px solid #ddd;">
+        </div>
+        <div id="contract-modal-result" style="min-height:22px;margin-bottom:8px;color:#1976d2;"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+          <button id="contract-modal-send" style="flex:1 1 0;background:var(--primary);color:#fff;">전송</button>
+          <button id="contract-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;">취소</button>
+        </div>
+      </div>
+    `;
+
+    // 취소 버튼
+    document.getElementById('contract-modal-cancel').onclick = function() {
+      modalBg.style.display = 'none';
+      modalBg.innerHTML = '';
+    };
+
+    // 전송 버튼
+    document.getElementById('contract-modal-send').onclick = async function() {
+      const email = document.getElementById('contract-email').value.trim();
+      const resultDiv = document.getElementById('contract-modal-result');
+      
+      if (!email) {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '이메일 주소를 입력해주세요.';
+        return;
+      }
+
+      if (!email.includes('@')) {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '올바른 이메일 주소를 입력해주세요.';
+        return;
+      }
+
+      resultDiv.style.color = '#1976d2';
+      resultDiv.innerText = '계약서를 전송 중입니다...';
+
+      try {
+        const res = await fetch('/api/email/contract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipientEmail: email })
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+          resultDiv.style.color = '#2e7d32';
+          resultDiv.innerText = '계약서가 성공적으로 전송되었습니다!';
+          setTimeout(() => {
+            modalBg.style.display = 'none';
+            modalBg.innerHTML = '';
+          }, 2000);
+        } else {
+          resultDiv.style.color = '#d32f2f';
+          resultDiv.innerText = result.message || '계약서 전송에 실패했습니다.';
+        }
+      } catch (error) {
+        console.error('계약서 전송 오류:', error);
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '계약서 전송에 실패했습니다.';
+      }
+    };
+
+    // 바깥 클릭 시 닫기
+    modalBg.onclick = function(e) {
+      if (e.target === modalBg) {
+        modalBg.style.display = 'none';
+        modalBg.innerHTML = '';
+      }
+    };
+
+    // Enter 키로 전송
+    document.getElementById('contract-email').onkeypress = function(e) {
+      if (e.key === 'Enter') {
+        document.getElementById('contract-modal-send').click();
       }
     };
   }

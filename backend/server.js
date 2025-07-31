@@ -11,6 +11,9 @@ const sessionsDB = require('./sessions-db');
 const membersDB = require('./members-db');
 const monthlyStatsDB = require('./monthly-stats-db');
 
+// 이메일 서비스 모듈
+const emailService = require('./email-service');
+
 const app = express();
 const PORT = 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
@@ -575,6 +578,51 @@ app.get('/api/stats', async (req, res) => {
     console.error('통계 API 오류:', error);
     res.status(500).json({ error: '통계를 불러오지 못했습니다.' });
   }
+});
+
+// 이메일 설정 테스트 API
+app.get('/api/email/test', async (req, res) => {
+    try {
+        const result = await emailService.testEmailConnection();
+        res.json(result);
+    } catch (error) {
+        console.error('[API] 이메일 설정 테스트 오류:', error);
+        res.status(500).json({ success: false, message: '이메일 설정 테스트에 실패했습니다.' });
+    }
+});
+
+// 계약서 이메일 전송 API
+app.post('/api/email/contract', async (req, res) => {
+    try {
+        const { recipientEmail } = req.body;
+        
+        if (!recipientEmail) {
+            return res.status(400).json({ message: '이메일 주소를 입력해주세요.' });
+        }
+        
+        // 기본 계약서 데이터 (회원 정보 없이)
+        const contractData = {
+            name: '회원',
+            gender: '',
+            phone: '',
+            trainer: '',
+            center: '',
+            regdate: new Date().toISOString().split('T')[0],
+            sessions: ''
+        };
+        
+        // 계약서 이메일 전송
+        const result = await emailService.sendContractEmail(contractData, recipientEmail);
+        
+        res.json({ 
+            message: '계약서가 성공적으로 전송되었습니다.', 
+            messageId: result.messageId 
+        });
+        
+    } catch (error) {
+        console.error('[API] 계약서 이메일 전송 오류:', error);
+        res.status(500).json({ message: '계약서 이메일 전송에 실패했습니다.' });
+    }
 });
 
 app.listen(PORT, () => {
