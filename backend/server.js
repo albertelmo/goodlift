@@ -705,7 +705,8 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
 
         // 기본값 설정을 위한 데이터 준비
         let defaultCenter = '';
-        let trainerMap = {}; // 트레이너 username -> name 매핑
+        let trainerNameMap = {}; // 트레이너 name -> username 매핑
+        let trainerUsernameMap = {}; // 트레이너 username -> name 매핑
         
         try {
             // 센터 목록에서 첫 번째 센터 가져오기
@@ -724,7 +725,8 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
             }
             const trainers = accounts.filter(acc => acc.role === 'trainer');
             trainers.forEach(trainer => {
-                trainerMap[trainer.name] = trainer.username; // name -> username 매핑
+                trainerNameMap[trainer.name] = trainer.username; // name -> username 매핑
+                trainerUsernameMap[trainer.username] = trainer.name; // username -> name 매핑
             });
         } catch (error) {
             console.error('[API] 센터/트레이너 정보 읽기 오류:', error);
@@ -774,8 +776,11 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
                     }
                 }
 
-                // 트레이너명 검증
-                if (!trainerMap[trainer]) {
+                // 트레이너명을 username으로 변환
+                let trainerUsername = trainer;
+                if (trainerNameMap[trainer]) {
+                    trainerUsername = trainerNameMap[trainer];
+                } else {
                     errors.push(`행 ${i + 1}: 존재하지 않는 트레이너입니다: ${trainer}`);
                     continue;
                 }
@@ -784,7 +789,7 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
                     name,
                     gender,
                     phone,
-                    trainer, // 트레이너 이름 그대로 저장
+                    trainer: trainerUsername, // username으로 저장
                     center,
                     regdate,
                     sessions
@@ -883,6 +888,80 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('[API] 엑셀 파일 업로드 오류:', error);
         res.status(500).json({ message: '엑셀 파일 처리에 실패했습니다.' });
+    }
+});
+
+// 회원 트레이너 데이터 마이그레이션 API (기존 name -> username 변환)
+app.post('/api/members/migrate-trainers', async (req, res) => {
+    try {
+        // 트레이너 매핑 정보 가져오기
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const trainers = accounts.filter(acc => acc.role === 'trainer');
+        const trainerNameMap = {};
+        trainers.forEach(trainer => {
+            trainerNameMap[trainer.name] = trainer.username;
+        });
+
+        // 모든 회원 조회
+        const members = await membersDB.getMembers();
+        const migrationResults = [];
+
+        for (const member of members) {
+            try {
+                // 현재 trainer가 name인지 username인지 확인
+                const isName = trainerNameMap[member.trainer]; // name이면 username 반환, 아니면 undefined
+                
+                if (isName) {
+                    // name으로 저장되어 있으면 username으로 업데이트
+                    await membersDB.updateMember(member.name, { trainer: isName });
+                    migrationResults.push({
+                        member: member.name,
+                        oldTrainer: member.trainer,
+                        newTrainer: isName,
+                        status: 'success'
+                    });
+                } else {
+                    // 이미 username이거나 매핑되지 않는 경우
+                    migrationResults.push({
+                        member: member.name,
+                        oldTrainer: member.trainer,
+                        newTrainer: member.trainer,
+                        status: 'no_change'
+                    });
+                }
+            } catch (error) {
+                migrationResults.push({
+                    member: member.name,
+                    oldTrainer: member.trainer,
+                    newTrainer: null,
+                    status: 'error',
+                    error: error.message
+                });
+            }
+        }
+
+        const successCount = migrationResults.filter(r => r.status === 'success').length;
+        const noChangeCount = migrationResults.filter(r => r.status === 'no_change').length;
+        const errorCount = migrationResults.filter(r => r.status === 'error').length;
+
+        res.json({
+            message: '트레이너 데이터 마이그레이션이 완료되었습니다.',
+            summary: {
+                total: members.length,
+                success: successCount,
+                no_change: noChangeCount,
+                error: errorCount
+            },
+            results: migrationResults
+        });
+
+    } catch (error) {
+        console.error('[API] 트레이너 마이그레이션 오류:', error);
+        res.status(500).json({ message: '마이그레이션에 실패했습니다.' });
     }
 });
 
