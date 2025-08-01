@@ -380,22 +380,62 @@ app.get('/api/sessions', async (req, res) => {
 // 세션 추가
 app.post('/api/sessions', async (req, res) => {
     try {
-        const { member, trainer, date, time } = req.body;
+        const { member, trainer, date, time, repeat, repeatCount } = req.body;
         if (!member || !trainer || !date || !time) {
             return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
         }
         
-        const newSession = {
-            id: uuidv4(),
-            member,
-            trainer,
-            date,
-            time,
-            status: '예정'
-        };
+        // 반복 설정 확인
+        const isRepeat = repeat === 'on' || repeat === true;
+        const repeatTimes = isRepeat ? Math.min(Math.max(parseInt(repeatCount) || 1, 1), 10) : 1;
         
-        const session = await sessionsDB.addSession(newSession);
-        res.json({ message: '세션이 추가되었습니다.', session });
+        if (isRepeat && (!repeatCount || repeatTimes < 1 || repeatTimes > 10)) {
+            return res.status(400).json({ message: '반복 횟수는 1-10회 사이로 설정해주세요.' });
+        }
+        
+        // 반복 세션 생성
+        const sessionsToAdd = [];
+        const startDate = new Date(date);
+        
+        for (let i = 0; i < repeatTimes; i++) {
+            const currentDate = new Date(startDate);
+            currentDate.setDate(startDate.getDate() + (i * 7)); // 매주 같은 요일
+            
+            const sessionDate = currentDate.toISOString().split('T')[0];
+            
+            // 시간 중복 체크 (같은 트레이너의 해당 시간 ±30분)
+            const hasConflict = await sessionsDB.checkTimeConflict(trainer, sessionDate, time);
+            
+            if (!hasConflict) {
+                sessionsToAdd.push({
+                    id: uuidv4(),
+                    member,
+                    trainer,
+                    date: sessionDate,
+                    time,
+                    status: '예정'
+                });
+            }
+        }
+        
+        if (sessionsToAdd.length === 0) {
+            return res.status(400).json({ message: '모든 날짜에 시간 중복이 있어 세션을 추가할 수 없습니다.' });
+        }
+        
+        // 세션들 추가
+        const addedSessions = await sessionsDB.addMultipleSessions(sessionsToAdd);
+        
+        const message = isRepeat 
+            ? `${addedSessions.length}개의 세션이 추가되었습니다.${addedSessions.length < repeatTimes ? ` (${repeatTimes - addedSessions.length}개는 시간 중복으로 제외)` : ''}`
+            : '세션이 추가되었습니다.';
+            
+        res.json({ 
+            message, 
+            sessions: addedSessions,
+            total: repeatTimes,
+            added: addedSessions.length,
+            skipped: repeatTimes - addedSessions.length
+        });
     } catch (error) {
         console.error('[API] 세션 추가 오류:', error);
         res.status(500).json({ message: '세션 추가에 실패했습니다.' });

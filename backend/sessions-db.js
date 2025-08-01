@@ -166,6 +166,60 @@ async function getSessionsByDateRange(startDate, endDate) {
   }
 }
 
+// 시간 중복 체크 (같은 트레이너의 해당 시간 ±30분)
+const checkTimeConflict = async (trainer, date, time) => {
+  try {
+    const query = `
+      SELECT COUNT(*) FROM sessions 
+      WHERE trainer = $1 
+        AND date = $2 
+        AND (
+          time = $3::time 
+          OR time = ($3::time - INTERVAL '30 minutes')
+          OR time = ($3::time + INTERVAL '30 minutes')
+        )
+    `;
+    const result = await pool.query(query, [trainer, date, time]);
+    return parseInt(result.rows[0].count) > 0;
+  } catch (error) {
+    console.error('[PostgreSQL] 시간 중복 체크 오류:', error);
+    throw error;
+  }
+};
+
+// 여러 세션 일괄 추가
+const addMultipleSessions = async (sessions) => {
+  try {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const addedSessions = [];
+      for (const session of sessions) {
+        const query = `
+          INSERT INTO sessions (id, member, trainer, date, time, status)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status
+        `;
+        const values = [session.id, session.member, session.trainer, session.date, session.time, session.status];
+        const result = await client.query(query, values);
+        addedSessions.push(result.rows[0]);
+      }
+      
+      await client.query('COMMIT');
+      return addedSessions;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 여러 세션 추가 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -184,5 +238,7 @@ module.exports = {
   deleteSession,
   getSessionById,
   getSessionsByDateRange,
+  checkTimeConflict,
+  addMultipleSessions,
   pool
 }; 

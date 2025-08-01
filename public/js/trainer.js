@@ -212,9 +212,28 @@ async function renderCalUI(container, forceDate) {
                       <label style="width:100%;text-align:left;">시간
                         <select name="time" id="tmc-time-input" required style="width:180px;"></select>
                       </label>
-                                          <button type="submit" style="width:180px;">등록</button>
-                    <div id="tmc-session-add-result" style="min-height:20px;font-size:0.97rem;"></div>
-                  </form>
+                      <label style="width:100%;text-align:left;display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" name="repeat" id="tmc-repeat-checkbox" style="width:auto;">
+                        <span>반복하기</span>
+                      </label>
+                      <label style="width:100%;text-align:left;opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;" id="tmc-repeat-count-label">
+                        반복횟수
+                        <select name="repeatCount" id="tmc-repeat-count-input" style="width:180px;">
+                          <option value="1">1회</option>
+                          <option value="2">2회</option>
+                          <option value="3">3회</option>
+                          <option value="4">4회</option>
+                          <option value="5">5회</option>
+                          <option value="6">6회</option>
+                          <option value="7">7회</option>
+                          <option value="8">8회</option>
+                          <option value="9">9회</option>
+                          <option value="10">10회</option>
+                        </select>
+                      </label>
+                      <button type="submit" style="width:180px;">등록</button>
+                      <div id="tmc-session-add-result" style="min-height:20px;font-size:0.97rem;"></div>
+                    </form>
                 </div>
             </div>
         </div>`;
@@ -271,6 +290,18 @@ async function renderCalUI(container, forceDate) {
             document.getElementById('tmc-modal-bg').style.display = 'none';
             document.getElementById('tmc-modal').style.display = 'none';
         };
+        
+        // 반복 체크박스 이벤트
+        document.getElementById('tmc-repeat-checkbox').onchange = function() {
+            const repeatCountLabel = document.getElementById('tmc-repeat-count-label');
+            if (this.checked) {
+                repeatCountLabel.style.opacity = '1';
+                repeatCountLabel.style.height = 'auto';
+            } else {
+                repeatCountLabel.style.opacity = '0';
+                repeatCountLabel.style.height = '0';
+            }
+        };
         document.getElementById('tmc-session-add-form').onsubmit = async function(e) {
           e.preventDefault();
           const form = e.target;
@@ -289,8 +320,17 @@ async function renderCalUI(container, forceDate) {
             if (res.ok) {
               resultDiv.style.color = '#1976d2';
               resultDiv.innerText = result.message;
+              
+              // 반복 세션 추가 시 상세 정보 표시
+              if (result.total && result.total > 1) {
+                resultDiv.innerHTML += `<br><small style="color:#666;">총 ${result.total}회 중 ${result.added}회 추가됨${result.skipped > 0 ? ` (${result.skipped}회는 시간 중복으로 제외)` : ''}</small>`;
+              }
+              
               form.reset();
               document.getElementById('tmc-date-input').value = `${yyyy}-${mm}-${dd}`;
+              document.getElementById('tmc-repeat-checkbox').checked = false;
+              document.getElementById('tmc-repeat-count-label').style.opacity = '0';
+              document.getElementById('tmc-repeat-count-label').style.height = '0';
               renderCalUI(container, dd); // 세션 추가 후 갱신
             } else {
               resultDiv.style.color = '#d32f2f';
