@@ -125,12 +125,36 @@ async function renderCalUI(container, forceDate) {
         const sessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}`);
         const allSessions = await sessionsRes.json();
         
-        const sessionDays = new Set(
-          allSessions.filter(s => s.date && s.date.startsWith(`${yyyy}-${mm}`)).map(s => {
-            const dateStr = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
-            return dateStr.split('-')[2];
-          })
-        );
+        // 회원 정보 가져오기
+        const membersRes = await fetch('/api/members');
+        const members = await membersRes.json();
+        
+        // 세션이 있는 날짜와 결석 여부 정보 수집
+        const sessionDayInfo = {};
+        allSessions.filter(s => s.date && s.date.startsWith(`${yyyy}-${mm}`)).forEach(s => {
+          const day = s.date.split('T')[0].split('-')[2];
+          const member = members.find(m => m.name === s.member);
+          const remainSessions = member ? member.remainSessions : 0;
+          const hasNoRemainingSessions = remainSessions <= 0;
+          
+          // 현재 날짜와 세션 날짜 비교
+          const today = new Date();
+          const sessionDate = new Date(s.date);
+          const isPastDate = sessionDate < today && sessionDate.toDateString() !== today.toDateString();
+          
+          // 결석 여부 확인
+          const isAbsent = s.status !== '완료' && !hasNoRemainingSessions && isPastDate;
+          
+          // 해당 날짜에 결석이 있는지 표시
+          if (!sessionDayInfo[day]) {
+            sessionDayInfo[day] = { hasSession: true, hasAbsent: false };
+          }
+          if (isAbsent) {
+            sessionDayInfo[day].hasAbsent = true;
+          }
+        });
+        
+        const sessionDays = new Set(Object.keys(sessionDayInfo));
         
         // 선택 날짜의 세션만 추출 (시간순 정렬)
         const sessions = allSessions.filter(s => {
@@ -138,27 +162,40 @@ async function renderCalUI(container, forceDate) {
           return sessionDate === selectedDate;
         }).sort((a, b) => a.time.localeCompare(b.time));
         
-        // 회원 정보 가져오기
-        const membersRes = await fetch('/api/members');
-        const members = await membersRes.json();
-        
         // 세션별로 회원 정보 매핑
         const sessionsWithMemberInfo = sessions.map(s => {
           const member = members.find(m => m.name === s.member);
           const remainSessions = member ? member.remainSessions : 0;
           const hasNoRemainingSessions = remainSessions <= 0;
           
-          // 완료된 세션은 잔여세션과 관계없이 "완료" 상태 유지
+          // 현재 날짜와 세션 날짜 비교
+          const today = new Date();
+          const sessionDate = new Date(s.date);
+          const isPastDate = sessionDate < today && sessionDate.toDateString() !== today.toDateString();
+          
+          // 상태 우선순위: 완료 > 잔여세션부족 > 결석 > 예정
           let displayStatus = s.status;
-          if (s.status !== '완료' && hasNoRemainingSessions) {
+          
+          if (s.status === '완료') {
+            // 완료된 세션은 그대로 유지
+            displayStatus = '완료';
+          } else if (hasNoRemainingSessions) {
+            // 잔여세션이 부족한 경우 우선 표시
             displayStatus = '잔여세션 부족';
+          } else if (isPastDate) {
+            // 날짜가 지난 미완료 세션은 "결석"으로 표시
+            displayStatus = '결석';
+          } else {
+            // 그 외는 원래 상태 유지
+            displayStatus = s.status;
           }
           
           return {
             ...s,
             remainSessions,
             hasNoRemainingSessions,
-            displayStatus
+            displayStatus,
+            isPastDate
           };
         });
         
@@ -170,7 +207,7 @@ async function renderCalUI(container, forceDate) {
                 </div>
                 <table class="tmc-cal-table">
                     <thead><tr>${['일','월','화','수','목','금','토'].map(d=>`<th>${d}</th>`).join('')}</tr></thead>
-                    <tbody>${renderSimpleMonthWithDots(yyyy, mm, dd, sessionDays)}</tbody>
+                    <tbody>${renderSimpleMonthWithDots(yyyy, mm, dd, sessionDayInfo)}</tbody>
                 </table>
             </div>
             <div class="tmc-session-list">`;
@@ -184,10 +221,12 @@ async function renderCalUI(container, forceDate) {
             
             let itemStyle = '';
             if (s.status === '완료') itemStyle = 'style="pointer-events:none;opacity:0.6;"';
+            else if (s.displayStatus === '결석') itemStyle = 'style="opacity:0.7;"';
             
             let statusClass = '';
-            if (s.status === '완료') statusClass = 'attend';
-            else if (s.status === '예정') statusClass = 'scheduled';
+            if (s.displayStatus === '완료') statusClass = 'attend';
+            else if (s.displayStatus === '예정') statusClass = 'scheduled';
+            else if (s.displayStatus === '결석') statusClass = 'absent';
             // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
             if (s.hasNoRemainingSessions && s.status !== '완료') statusClass += ' no-remaining';
             
@@ -426,7 +465,7 @@ function renderSimpleMonth(year, month, today) {
     return html;
 }
 
-function renderSimpleMonthWithDots(year, month, today, sessionDays) {
+function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
     const m = Number(month);
     const first = new Date(year, m-1, 1);
     const last = new Date(year, m, 0);
@@ -438,9 +477,17 @@ function renderSimpleMonthWithDots(year, month, today, sessionDays) {
             if (day < 1 || day > last.getDate()) {
                 html += '<td></td>';
             } else {
-                const isToday = String(day).padStart(2,'0') === today;
-                const hasSession = sessionDays.has(String(day).padStart(2,'0'));
-                html += `<td data-day="${String(day).padStart(2,'0')}"${isToday ? ' class="tmc-today"' : ''}><div>${day}</div>${hasSession ? '<div style="margin-top:2px;font-size:1.1em;color:#1de9b6;line-height:1;">●</div>' : '<div style="height:1.1em;"></div>'}</td>`;
+                const dayStr = String(day).padStart(2,'0');
+                const isToday = dayStr === today;
+                const dayInfo = sessionDayInfo[dayStr];
+                
+                let dotHtml = '<div style="height:1.1em;"></div>';
+                if (dayInfo && dayInfo.hasSession) {
+                    const dotColor = dayInfo.hasAbsent ? '#ff6b6b' : '#1de9b6'; // 결석이 있으면 연한 빨간색, 없으면 초록색
+                    dotHtml = `<div style="margin-top:2px;font-size:1.1em;color:${dotColor};line-height:1;">●</div>`;
+                }
+                
+                html += `<td data-day="${dayStr}"${isToday ? ' class="tmc-today"' : ''}><div>${day}</div>${dotHtml}</td>`;
             }
         }
         html += '</tr>';

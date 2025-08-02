@@ -588,6 +588,7 @@ li, td, th {
 .tmc-session-status { margin-left: auto; font-size: 0.98rem; font-weight: 600; padding: 2px 12px; border-radius: 8px; }
 .tmc-session-status.attend { background: #e8f5e9; color: #388e3c; border: 1px solid #81c784; }
 .tmc-session-status.scheduled { background: #e3f0ff; color: #1976d2; border: 1px solid #1976d2; }
+.tmc-session-status.absent { background: #ffebee; color: #d32f2f; border: 1px solid #e57373; }
 .tmc-session-status.no-remaining { background: #ffebee; color: #d32f2f; border: 1px solid #e57373; }
 .tmc-no-session { color: #bbb; text-align: center; margin: 24px 0; }
 .tmc-fab {

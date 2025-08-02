@@ -22,7 +22,7 @@
 
 .awc-search-area {
   display: flex;
-  align-items: center; /* 다시 중앙 정렬로 변경 */
+  align-items: flex-end; /* 아래쪽 정렬로 변경 */
   gap: 8px;
   width: 200px;
   flex-shrink: 0;
@@ -31,14 +31,14 @@
 .awc-search-input {
   flex: 1;
   min-width: 120px; /* 최소 너비 설정 */
-  padding: 0 12px; /* 상하 패딩 제거, 좌우만 유지 */
+  padding: 6px 12px; /* 세로폭 줄이기 */
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 14px;
   line-height: 1; /* 주간 이동 버튼과 동일한 line-height */
   outline: none;
   transition: border-color 0.2s;
-  height: 36px; /* 주간 이동 버튼과 동일한 높이 */
+  height: 36px; /* 높이 고정 */
   box-sizing: border-box;
   display: flex;
   align-items: center; /* 내부 텍스트 중앙 정렬 */
