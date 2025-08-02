@@ -380,62 +380,22 @@ app.get('/api/sessions', async (req, res) => {
 // 세션 추가
 app.post('/api/sessions', async (req, res) => {
     try {
-        const { member, trainer, date, time, repeat, repeatCount } = req.body;
+        const { member, trainer, date, time } = req.body;
         if (!member || !trainer || !date || !time) {
             return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
         }
         
-        // 반복 설정 확인
-        const isRepeat = repeat === 'on' || repeat === true;
-        const repeatTimes = isRepeat ? Math.min(Math.max(parseInt(repeatCount) || 1, 1), 10) : 1;
+        const newSession = {
+            id: uuidv4(),
+            member,
+            trainer,
+            date,
+            time,
+            status: '예정'
+        };
         
-        if (isRepeat && (!repeatCount || repeatTimes < 1 || repeatTimes > 10)) {
-            return res.status(400).json({ message: '반복 횟수는 1-10회 사이로 설정해주세요.' });
-        }
-        
-        // 반복 세션 생성
-        const sessionsToAdd = [];
-        const startDate = new Date(date);
-        
-        for (let i = 0; i < repeatTimes; i++) {
-            const currentDate = new Date(startDate);
-            currentDate.setDate(startDate.getDate() + (i * 7)); // 매주 같은 요일
-            
-            const sessionDate = currentDate.toISOString().split('T')[0];
-            
-            // 시간 중복 체크 (같은 트레이너의 해당 시간 ±30분)
-            const hasConflict = await sessionsDB.checkTimeConflict(trainer, sessionDate, time);
-            
-            if (!hasConflict) {
-                sessionsToAdd.push({
-                    id: uuidv4(),
-                    member,
-                    trainer,
-                    date: sessionDate,
-                    time,
-                    status: '예정'
-                });
-            }
-        }
-        
-        if (sessionsToAdd.length === 0) {
-            return res.status(400).json({ message: '모든 날짜에 시간 중복이 있어 세션을 추가할 수 없습니다.' });
-        }
-        
-        // 세션들 추가
-        const addedSessions = await sessionsDB.addMultipleSessions(sessionsToAdd);
-        
-        const message = isRepeat 
-            ? `${addedSessions.length}개의 세션이 추가되었습니다.${addedSessions.length < repeatTimes ? ` (${repeatTimes - addedSessions.length}개는 시간 중복으로 제외)` : ''}`
-            : '세션이 추가되었습니다.';
-            
-        res.json({ 
-            message, 
-            sessions: addedSessions,
-            total: repeatTimes,
-            added: addedSessions.length,
-            skipped: repeatTimes - addedSessions.length
-        });
+        const session = await sessionsDB.addSession(newSession);
+        res.json({ message: '세션이 추가되었습니다.', session });
     } catch (error) {
         console.error('[API] 세션 추가 오류:', error);
         res.status(500).json({ message: '세션 추가에 실패했습니다.' });
@@ -581,10 +541,22 @@ app.get('/api/stats', async (req, res) => {
     });
     
     // 통계 계산
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
     const stats = {
       totalSessions: sessions.length,
       completedSessions: sessions.filter(s => s.status === '완료').length,
-      scheduledSessions: sessions.filter(s => s.status === '예정').length,
+      scheduledSessions: sessions.filter(s => {
+        const sessionDate = new Date(s.date);
+        sessionDate.setHours(0, 0, 0, 0);
+        return s.status === '예정' && sessionDate >= today; // 오늘 이후의 예정 세션만
+      }).length,
+      absentSessions: sessions.filter(s => {
+        const sessionDate = new Date(s.date);
+        sessionDate.setHours(0, 0, 0, 0);
+        return s.status !== '완료' && sessionDate < today; // 오늘 이전의 미완료 세션
+      }).length,
       trainerStats: []
     };
     
@@ -598,6 +570,7 @@ app.get('/api/stats', async (req, res) => {
         total: 0,
         completed: 0,
         scheduled: 0,
+        absent: 0,
         memberCount: trainerMemberCount[trainerName] || 0
       });
     });
@@ -612,6 +585,7 @@ app.get('/api/stats', async (req, res) => {
           total: 0,
           completed: 0,
           scheduled: 0,
+          absent: 0,
           memberCount: trainerMemberCount[trainerName] || 0
         });
       }
@@ -619,13 +593,15 @@ app.get('/api/stats', async (req, res) => {
       const trainer = trainerMap.get(trainerName);
       trainer.total++;
       
-      switch (session.status) {
-        case '완료':
-          trainer.completed++;
-          break;
-        case '예정':
-          trainer.scheduled++;
-          break;
+      const sessionDate = new Date(session.date);
+      sessionDate.setHours(0, 0, 0, 0);
+      
+      if (session.status === '완료') {
+        trainer.completed++;
+      } else if (session.status === '예정' && sessionDate >= today) {
+        trainer.scheduled++;
+      } else if (sessionDate < today) {
+        trainer.absent++;
       }
     });
     

@@ -178,6 +178,10 @@ function renderStatsResults(stats) {
         <div class="stats-card-title">예정된 세션</div>
         <div class="stats-card-value">${stats.scheduledSessions || 0}</div>
       </div>
+      <div class="stats-card">
+        <div class="stats-card-title">결석 세션</div>
+        <div class="stats-card-value">${stats.absentSessions || 0}</div>
+      </div>
     </div>
     <div class="stats-details">
       <h4>트레이너별 통계</h4>
@@ -186,7 +190,7 @@ function renderStatsResults(stats) {
       </div>
     </div>
     <div class="stats-details">
-      <h4>월별 세션 통계</h4>
+      <h4>월별 등록 세션</h4>
       <div id="monthly-stats-container">
         <div style="text-align:center;color:#888;padding:20px;">월별 통계를 불러오는 중...</div>
       </div>
@@ -208,6 +212,7 @@ function renderTrainerStats(trainerStats) {
           <th>총 세션</th>
           <th>완료</th>
           <th>예정</th>
+          <th>결석</th>
         </tr>
       </thead>
       <tbody>
@@ -218,6 +223,7 @@ function renderTrainerStats(trainerStats) {
             <td>${trainer.total}</td>
             <td>${trainer.completed}</td>
             <td>${trainer.scheduled}</td>
+            <td>${trainer.absent || 0}</td>
           </tr>
         `).join('')}
       </tbody>
