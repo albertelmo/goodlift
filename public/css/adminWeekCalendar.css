@@ -2,13 +2,72 @@
 
 .awc-header {
   margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.awc-left-spacer {
+  width: 200px; /* 검색창과 동일한 너비 */
+  flex-shrink: 0;
 }
 
 .awc-date-nav {
   display: flex;
   align-items: center;
   gap: 15px;
+  flex-shrink: 0;
+}
+
+.awc-search-area {
+  display: flex;
+  align-items: center; /* 다시 중앙 정렬로 변경 */
+  gap: 8px;
+  width: 200px;
+  flex-shrink: 0;
+}
+
+.awc-search-input {
+  flex: 1;
+  min-width: 120px; /* 최소 너비 설정 */
+  padding: 0 12px; /* 상하 패딩 제거, 좌우만 유지 */
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1; /* 주간 이동 버튼과 동일한 line-height */
+  outline: none;
+  transition: border-color 0.2s;
+  height: 36px; /* 주간 이동 버튼과 동일한 높이 */
+  box-sizing: border-box;
+  display: flex;
+  align-items: center; /* 내부 텍스트 중앙 정렬 */
+  justify-content: center; /* 가로 중앙 정렬 추가 */
+}
+
+.awc-search-input:focus {
+  border-color: #1976d2;
+}
+
+.awc-search-clear {
+  background: #e0e0e0; /* 더 진한 회색으로 변경 */
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color 0.2s;
+  width: 36px; /* 주간 이동 버튼과 동일한 크기 */
+  height: 36px;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  box-sizing: border-box;
+}
+
+.awc-search-clear:hover {
+  background: #d0d0d0; /* 호버 시 더 진한 색상 */
 }
 
 .awc-date-nav button {
@@ -338,6 +397,20 @@
 }
 
 @media (max-width: 768px) {
+  .awc-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .awc-left-spacer {
+    display: none;
+  }
+  
+  .awc-search-area {
+    width: 100%;
+    max-width: 300px;
+  }
+  
   .awc-calendar-grid {
     grid-template-columns: 50px repeat(7, 1fr);
     grid-template-rows: 35px repeat(17, 50px);

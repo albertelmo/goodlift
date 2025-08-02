@@ -4,7 +4,9 @@ export const adminWeekCalendar = {
 };
 
 let state = {
-  weekStart: null // 'YYYY-MM-DD' - 주의 시작일 (월요일)
+  weekStart: null,        // 'YYYY-MM-DD' - 주의 시작일 (월요일)
+  searchMember: null,     // 검색할 회원명
+  isSearchActive: false   // 검색 모드 활성화 여부
 };
 
 function render(root, dateStr) {
@@ -39,15 +41,53 @@ function renderHeader(headerEl) {
   };
   
   headerEl.innerHTML = `
+    <div class="awc-left-spacer"></div>
     <div class="awc-date-nav">
       <button id="awc-prev" class="awc-nav-btn awc-prev-btn"></button>
       <span class="awc-date">${formatDate(monday)} ~ ${formatDate(sunday)}</span>
       <button id="awc-next" class="awc-nav-btn awc-next-btn"></button>
     </div>
+    <div class="awc-search-area">
+      <input type="text" id="awc-search-input" placeholder="🔍 회원명 검색..." class="awc-search-input" value="${state.searchMember || ''}">
+      <button id="awc-search-clear" class="awc-search-clear" style="display:${state.searchMember ? 'block' : 'none'};">×</button>
+    </div>
   `;
   
+  // 이벤트 리스너 설정
+  setupSearchEventListeners(headerEl);
   headerEl.querySelector('#awc-prev').onclick = () => moveWeek(-1);
   headerEl.querySelector('#awc-next').onclick = () => moveWeek(1);
+}
+
+function setupSearchEventListeners(headerEl) {
+  const searchInput = headerEl.querySelector('#awc-search-input');
+  const clearBtn = headerEl.querySelector('#awc-search-clear');
+  
+  // 검색 입력 이벤트
+  searchInput.addEventListener('input', function() {
+    const searchTerm = this.value.trim();
+    state.searchMember = searchTerm;
+    state.isSearchActive = searchTerm.length > 0;
+    
+    // 초기화 버튼 표시/숨김
+    clearBtn.style.display = searchTerm ? 'block' : 'none';
+    
+    // 테이블 다시 렌더링
+    const tableWrap = document.querySelector('.awc-table-wrap');
+    if (tableWrap) renderTable(tableWrap);
+  });
+  
+  // 검색 초기화 버튼
+  clearBtn.addEventListener('click', function() {
+    searchInput.value = '';
+    state.searchMember = null;
+    state.isSearchActive = false;
+    this.style.display = 'none';
+    
+    // 테이블 다시 렌더링
+    const tableWrap = document.querySelector('.awc-table-wrap');
+    if (tableWrap) renderTable(tableWrap);
+  });
 }
 
 function moveWeek(delta) {
@@ -92,7 +132,7 @@ async function renderTable(tableWrap) {
   ]);
   
   // 세션별로 회원 정보 매핑
-  const processedSessions = sessions.map(s => {
+  let processedSessions = sessions.map(s => {
     const member = members.find(m => m.name === s.member);
     const remainSessions = member ? member.remainSessions : 0;
     const hasNoRemainingSessions = remainSessions <= 0;
@@ -110,6 +150,25 @@ async function renderTable(tableWrap) {
       displayStatus
     };
   });
+  
+  // 검색 필터링 적용
+  if (state.searchMember && state.searchMember.trim()) {
+    const searchTerm = state.searchMember.trim().toLowerCase();
+    processedSessions = processedSessions.filter(session => 
+      session.member.toLowerCase().includes(searchTerm)
+    );
+  }
+  
+  // 검색 결과가 없을 때 처리
+  if (state.isSearchActive && processedSessions.length === 0) {
+    tableWrap.innerHTML = `
+      <div style="color:#888;text-align:center;padding:40px;">
+        <div style="margin-bottom:8px;">"${state.searchMember}" 회원의 세션을 찾을 수 없습니다.</div>
+        <div style="font-size:0.9em;color:#666;">다른 주를 확인하거나 검색어를 변경해보세요.</div>
+      </div>
+    `;
+    return;
+  }
   
   // 30분 단위 시간대 생성 (06:00 ~ 22:00)
   const timeSlots = [];
