@@ -365,15 +365,16 @@ function generateTimeSlots(sessionAnalysis) {
     timeSlots = [...earlySlots, ...timeSlots];
   }
   
-  // 늦은 시간 확장 (17:00~22:00)
+  // 늦은 시간 확장 (17:30~22:00)
   if (sessionAnalysis.needsLateExtension) {
     const lateSlots = [];
     const endHour = Math.min(22, Math.ceil(sessionAnalysis.maxMinutes / 60));
     const endMinute = sessionAnalysis.maxMinutes % 60;
     
-    // 30분 단위로 늦은 시간 슬롯 생성
+    // 30분 단위로 늦은 시간 슬롯 생성 (17:30부터 시작)
     for (let h = 17; h <= endHour; h++) {
       for (let m = 0; m < 60; m += 30) {
+        if (h === 17 && m === 0) continue; // 17:00은 기본 슬롯에 이미 있으므로 건너뛰기
         if (h === endHour && m > endMinute) break;
         lateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
       }
@@ -381,7 +382,17 @@ function generateTimeSlots(sessionAnalysis) {
     timeSlots = [...timeSlots, ...lateSlots];
   }
   
-  return timeSlots;
+  // 중복 제거 (Set을 사용하여 고유한 값만 유지)
+  const uniqueTimeSlots = [...new Set(timeSlots)];
+  
+  // 시간순 정렬
+  uniqueTimeSlots.sort((a, b) => {
+    const [hourA, minuteA] = a.split(':').map(Number);
+    const [hourB, minuteB] = b.split(':').map(Number);
+    return (hourA * 60 + minuteA) - (hourB * 60 + minuteB);
+  });
+  
+  return uniqueTimeSlots;
 }
 
 
