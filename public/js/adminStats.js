@@ -239,7 +239,7 @@ function renderTrainerStats(trainerStats) {
       <thead>
         <tr>
           <th>트레이너</th>
-          <th>담당 회원수</th>
+          <th>유효 회원수</th>
           <th>총 세션</th>
           <th>완료</th>
           <th>예정</th>
