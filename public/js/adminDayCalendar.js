@@ -99,7 +99,7 @@ async function renderTable(tableWrap) {
   for (let i = 0; i < hours.length; i++) {
     const hour = hours[i];
     const [h, m] = hour.split(':').map(Number);
-    html += '<tr>';
+    html += `<tr data-time="${hour}">`;
     // 왼쪽 시간 칼럼: 30분 단위로 모든 시간 표시
     html += `<td class="adc-time">${hour}</td>`;
     trainers.forEach(t => {

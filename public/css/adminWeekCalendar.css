@@ -208,6 +208,30 @@
   z-index: 1;
 }
 
+/* 11:30-12:00 사이 구분선 (파란색) */
+.awc-session-container[data-time="12:00"]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #1976d2;
+  z-index: 2;
+}
+
+/* 16:30-17:00 사이 구분선 (파란색) */
+.awc-session-container[data-time="17:00"]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #1976d2;
+  z-index: 2;
+}
+
 /* 세션 카드 (1시간 고정, 가로 배치) */
 .awc-session-card {
   background: white;
