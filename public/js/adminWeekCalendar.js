@@ -1,7 +1,19 @@
-// 주간 세션 캘린더 (관리자용) - 30분 단위 구조
+// 주간 세션 캘린더 (관리자용) - 기본 9~17시 + 동적 확장
 export const adminWeekCalendar = {
   render
 };
+
+// 기본 시간대 설정
+const DEFAULT_TIME_RANGE = {
+  start: '09:00',
+  end: '17:00'
+};
+
+const DEFAULT_TIME_SLOTS = [
+  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
+  '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
+  '15:00', '15:30', '16:00', '16:30', '17:00'
+]; // 17개 슬롯
 
 let state = {
   weekStart: null,        // 'YYYY-MM-DD' - 주의 시작일 (월요일)
@@ -170,15 +182,14 @@ async function renderTable(tableWrap) {
     return;
   }
   
-  // 30분 단위 시간대 생성 (06:00 ~ 22:00)
-  const timeSlots = [];
-  for (let h = 6; h <= 22; h++) {
-    timeSlots.push(`${String(h).padStart(2, '0')}:00`);
-    timeSlots.push(`${String(h).padStart(2, '0')}:30`);
-  }
+  // 세션 시간대 분석 및 동적 시간 슬롯 생성
+  const sessionAnalysis = analyzeSessionTimeRange(processedSessions);
+  const timeSlots = generateTimeSlots(sessionAnalysis);
   
   // CSS Grid 기반 캘린더 생성
   let html = '<div class="awc-calendar-grid">';
+  
+
   
   // 시간 라벨 행 (첫 번째 행)
   html += '<div class="awc-time-header">시간</div>';
@@ -196,10 +207,10 @@ async function renderTable(tableWrap) {
     html += `<div class="${className}">${String(date.getMonth()+1).padStart(2,'0')}.${String(date.getDate()).padStart(2,'0')}<br>(${dayName})</div>`;
   });
   
-  // 30분 단위 시간 라벨 생성
+  // 동적 시간 라벨 생성
   timeSlots.forEach((timeSlot, slotIndex) => {
     const gridRow = slotIndex + 2; // +2는 헤더 행 때문
-    html += `<div class="awc-time-label" style="grid-row: ${gridRow}; grid-column: 1;">${timeSlot}</div>`;
+    html += `<div class="awc-time-label" data-time="${timeSlot}" style="grid-row: ${gridRow}; grid-column: 1;">${timeSlot}</div>`;
   });
   
   // 각 날짜별로 세션들을 30분 단위로 그룹화하여 배치
@@ -285,7 +296,7 @@ async function renderTable(tableWrap) {
       const isHourDivider = slotMinute === 0;
       const hourDividerClass = isHourDivider ? 'hour-divider' : '';
       
-      html += `<div class="awc-session-container ${hourDividerClass}" style="grid-row: ${startRow} / ${startRow + rowSpan}; grid-column: ${gridColumn};">
+      html += `<div class="awc-session-container ${hourDividerClass}" data-time="${timeSlot}" style="grid-row: ${startRow} / ${startRow + rowSpan}; grid-column: ${gridColumn};">
         ${renderSessions(currentSlotSessions, trainers, totalSessionsForWidth, offsetFromPrev)}
       </div>`;
     });
@@ -293,6 +304,104 @@ async function renderTable(tableWrap) {
   
   html += '</div>';
   tableWrap.innerHTML = html;
+  
+  // 그리드 행 수 동적 업데이트
+  updateCalendarGrid(timeSlots, sessionAnalysis);
+}
+
+// 세션 시간대 분석 함수
+function analyzeSessionTimeRange(sessions) {
+  if (sessions.length === 0) {
+    return { timeSlots: DEFAULT_TIME_SLOTS, hasExtendedHours: false };
+  }
+  
+  // 세션 시간들을 분 단위로 변환
+  const sessionMinutes = sessions.map(session => {
+    const [hour, minute] = session.time.split(':').map(Number);
+    return hour * 60 + minute;
+  });
+  
+  const minMinutes = Math.min(...sessionMinutes);
+  const maxMinutes = Math.max(...sessionMinutes);
+  
+  // 기본 범위 (9:00~17:00 = 540~1020분)
+  const defaultStart = 9 * 60;  // 540분
+  const defaultEnd = 17 * 60;   // 1020분
+  
+  // 확장이 필요한지 확인
+  const needsEarlyExtension = minMinutes < defaultStart;
+  const needsLateExtension = maxMinutes > defaultEnd;
+  
+  return {
+    minMinutes,
+    maxMinutes,
+    needsEarlyExtension,
+    needsLateExtension,
+    hasExtendedHours: needsEarlyExtension || needsLateExtension
+  };
+}
+
+// 동적 시간 슬롯 생성 함수
+function generateTimeSlots(sessionAnalysis) {
+  let timeSlots = [...DEFAULT_TIME_SLOTS]; // 기본 9~17시
+  
+  if (!sessionAnalysis.hasExtendedHours) {
+    return timeSlots;
+  }
+  
+  // 이른 시간 확장 (6:00~9:00)
+  if (sessionAnalysis.needsEarlyExtension) {
+    const earlySlots = [];
+    const startHour = Math.max(6, Math.floor(sessionAnalysis.minMinutes / 60));
+    const startMinute = sessionAnalysis.minMinutes % 60;
+    
+    // 30분 단위로 이른 시간 슬롯 생성
+    for (let h = startHour; h < 9; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        if (h === startHour && m < startMinute) continue;
+        earlySlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+      }
+    }
+    timeSlots = [...earlySlots, ...timeSlots];
+  }
+  
+  // 늦은 시간 확장 (17:00~22:00)
+  if (sessionAnalysis.needsLateExtension) {
+    const lateSlots = [];
+    const endHour = Math.min(22, Math.ceil(sessionAnalysis.maxMinutes / 60));
+    const endMinute = sessionAnalysis.maxMinutes % 60;
+    
+    // 30분 단위로 늦은 시간 슬롯 생성
+    for (let h = 17; h <= endHour; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        if (h === endHour && m > endMinute) break;
+        lateSlots.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
+      }
+    }
+    timeSlots = [...timeSlots, ...lateSlots];
+  }
+  
+  return timeSlots;
+}
+
+
+
+// 캘린더 그리드 업데이트 함수
+function updateCalendarGrid(timeSlots, sessionAnalysis) {
+  const calendarGrid = document.querySelector('.awc-calendar-grid');
+  if (!calendarGrid) return;
+  
+  const gridRows = 1 + timeSlots.length; // 헤더 1개 + 시간 슬롯들
+  
+  // 그리드 행 수 업데이트
+  calendarGrid.style.gridTemplateRows = `50px repeat(${timeSlots.length}, 30px)`;
+  
+  // 확장된 시간대 표시 여부에 따른 클래스 추가
+  if (sessionAnalysis.hasExtendedHours) {
+    calendarGrid.classList.add('extended-hours');
+  } else {
+    calendarGrid.classList.remove('extended-hours');
+  }
 }
 
 function renderSessions(sessions, trainers, totalSessionsForWidth, offsetFromPrev) {

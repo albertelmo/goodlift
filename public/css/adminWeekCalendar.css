@@ -1,4 +1,6 @@
-/* 주간 세션 캘린더 스타일 (시간 경계를 넘는 세션 구조) */
+/* 주간 세션 캘린더 스타일 (기본 9~17시 + 동적 확장) */
+
+
 
 .awc-header {
   margin-bottom: 20px;
@@ -122,11 +124,11 @@
   font-size: 16px;
 }
 
-/* 주간 캘린더 그리드 (30분 단위) */
+/* 주간 캘린더 그리드 (기본 9~17시 + 동적 확장) */
 .awc-calendar-grid {
   display: grid;
   grid-template-columns: 60px repeat(7, 1fr); /* 시간 라벨 + 7일 */
-  grid-template-rows: 50px repeat(34, 30px); /* 헤더 + 30분 단위 34개 (06:00~22:00) */
+  grid-template-rows: 50px repeat(17, 30px); /* 헤더 + 기본 17개 슬롯 (9~17시) */
   gap: 1px;
   background: #f0f0f0;
   border: 1px solid #ddd;
@@ -186,6 +188,8 @@
   position: relative; /* 세션 카드의 절대 위치 기준 */
   min-height: 60px;
 }
+
+
 
 /* 시간 단위 세션 컨테이너 구분선 (1시간마다) */
 .awc-session-container.hour-divider {
@@ -366,6 +370,8 @@
   background: #d32f2f;
   border-radius: 50%;
 }
+
+
 
 /* 반응형 디자인 */
 @media (max-width: 1200px) {
