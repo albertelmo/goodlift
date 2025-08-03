@@ -203,7 +203,7 @@ function renderStatsResults(stats) {
       </div>
       <div class="stats-card">
         <div class="stats-card-title">완료된 세션</div>
-        <div class="stats-card-value">${stats.completedSessions || 0}</div>
+        <div class="stats-card-value">${stats.completedSessions || 0}${stats.completedTrialOrAnonymous > 0 ? `(${stats.completedTrialOrAnonymous})` : ''}</div>
       </div>
       <div class="stats-card">
         <div class="stats-card-title">예정된 세션</div>
@@ -252,7 +252,7 @@ function renderTrainerStats(trainerStats) {
             <td style="color:#1976d2;font-weight:600;">${trainer.name}</td>
             <td>${trainer.memberCount || 0}</td>
             <td>${trainer.total}</td>
-            <td>${trainer.completed}</td>
+            <td>${trainer.completed}${trainer.completedTrialOrAnonymous > 0 ? `(${trainer.completedTrialOrAnonymous})` : ''}</td>
             <td>${trainer.scheduled}</td>
             <td>${trainer.absent || 0}</td>
           </tr>
@@ -378,7 +378,7 @@ function renderTrainerSessionsModal(data, trainerName, yearMonth) {
       <div class="modal-body">
         <div class="sessions-summary" style="display:flex;justify-content:space-around;margin-bottom:8px;padding:6px;background:#f8f9fa;border-radius:3px;font-size:0.8em;">
           <span style="color:#666;">총: <strong>${summary.totalSessions}</strong></span>
-          <span style="color:#4caf50;">완료: <strong>${summary.completedSessions}</strong></span>
+          <span style="color:#4caf50;">완료: <strong>${summary.completedSessions}${summary.completedTrialOrAnonymous > 0 ? `(${summary.completedTrialOrAnonymous})` : ''}</strong></span>
           <span style="color:#2196f3;">예정: <strong>${summary.pendingSessions}</strong></span>
           <span style="color:#f44336;">결석: <strong>${summary.absentSessions}</strong></span>
         </div>

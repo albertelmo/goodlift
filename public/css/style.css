@@ -452,13 +452,13 @@ li, td, th {
   padding: 8px 8px;
   text-align: left;
   border-bottom: 2px solid #e0e0e0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 .member-flex-wrap #member-list td {
   padding: 6px 8px;
   border-bottom: 1px solid #f0f0f0;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
 }
 
 .member-flex-wrap #member-list tr:hover {
@@ -886,7 +886,7 @@ li, td, th {
 }
 
 .stats-card-value {
-  font-size: 2rem;
+  font-size: 1.6rem;
   font-weight: 700;
   color: var(--primary);
 }

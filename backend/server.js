@@ -616,9 +616,15 @@ app.get('/api/trainer-sessions', async (req, res) => {
         });
         
         // 요약 정보 계산
+        const completedSessions = sessionsWithMemberInfo.filter(s => s.displayStatus === '완료');
+        const trialOrAnonymousSessions = completedSessions.filter(s => 
+            s.member.startsWith('체험') || s.member.startsWith('무기명')
+        );
+        
         const summary = {
             totalSessions: sessionsWithMemberInfo.length,
-            completedSessions: sessionsWithMemberInfo.filter(s => s.displayStatus === '완료').length,
+            completedSessions: completedSessions.length,
+            completedTrialOrAnonymous: trialOrAnonymousSessions.length,
             pendingSessions: sessionsWithMemberInfo.filter(s => s.displayStatus === '예정').length,
             absentSessions: sessionsWithMemberInfo.filter(s => s.displayStatus === '결석').length
         };
@@ -678,9 +684,16 @@ app.get('/api/stats', async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
+    // 완료된 세션 중 체험/무기명 회원 필터링
+    const completedSessions = sessions.filter(s => s.status === '완료');
+    const trialOrAnonymousSessions = completedSessions.filter(s => 
+        s.member.startsWith('체험') || s.member.startsWith('무기명')
+    );
+    
     const stats = {
       totalSessions: sessions.length,
-      completedSessions: sessions.filter(s => s.status === '완료').length,
+      completedSessions: completedSessions.length,
+      completedTrialOrAnonymous: trialOrAnonymousSessions.length,
       scheduledSessions: sessions.filter(s => {
         const sessionDate = new Date(s.date);
         sessionDate.setHours(0, 0, 0, 0);
@@ -706,6 +719,7 @@ app.get('/api/stats', async (req, res) => {
         username: trainerAccount ? trainerAccount.username : trainerName, // username 추가
         total: 0,
         completed: 0,
+        completedTrialOrAnonymous: 0,
         scheduled: 0,
         absent: 0,
         memberCount: trainerMemberCount[trainerName] || 0
@@ -724,6 +738,7 @@ app.get('/api/stats', async (req, res) => {
           username: trainerAccount ? trainerAccount.username : trainerName, // username 추가
           total: 0,
           completed: 0,
+          completedTrialOrAnonymous: 0,
           scheduled: 0,
           absent: 0,
           memberCount: trainerMemberCount[trainerName] || 0
@@ -738,6 +753,10 @@ app.get('/api/stats', async (req, res) => {
       
       if (session.status === '완료') {
         trainer.completed++;
+        // 체험/무기명 회원 체크
+        if (session.member.startsWith('체험') || session.member.startsWith('무기명')) {
+          trainer.completedTrialOrAnonymous++;
+        }
       } else if (session.status === '예정' && sessionDate >= today) {
         trainer.scheduled++;
       } else if (sessionDate < today) {
