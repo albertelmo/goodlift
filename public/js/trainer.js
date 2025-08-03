@@ -264,16 +264,10 @@ async function renderCalUI(container, forceDate) {
                       <label style="width:100%;text-align:left;opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;" id="tmc-repeat-count-label">
                         반복횟수
                         <select name="repeatCount" id="tmc-repeat-count-input" style="width:180px;">
-                          <option value="1">1회</option>
-                          <option value="2">2회</option>
-                          <option value="3">3회</option>
-                          <option value="4">4회</option>
                           <option value="5">5회</option>
-                          <option value="6">6회</option>
-                          <option value="7">7회</option>
-                          <option value="8">8회</option>
-                          <option value="9">9회</option>
                           <option value="10">10회</option>
+                          <option value="15">15회</option>
+                          <option value="20">20회</option>
                         </select>
                       </label>
                       <button type="submit" style="width:180px;">등록</button>

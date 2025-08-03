@@ -380,22 +380,67 @@ app.get('/api/sessions', async (req, res) => {
 // 세션 추가
 app.post('/api/sessions', async (req, res) => {
     try {
-        const { member, trainer, date, time } = req.body;
+        const { member, trainer, date, time, repeat, repeatCount } = req.body;
         if (!member || !trainer || !date || !time) {
             return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
         }
         
-        const newSession = {
-            id: uuidv4(),
-            member,
-            trainer,
-            date,
-            time,
-            status: '예정'
-        };
-        
-        const session = await sessionsDB.addSession(newSession);
-        res.json({ message: '세션이 추가되었습니다.', session });
+        // 반복 세션 처리
+        if (repeat && repeatCount && parseInt(repeatCount) > 1) {
+            const sessions = [];
+            const count = parseInt(repeatCount);
+            
+            for (let i = 0; i < count; i++) {
+                const sessionDate = new Date(date);
+                sessionDate.setDate(sessionDate.getDate() + (i * 7)); // 7일씩 증가
+                
+                // 시간 중복 체크
+                const hasConflict = await sessionsDB.checkTimeConflict(
+                    trainer, 
+                    sessionDate.toISOString().split('T')[0], 
+                    time
+                );
+                
+                if (!hasConflict) {
+                    sessions.push({
+                        id: uuidv4(),
+                        member,
+                        trainer,
+                        date: sessionDate.toISOString().split('T')[0],
+                        time,
+                        status: '예정'
+                    });
+                }
+            }
+            
+            if (sessions.length === 0) {
+                return res.status(400).json({ message: '모든 날짜에 시간 중복이 있습니다.' });
+            }
+            
+            const addedSessions = await sessionsDB.addMultipleSessions(sessions);
+            const skipped = count - sessions.length;
+            
+            res.json({ 
+                message: '세션이 추가되었습니다.', 
+                session: addedSessions[0],
+                total: count,
+                added: sessions.length,
+                skipped: skipped
+            });
+        } else {
+            // 단일 세션 추가
+            const newSession = {
+                id: uuidv4(),
+                member,
+                trainer,
+                date,
+                time,
+                status: '예정'
+            };
+            
+            const session = await sessionsDB.addSession(newSession);
+            res.json({ message: '세션이 추가되었습니다.', session });
+        }
     } catch (error) {
         console.error('[API] 세션 추가 오류:', error);
         res.status(500).json({ message: '세션 추가에 실패했습니다.' });
