@@ -546,6 +546,95 @@ app.get('/api/monthly-stats/all', async (req, res) => {
     }
 });
 
+// 트레이너별 세션 조회 API
+app.get('/api/trainer-sessions', async (req, res) => {
+    try {
+        const { trainer, yearMonth, status, member } = req.query;
+        
+        if (!trainer || !yearMonth) {
+            return res.status(400).json({ message: '트레이너와 년월 정보가 필요합니다.' });
+        }
+        
+        // 년월을 시작일과 종료일로 변환
+        const [year, month] = yearMonth.split('-');
+        const startDate = `${year}-${month}-01`;
+        const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // 해당 월의 마지막 날
+        
+        // 세션 데이터 조회
+        const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
+        
+        // 트레이너 필터링
+        let filteredSessions = sessions.filter(session => session.trainer === trainer);
+        
+        // 추가 필터링
+        if (status && status !== '전체') {
+            filteredSessions = filteredSessions.filter(session => session.status === status);
+        }
+        
+        if (member) {
+            filteredSessions = filteredSessions.filter(session => 
+                session.member.toLowerCase().includes(member.toLowerCase())
+            );
+        }
+        
+        // 세션 데이터 정리 (결석 자동 판단 포함)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const sessionsWithMemberInfo = filteredSessions.map(session => {
+            const sessionDate = new Date(session.date);
+            sessionDate.setHours(0, 0, 0, 0);
+            
+            let displayStatus = session.status;
+            
+            // 날짜가 지났고 완료되지 않은 세션은 결석으로 표시
+            if (session.status !== '완료' && sessionDate < today) {
+                displayStatus = '결석';
+            }
+            
+            return {
+                ...session,
+                displayStatus
+            };
+        });
+        
+        // 날짜, 시간순 정렬 (최신순)
+        sessionsWithMemberInfo.sort((a, b) => {
+            // Date 객체를 직접 비교
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            
+            // 날짜가 다르면 날짜로 비교
+            if (dateA.getTime() !== dateB.getTime()) {
+                return dateB.getTime() - dateA.getTime(); // 최신순
+            }
+            
+            // 날짜가 같으면 시간으로 비교
+            const timeA = String(a.time);
+            const timeB = String(b.time);
+            return timeB.localeCompare(timeA); // 최신순
+        });
+        
+        // 요약 정보 계산
+        const summary = {
+            totalSessions: sessionsWithMemberInfo.length,
+            completedSessions: sessionsWithMemberInfo.filter(s => s.displayStatus === '완료').length,
+            pendingSessions: sessionsWithMemberInfo.filter(s => s.displayStatus === '예정').length,
+            absentSessions: sessionsWithMemberInfo.filter(s => s.displayStatus === '결석').length
+        };
+        
+        res.json({
+            sessions: sessionsWithMemberInfo,
+            summary,
+            trainer,
+            yearMonth
+        });
+    } catch (error) {
+        console.error('[API] 트레이너 세션 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 세션 조회에 실패했습니다.' });
+    }
+});
+
 // 통계 API
 app.get('/api/stats', async (req, res) => {
   try {
@@ -610,8 +699,11 @@ app.get('/api/stats', async (req, res) => {
     
     // 먼저 담당 회원이 있는 모든 트레이너를 추가
     Object.keys(trainerMemberCount).forEach(trainerName => {
+      // 트레이너 이름으로 username 찾기
+      const trainerAccount = trainers.find(t => t.name === trainerName);
       trainerMap.set(trainerName, {
         name: trainerName,
+        username: trainerAccount ? trainerAccount.username : trainerName, // username 추가
         total: 0,
         completed: 0,
         scheduled: 0,
@@ -625,8 +717,11 @@ app.get('/api/stats', async (req, res) => {
       const trainerName = trainerNameMap[session.trainer] || session.trainer; // 이름이 없으면 ID 사용
       
       if (!trainerMap.has(trainerName)) {
+        // 트레이너 이름으로 username 찾기
+        const trainerAccount = trainers.find(t => t.name === trainerName);
         trainerMap.set(trainerName, {
           name: trainerName,
+          username: trainerAccount ? trainerAccount.username : trainerName, // username 추가
           total: 0,
           completed: 0,
           scheduled: 0,
