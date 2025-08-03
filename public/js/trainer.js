@@ -248,6 +248,9 @@ async function renderCalUI(container, forceDate) {
                 <div class="tmc-modal-content">
                     <h3>세션 추가</h3>
                     <form id="tmc-session-add-form" style="display:flex;flex-direction:column;gap:12px;align-items:center;">
+                      <label style="width:100%;text-align:left;">트레이너
+                        <select name="trainer" id="tmc-trainer-select" required style="width:180px;"></select>
+                      </label>
                       <label style="width:100%;text-align:left;">회원
                         <select name="member" id="tmc-member-select" required style="width:180px;"></select>
                       </label>
@@ -278,10 +281,33 @@ async function renderCalUI(container, forceDate) {
         </div>`;
         container.innerHTML = html;
         
-        // 세션 추가 모달: 회원 드롭다운 로딩
-        const myMembers = members.filter(m=>m.trainer===username && m.remainSessions > 0 && m.status === '유효');
-        const sel = document.getElementById('tmc-member-select');
-        sel.innerHTML = myMembers.length ? myMembers.map(m=>`<option value=\"${m.name}\">${m.name}</option>`).join('') : '<option value=\"\">담당 회원 없음</option>';
+        // 세션 추가 모달: 트레이너 드롭다운 로딩
+        const trainersRes = await fetch('/api/trainers');
+        const allTrainers = await trainersRes.json();
+        const trainerSel = document.getElementById('tmc-trainer-select');
+        trainerSel.innerHTML = allTrainers.map(t => `<option value="${t.username}"${t.username === username ? ' selected' : ''}>${t.name}</option>`).join('');
+        
+        // 트레이너 변경 시 회원 목록 업데이트 함수
+        async function updateMemberDropdown(selectedTrainer) {
+            const memberSel = document.getElementById('tmc-member-select');
+            const filteredMembers = members.filter(m => 
+                m.trainer === selectedTrainer && 
+                m.remainSessions > 0 && 
+                m.status === '유효'
+            );
+            memberSel.innerHTML = filteredMembers.length ? 
+                filteredMembers.map(m => `<option value="${m.name}">${m.name}</option>`).join('') : 
+                '<option value="">담당 회원 없음</option>';
+        }
+        
+        // 초기 회원 드롭다운 로딩 (현재 트레이너)
+        await updateMemberDropdown(username);
+        
+        // 트레이너 변경 이벤트 리스너
+        trainerSel.addEventListener('change', async function() {
+            const selectedTrainer = this.value;
+            await updateMemberDropdown(selectedTrainer);
+        });
         
         // 시간 드롭다운 06:00~22:00 30분 단위 생성 (중복 방지, 1시간 단위)
         const timeSel = document.getElementById('tmc-time-input');
@@ -345,6 +371,7 @@ async function renderCalUI(container, forceDate) {
           e.preventDefault();
           const form = e.target;
           const data = Object.fromEntries(new FormData(form));
+          // 세션은 항상 현재 로그인한 트레이너로 등록
           data.trainer = username;
           const resultDiv = document.getElementById('tmc-session-add-result');
           resultDiv.style.color = '#1976d2';

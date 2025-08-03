@@ -21,6 +21,13 @@ let state = {
   isSearchActive: false   // 검색 모드 활성화 여부
 };
 
+// KST(로컬) 기준 YYYY-MM-DD 문자열 반환 함수
+function getLocalDateStr(date = new Date()) {
+  return date.getFullYear() + '-' +
+    String(date.getMonth()+1).padStart(2,'0') + '-' +
+    String(date.getDate()).padStart(2,'0');
+}
+
 function render(root, dateStr) {
   if (!root) return;
   
@@ -34,7 +41,7 @@ function render(root, dateStr) {
   let monday = new Date(date);
   monday.setDate(date.getDate() - daysToMonday);
   
-  state.weekStart = monday.toISOString().slice(0, 10);
+  state.weekStart = getLocalDateStr(monday);
   
   root.innerHTML = `<div class="awc-header"></div><div class="awc-table-wrap"></div>`;
   renderHeader(root.querySelector('.awc-header'));
@@ -117,7 +124,7 @@ function moveWeek(delta) {
     monday.setDate(monday.getDate() + (delta * 7));
   }
   
-  state.weekStart = monday.toISOString().slice(0, 10);
+  state.weekStart = getLocalDateStr(monday);
   const root = document.getElementById('admin-week-calendar-root');
   if (root) render(root, state.weekStart);
 }
@@ -133,7 +140,7 @@ async function renderTable(tableWrap) {
   for (let i = 0; i < 7; i++) {
     const date = new Date(monday);
     date.setDate(monday.getDate() + i);
-    weekDates.push(date.toISOString().slice(0, 10));
+    weekDates.push(getLocalDateStr(date));
   }
   
   // 트레이너, 세션, 회원 데이터 fetch

@@ -7,12 +7,19 @@ let state = {
   date: null // 'YYYY-MM-DD'
 };
 
+// KST(로컬) 기준 YYYY-MM-DD 문자열 반환 함수
+function getLocalDateStr(date = new Date()) {
+  return date.getFullYear() + '-' +
+    String(date.getMonth()+1).padStart(2,'0') + '-' +
+    String(date.getDate()).padStart(2,'0');
+}
+
 function render(root, dateStr) {
   if (!root) return;
   // 날짜 상태 초기화
   let today = new Date();
   let date = dateStr ? new Date(dateStr) : today;
-  state.date = date.toISOString().slice(0, 10);
+  state.date = getLocalDateStr(date);
   root.innerHTML = `<div class="adc-header"></div><div class="adc-table-wrap"></div>`;
   renderHeader(root.querySelector('.adc-header'));
   renderTable(root.querySelector('.adc-table-wrap'));
@@ -36,7 +43,7 @@ function moveDate(delta) {
   let d = new Date(state.date);
   if (delta === 0) d = new Date();
   else d.setDate(d.getDate() + delta);
-  state.date = d.toISOString().slice(0, 10);
+  state.date = getLocalDateStr(d);
   const root = document.getElementById('admin-day-calendar-root');
   if (root) render(root, state.date);
 }
