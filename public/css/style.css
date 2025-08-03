@@ -40,8 +40,8 @@ h2, h3 {
     max-width: 120px;
     object-fit: contain;
     cursor: pointer;
-    margin-top: 8px;
-    margin-bottom: 4px;
+    margin-top: 16px;
+    margin-bottom: 8px;
     display: block;
     align-self: flex-start;
     margin-right: auto;
@@ -122,7 +122,7 @@ button:hover, button:focus {
 #mainSection {
     display: none;
     max-width: 980px;
-    margin: 24px auto;
+    margin: 48px auto;
     background: var(--card-bg);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -172,7 +172,7 @@ button:hover, button:focus {
 }
 
 .tab-content {
-    padding: 24px 24px;
+    padding: 44px 38px;
     min-height: 240px;
     color: var(--text);
     font-size: 1.09rem;
