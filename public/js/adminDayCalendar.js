@@ -140,7 +140,7 @@ async function renderTable(tableWrap) {
         }
         
         html += `<td rowspan="2"><div class="${sessionClass}">
-          <strong>${session.member}</strong>
+          <strong>${session.member} (${session.remainSessions})</strong>
           <div class="adc-status-label">${session.displayStatus}</div>
           ${session.hasNoRemainingSessions && session.status !== '완료' ? '<div style="color:#d32f2f;font-size:0.8em;">⚠️</div>' : ''}
         </div></td>`;
