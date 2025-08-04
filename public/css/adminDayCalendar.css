@@ -258,8 +258,19 @@
   border-radius: 50%;
 }
 
-#admin-day-calendar-root .adc-table tr:nth-child(odd) td {
-  border-bottom: 0.5px solid #e0e0e0;
+/* 정시 라인의 하단 선 제거 (30분 라인의 하단선이 정시 구분선 역할) */
+#admin-day-calendar-root .adc-table tr[data-time$=":00"] td {
+  border-bottom: none;
+}
+
+/* 30분 라인의 상단 선 제거 */
+#admin-day-calendar-root .adc-table tr[data-time$=":30"] td {
+  border-top: none;
+}
+
+/* 세션 카드가 있는 셀의 하단 선 제거 (rowspan=2로 인한 라인 방지) */
+#admin-day-calendar-root .adc-table td[rowspan="2"] {
+  border-bottom: none;
 }
 
 /* 11:30-12:00 사이 구분선 (파란색) - 시간 칼럼 제외 */
