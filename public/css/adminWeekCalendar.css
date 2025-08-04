@@ -24,7 +24,7 @@
 
 .awc-search-area {
   display: flex;
-  align-items: flex-end; /* 아래쪽 정렬로 변경 */
+  align-items: flex-end; /* 하단 정렬로 변경 */
   gap: 8px;
   width: 200px;
   flex-shrink: 0;
@@ -33,18 +33,16 @@
 .awc-search-input {
   flex: 1;
   min-width: 120px; /* 최소 너비 설정 */
-  padding: 6px 12px; /* 세로폭 줄이기 */
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  line-height: 1; /* 주간 이동 버튼과 동일한 line-height */
-  outline: none;
-  transition: border-color 0.2s;
-  height: 36px; /* 높이 고정 */
-  box-sizing: border-box;
-  display: flex;
-  align-items: center; /* 내부 텍스트 중앙 정렬 */
-  justify-content: center; /* 가로 중앙 정렬 추가 */
+  padding: 6px 12px !important; /* 세로폭 줄이기 - !important 추가 */
+  border: 1px solid #ddd !important;
+  border-radius: 4px !important;
+  font-size: 14px !important;
+  line-height: 1 !important; /* 주간 이동 버튼과 동일한 line-height */
+  outline: none !important;
+  transition: border-color 0.2s !important;
+  height: 36px !important; /* 높이를 50px에서 36px로 감소 */
+  box-sizing: border-box !important;
+  margin-bottom: 0 !important; /* 전역 스타일의 margin-bottom 제거 */
 }
 
 .awc-search-input:focus {
@@ -63,7 +61,7 @@
   width: 36px; /* 주간 이동 버튼과 동일한 크기 */
   height: 36px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   box-sizing: border-box;
 }
@@ -73,11 +71,13 @@
 }
 
 .awc-date-nav button {
-  padding: 8px 12px;
+  padding: 6px 12px;
   border: 1px solid #ddd;
   background: white;
   cursor: pointer;
   border-radius: 4px;
+  height: 36px;
+  box-sizing: border-box;
 }
 
 .awc-date-nav button:hover {
