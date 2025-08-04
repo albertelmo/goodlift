@@ -439,7 +439,7 @@ function renderList(container) {
         <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">📄 계약서</h3>
         <div style="margin-bottom:20px;border:1px solid #ddd;border-radius:8px;padding:16px;background:#f9f9f9;">
           <h4 style="margin-top:0;color:#333;">피트니스 계약서</h4>
-          <div id="contract-content" style="line-height:1.0;color:#555;font-size:12px;">
+          <div id="contract-content" style="line-height:1.2;color:#555;font-size:12px;">
             계약서를 불러오는 중...
           </div>
         </div>
