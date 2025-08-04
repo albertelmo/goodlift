@@ -1066,7 +1066,39 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
     }
 });
 
-
+// 계약서 내용 조회 API
+app.get('/api/contract/content', (req, res) => {
+    try {
+        const contractPath = path.join(__dirname, '../public/img/contract.txt');
+        
+        if (!fs.existsSync(contractPath)) {
+            return res.status(404).json({ 
+                message: '계약서 파일을 찾을 수 없습니다.',
+                content: '계약서 파일이 존재하지 않습니다.' 
+            });
+        }
+        
+        const content = fs.readFileSync(contractPath, 'utf-8');
+        
+        // 텍스트를 HTML로 변환 (줄바꿈을 <br>로 변환)
+        const htmlContent = content
+            .replace(/\n/g, '<br>')
+            .replace(/\r\n/g, '<br>')
+            .replace(/\r/g, '<br>');
+        
+        res.json({ 
+            message: '계약서 내용을 성공적으로 불러왔습니다.',
+            content: htmlContent 
+        });
+        
+    } catch (error) {
+        console.error('[API] 계약서 내용 조회 오류:', error);
+        res.status(500).json({ 
+            message: '계약서 내용을 불러오는데 실패했습니다.',
+            content: '계약서 내용을 불러오는데 실패했습니다.' 
+        });
+    }
+});
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);

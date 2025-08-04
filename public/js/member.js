@@ -308,6 +308,12 @@ function renderList(container) {
       return;
     }
     
+    // 확인 메시지 추가
+    const confirmDownload = confirm(`현재 표시된 ${currentDisplayedMembers.length}명의 회원 정보를 다운로드하시겠습니까?`);
+    if (!confirmDownload) {
+      return;
+    }
+    
     try {
       const res = await fetch('/api/members/export', {
         method: 'POST',
@@ -424,35 +430,97 @@ function renderList(container) {
 
 
 
-  // 계약서 전송 모달
+  // 계약서 미리보기 모달
   function showContractModal() {
     const modalBg = document.getElementById('member-edit-modal-bg');
     modalBg.style.display = 'block';
     modalBg.innerHTML = `
-      <div id="contract-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:32px 24px;z-index:1002;min-width:300px;max-width:96vw;">
-        <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">📄 계약서 전송</h3>
-        <div style="margin-bottom:14px;">
-          <b>이메일 주소</b><br>
-          <input type="email" id="contract-email" placeholder="example@email.com" style="width:100%;border-radius:6px;padding:7px 10px;margin-top:2px;border:1.2px solid #ddd;">
+      <div id="contract-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:32px 24px;z-index:1002;min-width:600px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">📄 계약서</h3>
+        <div style="margin-bottom:20px;border:1px solid #ddd;border-radius:8px;padding:16px;background:#f9f9f9;">
+          <h4 style="margin-top:0;color:#333;">피트니스 계약서</h4>
+          <div id="contract-content" style="line-height:1.0;color:#555;font-size:12px;">
+            계약서를 불러오는 중...
+          </div>
         </div>
         <div id="contract-modal-result" style="min-height:22px;margin-bottom:8px;color:#1976d2;"></div>
         <div style="display:flex;gap:12px;justify-content:flex-end;">
-          <button id="contract-modal-send" style="flex:1 1 0;background:var(--primary);color:#fff;">전송</button>
-          <button id="contract-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;">취소</button>
+          <button id="contract-modal-send" style="flex:1 1 0;background:var(--primary);color:#fff;">이메일로 전송</button>
+          <button id="contract-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;">닫기</button>
         </div>
       </div>
     `;
 
-    // 취소 버튼
+    // 계약서 내용 로드
+    loadContractContent();
+
+    // 닫기 버튼
     document.getElementById('contract-modal-cancel').onclick = function() {
       modalBg.style.display = 'none';
       modalBg.innerHTML = '';
     };
 
+    // 이메일 전송 버튼
+    document.getElementById('contract-modal-send').onclick = function() {
+      showEmailInputModal();
+    };
+
+    // 바깥 클릭 시 닫기
+    modalBg.onclick = function(e) {
+      if (e.target === modalBg) {
+        modalBg.style.display = 'none';
+        modalBg.innerHTML = '';
+      }
+    };
+  }
+
+  // 계약서 내용 로드 함수
+  async function loadContractContent() {
+    const contentDiv = document.getElementById('contract-content');
+    
+    try {
+      const res = await fetch('/api/contract/content');
+      const result = await res.json();
+      
+      if (res.ok) {
+        contentDiv.innerHTML = result.content || '계약서 내용을 불러올 수 없습니다.';
+      } else {
+        contentDiv.innerHTML = '계약서 내용을 불러오는데 실패했습니다.';
+      }
+    } catch (error) {
+      console.error('계약서 내용 로드 오류:', error);
+      contentDiv.innerHTML = '계약서 내용을 불러오는데 실패했습니다.';
+    }
+  }
+
+  // 이메일 입력 모달
+  function showEmailInputModal() {
+    const modalBg = document.getElementById('member-edit-modal-bg');
+    modalBg.innerHTML = `
+      <div id="email-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:32px 24px;z-index:1002;min-width:300px;max-width:96vw;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">📧 이메일 전송</h3>
+        <div style="margin-bottom:14px;">
+          <b>이메일 주소</b><br>
+          <input type="email" id="contract-email" placeholder="example@email.com" style="width:100%;border-radius:6px;padding:7px 10px;margin-top:2px;border:1.2px solid #ddd;">
+        </div>
+        <div id="email-modal-result" style="min-height:22px;margin-bottom:8px;color:#1976d2;"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;">
+          <button id="email-modal-send" style="flex:1 1 0;background:var(--primary);color:#fff;">전송</button>
+          <button id="email-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;">취소</button>
+        </div>
+      </div>
+    `;
+
+    // 취소 버튼
+    document.getElementById('email-modal-cancel').onclick = function() {
+      modalBg.style.display = 'none';
+      modalBg.innerHTML = '';
+    };
+
     // 전송 버튼
-    document.getElementById('contract-modal-send').onclick = async function() {
+    document.getElementById('email-modal-send').onclick = async function() {
       const email = document.getElementById('contract-email').value.trim();
-      const resultDiv = document.getElementById('contract-modal-result');
+      const resultDiv = document.getElementById('email-modal-result');
       
       if (!email) {
         resultDiv.style.color = '#d32f2f';
@@ -507,7 +575,7 @@ function renderList(container) {
     // Enter 키로 전송
     document.getElementById('contract-email').onkeypress = function(e) {
       if (e.key === 'Enter') {
-        document.getElementById('contract-modal-send').click();
+        document.getElementById('email-modal-send').click();
       }
     };
   }
