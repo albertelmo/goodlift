@@ -68,13 +68,15 @@ export async function renderMyMembers(container, username) {
     try {
         const res = await fetch('/api/members');
         const members = await res.json();
-        const myMembers = members.filter(m => m.trainer === username)
-            .sort((a, b) => {
-                // 잔여세션이 없는 경우를 맨 뒤로
-                const aRemain = a.remainSessions !== undefined ? a.remainSessions : -1;
-                const bRemain = b.remainSessions !== undefined ? b.remainSessions : -1;
-                return aRemain - bRemain; // 오름차순 (잔여세션 적은 순)
-            });
+        const myMembers = members.filter(m => 
+            m.trainer === username && 
+            m.status === '유효'
+        ).sort((a, b) => {
+            // 잔여세션이 없는 경우를 맨 뒤로
+            const aRemain = a.remainSessions !== undefined ? a.remainSessions : -1;
+            const bRemain = b.remainSessions !== undefined ? b.remainSessions : -1;
+            return aRemain - bRemain; // 오름차순 (잔여세션 적은 순)
+        });
         if (!myMembers.length) {
             container.innerHTML = '<div style="color:#888;text-align:center;">담당 회원이 없습니다.</div>';
             return;
