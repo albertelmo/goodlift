@@ -1,6 +1,31 @@
 /* 날짜별 세션 캘린더 (관리자용) - 현대적인 디자인 */
+/* 더 구체적인 선택자로 우선순위 높임 */
+#admin-day-calendar-root .adc-table th, 
+#admin-day-calendar-root .adc-table td {
+  border: 1px solid #e0e0e0;
+  text-align: center;
+  padding: 0;
+  background: #fff;
+  font-size: 12px;
+  min-width: 120px;
+  height: 24px;
+  position: relative;
+  vertical-align: top;
+}
+
+#admin-day-calendar-root .adc-table th {
+  background: #f8f9fa;
+  font-weight: bold;
+  color: #333;
+  font-size: 12px;
+  height: 40px;
+  border-bottom: 2px solid #e0e0e0;
+  vertical-align: middle;
+}
+
 .adc-header {
   margin-bottom: 20px;
+  text-align: center;
 }
 
 .adc-date-nav {
@@ -82,27 +107,7 @@
   overflow: hidden;
 }
 
-.adc-table th, .adc-table td {
-  border: 1px solid #e0e0e0;
-  text-align: center;
-  padding: 0;
-  background: #fff;
-  font-size: 14px;
-  min-width: 120px;
-  height: 24px;
-  position: relative;
-  vertical-align: top;
-}
-
-.adc-table th {
-  background: #f8f9fa;
-  font-weight: bold;
-  color: #333;
-  font-size: 14px;
-  height: 40px;
-  border-bottom: 2px solid #e0e0e0;
-  vertical-align: middle;
-}
+/* 기존 스타일은 더 구체적인 선택자로 대체됨 */
 
 /* 시간 열 헤더 특별 스타일 */
 .adc-table th:first-child {
@@ -123,8 +128,8 @@
   width: 60px !important;
   min-width: 60px !important;
   max-width: 60px !important;
-  text-align: right;
-  vertical-align: middle;
+  text-align: right !important;
+  vertical-align: middle !important;
   position: relative;
   box-sizing: border-box;
 }
@@ -140,7 +145,7 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
   padding: 4px 6px;
   margin: 2px;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 500;
   min-height: 40px;
   max-width: 98%;
@@ -156,14 +161,14 @@
 }
 
 .adc-session strong {
-  font-size: 13px;
+  font-size: 10px;
   font-weight: bold;
   margin-bottom: 2px;
   color: #333;
 }
 
 .adc-status-label {
-  font-size: 10px;
+  font-size: 7px;
   font-weight: bold;
   text-align: center;
   padding: 1px 3px;
@@ -253,18 +258,18 @@
   border-radius: 50%;
 }
 
-.adc-table tr:nth-child(odd) td {
-  border-bottom: 1px dashed #f5f5f5;
+#admin-day-calendar-root .adc-table tr:nth-child(odd) td {
+  border-bottom: 0.5px solid #e0e0e0;
 }
 
-/* 11:30-12:00 사이 구분선 (파란색) */
-.adc-table tr[data-time="12:00"] td {
-  border-top: 2px solid #1976d2;
+/* 11:30-12:00 사이 구분선 (파란색) - 시간 칼럼 제외 */
+#admin-day-calendar-root .adc-table tr[data-time="12:00"] td:not(:first-child) {
+  border-top: 1px solid #1976d2;
 }
 
-/* 16:30-17:00 사이 구분선 (파란색) */
-.adc-table tr[data-time="17:00"] td {
-  border-top: 2px solid #1976d2;
+/* 16:30-17:00 사이 구분선 (파란색) - 시간 칼럼 제외 */
+#admin-day-calendar-root .adc-table tr[data-time="17:00"] td:not(:first-child) {
+  border-top: 1px solid #1976d2;
 }
 
 /* 반응형 디자인 */
@@ -275,20 +280,24 @@
   
   .adc-table th, .adc-table td {
     min-width: 100px;
-    font-size: 13px;
+    font-size: 11px;
+  }
+  
+  .adc-time {
+    font-size: 10px;
   }
   
   .adc-session {
-    font-size: 11px;
+    font-size: 9px;
     padding: 3px 4px;
   }
   
   .adc-session strong {
-    font-size: 12px;
+    font-size: 9px;
   }
   
   .adc-status-label {
-    font-size: 9px;
+    font-size: 6px;
   }
 }
 
@@ -299,20 +308,24 @@
   
   .adc-table th, .adc-table td {
     min-width: 80px;
-    font-size: 12px;
+    font-size: 10px;
+  }
+  
+  .adc-time {
+    font-size: 9px;
   }
   
   .adc-session {
-    font-size: 10px;
+    font-size: 8px;
     padding: 2px 3px;
     min-height: 42px;
   }
   
   .adc-session strong {
-    font-size: 11px;
+    font-size: 8px;
   }
   
   .adc-status-label {
-    font-size: 8px;
+    font-size: 5px;
   }
 } 
