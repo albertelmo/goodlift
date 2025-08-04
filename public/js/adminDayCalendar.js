@@ -98,9 +98,12 @@ async function renderTable(tableWrap) {
     const m = t % 60;
     hours.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
   }
+  // 트레이너를 가나다순으로 정렬
+  const sortedTrainers = trainers.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  
   // 표 렌더링
   let html = '<div class="adc-table-scroll"><table class="adc-table"><thead><tr><th>시간</th>';
-  trainers.forEach(t => { html += `<th>${t.name}</th>`; });
+  sortedTrainers.forEach(t => { html += `<th>${t.name}</th>`; });
   html += '</tr></thead><tbody>';
   // 30분 단위 행 생성, 세션은 rowspan=2로 표시
   for (let i = 0; i < hours.length; i++) {
@@ -109,7 +112,7 @@ async function renderTable(tableWrap) {
     html += `<tr data-time="${hour}">`;
     // 왼쪽 시간 칼럼: 30분 단위로 모든 시간 표시
     html += `<td class="adc-time">${hour}</td>`;
-    trainers.forEach(t => {
+    sortedTrainers.forEach(t => {
       // 세션이 이 시간에 시작하면 rowspan=2로 카드 표시
       const session = processedSessions.find(s => s.trainer === t.username && s.time === hour);
       

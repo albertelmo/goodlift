@@ -234,6 +234,9 @@ function renderTrainerStats(trainerStats) {
     return '<div style="color:#888;text-align:center;padding:20px;">트레이너별 데이터가 없습니다.</div>';
   }
   
+  // 트레이너를 가나다순으로 정렬
+  const sortedTrainerStats = trainerStats.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  
   return `
     <table class="trainer-stats-table">
       <thead>
@@ -247,7 +250,7 @@ function renderTrainerStats(trainerStats) {
         </tr>
       </thead>
       <tbody>
-        ${trainerStats.map(trainer => `
+        ${sortedTrainerStats.map(trainer => `
           <tr class="trainer-row" data-trainer="${trainer.username}" data-name="${trainer.name}" style="cursor:pointer;transition:background-color 0.2s;">
             <td style="color:#1976d2;font-weight:600;">${trainer.name}</td>
             <td>${trainer.memberCount || 0}</td>
