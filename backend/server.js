@@ -702,7 +702,9 @@ app.get('/api/stats', async (req, res) => {
     // 트레이너별 담당 회원 수 계산
     const trainerMemberCount = {};
     members.forEach(member => {
-      if (member.status === '유효') { // 유효한 회원만 카운트
+      if (member.status === '유효' && 
+          !member.name.startsWith('무기명') && 
+          !member.name.startsWith('체험')) { // 유효한 회원만 카운트 (무기명, 체험 제외)
         const trainerName = trainerNameMap[member.trainer] || member.trainer;
         trainerMemberCount[trainerName] = (trainerMemberCount[trainerName] || 0) + 1;
       }
@@ -718,6 +720,13 @@ app.get('/api/stats', async (req, res) => {
         s.member.startsWith('체험') || s.member.startsWith('무기명')
     );
     
+    // 전체 유효회원수 계산
+    const totalValidMembers = members.filter(member => 
+        member.status === '유효' && 
+        !member.name.startsWith('무기명') && 
+        !member.name.startsWith('체험')
+    ).length;
+    
     const stats = {
       totalSessions: sessions.length,
       completedSessions: completedSessions.length,
@@ -732,6 +741,7 @@ app.get('/api/stats', async (req, res) => {
         sessionDate.setHours(0, 0, 0, 0);
         return s.status !== '완료' && sessionDate < today; // 오늘 이전의 미완료 세션
       }).length,
+      totalValidMembers: totalValidMembers,
       trainerStats: []
     };
     

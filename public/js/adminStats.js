@@ -198,6 +198,10 @@ function renderStatsResults(stats) {
   return `
     <div class="stats-grid">
       <div class="stats-card">
+        <div class="stats-card-title">유효 회원수</div>
+        <div class="stats-card-value">${stats.totalValidMembers || 0}</div>
+      </div>
+      <div class="stats-card">
         <div class="stats-card-title">총 세션 수</div>
         <div class="stats-card-value">${stats.totalSessions || 0}</div>
       </div>
@@ -242,7 +246,7 @@ function renderTrainerStats(trainerStats) {
       <thead>
         <tr>
           <th>트레이너</th>
-          <th>담당 회원수</th>
+          <th>유효 회원수</th>
           <th>총 세션</th>
           <th>완료</th>
           <th>예정</th>
