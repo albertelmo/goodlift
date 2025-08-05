@@ -1185,4 +1185,107 @@ li, td, th {
     padding: 3px 6px;
     min-width: 50px;
   }
+}
+
+/* 비밀 버튼 스타일 */
+#secretBtn {
+  background: none !important;
+  border: none !important;
+  cursor: pointer;
+  font-size: 12px;
+  color: #666;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  margin-left: 8px;
+}
+
+#secretBtn:hover {
+  background: rgba(25, 118, 210, 0.1) !important;
+  color: #1976d2;
+  transform: scale(1.1);
+}
+
+#secretBtn:active {
+  transform: scale(0.95);
+}
+
+/* 비밀 모달 스타일 */
+#secretPasswordModal h3,
+#memberDeleteModal h3 {
+  color: #d32f2f !important;
+}
+
+#memberDeleteModal {
+  max-height: 80vh !important;
+  overflow-y: auto !important;
+}
+
+#memberDeleteModal::-webkit-scrollbar {
+  width: 6px;
+}
+
+#memberDeleteModal::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+#memberDeleteModal::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+#memberDeleteModal::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+#memberInfoContent,
+#sessionInfoContent {
+  line-height: 1.6;
+}
+
+#memberInfoContent div,
+#sessionInfoContent div {
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2px 0;
+}
+
+#memberInfoContent strong,
+#sessionInfoContent strong {
+  color: #1976d2;
+  font-weight: 600;
+  min-width: 80px;
+}
+
+#confirmDeleteBtn {
+  background: #d32f2f !important;
+  color: #fff !important;
+}
+
+#confirmDeleteBtn:hover {
+  background: #b71c1c !important;
+}
+
+/* 모바일 반응형 */
+@media (max-width: 600px) {
+  #memberDeleteModal {
+    max-width: 95vw !important;
+    max-height: 85vh !important;
+    padding: 16px !important;
+  }
+  
+  #memberInfoContent div,
+  #sessionInfoContent div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  #memberInfoContent strong,
+  #sessionInfoContent strong {
+    min-width: auto;
+  }
 } 

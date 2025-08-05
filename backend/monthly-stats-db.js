@@ -162,6 +162,40 @@ const addReRegistrationSessions = async (sessionCount, yearMonth = null) => {
   }
 };
 
+// 월별 통계 초기화 (0으로 리셋)
+const resetMonthlyStats = async (yearMonth) => {
+  try {
+    // 해당 월 데이터가 있는지 확인
+    const checkQuery = `SELECT COUNT(*) FROM monthly_stats WHERE year_month = $1`;
+    const checkResult = await pool.query(checkQuery, [yearMonth]);
+    const exists = parseInt(checkResult.rows[0].count) > 0;
+    
+    if (exists) {
+      // 기존 데이터를 0으로 업데이트
+      const query = `
+        UPDATE monthly_stats 
+        SET new_sessions = 0, re_registration_sessions = 0, updated_at = CURRENT_TIMESTAMP
+        WHERE year_month = $1
+        RETURNING year_month, new_sessions, re_registration_sessions
+      `;
+      const result = await pool.query(query, [yearMonth]);
+      return result.rows[0];
+    } else {
+      // 새 데이터 생성 (0으로)
+      const query = `
+        INSERT INTO monthly_stats (year_month, new_sessions, re_registration_sessions)
+        VALUES ($1, 0, 0)
+        RETURNING year_month, new_sessions, re_registration_sessions
+      `;
+      const result = await pool.query(query, [yearMonth]);
+      return result.rows[0];
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 월별 통계 초기화 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   await createMonthlyStatsTable();
@@ -173,5 +207,6 @@ module.exports = {
   getAllMonthlyStats,
   addNewSessions,
   addReRegistrationSessions,
+  resetMonthlyStats,
   getCurrentYearMonth
 }; 

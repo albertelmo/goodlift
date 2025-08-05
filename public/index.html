@@ -10,7 +10,10 @@
 </head>
 <body>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
-      <img id="mainLogo" src="img/logo.jpg" alt="GoodLift 로고" style="height:38px;cursor:pointer; margin-top:16px; margin-bottom:8px;" />
+      <div style="display:flex;align-items:center;gap:8px;">
+        <img id="mainLogo" src="img/logo.jpg" alt="GoodLift 로고" style="height:38px;cursor:pointer; margin-top:16px; margin-bottom:8px;" />
+        <button id="secretBtn" title="관리자 기능" style="background:none;border:none;cursor:pointer;font-size:12px;color:#666;padding:4px;border-radius:4px;transition:all 0.2s;" aria-label="관리자 기능">🔒</button>
+      </div>
       <div class="header-btns">
         <button id="settingsBtn" title="설정" style="display:none;" aria-label="설정">
           <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 5 15.4a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 5 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 8 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19 8.6a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/></svg>
@@ -89,11 +92,83 @@
         </div>
       </form>
     </div>
+
+    <!-- 비밀번호 입력 모달 -->
+    <div id="secretPasswordModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="secretPasswordModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:32px 28px 24px 28px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:320px;max-width:90vw;">
+      <h3 style="margin-top:0;margin-bottom:18px;color:#d32f2f;font-size:1.15rem;">관리자 인증</h3>
+      <form id="secretPasswordForm">
+        <div class="form-row">
+          <label for="secretPassword">관리자 비밀번호</label>
+          <input type="password" id="secretPassword" name="secretPassword" required>
+        </div>
+        <div id="secretPasswordResult" style="min-height:22px;color:#d32f2f;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button type="button" id="closeSecretPasswordBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="submit">확인</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 회원 삭제 모달 -->
+    <div id="memberDeleteModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="memberDeleteModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:400px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+      <h3 style="margin-top:0;margin-bottom:18px;color:#d32f2f;font-size:1.15rem;">회원 삭제</h3>
+      <div id="memberSearchSection">
+        <div class="form-row">
+          <label for="memberNameInput">회원 이름</label>
+          <input type="text" id="memberNameInput" name="memberName" placeholder="삭제할 회원 이름을 입력하세요" required>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;">
+          <button type="button" id="closeMemberDeleteBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="button" id="searchMemberBtn" style="background:#1976d2;color:#fff;">검색</button>
+        </div>
+      </div>
+      <div id="memberInfoSection" style="display:none;">
+        <div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;background:#f9f9f9;">
+          <h4 style="margin-top:0;margin-bottom:8px;color:#1976d2;font-size:1rem;">회원 정보</h4>
+          <div id="memberInfoContent" style="font-size:0.9rem;"></div>
+        </div>
+        <div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;background:#fff3cd;">
+          <h4 style="margin-top:0;margin-bottom:8px;color:#856404;font-size:1rem;">세션 정보</h4>
+          <div id="sessionInfoContent" style="font-size:0.9rem;"></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid #eee;">
+          <button type="button" id="cancelDeleteBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="button" id="confirmDeleteBtn" style="background:#d32f2f;color:#fff;">삭제 확인</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 월별 통계 초기화 모달 -->
+    <div id="monthlyStatsResetModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="monthlyStatsResetModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:400px;max-width:90vw;">
+      <h3 style="margin-top:0;margin-bottom:18px;color:#d32f2f;font-size:1.15rem;">월별 통계 초기화</h3>
+      <div id="monthlyStatsResetSection">
+        <div class="form-row">
+          <label for="yearMonthInput">연도-월</label>
+          <input type="text" id="yearMonthInput" name="yearMonth" placeholder="YYYY-MM (예: 2025-01)" required>
+        </div>
+        <div style="margin:12px 0;padding:12px;background:#fff3cd;border-radius:8px;border:1px solid #ffeaa7;">
+          <div style="font-size:0.9rem;color:#856404;">
+            <strong>⚠️ 주의사항:</strong><br>
+            • 해당 월의 모든 세션 통계가 0으로 초기화됩니다.<br>
+            • 신규 세션과 재등록 세션 모두 0이 됩니다.<br>
+            • 이 작업은 되돌릴 수 없습니다.
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+          <button type="button" id="closeMonthlyStatsResetBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="button" id="resetMonthlyStatsBtn" style="background:#d32f2f;color:#fff;">초기화 실행</button>
+        </div>
+      </div>
+    </div>
     <div id="mainSection">
         <div id="tabBar" class="tab-bar"></div>
         <div id="tabContent" class="tab-content"></div>
     </div>
     <script type="module" src="js/main.js"></script>
     <script type="module" src="js/adminDayCalendar.js"></script>
+    <script type="module" src="js/secret.js"></script>
 </body>
 </html>

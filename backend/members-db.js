@@ -214,6 +214,28 @@ const getMemberByName = async (name) => {
   }
 };
 
+// 회원 삭제
+const deleteMember = async (name) => {
+  try {
+    const query = `
+      DELETE FROM members 
+      WHERE name = $1
+      RETURNING id, name
+    `;
+    
+    const result = await pool.query(query, [name]);
+    
+    if (result.rows.length === 0) {
+      throw new Error('회원을 찾을 수 없습니다.');
+    }
+    
+    return result.rows[0];
+  } catch (error) {
+    console.error('[PostgreSQL] 회원 삭제 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -230,5 +252,6 @@ module.exports = {
   addMember,
   updateMember,
   decrementRemainSessions,
-  getMemberByName
+  getMemberByName,
+  deleteMember
 }; 

@@ -364,6 +364,31 @@ app.patch('/api/members/:name', async (req, res) => {
     }
 });
 
+// 회원 삭제
+app.delete('/api/members/:name', async (req, res) => {
+    try {
+        const name = decodeURIComponent(req.params.name);
+        if (!name) {
+            return res.status(400).json({ message: '회원 이름이 필요합니다.' });
+        }
+        
+        // 회원 삭제
+        await membersDB.deleteMember(name);
+        
+        // 해당 회원의 모든 세션 삭제
+        await sessionsDB.deleteSessionsByMember(name);
+        
+        res.json({ message: '회원이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 회원 삭제 오류:', error);
+        if (error.message === '회원을 찾을 수 없습니다.') {
+            res.status(404).json({ message: '회원을 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '회원 삭제에 실패했습니다.' });
+        }
+    }
+});
+
 // 세션 목록 조회 (트레이너, 날짜별, 주간 필터)
 app.get('/api/sessions', async (req, res) => {
     try {
@@ -1100,6 +1125,35 @@ app.get('/api/contract/content', (req, res) => {
             message: '계약서 내용을 불러오는데 실패했습니다.',
             content: '계약서 내용을 불러오는데 실패했습니다.' 
         });
+    }
+});
+
+// 월별 통계 초기화 API
+app.post('/api/monthly-stats/reset', async (req, res) => {
+    try {
+        const { yearMonth } = req.body;
+        
+        if (!yearMonth) {
+            return res.status(400).json({ message: '연도-월 형식(YYYY-MM)이 필요합니다.' });
+        }
+        
+        // YYYY-MM 형식 검증
+        const yearMonthRegex = /^\d{4}-\d{2}$/;
+        if (!yearMonthRegex.test(yearMonth)) {
+            return res.status(400).json({ message: '올바른 연도-월 형식(YYYY-MM)을 입력해주세요.' });
+        }
+        
+        // 월별 통계 초기화
+        const result = await monthlyStatsDB.resetMonthlyStats(yearMonth);
+        
+        res.json({ 
+            message: `${yearMonth} 월별 통계가 초기화되었습니다.`,
+            result: result
+        });
+        
+    } catch (error) {
+        console.error('[API] 월별 통계 초기화 오류:', error);
+        res.status(500).json({ message: '월별 통계 초기화에 실패했습니다.' });
     }
 });
 

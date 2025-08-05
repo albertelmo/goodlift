@@ -220,6 +220,23 @@ const addMultipleSessions = async (sessions) => {
   }
 };
 
+// 회원별 세션 삭제
+const deleteSessionsByMember = async (memberName) => {
+  try {
+    const query = `
+      DELETE FROM sessions 
+      WHERE member = $1
+      RETURNING id, member
+    `;
+    
+    const result = await pool.query(query, [memberName]);
+    return result.rows;
+  } catch (error) {
+    console.error('[PostgreSQL] 회원별 세션 삭제 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -240,5 +257,6 @@ module.exports = {
   getSessionsByDateRange,
   checkTimeConflict,
   addMultipleSessions,
+  deleteSessionsByMember,
   pool
 }; 
