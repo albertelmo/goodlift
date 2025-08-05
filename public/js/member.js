@@ -349,6 +349,7 @@ function renderList(container) {
       <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:24px 20px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
         <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">회원 정보 수정</h3>
         <div style="margin-bottom:10px;"><b>이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:6px 8px;margin-top:2px;"></div>
+        <div style="margin-bottom:10px;"><b>전화번호</b><br><input id="edit-phone" type="tel" value="${member.phone || ''}" pattern="[0-9\-]+" placeholder="010-1234-5678" style="width:100%;border-radius:6px;padding:6px 8px;margin-top:2px;"></div>
         <div style="margin-bottom:10px;"><b>성별</b><br>
           <select id="edit-gender" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
             <option value="male"${member.gender==='male'?' selected':''}>남성</option>
@@ -399,6 +400,7 @@ function renderList(container) {
       const addSessions = Number(document.getElementById('edit-add-sessions').value)||0;
       const gender = document.getElementById('edit-gender').value;
       const center = document.getElementById('edit-center').value;
+      const phone = document.getElementById('edit-phone').value;
       const resultDiv = document.getElementById('edit-modal-result');
       resultDiv.style.color = '#1976d2';
       resultDiv.innerText = '처리 중...';
@@ -406,7 +408,7 @@ function renderList(container) {
         const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status, trainer, addSessions, gender, center })
+          body: JSON.stringify({ status, trainer, addSessions, gender, center, phone })
         });
         const result = await res.json();
         if (res.ok) {

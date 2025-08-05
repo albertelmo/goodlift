@@ -123,6 +123,10 @@ const updateMember = async (name, updates) => {
       fields.push(`center = $${paramIndex++}`);
       values.push(updates.center);
     }
+    if (updates.phone !== undefined) {
+      fields.push(`phone = $${paramIndex++}`);
+      values.push(updates.phone);
+    }
     if (updates.addSessions && !isNaN(Number(updates.addSessions))) {
       const add = Number(updates.addSessions);
       fields.push(`sessions = sessions + $${paramIndex++}`);
