@@ -243,15 +243,26 @@ function getSessionCountColor(count) {
 
 // 월별 통계 행 클릭 이벤트 설정
 function setupMonthlyStatsRowEventListeners() {
-  setTimeout(() => {
+  // 즉시 실행하되, DOM이 준비될 때까지 재시도
+  const setupEventListeners = () => {
     const monthlyStatRows = document.querySelectorAll('.monthly-stat-row');
     console.log('월별 통계 행 개수:', monthlyStatRows.length);
     
+    if (monthlyStatRows.length === 0) {
+      // 행이 없으면 50ms 후 다시 시도
+      setTimeout(setupEventListeners, 50);
+      return;
+    }
+    
     monthlyStatRows.forEach((row, index) => {
       console.log(`행 ${index} 클릭 이벤트 추가:`, row);
+      // 기존 이벤트 리스너 제거 (중복 방지)
+      row.removeEventListener('click', handleMonthlyStatRowClick);
       row.addEventListener('click', handleMonthlyStatRowClick);
     });
-  }, 100);
+  };
+  
+  setupEventListeners();
 }
 
 // 월별 통계 행 클릭 핸들러
@@ -327,14 +338,15 @@ async function loadStats() {
     if (loadingElement) loadingElement.style.display = 'none';
     if (resultsElement) {
       resultsElement.innerHTML = renderStatsResults(stats);
-      // 월별 통계 로드
-      loadMonthlyStats();
       // 트레이너 행 이벤트 리스너 다시 설정
       setupTrainerRowEventListeners();
       // 유효회원수 툴팁 이벤트 설정
       setupValidMembersTooltip();
-      // 월별 통계 행 클릭 이벤트 설정
-      setupMonthlyStatsRowEventListeners();
+      // 월별 통계 로드 (완료 후 이벤트 리스너 설정)
+      loadMonthlyStats().then(() => {
+        // 월별 통계 행 클릭 이벤트 설정
+        setupMonthlyStatsRowEventListeners();
+      });
     }
     
     updateDateDisplay();
