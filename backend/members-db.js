@@ -115,6 +115,14 @@ const updateMember = async (name, updates) => {
       fields.push(`trainer = $${paramIndex++}`);
       values.push(updates.trainer);
     }
+    if (updates.gender) {
+      fields.push(`gender = $${paramIndex++}`);
+      values.push(updates.gender);
+    }
+    if (updates.center) {
+      fields.push(`center = $${paramIndex++}`);
+      values.push(updates.center);
+    }
     if (updates.addSessions && !isNaN(Number(updates.addSessions))) {
       const add = Number(updates.addSessions);
       fields.push(`sessions = sessions + $${paramIndex++}`);

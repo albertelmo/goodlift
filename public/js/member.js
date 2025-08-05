@@ -346,22 +346,33 @@ function renderList(container) {
     const modalBg = document.getElementById('member-edit-modal-bg');
     modalBg.style.display = 'block';
     modalBg.innerHTML = `
-      <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:32px 24px;z-index:1002;min-width:260px;max-width:96vw;min-height:120px;">
+      <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:24px 20px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
         <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">회원 정보 수정</h3>
-        <div style="margin-bottom:14px;"><b>이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:7px 10px;margin-top:2px;"></div>
-        <div style="margin-bottom:14px;"><b>상태</b><br>
-          <select id="edit-status" style="width:100%;padding:7px 10px;border-radius:6px;margin-top:2px;">
+        <div style="margin-bottom:10px;"><b>이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:6px 8px;margin-top:2px;"></div>
+        <div style="margin-bottom:10px;"><b>성별</b><br>
+          <select id="edit-gender" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
+            <option value="male"${member.gender==='male'?' selected':''}>남성</option>
+            <option value="female"${member.gender==='female'?' selected':''}>여성</option>
+          </select>
+        </div>
+        <div style="margin-bottom:10px;"><b>센터</b><br>
+          <select id="edit-center" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
+            <option value="">불러오는 중...</option>
+          </select>
+        </div>
+        <div style="margin-bottom:10px;"><b>상태</b><br>
+          <select id="edit-status" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
             <option value="유효"${member.status==='유효'?' selected':''}>유효</option>
             <option value="정지"${member.status==='정지'?' selected':''}>정지</option>
             <option value="만료"${member.status==='만료'?' selected':''}>만료</option>
           </select>
         </div>
-        <div style="margin-bottom:14px;"><b>담당 트레이너</b><br>
-          <select id="edit-trainer" style="width:100%;padding:7px 10px;border-radius:6px;margin-top:2px;">
+        <div style="margin-bottom:10px;"><b>담당 트레이너</b><br>
+          <select id="edit-trainer" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
             ${trainers.map(t=>`<option value="${t.username}"${member.trainer===t.username?' selected':''}>${t.name}</option>`).join('')}
           </select>
         </div>
-        <div style="margin-bottom:14px;"><b>추가 세션</b><br><input id="edit-add-sessions" type="number" min="0" value="0" style="width:100%;border-radius:6px;padding:7px 10px;margin-top:2px;"></div>
+        <div style="margin-bottom:10px;"><b>추가 세션</b><br><input id="edit-add-sessions" type="number" min="0" value="0" style="width:100%;border-radius:6px;padding:6px 8px;margin-top:2px;"></div>
         <div id="edit-modal-result" style="min-height:22px;margin-bottom:8px;color:#1976d2;"></div>
         <div style="display:flex;gap:12px;justify-content:flex-end;">
           <button id="edit-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;">저장</button>
@@ -369,6 +380,12 @@ function renderList(container) {
         </div>
       </div>
     `;
+
+    // 센터 드롭다운 로딩
+    fetch('/api/centers').then(r=>r.json()).then(centers=>{
+      const centerSel = document.getElementById('edit-center');
+      centerSel.innerHTML = '<option value="">선택</option>' + centers.map(c=>`<option value="${c.name}"${member.center===c.name?' selected':''}>${c.name}</option>`).join('');
+    });
 
     // 닫기 버튼
     document.getElementById('edit-modal-cancel').onclick = function() {
@@ -380,6 +397,8 @@ function renderList(container) {
       const status = document.getElementById('edit-status').value;
       const trainer = document.getElementById('edit-trainer').value;
       const addSessions = Number(document.getElementById('edit-add-sessions').value)||0;
+      const gender = document.getElementById('edit-gender').value;
+      const center = document.getElementById('edit-center').value;
       const resultDiv = document.getElementById('edit-modal-result');
       resultDiv.style.color = '#1976d2';
       resultDiv.innerText = '처리 중...';
@@ -387,7 +406,7 @@ function renderList(container) {
         const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status, trainer, addSessions })
+          body: JSON.stringify({ status, trainer, addSessions, gender, center })
         });
         const result = await res.json();
         if (res.ok) {
