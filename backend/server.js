@@ -12,6 +12,7 @@ require('dotenv').config();
 const sessionsDB = require('./sessions-db');
 const membersDB = require('./members-db');
 const monthlyStatsDB = require('./monthly-stats-db');
+const registrationLogsDB = require('./registration-logs-db');
 
 // 이메일 서비스 모듈
 const emailService = require('./email-service');
@@ -45,6 +46,7 @@ if (!fs.existsSync(DATA_DIR)) {
 sessionsDB.initializeDatabase();
 membersDB.initializeDatabase();
 monthlyStatsDB.initializeDatabase();
+registrationLogsDB.initializeDatabase();
 
 // 파일 업로드 설정
 const storage = multer.memoryStorage();
@@ -270,6 +272,16 @@ app.post('/api/members', async (req, res) => {
         // 신규 세션 통계 추가
         if (numSessions > 0) {
           await monthlyStatsDB.addNewSessions(numSessions);
+          
+                  // 신규등록 로그 저장
+        await registrationLogsDB.addLog({
+          member_name: name,
+          registration_type: '신규등록',
+          session_count: numSessions,
+          center: center,
+          trainer: trainer,
+          registration_date: regdate
+        });
         }
         
         res.json({ message: '회원이 추가되었습니다.', member });
@@ -351,6 +363,18 @@ app.patch('/api/members/:name', async (req, res) => {
         // 재등록 세션 통계 추가
         if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) > 0) {
           await monthlyStatsDB.addReRegistrationSessions(Number(addSessions));
+        }
+        
+        // 재등록 로그 저장 (세션 변경이 있는 경우)
+        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) !== 0) {
+          await registrationLogsDB.addLog({
+            member_name: name,
+            registration_type: '재등록',
+            session_count: Number(addSessions),
+            center: member.center,
+            trainer: member.trainer,
+            registration_date: new Date().toISOString().split('T')[0]
+          });
         }
         
         res.json({ message: '회원 정보가 수정되었습니다.', member });
@@ -1176,6 +1200,35 @@ app.post('/api/monthly-stats/reset', async (req, res) => {
     } catch (error) {
         console.error('[API] 월별 통계 초기화 오류:', error);
         res.status(500).json({ message: '월별 통계 초기화에 실패했습니다.' });
+    }
+});
+
+// 등록 로그 조회 API
+app.get('/api/registration-logs/:yearMonth', async (req, res) => {
+    try {
+        const { yearMonth } = req.params;
+        
+        if (!yearMonth) {
+            return res.status(400).json({ message: '연도-월 형식(YYYY-MM)이 필요합니다.' });
+        }
+        
+        // YYYY-MM 형식 검증
+        const yearMonthRegex = /^\d{4}-\d{2}$/;
+        if (!yearMonthRegex.test(yearMonth)) {
+            return res.status(400).json({ message: '올바른 연도-월 형식(YYYY-MM)을 입력해주세요.' });
+        }
+        
+        // 해당 월의 등록 로그 조회
+        const logs = await registrationLogsDB.getLogsByMonth(yearMonth);
+        
+        res.json({ 
+            message: `${yearMonth} 등록 로그를 조회했습니다.`,
+            logs: logs
+        });
+        
+    } catch (error) {
+        console.error('[API] 등록 로그 조회 오류:', error);
+        res.status(500).json({ message: '등록 로그 조회에 실패했습니다.' });
     }
 });
 

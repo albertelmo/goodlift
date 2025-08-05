@@ -126,6 +126,123 @@ function setupValidMembersTooltip() {
   });
 }
 
+// 등록 로그 모달 표시
+async function showRegistrationLogsModal(yearMonth) {
+  try {
+    const response = await fetch(`/api/registration-logs/${yearMonth}`);
+    const data = await response.json();
+    
+    if (response.ok) {
+      const displayMonth = `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월`;
+      
+      // 트레이너 정보 가져오기
+      const trainerResponse = await fetch('/api/trainers');
+      const trainers = await trainerResponse.json();
+      
+      // 트레이너 ID를 이름으로 매핑
+      const trainerMap = {};
+      trainers.forEach(trainer => {
+        trainerMap[trainer.username] = trainer.name;
+      });
+      
+      showModal(renderRegistrationLogsModal(data.logs, displayMonth, trainerMap));
+    } else {
+      alert(`등록 로그 조회 실패: ${data.message}`);
+    }
+  } catch (error) {
+    console.error('등록 로그 조회 오류:', error);
+    alert('등록 로그를 불러오는데 실패했습니다.');
+  }
+}
+
+// 등록 로그 모달 렌더링
+function renderRegistrationLogsModal(logs, displayMonth, trainerMap) {
+  if (!logs || logs.length === 0) {
+    return `
+      <div style="text-align:center;padding:40px;">
+        <h3 style="color:#1976d2;margin-bottom:20px;">${displayMonth} 등록 로그</h3>
+        <div style="color:#888;">해당 월의 등록 로그가 없습니다.</div>
+      </div>
+    `;
+  }
+  
+  const logsHTML = logs.map(log => {
+    const sessionCountText = formatSessionCount(log.session_count);
+    const sessionCountColor = getSessionCountColor(log.session_count);
+    const registrationDate = log.registration_date ? log.registration_date.split('-').slice(1).join('-') : '';
+    const trainerName = trainerMap[log.trainer] || log.trainer; // 트레이너 ID를 이름으로 변환
+    
+    return `
+      <tr style="border-bottom:1px solid #eee;">
+        <td style="padding:6px 4px;text-align:center;font-size:0.75rem;">${registrationDate}</td>
+        <td style="padding:6px 4px;text-align:center;font-size:0.75rem;">${log.member_name}</td>
+        <td style="padding:6px 4px;text-align:center;font-size:0.75rem;">${log.registration_type}</td>
+        <td style="padding:6px 4px;text-align:center;font-weight:600;color:${sessionCountColor};font-size:0.75rem;">${sessionCountText}</td>
+        <td style="padding:6px 4px;text-align:center;font-size:0.75rem;">${trainerName}</td>
+        <td style="padding:6px 4px;text-align:center;font-size:0.75rem;">${log.center}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  return `
+    <div style="max-width:900px;max-height:700px;overflow-y:auto;position:relative;">
+      <button id="modal-close-btn" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      <h3 style="color:#1976d2;margin-bottom:16px;text-align:center;padding-right:35px;font-size:1.1rem;">${displayMonth} 등록 로그</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+        <thead>
+          <tr style="background:#f5f5f5;">
+            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;font-size:0.8rem;">날짜</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;font-size:0.8rem;">회원명</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;font-size:0.8rem;">유형</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;font-size:0.8rem;">세션</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;font-size:0.8rem;">트레이너</th>
+            <th style="padding:8px 6px;text-align:center;border-bottom:2px solid #ddd;color:#1976d2;font-size:0.8rem;">센터명</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${logsHTML}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// 세션 수 포맷팅
+function formatSessionCount(count) {
+  if (count > 0) {
+    return `${count}회`;
+  } else if (count < 0) {
+    return `${count}회`;
+  } else {
+    return '0회';
+  }
+}
+
+// 세션 수 색상
+function getSessionCountColor(count) {
+  if (count > 0) return '#1976d2'; // 파란색 (증가)
+  if (count < 0) return '#d32f2f'; // 빨간색 (감소)
+  return '#666'; // 회색 (변화 없음)
+}
+
+// 월별 통계 행 클릭 이벤트 설정
+function setupMonthlyStatsRowEventListeners() {
+  setTimeout(() => {
+    const monthlyStatRows = document.querySelectorAll('.monthly-stat-row');
+    monthlyStatRows.forEach(row => {
+      row.addEventListener('click', handleMonthlyStatRowClick);
+    });
+  }, 100);
+}
+
+// 월별 통계 행 클릭 핸들러
+function handleMonthlyStatRowClick() {
+  const yearMonth = this.getAttribute('data-year-month');
+  if (yearMonth) {
+    showRegistrationLogsModal(yearMonth);
+  }
+}
+
 function navigateDate(delta) {
   switch (currentPeriod) {
     case 'day':
@@ -193,6 +310,8 @@ async function loadStats() {
       setupTrainerRowEventListeners();
       // 유효회원수 툴팁 이벤트 설정
       setupValidMembersTooltip();
+      // 월별 통계 행 클릭 이벤트 설정
+      setupMonthlyStatsRowEventListeners();
     }
     
     updateDateDisplay();
@@ -357,7 +476,7 @@ function renderMonthlyStats(monthlyStats) {
           const yearMonth = stat.year_month;
           const displayMonth = yearMonth ? `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월` : '';
           return `
-            <tr style="border-bottom:1px solid #eee;">
+            <tr class="monthly-stat-row" data-year-month="${yearMonth}" style="border-bottom:1px solid #eee;cursor:pointer;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f8ff'" onmouseout="this.style.backgroundColor=''">
               <td style="padding:12px;text-align:left;">${displayMonth}</td>
               <td style="padding:12px;text-align:center;">${stat.new_sessions || 0}</td>
               <td style="padding:12px;text-align:center;">${stat.re_registration_sessions || 0}</td>
