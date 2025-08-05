@@ -129,15 +129,24 @@ function setupValidMembersTooltip() {
 // 등록 로그 모달 표시
 async function showRegistrationLogsModal(yearMonth) {
   try {
+    console.log('등록 로그 모달 시작:', yearMonth);
+    
     const response = await fetch(`/api/registration-logs/${yearMonth}`);
+    console.log('API 응답 상태:', response.status);
+    
     const data = await response.json();
+    console.log('API 응답 데이터:', data);
     
     if (response.ok) {
       const displayMonth = `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월`;
+      console.log('표시 월:', displayMonth);
       
       // 트레이너 정보 가져오기
       const trainerResponse = await fetch('/api/trainers');
+      console.log('트레이너 API 응답 상태:', trainerResponse.status);
+      
       const trainers = await trainerResponse.json();
+      console.log('트레이너 데이터:', trainers);
       
       // 트레이너 ID를 이름으로 매핑
       const trainerMap = {};
@@ -145,8 +154,15 @@ async function showRegistrationLogsModal(yearMonth) {
         trainerMap[trainer.username] = trainer.name;
       });
       
-      showModal(renderRegistrationLogsModal(data.logs, displayMonth, trainerMap));
+      console.log('트레이너 매핑:', trainerMap);
+      
+      const modalContent = renderRegistrationLogsModal(data.logs, displayMonth, trainerMap);
+      console.log('모달 콘텐츠 생성 완료');
+      
+      showModal(modalContent);
+      console.log('모달 표시 완료');
     } else {
+      console.error('API 오류:', data.message);
       alert(`등록 로그 조회 실패: ${data.message}`);
     }
   } catch (error) {
@@ -229,7 +245,10 @@ function getSessionCountColor(count) {
 function setupMonthlyStatsRowEventListeners() {
   setTimeout(() => {
     const monthlyStatRows = document.querySelectorAll('.monthly-stat-row');
-    monthlyStatRows.forEach(row => {
+    console.log('월별 통계 행 개수:', monthlyStatRows.length);
+    
+    monthlyStatRows.forEach((row, index) => {
+      console.log(`행 ${index} 클릭 이벤트 추가:`, row);
       row.addEventListener('click', handleMonthlyStatRowClick);
     });
   }, 100);
@@ -237,9 +256,13 @@ function setupMonthlyStatsRowEventListeners() {
 
 // 월별 통계 행 클릭 핸들러
 function handleMonthlyStatRowClick() {
+  console.log('월별 통계 행 클릭됨');
   const yearMonth = this.getAttribute('data-year-month');
+  console.log('선택된 연월:', yearMonth);
   if (yearMonth) {
     showRegistrationLogsModal(yearMonth);
+  } else {
+    console.error('연월 데이터가 없습니다');
   }
 }
 
@@ -596,9 +619,13 @@ function renderTrainerSessionsModal(data, trainerName, yearMonth) {
 
 // 모달 표시 함수
 function showModal(content) {
+  console.log('showModal 호출됨');
+  console.log('콘텐츠 길이:', content ? content.length : 0);
+  
   // 기존 모달 제거
   const existingModal = document.querySelector('.modal-overlay');
   if (existingModal) {
+    console.log('기존 모달 제거');
     existingModal.remove();
   }
   
@@ -607,15 +634,20 @@ function showModal(content) {
   modalOverlay.className = 'modal-overlay';
   modalOverlay.innerHTML = content;
   
+  console.log('모달 요소 생성:', modalOverlay);
+  
   document.body.appendChild(modalOverlay);
+  console.log('모달 DOM에 추가됨');
   
   // 모달 표시 애니메이션
   setTimeout(() => {
     modalOverlay.style.opacity = '1';
+    console.log('모달 애니메이션 완료');
   }, 10);
   
   // 모달 이벤트 리스너 설정
   setupModalEventListeners();
+  console.log('모달 이벤트 리스너 설정 완료');
 }
 
 // 모달 닫기 함수

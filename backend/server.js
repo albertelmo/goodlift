@@ -1203,7 +1203,24 @@ app.post('/api/monthly-stats/reset', async (req, res) => {
     }
 });
 
-// 등록 로그 조회 API
+// 전체 등록 로그 조회 API
+app.get('/api/registration-logs', async (req, res) => {
+    try {
+        // 모든 등록 로그 조회
+        const logs = await registrationLogsDB.getAllLogs();
+        
+        res.json({ 
+            message: '전체 등록 로그를 조회했습니다.',
+            logs: logs
+        });
+        
+    } catch (error) {
+        console.error('[API] 전체 등록 로그 조회 오류:', error);
+        res.status(500).json({ message: '전체 등록 로그 조회에 실패했습니다.' });
+    }
+});
+
+// 특정 월 등록 로그 조회 API
 app.get('/api/registration-logs/:yearMonth', async (req, res) => {
     try {
         const { yearMonth } = req.params;
