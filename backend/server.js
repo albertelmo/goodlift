@@ -727,6 +727,17 @@ app.get('/api/stats', async (req, res) => {
         !member.name.startsWith('체험')
     ).length;
     
+    // 센터별 유효회원수 계산
+    const centerValidMembers = {};
+    members.forEach(member => {
+        if (member.status === '유효' && 
+            !member.name.startsWith('무기명') && 
+            !member.name.startsWith('체험')) {
+            const center = member.center;
+            centerValidMembers[center] = (centerValidMembers[center] || 0) + 1;
+        }
+    });
+    
     const stats = {
       totalSessions: sessions.length,
       completedSessions: completedSessions.length,
@@ -742,6 +753,7 @@ app.get('/api/stats', async (req, res) => {
         return s.status !== '완료' && sessionDate < today; // 오늘 이전의 미완료 세션
       }).length,
       totalValidMembers: totalValidMembers,
+      centerValidMembers: centerValidMembers,
       trainerStats: []
     };
     

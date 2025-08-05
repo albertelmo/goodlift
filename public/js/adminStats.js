@@ -90,6 +90,42 @@ function handleTrainerRowClick() {
   showTrainerSessionsModal(trainer, trainerName, selectedYearMonth);
 }
 
+// 유효회원수 툴팁 이벤트 설정
+function setupValidMembersTooltip() {
+  const validMembersCard = document.getElementById('validMembersCard');
+  if (!validMembersCard) return;
+  
+  const tooltip = validMembersCard.querySelector('.center-tooltip');
+  if (!tooltip) return;
+  
+  let tooltipTimeout;
+  
+  // 마우스 진입 시 툴팁 표시
+  validMembersCard.addEventListener('mouseenter', () => {
+    clearTimeout(tooltipTimeout);
+    tooltip.style.display = 'block';
+  });
+  
+  // 마우스 이탈 시 툴팁 숨김
+  validMembersCard.addEventListener('mouseleave', () => {
+    tooltipTimeout = setTimeout(() => {
+      tooltip.style.display = 'none';
+    }, 200);
+  });
+  
+  // 툴팁에 마우스 진입 시 유지
+  tooltip.addEventListener('mouseenter', () => {
+    clearTimeout(tooltipTimeout);
+  });
+  
+  // 툴팁에서 마우스 이탈 시 숨김
+  tooltip.addEventListener('mouseleave', () => {
+    tooltipTimeout = setTimeout(() => {
+      tooltip.style.display = 'none';
+    }, 200);
+  });
+}
+
 function navigateDate(delta) {
   switch (currentPeriod) {
     case 'day':
@@ -155,6 +191,8 @@ async function loadStats() {
       loadMonthlyStats();
       // 트레이너 행 이벤트 리스너 다시 설정
       setupTrainerRowEventListeners();
+      // 유효회원수 툴팁 이벤트 설정
+      setupValidMembersTooltip();
     }
     
     updateDateDisplay();
@@ -195,11 +233,21 @@ function calculateDateRange() {
 }
 
 function renderStatsResults(stats) {
+  // 센터별 유효회원수 툴팁 내용 생성
+  const centerTooltipContent = stats.centerValidMembers ? 
+    Object.entries(stats.centerValidMembers)
+      .map(([center, count]) => `<div>${center}: ${count}명</div>`)
+      .join('') : '센터별 데이터가 없습니다.';
+  
   return `
     <div class="stats-grid">
-      <div class="stats-card">
+      <div class="stats-card" id="validMembersCard" style="position:relative;cursor:help;">
         <div class="stats-card-title">유효 회원수</div>
         <div class="stats-card-value">${stats.totalValidMembers || 0}</div>
+        <div class="center-tooltip" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;white-space:nowrap;z-index:1000;margin-top:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+          <div style="font-weight:600;margin-bottom:4px;text-align:center;">센터별 유효회원수</div>
+          ${centerTooltipContent}
+        </div>
       </div>
       <div class="stats-card">
         <div class="stats-card-title">총 세션 수</div>
