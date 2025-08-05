@@ -129,24 +129,15 @@ function setupValidMembersTooltip() {
 // 등록 로그 모달 표시
 async function showRegistrationLogsModal(yearMonth) {
   try {
-    console.log('등록 로그 모달 시작:', yearMonth);
-    
     const response = await fetch(`/api/registration-logs/${yearMonth}`);
-    console.log('API 응답 상태:', response.status);
-    
     const data = await response.json();
-    console.log('API 응답 데이터:', data);
     
     if (response.ok) {
       const displayMonth = `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월`;
-      console.log('표시 월:', displayMonth);
       
       // 트레이너 정보 가져오기
       const trainerResponse = await fetch('/api/trainers');
-      console.log('트레이너 API 응답 상태:', trainerResponse.status);
-      
       const trainers = await trainerResponse.json();
-      console.log('트레이너 데이터:', trainers);
       
       // 트레이너 ID를 이름으로 매핑
       const trainerMap = {};
@@ -154,15 +145,9 @@ async function showRegistrationLogsModal(yearMonth) {
         trainerMap[trainer.username] = trainer.name;
       });
       
-      console.log('트레이너 매핑:', trainerMap);
-      
       const modalContent = renderRegistrationLogsModal(data.logs, displayMonth, trainerMap);
-      console.log('모달 콘텐츠 생성 완료');
-      
       showModal(modalContent);
-      console.log('모달 표시 완료');
     } else {
-      console.error('API 오류:', data.message);
       alert(`등록 로그 조회 실패: ${data.message}`);
     }
   } catch (error) {
@@ -246,7 +231,6 @@ function setupMonthlyStatsRowEventListeners() {
   // 즉시 실행하되, DOM이 준비될 때까지 재시도
   const setupEventListeners = () => {
     const monthlyStatRows = document.querySelectorAll('.monthly-stat-row');
-    console.log('월별 통계 행 개수:', monthlyStatRows.length);
     
     if (monthlyStatRows.length === 0) {
       // 행이 없으면 50ms 후 다시 시도
@@ -254,8 +238,7 @@ function setupMonthlyStatsRowEventListeners() {
       return;
     }
     
-    monthlyStatRows.forEach((row, index) => {
-      console.log(`행 ${index} 클릭 이벤트 추가:`, row);
+    monthlyStatRows.forEach((row) => {
       // 기존 이벤트 리스너 제거 (중복 방지)
       row.removeEventListener('click', handleMonthlyStatRowClick);
       row.addEventListener('click', handleMonthlyStatRowClick);
@@ -267,13 +250,9 @@ function setupMonthlyStatsRowEventListeners() {
 
 // 월별 통계 행 클릭 핸들러
 function handleMonthlyStatRowClick() {
-  console.log('월별 통계 행 클릭됨');
   const yearMonth = this.getAttribute('data-year-month');
-  console.log('선택된 연월:', yearMonth);
   if (yearMonth) {
     showRegistrationLogsModal(yearMonth);
-  } else {
-    console.error('연월 데이터가 없습니다');
   }
 }
 
@@ -474,24 +453,14 @@ function renderTrainerStats(trainerStats) {
 // 월별 통계 로드
 async function loadMonthlyStats() {
   try {
-    console.log('월별 통계 로드 시작');
-    
     const response = await fetch('/api/monthly-stats/all');
-    console.log('월별 통계 API 응답 상태:', response.status);
-    
     const monthlyStats = await response.json();
-    console.log('월별 통계 데이터:', monthlyStats);
     
     const container = document.querySelector('#monthly-stats-container');
-    console.log('월별 통계 컨테이너:', container);
     
     if (container) {
       const renderedContent = renderMonthlyStats(monthlyStats);
-      console.log('렌더링된 월별 통계 HTML 길이:', renderedContent.length);
       container.innerHTML = renderedContent;
-      console.log('월별 통계 컨테이너에 HTML 추가 완료');
-    } else {
-      console.error('월별 통계 컨테이너를 찾을 수 없습니다');
     }
   } catch (error) {
     console.error('월별 통계 로드 오류:', error);
@@ -504,19 +473,13 @@ async function loadMonthlyStats() {
 
 // 월별 통계 렌더링
 function renderMonthlyStats(monthlyStats) {
-  console.log('renderMonthlyStats 호출됨, 데이터 개수:', monthlyStats ? monthlyStats.length : 0);
-  
   if (!monthlyStats || !monthlyStats.length) {
-    console.log('월별 데이터가 없음');
     return '<div style="color:#888;text-align:center;padding:20px;">월별 데이터가 없습니다.</div>';
   }
   
-  console.log('월별 통계 데이터 상세:', monthlyStats);
-  
-  const tableRows = monthlyStats.map((stat, index) => {
+  const tableRows = monthlyStats.map((stat) => {
     const yearMonth = stat.year_month;
     const displayMonth = yearMonth ? `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월` : '';
-    console.log(`행 ${index}: yearMonth=${yearMonth}, displayMonth=${displayMonth}`);
     
     return `
       <tr class="monthly-stat-row" data-year-month="${yearMonth}" style="border-bottom:1px solid #eee;cursor:pointer;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f8ff'" onmouseout="this.style.backgroundColor=''">
@@ -527,8 +490,6 @@ function renderMonthlyStats(monthlyStats) {
       </tr>
     `;
   }).join('');
-  
-  console.log('생성된 테이블 행 개수:', monthlyStats.length);
   
   return `
     <table class="monthly-stats-table" style="width:100%;border-collapse:collapse;margin-top:10px;">
@@ -654,13 +615,9 @@ function renderTrainerSessionsModal(data, trainerName, yearMonth) {
 
 // 모달 표시 함수
 function showModal(content) {
-  console.log('showModal 호출됨');
-  console.log('콘텐츠 길이:', content ? content.length : 0);
-  
   // 기존 모달 제거
   const existingModal = document.querySelector('.modal-overlay');
   if (existingModal) {
-    console.log('기존 모달 제거');
     existingModal.remove();
   }
   
@@ -669,20 +626,15 @@ function showModal(content) {
   modalOverlay.className = 'modal-overlay';
   modalOverlay.innerHTML = content;
   
-  console.log('모달 요소 생성:', modalOverlay);
-  
   document.body.appendChild(modalOverlay);
-  console.log('모달 DOM에 추가됨');
   
   // 모달 표시 애니메이션
   setTimeout(() => {
     modalOverlay.style.opacity = '1';
-    console.log('모달 애니메이션 완료');
   }, 10);
   
   // 모달 이벤트 리스너 설정
   setupModalEventListeners();
-  console.log('모달 이벤트 리스너 설정 완료');
 }
 
 // 모달 닫기 함수
