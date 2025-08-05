@@ -474,6 +474,18 @@ li, td, th {
         width: 100%;
         min-width: 0;
     }
+    .member-flex-wrap #member-list {
+        overflow-x: auto;
+    }
+    .member-flex-wrap #member-list table {
+        min-width: 600px;
+    }
+    #member-table-wrap {
+        overflow-x: auto;
+    }
+    #member-table-wrap table {
+        min-width: 600px;
+    }
 }
 
 @media (max-width: 900px) {
@@ -484,6 +496,34 @@ li, td, th {
     .scheduler-header { padding: 12px 4px 8px 4px; }
     .scheduler-table th, .scheduler-table td { font-size: 0.97rem; min-width: 80px; }
     .scheduler-table .time-col { width: 48px; min-width: 48px; }
+    
+    .member-flex-wrap {
+        padding: 12px;
+        gap: 12px;
+    }
+    .member-flex-wrap #member-list {
+        overflow-x: auto;
+    }
+    .member-flex-wrap #member-list table {
+        min-width: 500px;
+    }
+    .member-flex-wrap #member-list th,
+    .member-flex-wrap #member-list td {
+        font-size: 0.65rem;
+        padding: 4px 6px;
+    }
+    
+    #member-table-wrap {
+        overflow-x: auto;
+    }
+    #member-table-wrap table {
+        min-width: 500px;
+    }
+    #member-table-wrap th,
+    #member-table-wrap td {
+        font-size: 0.65rem;
+        padding: 4px 6px;
+    }
 }
 
 @media (max-width: 700px) {
