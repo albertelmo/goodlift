@@ -462,12 +462,24 @@ function renderTrainerStats(trainerStats) {
 // 월별 통계 로드
 async function loadMonthlyStats() {
   try {
+    console.log('월별 통계 로드 시작');
+    
     const response = await fetch('/api/monthly-stats/all');
+    console.log('월별 통계 API 응답 상태:', response.status);
+    
     const monthlyStats = await response.json();
+    console.log('월별 통계 데이터:', monthlyStats);
     
     const container = document.querySelector('#monthly-stats-container');
+    console.log('월별 통계 컨테이너:', container);
+    
     if (container) {
-      container.innerHTML = renderMonthlyStats(monthlyStats);
+      const renderedContent = renderMonthlyStats(monthlyStats);
+      console.log('렌더링된 월별 통계 HTML 길이:', renderedContent.length);
+      container.innerHTML = renderedContent;
+      console.log('월별 통계 컨테이너에 HTML 추가 완료');
+    } else {
+      console.error('월별 통계 컨테이너를 찾을 수 없습니다');
     }
   } catch (error) {
     console.error('월별 통계 로드 오류:', error);
@@ -480,9 +492,31 @@ async function loadMonthlyStats() {
 
 // 월별 통계 렌더링
 function renderMonthlyStats(monthlyStats) {
-  if (!monthlyStats.length) {
+  console.log('renderMonthlyStats 호출됨, 데이터 개수:', monthlyStats ? monthlyStats.length : 0);
+  
+  if (!monthlyStats || !monthlyStats.length) {
+    console.log('월별 데이터가 없음');
     return '<div style="color:#888;text-align:center;padding:20px;">월별 데이터가 없습니다.</div>';
   }
+  
+  console.log('월별 통계 데이터 상세:', monthlyStats);
+  
+  const tableRows = monthlyStats.map((stat, index) => {
+    const yearMonth = stat.year_month;
+    const displayMonth = yearMonth ? `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월` : '';
+    console.log(`행 ${index}: yearMonth=${yearMonth}, displayMonth=${displayMonth}`);
+    
+    return `
+      <tr class="monthly-stat-row" data-year-month="${yearMonth}" style="border-bottom:1px solid #eee;cursor:pointer;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f8ff'" onmouseout="this.style.backgroundColor=''">
+        <td style="padding:12px;text-align:left;">${displayMonth}</td>
+        <td style="padding:12px;text-align:center;">${stat.new_sessions || 0}</td>
+        <td style="padding:12px;text-align:center;">${stat.re_registration_sessions || 0}</td>
+        <td style="padding:12px;text-align:center;font-weight:bold;">${stat.total_sessions || 0}</td>
+      </tr>
+    `;
+  }).join('');
+  
+  console.log('생성된 테이블 행 개수:', monthlyStats.length);
   
   return `
     <table class="monthly-stats-table" style="width:100%;border-collapse:collapse;margin-top:10px;">
@@ -495,18 +529,7 @@ function renderMonthlyStats(monthlyStats) {
         </tr>
       </thead>
       <tbody>
-        ${monthlyStats.map(stat => {
-          const yearMonth = stat.year_month;
-          const displayMonth = yearMonth ? `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월` : '';
-          return `
-            <tr class="monthly-stat-row" data-year-month="${yearMonth}" style="border-bottom:1px solid #eee;cursor:pointer;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f8ff'" onmouseout="this.style.backgroundColor=''">
-              <td style="padding:12px;text-align:left;">${displayMonth}</td>
-              <td style="padding:12px;text-align:center;">${stat.new_sessions || 0}</td>
-              <td style="padding:12px;text-align:center;">${stat.re_registration_sessions || 0}</td>
-              <td style="padding:12px;text-align:center;font-weight:bold;">${stat.total_sessions || 0}</td>
-            </tr>
-          `;
-        }).join('')}
+        ${tableRows}
       </tbody>
     </table>
   `;
