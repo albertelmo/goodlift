@@ -88,7 +88,18 @@ function renderAddForm(container) {
 }
 
 function renderList(container) {
-  if (!container) return;
+  // 디버깅: 컨테이너 존재 여부 확인
+  console.log('[Member List] renderList called, container:', container);
+  
+  if (!container) {
+    console.error('[Member List] Container is null or undefined');
+    return;
+  }
+  
+  // 컨테이너에 기본 스타일 추가 (모바일에서 높이 문제 해결)
+  container.style.minHeight = '200px';
+  container.style.display = 'block';
+  
   container.innerHTML = `
     <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="display:flex;align-items:center;gap:8px;">
@@ -112,32 +123,64 @@ function renderList(container) {
         <input id="member-search-input" type="text" placeholder="검색어 입력" style="padding:6px 10px;font-size:0.97rem;border:1.2px solid #bbb;border-radius:6px;width:160px;">
       </div>
     </div>
-    <div id="member-table-wrap"></div>
+    <div id="member-table-wrap" style="min-height:100px;display:block;"></div>
     <div id="member-edit-modal-bg" style="display:none;"></div>
   `;
+  
   const tableWrap = container.querySelector('#member-table-wrap');
+  
+  // 디버깅: tableWrap 존재 여부 확인
+  console.log('[Member List] tableWrap found:', tableWrap);
+  
+  if (!tableWrap) {
+    console.error('[Member List] tableWrap element not found');
+    container.innerHTML = '<div style="color:#d32f2f;text-align:center;padding:20px;">회원 목록 컨테이너를 찾을 수 없습니다.</div>';
+    return;
+  }
+  
+  // 로딩 상태 표시
+  tableWrap.innerHTML = '<div style="color:#1976d2;text-align:center;padding:20px;">회원 목록을 불러오는 중...</div>';
+  
   let allMembers = [];
   let trainers = [];
   let sortColumn = null;
   let sortDirection = 'asc'; // 'asc' 또는 'desc'
   let currentDisplayedMembers = []; // 현재 표시된 회원 목록 추적
+  
   // 데이터 불러오기
+  console.log('[Member List] Fetching data...');
   Promise.all([
     fetch('/api/members').then(r=>r.json()),
     fetch('/api/trainers').then(r=>r.json())
   ]).then(([members, trs]) => {
+    console.log('[Member List] Data loaded - members:', members.length, 'trainers:', trs.length);
     allMembers = members;
     trainers = trs;
     renderTable(allMembers);
-  }).catch(()=>{
-    tableWrap.innerHTML = '<div style="color:#d32f2f;text-align:center;">회원 목록을 불러오지 못했습니다.</div>';
+  }).catch((error)=>{
+    console.error('[Member List] Error loading data:', error);
+    if (tableWrap) {
+      tableWrap.innerHTML = '<div style="color:#d32f2f;text-align:center;padding:20px;">회원 목록을 불러오지 못했습니다.</div>';
+    } else {
+      container.innerHTML = '<div style="color:#d32f2f;text-align:center;padding:20px;">회원 목록을 불러오지 못했습니다.</div>';
+    }
   });
   // 테이블 렌더링 함수
   function renderTable(members) {
+    console.log('[Member List] renderTable called with', members.length, 'members');
+    
+    // tableWrap 존재 여부 재확인
+    if (!tableWrap) {
+      console.error('[Member List] tableWrap is null in renderTable');
+      return;
+    }
+    
     const tMap = {};
     trainers.forEach(t => { tMap[t.username] = t.name; });
+    
     if (!members.length) {
-      tableWrap.innerHTML = '<div style="color:#888;text-align:center;">등록된 회원이 없습니다.</div>';
+      console.log('[Member List] No members found, showing empty message');
+      tableWrap.innerHTML = '<div style="color:#888;text-align:center;padding:20px;">등록된 회원이 없습니다.</div>';
       return;
     }
     
@@ -218,6 +261,9 @@ function renderList(container) {
     });
     html += '</tbody></table>';
     tableWrap.innerHTML = html;
+    
+    console.log('[Member List] Table rendered successfully with', members.length, 'rows');
+    console.log('[Member List] tableWrap innerHTML length:', tableWrap.innerHTML.length);
     
     // 현재 표시된 회원 목록 업데이트
     currentDisplayedMembers = members;

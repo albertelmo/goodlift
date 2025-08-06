@@ -437,7 +437,7 @@ li, td, th {
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  overflow: hidden;
+  overflow: auto;
 }
 
 .member-flex-wrap #member-list table {
@@ -475,13 +475,18 @@ li, td, th {
         min-width: 0;
     }
     .member-flex-wrap #member-list {
-        overflow-x: auto;
+        overflow: auto;
+        max-height: 60vh;
+        min-height: 250px;
+        /* 모바일에서만 높이 제한 적용 */
     }
     .member-flex-wrap #member-list table {
         min-width: 600px;
     }
     #member-table-wrap {
-        overflow-x: auto;
+        overflow: auto;
+        max-height: 55vh;
+        /* 모바일에서만 높이 제한 적용 */
     }
     #member-table-wrap table {
         min-width: 600px;
@@ -502,7 +507,9 @@ li, td, th {
         gap: 12px;
     }
     .member-flex-wrap #member-list {
-        overflow-x: auto;
+        overflow: auto;
+        max-height: 50vh;
+        min-height: 200px;
     }
     .member-flex-wrap #member-list table {
         min-width: 500px;
@@ -514,7 +521,8 @@ li, td, th {
     }
     
     #member-table-wrap {
-        overflow-x: auto;
+        overflow: auto;
+        max-height: 45vh;
     }
     #member-table-wrap table {
         min-width: 500px;
