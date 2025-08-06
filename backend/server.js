@@ -5,6 +5,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
+const { getKoreanDate } = require('./utils');
 
 require('dotenv').config();
 
@@ -361,7 +362,7 @@ app.patch('/api/members/:name', async (req, res) => {
         const member = await membersDB.updateMember(name, updates);
         
         // 재등록 세션 통계 추가
-        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) > 0) {
+        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) !== 0) {
           await monthlyStatsDB.addReRegistrationSessions(Number(addSessions));
         }
         
@@ -373,7 +374,7 @@ app.patch('/api/members/:name', async (req, res) => {
             session_count: Number(addSessions),
             center: member.center,
             trainer: member.trainer,
-            registration_date: new Date().toISOString().split('T')[0]
+            registration_date: getKoreanDate()
           });
         }
         

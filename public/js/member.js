@@ -31,8 +31,13 @@ function renderAddForm(container) {
       <div id="member-add-result" style="min-height:24px;margin-top:8px;"></div>
     </form>
   `;
-  // 오늘 날짜 기본값
-  document.getElementById('member-regdate').value = new Date().toISOString().slice(0, 10);
+  // 오늘 날짜 기본값 (한국 시간대)
+  const getKoreanDate = () => {
+    const now = new Date();
+    const koreanTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+    return koreanTime.toISOString().slice(0, 10);
+  };
+  document.getElementById('member-regdate').value = getKoreanDate();
   // 트레이너/센터 드롭다운 동적 로딩
   fetch('/api/trainers').then(r=>r.json()).then(trs=>{
     const sel = document.getElementById('member-trainer-select');
@@ -67,7 +72,7 @@ function renderAddForm(container) {
         resultDiv.innerText = result.message;
         setTimeout(() => { resultDiv.innerText = ''; }, 1500);
         form.reset();
-        document.getElementById('member-regdate').value = new Date().toISOString().slice(0, 10);
+        document.getElementById('member-regdate').value = getKoreanDate();
         member.renderList(document.getElementById('member-list'));
       } else {
         resultDiv.style.color = '#d32f2f';

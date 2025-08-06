@@ -131,7 +131,8 @@ const updateMember = async (name, updates) => {
       const add = Number(updates.addSessions);
       fields.push(`sessions = sessions + $${paramIndex++}`);
       fields.push(`remain_sessions = remain_sessions + $${paramIndex++}`);
-      fields.push(`regdate = CURRENT_DATE`);
+      // 한국 시간대 기준 날짜 (UTC+9)
+      fields.push(`regdate = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')::date`);
       values.push(add, add);
     }
 
