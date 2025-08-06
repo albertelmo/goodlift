@@ -763,6 +763,40 @@ app.get('/api/stats', async (req, res) => {
         }
     });
     
+    // 센터별 세션 통계 계산
+    const centerSessions = {
+      total: {},
+      completed: {},
+      scheduled: {},
+      absent: {}
+    };
+    
+    // 회원별 센터 정보 매핑
+    const memberCenterMap = {};
+    members.forEach(member => {
+      memberCenterMap[member.name] = member.center;
+    });
+    
+    // 세션별로 센터 통계 계산
+    sessions.forEach(session => {
+      const center = memberCenterMap[session.member];
+      if (center) {
+        // 총 세션
+        centerSessions.total[center] = (centerSessions.total[center] || 0) + 1;
+        
+        const sessionDate = new Date(session.date);
+        sessionDate.setHours(0, 0, 0, 0);
+        
+        if (session.status === '완료') {
+          centerSessions.completed[center] = (centerSessions.completed[center] || 0) + 1;
+        } else if (session.status === '예정' && sessionDate >= today) {
+          centerSessions.scheduled[center] = (centerSessions.scheduled[center] || 0) + 1;
+        } else if (sessionDate < today) {
+          centerSessions.absent[center] = (centerSessions.absent[center] || 0) + 1;
+        }
+      }
+    });
+    
     const stats = {
       totalSessions: sessions.length,
       completedSessions: completedSessions.length,
@@ -779,6 +813,7 @@ app.get('/api/stats', async (req, res) => {
       }).length,
       totalValidMembers: totalValidMembers,
       centerValidMembers: centerValidMembers,
+      centerSessions: centerSessions,
       trainerStats: []
     };
     

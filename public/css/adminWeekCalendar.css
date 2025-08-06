@@ -10,9 +10,35 @@
   padding: 0 16px;
 }
 
-.awc-left-spacer {
-  width: 200px; /* 검색창과 동일한 너비 */
+.awc-center-filter {
+  display: flex !important;
+  align-items: flex-end !important; /* 하단 정렬로 변경 */
+  gap: 8px;
   flex-shrink: 0;
+}
+
+.awc-center-select {
+  padding: 6px 12px !important;
+  border: 1px solid #ddd !important;
+  border-radius: 4px !important;
+  font-size: 14px !important;
+  background: white !important;
+  cursor: pointer !important;
+  outline: none !important;
+  transition: border-color 0.2s !important;
+  height: 36px !important;
+  box-sizing: border-box !important;
+  min-width: 150px;
+  line-height: 1 !important; /* line-height 추가 */
+  margin-bottom: 0 !important; /* 전역 스타일의 margin-bottom 제거 */
+}
+
+.awc-center-select:focus {
+  border-color: #1976d2;
+}
+
+.awc-center-select:hover {
+  border-color: #1976d2;
 }
 
 .awc-date-nav {
@@ -432,8 +458,15 @@
     gap: 12px;
   }
   
-  .awc-left-spacer {
-    display: none;
+  .awc-center-filter {
+    width: 100%;
+    justify-content: center;
+    align-items: flex-end !important; /* 모바일에서도 하단 정렬 유지 */
+  }
+  
+  .awc-center-select {
+    min-width: 200px;
+    max-width: 300px;
   }
   
   .awc-search-area {

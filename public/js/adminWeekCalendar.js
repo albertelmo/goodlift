@@ -18,7 +18,8 @@ const DEFAULT_TIME_SLOTS = [
 let state = {
   weekStart: null,        // 'YYYY-MM-DD' - 주의 시작일 (월요일)
   searchMember: null,     // 검색할 회원명
-  isSearchActive: false   // 검색 모드 활성화 여부
+  isSearchActive: false,  // 검색 모드 활성화 여부
+  selectedCenter: '전체'  // 선택된 센터 (기본값: 전체)
 };
 
 // KST(로컬) 기준 YYYY-MM-DD 문자열 반환 함수
@@ -60,7 +61,11 @@ function renderHeader(headerEl) {
   };
   
   headerEl.innerHTML = `
-    <div class="awc-left-spacer"></div>
+    <div class="awc-center-filter">
+      <select id="awc-center-select" class="awc-center-select">
+        <option value="전체">전체 센터</option>
+      </select>
+    </div>
     <div class="awc-date-nav">
       <button id="awc-prev" class="awc-nav-btn awc-prev-btn"></button>
       <span class="awc-date">${formatDate(monday)} ~ ${formatDate(sunday)}</span>
@@ -72,10 +77,43 @@ function renderHeader(headerEl) {
     </div>
   `;
   
-  // 이벤트 리스너 설정
+  // 센터 드롭다운 로딩 및 이벤트 리스너 설정
+  setupCenterFilter(headerEl);
   setupSearchEventListeners(headerEl);
   headerEl.querySelector('#awc-prev').onclick = () => moveWeek(-1);
   headerEl.querySelector('#awc-next').onclick = () => moveWeek(1);
+}
+
+async function setupCenterFilter(headerEl) {
+  const centerSelect = headerEl.querySelector('#awc-center-select');
+  
+  try {
+    // 센터 목록 가져오기
+    const centers = await fetch('/api/centers').then(r => r.json());
+    
+    // 센터 옵션 추가
+    centers.forEach(center => {
+      const option = document.createElement('option');
+      option.value = center.name;
+      option.textContent = center.name;
+      centerSelect.appendChild(option);
+    });
+    
+    // 현재 선택된 센터 설정
+    centerSelect.value = state.selectedCenter;
+    
+    // 센터 변경 이벤트
+    centerSelect.addEventListener('change', function() {
+      state.selectedCenter = this.value;
+      
+      // 테이블 다시 렌더링
+      const tableWrap = document.querySelector('.awc-table-wrap');
+      if (tableWrap) renderTable(tableWrap);
+    });
+    
+  } catch (error) {
+    console.error('[AWC] 센터 목록 로딩 실패:', error);
+  }
 }
 
 function setupSearchEventListeners(headerEl) {
@@ -169,6 +207,14 @@ async function renderTable(tableWrap) {
       displayStatus
     };
   });
+  
+  // 센터 필터링 적용
+  if (state.selectedCenter && state.selectedCenter !== '전체') {
+    processedSessions = processedSessions.filter(session => {
+      const member = members.find(m => m.name === session.member);
+      return member && member.center === state.selectedCenter;
+    });
+  }
   
   // 검색 필터링 적용
   if (state.searchMember && state.searchMember.trim()) {

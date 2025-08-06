@@ -90,6 +90,23 @@ function handleTrainerRowClick() {
   showTrainerSessionsModal(trainer, trainerName, selectedYearMonth);
 }
 
+// 센터별 세션 데이터 생성 함수
+function generateCenterSessionsContent(centerSessions, sessionType, title) {
+  if (!centerSessions || !centerSessions[sessionType]) {
+    return '센터별 데이터가 없습니다.';
+  }
+  
+  const centerData = centerSessions[sessionType];
+  
+  // 센터별 데이터를 내림차순으로 정렬하여 HTML 생성
+  const sortedCenters = Object.entries(centerData)
+    .sort(([,a], [,b]) => b - a)
+    .map(([center, count]) => `<div>${center}: ${count}개</div>`)
+    .join('');
+  
+  return sortedCenters || '센터별 데이터가 없습니다.';
+}
+
 // 유효회원수 툴팁 이벤트 설정
 function setupValidMembersTooltip() {
   const validMembersCard = document.getElementById('validMembersCard');
@@ -98,16 +115,36 @@ function setupValidMembersTooltip() {
   const tooltip = validMembersCard.querySelector('.center-tooltip');
   if (!tooltip) return;
   
+  setupTooltipEvents(validMembersCard, tooltip);
+}
+
+// 센터별 툴팁 이벤트 설정
+function setupCenterTooltips() {
+  const cardIds = ['totalSessionsCard', 'completedSessionsCard', 'scheduledSessionsCard', 'absentSessionsCard'];
+  
+  cardIds.forEach(cardId => {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+    
+    const tooltip = card.querySelector('.center-tooltip');
+    if (!tooltip) return;
+    
+    setupTooltipEvents(card, tooltip);
+  });
+}
+
+// 공통 툴팁 이벤트 설정 함수
+function setupTooltipEvents(card, tooltip) {
   let tooltipTimeout;
   
   // 마우스 진입 시 툴팁 표시
-  validMembersCard.addEventListener('mouseenter', () => {
+  card.addEventListener('mouseenter', () => {
     clearTimeout(tooltipTimeout);
     tooltip.style.display = 'block';
   });
   
   // 마우스 이탈 시 툴팁 숨김
-  validMembersCard.addEventListener('mouseleave', () => {
+  card.addEventListener('mouseleave', () => {
     tooltipTimeout = setTimeout(() => {
       tooltip.style.display = 'none';
     }, 200);
@@ -319,8 +356,9 @@ async function loadStats() {
       resultsElement.innerHTML = renderStatsResults(stats);
       // 트레이너 행 이벤트 리스너 다시 설정
       setupTrainerRowEventListeners();
-      // 유효회원수 툴팁 이벤트 설정
+      // 툴팁 이벤트 설정
       setupValidMembersTooltip();
+      setupCenterTooltips();
       // 월별 통계 로드 (완료 후 이벤트 리스너 설정)
       loadMonthlyStats().then(() => {
         // 월별 통계 행 클릭 이벤트 설정
@@ -372,6 +410,18 @@ function renderStatsResults(stats) {
       .map(([center, count]) => `<div>${center}: ${count}명</div>`)
       .join('') : '센터별 데이터가 없습니다.';
   
+  // 센터별 총 세션 툴팁 내용 생성
+  const centerTotalSessionsContent = generateCenterSessionsContent(stats.centerSessions, 'total', '총 세션');
+  
+  // 센터별 완료 세션 툴팁 내용 생성
+  const centerCompletedSessionsContent = generateCenterSessionsContent(stats.centerSessions, 'completed', '완료 세션');
+  
+  // 센터별 예정 세션 툴팁 내용 생성
+  const centerScheduledSessionsContent = generateCenterSessionsContent(stats.centerSessions, 'scheduled', '예정 세션');
+  
+  // 센터별 결석 세션 툴팁 내용 생성
+  const centerAbsentSessionsContent = generateCenterSessionsContent(stats.centerSessions, 'absent', '결석 세션');
+  
   return `
     <div class="stats-grid">
       <div class="stats-card" id="validMembersCard" style="position:relative;cursor:help;">
@@ -382,21 +432,37 @@ function renderStatsResults(stats) {
           ${centerTooltipContent}
         </div>
       </div>
-      <div class="stats-card">
+      <div class="stats-card" id="totalSessionsCard" style="position:relative;cursor:help;">
         <div class="stats-card-title">총 세션 수</div>
         <div class="stats-card-value">${stats.totalSessions || 0}</div>
+        <div class="center-tooltip" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;white-space:nowrap;z-index:1000;margin-top:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+          <div style="font-weight:600;margin-bottom:4px;text-align:center;">센터별 총 세션</div>
+          ${centerTotalSessionsContent}
+        </div>
       </div>
-      <div class="stats-card">
+      <div class="stats-card" id="completedSessionsCard" style="position:relative;cursor:help;">
         <div class="stats-card-title">완료된 세션</div>
         <div class="stats-card-value">${stats.completedSessions || 0}${stats.completedTrialOrAnonymous > 0 ? `(${stats.completedTrialOrAnonymous})` : ''}</div>
+        <div class="center-tooltip" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;white-space:nowrap;z-index:1000;margin-top:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+          <div style="font-weight:600;margin-bottom:4px;text-align:center;">센터별 완료 세션</div>
+          ${centerCompletedSessionsContent}
+        </div>
       </div>
-      <div class="stats-card">
+      <div class="stats-card" id="scheduledSessionsCard" style="position:relative;cursor:help;">
         <div class="stats-card-title">예정된 세션</div>
         <div class="stats-card-value">${stats.scheduledSessions || 0}</div>
+        <div class="center-tooltip" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;white-space:nowrap;z-index:1000;margin-top:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+          <div style="font-weight:600;margin-bottom:4px;text-align:center;">센터별 예정 세션</div>
+          ${centerScheduledSessionsContent}
+        </div>
       </div>
-      <div class="stats-card">
+      <div class="stats-card" id="absentSessionsCard" style="position:relative;cursor:help;">
         <div class="stats-card-title">결석 세션</div>
         <div class="stats-card-value">${stats.absentSessions || 0}</div>
+        <div class="center-tooltip" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;white-space:nowrap;z-index:1000;margin-top:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+          <div style="font-weight:600;margin-bottom:4px;text-align:center;">센터별 결석 세션</div>
+          ${centerAbsentSessionsContent}
+        </div>
       </div>
     </div>
     <div class="stats-details">
