@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { getKoreanDate } = require('./utils');
 
 // PostgreSQL 연결 풀 생성 (sessions-db.js와 동일한 설정 사용)
 const pool = new Pool({
@@ -131,9 +132,9 @@ const updateMember = async (name, updates) => {
       const add = Number(updates.addSessions);
       fields.push(`sessions = sessions + $${paramIndex++}`);
       fields.push(`remain_sessions = remain_sessions + $${paramIndex++}`);
-      // 한국 시간대 기준 날짜 (UTC+9)
-      fields.push(`regdate = (CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')::date`);
-      values.push(add, add);
+      // 한국 시간대 기준 날짜
+      fields.push(`regdate = $${paramIndex++}`);
+      values.push(add, add, getKoreanDate());
     }
 
     if (fields.length === 0) {
