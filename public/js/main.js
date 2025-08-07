@@ -130,10 +130,10 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 // 역할별 탭 및 내용 정의
 const adminTabs = [
-    { label: '오늘 세션', content: '<div id="admin-day-calendar-root"></div>' },
-    { label: '주간 세션', content: '<div id="admin-week-calendar-root"></div>' },
-    { label: '회원 관리', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
-    { label: '센터 관리', content: `<div style='max-width:400px;margin:0 auto;'>
+    { label: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
+    { label: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
+    { label: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: 'Center', content: `<div style='max-width:400px;margin:0 auto;'>
         <form id="center-add-form" style="display:flex;gap:8px;margin-bottom:18px;">
             <input type="text" id="center-name" placeholder="센터 이름" required style="flex:1;">
             <button type="submit">센터 추가</button>
@@ -142,8 +142,8 @@ const adminTabs = [
         <div id="center-list-loading">센터 목록을 불러오는 중...</div>
         <div id="center-list"></div>
     </div>` },
-    { label: '트레이너 관리', content: '<div id="trainer-list-loading">트레이너 목록을 불러오는 중...</div><div id="trainer-list"></div>' },
-    { label: '통계', content: '<div id="admin-stats-root"></div>' }
+    { label: 'Trainer', content: '<div id="trainer-list-loading">트레이너 목록을 불러오는 중...</div><div id="trainer-list"></div>' },
+    { label: 'Stat', content: '<div id="admin-stats-root"></div>' }
 ];
 const trainerTabs = [
     { label: '📅', content: '<div id="session-calendar"></div>' },
@@ -176,19 +176,19 @@ function renderTabs(tabs) {
             Array.from(tabBar.children).forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             tabContent.innerHTML = tab.content;
-            if (tab.label === '트레이너 관리') {
+            if (tab.label === 'Trainer') {
                 trainer.loadList();
             }
-            if (tab.label === '센터 관리') {
+            if (tab.label === 'Center') {
                 center.setupTab();
             }
-            if (tab.label === '오늘 세션') {
+            if (tab.label === 'Today') {
                 adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
             }
-            if (tab.label === '주간 세션') {
+            if (tab.label === 'Week') {
                 adminWeekCalendar.render(document.getElementById('admin-week-calendar-root'));
             }
-            if (tab.label === '회원 관리') {
+            if (tab.label === 'Member') {
                 member.renderAddForm(document.getElementById('member-add'));
                 member.renderList(document.getElementById('member-list'));
             }
@@ -199,25 +199,25 @@ function renderTabs(tabs) {
             if (tab.label === '📅') {
                 trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
             }
-            if (tab.label === '통계') {
+            if (tab.label === 'Stat') {
                 adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
             }
         };
         tabBar.appendChild(btn);
     });
-    if (tabs[0].label === '트레이너 관리') {
+    if (tabs[0].label === 'Trainer') {
         trainer.loadList();
     }
-    if (tabs[0].label === '센터 관리') {
+    if (tabs[0].label === 'Center') {
         center.setupTab();
     }
-    if (tabs[0].label === '오늘 세션') {
+    if (tabs[0].label === 'Today') {
         adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
     }
-    if (tabs[0].label === '주간 세션') {
+    if (tabs[0].label === 'Week') {
         adminWeekCalendar.render(document.getElementById('admin-week-calendar-root'));
     }
-    if (tabs[0].label === '회원 관리') {
+    if (tabs[0].label === 'Member') {
         member.renderAddForm(document.getElementById('member-add'));
         member.renderList(document.getElementById('member-list'));
     }
@@ -228,7 +228,7 @@ function renderTabs(tabs) {
     if (tabs[0].label === '📅') {
         trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
     }
-    if (tabs[0].label === '통계') {
+    if (tabs[0].label === 'Stat') {
         adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
     }
 }

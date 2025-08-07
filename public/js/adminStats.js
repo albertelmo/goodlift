@@ -314,11 +314,12 @@ function updateDateDisplay() {
 
   switch (currentPeriod) {
     case 'day':
-      dateElement.textContent = currentDate.toLocaleDateString('ko-KR', {
+      const dayOfWeek = currentDate.toLocaleDateString('ko-KR', { weekday: 'short' });
+      dateElement.textContent = `${currentDate.toLocaleDateString('ko-KR', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
-      });
+      })} (${dayOfWeek})`;
       break;
     case 'week':
       const weekStart = new Date(currentDate);
