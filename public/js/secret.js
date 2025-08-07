@@ -40,16 +40,34 @@ class SecretManager {
             closeMonthlyStatsResetBtn.addEventListener('click', () => this.closeMonthlyStatsResetModal());
         }
 
+        // 세션 삭제 모달 닫기 버튼
+        const closeSessionDeleteBtn = document.getElementById('closeSessionDeleteBtn');
+        if (closeSessionDeleteBtn) {
+            closeSessionDeleteBtn.addEventListener('click', () => this.closeSessionDeleteModal());
+        }
+
         // 회원 검색 버튼
         const searchMemberBtn = document.getElementById('searchMemberBtn');
         if (searchMemberBtn) {
             searchMemberBtn.addEventListener('click', () => this.searchMember());
         }
 
+        // 세션 검색 버튼
+        const searchSessionBtn = document.getElementById('searchSessionBtn');
+        if (searchSessionBtn) {
+            searchSessionBtn.addEventListener('click', () => this.searchSession());
+        }
+
         // 회원 삭제 확인 버튼
         const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
         if (confirmDeleteBtn) {
             confirmDeleteBtn.addEventListener('click', () => this.confirmDeleteMember());
+        }
+
+        // 세션 삭제 확인 버튼
+        const confirmSessionDeleteBtn = document.getElementById('confirmSessionDeleteBtn');
+        if (confirmSessionDeleteBtn) {
+            confirmSessionDeleteBtn.addEventListener('click', () => this.confirmDeleteSession());
         }
 
         // 월별 통계 초기화 버튼
@@ -62,6 +80,12 @@ class SecretManager {
         const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
         if (cancelDeleteBtn) {
             cancelDeleteBtn.addEventListener('click', () => this.closeMemberDeleteModal());
+        }
+
+        // 세션 삭제 취소 버튼
+        const cancelSessionDeleteBtn = document.getElementById('cancelSessionDeleteBtn');
+        if (cancelSessionDeleteBtn) {
+            cancelSessionDeleteBtn.addEventListener('click', () => this.closeSessionDeleteModal());
         }
 
         // 모달 배경 클릭 시 닫기
@@ -80,6 +104,11 @@ class SecretManager {
             monthlyStatsResetModalBg.addEventListener('click', () => this.closeMonthlyStatsResetModal());
         }
 
+        const sessionDeleteModalBg = document.getElementById('sessionDeleteModalBg');
+        if (sessionDeleteModalBg) {
+            sessionDeleteModalBg.addEventListener('click', () => this.closeSessionDeleteModal());
+        }
+
         // Enter 키 이벤트
         const memberNameInput = document.getElementById('memberNameInput');
         if (memberNameInput) {
@@ -95,6 +124,16 @@ class SecretManager {
             yearMonthInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     this.resetMonthlyStats();
+                }
+            });
+        }
+
+        // 세션 삭제 모달의 Enter 키 이벤트
+        const sessionMemberNameInput = document.getElementById('sessionMemberNameInput');
+        if (sessionMemberNameInput) {
+            sessionMemberNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.searchSession();
                 }
             });
         }
@@ -166,6 +205,7 @@ class SecretManager {
         // 간단한 메뉴 표시
         const menuItems = [
             { id: 'memberDelete', title: '회원 삭제', description: '회원 정보 및 세션 삭제' },
+            { id: 'sessionDelete', title: '세션 삭제', description: '특정 회원의 특정 세션 삭제' },
             { id: 'monthlyStatsReset', title: '월별 통계 초기화', description: '특정 월의 세션 통계를 0으로 초기화' }
         ];
 
@@ -204,6 +244,14 @@ class SecretManager {
             memberDeleteBtn.addEventListener('click', () => {
                 this.closeAdminMenuModal();
                 this.showMemberDeleteModal();
+            });
+        }
+
+        const sessionDeleteBtn = document.getElementById('sessionDeleteBtn');
+        if (sessionDeleteBtn) {
+            sessionDeleteBtn.addEventListener('click', () => {
+                this.closeAdminMenuModal();
+                this.showSessionDeleteModal();
             });
         }
 
@@ -287,14 +335,26 @@ class SecretManager {
             const sessionsResponse = await fetch('/api/sessions');
             const sessions = await sessionsResponse.json();
 
-            // 회원 검색 (부분 일치)
-            const foundMember = members.find(member => 
-                member.name.includes(memberName) || memberName.includes(member.name)
-            );
-
+            // 회원 검색 (정확한 일치 우선, 부분 일치 후순위)
+            let foundMember = members.find(member => member.name === memberName);
+            
+            // 정확한 일치가 없으면 부분 일치 검색
             if (!foundMember) {
-                alert('해당 이름의 회원을 찾을 수 없습니다.');
-                return;
+                const partialMatches = members.filter(member => 
+                    member.name.includes(memberName) || memberName.includes(member.name)
+                );
+                
+                if (partialMatches.length === 0) {
+                    alert('해당 이름의 회원을 찾을 수 없습니다.');
+                    return;
+                } else if (partialMatches.length === 1) {
+                    foundMember = partialMatches[0];
+                } else {
+                    // 여러 개의 부분 일치가 있을 경우 사용자에게 선택하도록 함
+                    const memberNames = partialMatches.map(m => m.name).join(', ');
+                    alert(`여러 회원이 검색되었습니다: ${memberNames}\n\n정확한 회원 이름을 입력해주세요.`);
+                    return;
+                }
             }
 
             // 해당 회원의 세션들 필터링
@@ -321,13 +381,16 @@ class SecretManager {
             `;
 
             // 세션 정보 표시
-            sessionInfoContent.innerHTML = `
-                <div><strong>총 세션:</strong> ${totalSessions}개</div>
-                <div><strong>예정 세션:</strong> ${scheduledSessions}개</div>
-                <div><strong>완료 세션:</strong> ${completedSessions}개</div>
-                <div><strong>결석 세션:</strong> ${absentSessions}개</div>
-                <div><strong>취소 세션:</strong> ${cancelledSessions}개</div>
-            `;
+            const memberSessionInfoContent = document.getElementById('memberSessionInfoContent');
+            if (memberSessionInfoContent) {
+                memberSessionInfoContent.innerHTML = `
+                    <div><strong>총 세션:</strong> ${totalSessions}개</div>
+                    <div><strong>예정 세션:</strong> ${scheduledSessions}개</div>
+                    <div><strong>완료 세션:</strong> ${completedSessions}개</div>
+                    <div><strong>결석 세션:</strong> ${absentSessions}개</div>
+                    <div><strong>취소 세션:</strong> ${cancelledSessions}개</div>
+                `;
+            }
 
             // 검색 섹션 숨기고 정보 섹션 표시
             memberSearchSection.style.display = 'none';
@@ -384,6 +447,161 @@ class SecretManager {
         } catch (error) {
             console.error('회원 삭제 중 오류:', error);
             alert('회원 삭제 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 세션 삭제 모달 표시
+    showSessionDeleteModal() {
+        const modalBg = document.getElementById('sessionDeleteModalBg');
+        const modal = document.getElementById('sessionDeleteModal');
+        const sessionMemberNameInput = document.getElementById('sessionMemberNameInput');
+        const sessionDateInput = document.getElementById('sessionDateInput');
+        const sessionTimeInput = document.getElementById('sessionTimeInput');
+        const sessionSearchSection = document.getElementById('sessionSearchSection');
+        const sessionInfoSection = document.getElementById('sessionInfoSection');
+
+        if (modalBg && modal && sessionMemberNameInput && sessionDateInput && sessionTimeInput && sessionSearchSection && sessionInfoSection) {
+            modalBg.style.display = 'block';
+            modal.style.display = 'block';
+            sessionMemberNameInput.value = '';
+            sessionDateInput.value = '';
+            sessionTimeInput.value = '';
+            sessionSearchSection.style.display = 'block';
+            sessionInfoSection.style.display = 'none';
+            sessionMemberNameInput.focus();
+        }
+    }
+
+    // 세션 삭제 모달 닫기
+    closeSessionDeleteModal() {
+        const modalBg = document.getElementById('sessionDeleteModalBg');
+        const modal = document.getElementById('sessionDeleteModal');
+        const sessionMemberNameInput = document.getElementById('sessionMemberNameInput');
+        const sessionDateInput = document.getElementById('sessionDateInput');
+        const sessionTimeInput = document.getElementById('sessionTimeInput');
+        const sessionSearchSection = document.getElementById('sessionSearchSection');
+        const sessionInfoSection = document.getElementById('sessionInfoSection');
+
+        if (modalBg && modal && sessionMemberNameInput && sessionDateInput && sessionTimeInput && sessionSearchSection && sessionInfoSection) {
+            modalBg.style.display = 'none';
+            modal.style.display = 'none';
+            sessionMemberNameInput.value = '';
+            sessionDateInput.value = '';
+            sessionTimeInput.value = '';
+            sessionSearchSection.style.display = 'block';
+            sessionInfoSection.style.display = 'none';
+        }
+    }
+
+    // 세션 검색
+    async searchSession() {
+        const sessionMemberNameInput = document.getElementById('sessionMemberNameInput');
+        const sessionDateInput = document.getElementById('sessionDateInput');
+        const sessionTimeInput = document.getElementById('sessionTimeInput');
+        const sessionInfoContent = document.getElementById('sessionInfoContent');
+        const sessionSearchSection = document.getElementById('sessionSearchSection');
+        const sessionInfoSection = document.getElementById('sessionInfoSection');
+
+        if (!sessionMemberNameInput || !sessionDateInput || !sessionTimeInput || !sessionInfoContent || !sessionSearchSection || !sessionInfoSection) return;
+
+        const memberName = sessionMemberNameInput.value.trim();
+        const date = sessionDateInput.value;
+        const time = sessionTimeInput.value;
+
+        if (!memberName || !date || !time) {
+            alert('회원 이름, 날짜, 시간을 모두 입력해주세요.');
+            return;
+        }
+
+        try {
+            // 세션 정보 가져오기
+            const sessionsResponse = await fetch('/api/sessions');
+            const sessions = await sessionsResponse.json();
+
+            // 해당 세션 찾기
+            const foundSession = sessions.find(session => 
+                session.member === memberName && 
+                session.date === date && 
+                session.time === time
+            );
+
+            if (!foundSession) {
+                alert('해당 조건의 세션을 찾을 수 없습니다.\n\n회원 이름, 날짜, 시간을 다시 확인해주세요.');
+                return;
+            }
+
+            // 세션 정보 표시
+            // 세션 정보 표시
+            sessionInfoContent.innerHTML = `
+                <div><strong>회원:</strong> ${foundSession.member || 'N/A'}</div>
+                <div><strong>트레이너:</strong> ${foundSession.trainer || 'N/A'}</div>
+                <div><strong>날짜:</strong> ${foundSession.date || 'N/A'}</div>
+                <div><strong>시간:</strong> ${foundSession.time || 'N/A'}</div>
+                <div><strong>상태:</strong> ${foundSession.status || 'N/A'}</div>
+            `;
+
+            // 검색 섹션 숨기고 정보 섹션 표시
+            sessionSearchSection.style.display = 'none';
+            sessionInfoSection.style.display = 'block';
+
+            // 삭제 확인 버튼에 세션 정보 저장
+            const confirmSessionDeleteBtn = document.getElementById('confirmSessionDeleteBtn');
+            if (confirmSessionDeleteBtn) {
+                confirmSessionDeleteBtn.dataset.sessionId = foundSession.id;
+                confirmSessionDeleteBtn.dataset.memberName = foundSession.member;
+                confirmSessionDeleteBtn.dataset.date = foundSession.date;
+                confirmSessionDeleteBtn.dataset.time = foundSession.time;
+            }
+
+        } catch (error) {
+            console.error('세션 검색 중 오류:', error);
+            alert('세션 검색 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 세션 삭제 확인
+    async confirmDeleteSession() {
+        const confirmSessionDeleteBtn = document.getElementById('confirmSessionDeleteBtn');
+        if (!confirmSessionDeleteBtn) return;
+
+        const sessionId = confirmSessionDeleteBtn.dataset.sessionId;
+        const memberName = confirmSessionDeleteBtn.dataset.memberName;
+        const date = confirmSessionDeleteBtn.dataset.date;
+        const time = confirmSessionDeleteBtn.dataset.time;
+
+        if (!sessionId || !memberName || !date || !time) {
+            alert('삭제할 세션 정보를 찾을 수 없습니다.');
+            return;
+        }
+
+        const confirmed = confirm(`정말로 "${memberName}" 회원의 ${date} ${time} 세션을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`);
+        
+        if (confirmed) {
+            await this.deleteSession(sessionId);
+        }
+    }
+
+    // 세션 삭제 실행
+    async deleteSession(sessionId) {
+        try {
+            // 세션 삭제
+            const deleteResponse = await fetch(`/api/sessions/${sessionId}`, {
+                method: 'DELETE'
+            });
+
+            if (deleteResponse.ok) {
+                alert('세션이 성공적으로 삭제되었습니다.');
+                this.closeSessionDeleteModal();
+                
+                // 페이지 새로고침 (데이터 업데이트를 위해)
+                location.reload();
+            } else {
+                const errorData = await deleteResponse.json();
+                alert(`세션 삭제 실패: ${errorData.message || '알 수 없는 오류'}`);
+            }
+        } catch (error) {
+            console.error('세션 삭제 중 오류:', error);
+            alert('세션 삭제 중 오류가 발생했습니다.');
         }
     }
 

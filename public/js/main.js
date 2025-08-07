@@ -17,6 +17,11 @@ window.addEventListener('DOMContentLoaded', function() {
     } else {
         document.getElementById('logoutBtn').style.display = 'none';
         document.getElementById('settingsBtn').style.display = 'none';
+        // 로그인하지 않은 상태에서는 secretBtn 숨김
+        const secretBtn = document.getElementById('secretBtn');
+        if (secretBtn) {
+            secretBtn.style.display = 'none';
+        }
     }
     document.getElementById('showSignupBtn').onclick = async function() {
         document.getElementById('loginSection').style.display = 'none';
@@ -148,6 +153,13 @@ function showMainSection(role, name) {
     document.getElementById('authSection').style.display = 'none';
     document.getElementById('mainSection').style.display = 'block';
     document.getElementById('logoutBtn').style.display = 'inline-block';
+    
+    // 관리자일 때만 secretBtn 표시
+    const secretBtn = document.getElementById('secretBtn');
+    if (secretBtn) {
+        secretBtn.style.display = role === 'admin' ? 'inline-block' : 'none';
+    }
+    
     let tabs = role === 'admin' ? adminTabs : trainerTabs;
     renderTabs(tabs);
 }

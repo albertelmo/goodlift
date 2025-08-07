@@ -12,7 +12,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
       <div style="display:flex;align-items:center;gap:8px;">
         <img id="mainLogo" src="img/logo.jpg" alt="GoodLift 로고" style="height:38px;cursor:pointer; margin-top:16px; margin-bottom:8px;" />
-        <button id="secretBtn" title="관리자 기능" style="background:none;border:none;cursor:pointer;font-size:12px;color:#666;padding:4px;border-radius:4px;transition:all 0.2s;" aria-label="관리자 기능">🔒</button>
+        <button id="secretBtn" title="관리자 기능" style="display:none;background:none;border:none;cursor:pointer;font-size:12px;color:#666;padding:4px;border-radius:4px;transition:all 0.2s;" aria-label="관리자 기능">🔒</button>
       </div>
       <div class="header-btns">
         <button id="settingsBtn" title="설정" style="display:none;" aria-label="설정">
@@ -131,11 +131,80 @@
         </div>
         <div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;background:#fff3cd;">
           <h4 style="margin-top:0;margin-bottom:8px;color:#856404;font-size:1rem;">세션 정보</h4>
-          <div id="sessionInfoContent" style="font-size:0.9rem;"></div>
+          <div id="memberSessionInfoContent" style="font-size:0.9rem;"></div>
         </div>
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid #eee;">
           <button type="button" id="cancelDeleteBtn" style="background:#eee;color:#1976d2;">취소</button>
           <button type="button" id="confirmDeleteBtn" style="background:#d32f2f;color:#fff;">삭제 확인</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 세션 삭제 모달 -->
+    <div id="sessionDeleteModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="sessionDeleteModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:400px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+      <h3 style="margin-top:0;margin-bottom:18px;color:#d32f2f;font-size:1.15rem;">세션 삭제</h3>
+      <div id="sessionSearchSection">
+        <div class="form-row">
+          <label for="sessionMemberNameInput">회원 이름</label>
+          <input type="text" id="sessionMemberNameInput" name="sessionMemberName" placeholder="삭제할 세션의 회원 이름을 입력하세요" required>
+        </div>
+        <div class="form-row">
+          <label for="sessionDateInput">날짜</label>
+          <input type="date" id="sessionDateInput" name="sessionDate" required>
+        </div>
+        <div class="form-row">
+          <label for="sessionTimeInput">시간</label>
+          <select id="sessionTimeInput" name="sessionTime" required>
+            <option value="">시간 선택</option>
+            <option value="06:00">06:00</option>
+            <option value="06:30">06:30</option>
+            <option value="07:00">07:00</option>
+            <option value="07:30">07:30</option>
+            <option value="08:00">08:00</option>
+            <option value="08:30">08:30</option>
+            <option value="09:00">09:00</option>
+            <option value="09:30">09:30</option>
+            <option value="10:00">10:00</option>
+            <option value="10:30">10:30</option>
+            <option value="11:00">11:00</option>
+            <option value="11:30">11:30</option>
+            <option value="12:00">12:00</option>
+            <option value="12:30">12:30</option>
+            <option value="13:00">13:00</option>
+            <option value="13:30">13:30</option>
+            <option value="14:00">14:00</option>
+            <option value="14:30">14:30</option>
+            <option value="15:00">15:00</option>
+            <option value="15:30">15:30</option>
+            <option value="16:00">16:00</option>
+            <option value="16:30">16:30</option>
+            <option value="17:00">17:00</option>
+            <option value="17:30">17:30</option>
+            <option value="18:00">18:00</option>
+            <option value="18:30">18:30</option>
+            <option value="19:00">19:00</option>
+            <option value="19:30">19:30</option>
+            <option value="20:00">20:00</option>
+            <option value="20:30">20:30</option>
+            <option value="21:00">21:00</option>
+            <option value="21:30">21:30</option>
+            <option value="22:00">22:00</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px;">
+          <button type="button" id="closeSessionDeleteBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="button" id="searchSessionBtn" style="background:#1976d2;color:#fff;">검색</button>
+        </div>
+      </div>
+      <div id="sessionInfoSection" style="display:none;">
+        <div style="border:1px solid #ddd;border-radius:8px;padding:12px;margin:12px 0;background:#f9f9f9;">
+          <h4 style="margin-top:0;margin-bottom:8px;color:#1976d2;font-size:1rem;">세션 정보</h4>
+          <div id="sessionInfoContent" style="font-size:0.9rem;"></div>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:12px;border-top:1px solid #eee;">
+          <button type="button" id="cancelSessionDeleteBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="button" id="confirmSessionDeleteBtn" style="background:#d32f2f;color:#fff;">삭제 확인</button>
         </div>
       </div>
     </div>
