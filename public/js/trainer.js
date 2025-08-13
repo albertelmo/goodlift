@@ -522,12 +522,39 @@ function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
 export const trainer = { loadList, renderMyMembers, renderSessionCalendar };
 
 function showAttendModal(sessionId, container, hasNoRemaining = false) {
+  // 스크롤 방지
+  document.body.style.overflow = 'hidden';
+  
   let modalBg = document.createElement('div');
   modalBg.className = 'tmc-modal-bg';
-  modalBg.style.display = 'block';
+  modalBg.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 9999;
+    display: block;
+  `;
+  
   let modal = document.createElement('div');
   modal.className = 'tmc-modal';
-  modal.style.display = 'block';
+  modal.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    display: block;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow: auto;
+  `;
   
   // 버튼 disabled 속성 설정
   const attendDisabled = hasNoRemaining ? 'disabled' : '';
@@ -548,6 +575,16 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   `;
   document.body.appendChild(modalBg);
   document.body.appendChild(modal);
+  
+  // 배경 클릭 시 닫기
+  modalBg.onclick = close;
+  
+  // ESC 키로 닫기
+  const escHandler = function(e) {
+    if (e.key === 'Escape') close();
+  };
+  document.addEventListener('keydown', escHandler);
+  
   // 닫기 버튼
   document.getElementById('attend-modal-close').onclick = close;
   // 출석 버튼
@@ -584,7 +621,7 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
               <span style=\"color:#388e3c;font-size:1.08em;\">잔여세션 ${remain}회</span>
             </div>
             <canvas id=\"attend-sign-canvas\" width=\"240\" height=\"140\" style=\"border:1.5px solid #e3eaf5;border-radius:8px;background:#fff;\"></canvas><br>
-            <button id=\"attend-sign-ok\" style=\"margin:8px 0 0 0;\">확인</button>
+            <button id=\"attend-sign-ok\" style=\"margin:8px 0 0 0;display:block;margin-left:auto;margin-right:auto;\">확인</button>
             <div id=\"attend-result\" style=\"min-height:20px;margin-top:8px;font-size:0.97rem;\"></div>
           `;
           // 사인 캔버스 (마우스+터치)
@@ -799,6 +836,8 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
     };
   }
   function close() {
+    document.body.style.overflow = '';
+    document.removeEventListener('keydown', escHandler);
     document.body.removeChild(modalBg);
     document.body.removeChild(modal);
   }
