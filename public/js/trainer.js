@@ -616,11 +616,15 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
           const member = members.find(m => m.name === session.member);
           const remain = member && member.remainSessions !== undefined ? member.remainSessions : '?';
           document.getElementById('attend-modal-body').innerHTML = `
-            <div style=\"margin-bottom:8px;display:flex;align-items:center;gap:12px;justify-content:center;\">
-              <span style=\"font-weight:600;color:#1976d2;\">수고하셨습니다!</span>
+            <div style=\"margin-bottom:8px;display:flex;align-items:center;gap:12px;justify-content:flex-end;\">
               <span style=\"color:#388e3c;font-size:1.08em;\">잔여세션 ${remain}회</span>
             </div>
-            <canvas id=\"attend-sign-canvas\" width=\"240\" height=\"140\" style=\"border:1.5px solid #e3eaf5;border-radius:8px;background:#fff;\"></canvas><br>
+            <div style=\"margin-bottom:8px;text-align:center;\">
+              <span style=\"font-weight:600;color:#1976d2;\">${session.member} 회원님! 수고하셨습니다!</span>
+            </div>
+            <div style=\"text-align:center;margin-bottom:8px;\">
+              <canvas id=\"attend-sign-canvas\" width=\"240\" height=\"140\" style=\"border:1.5px solid #e3eaf5;border-radius:8px;background:#fff;\"></canvas>
+            </div>
             <button id=\"attend-sign-ok\" style=\"margin:8px 0 0 0;display:block;margin-left:auto;margin-right:auto;\">확인</button>
             <div id=\"attend-result\" style=\"min-height:20px;margin-top:8px;font-size:0.97rem;\"></div>
           `;
