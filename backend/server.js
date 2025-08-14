@@ -922,7 +922,14 @@ app.post('/api/email/contract', async (req, res) => {
                 const accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf-8'));
                 const trainerAccount = accounts.find(account => account.username === trainer);
                 if (trainerAccount) {
-                    trainerName = trainerAccount.name || trainerAccount.username;
+                    console.log('[API] 트레이너 계정 정보:', {
+                        username: trainerAccount.username,
+                        name: trainerAccount.name,
+                        nameType: typeof trainerAccount.name,
+                        nameLength: trainerAccount.name ? trainerAccount.name.length : 0
+                    });
+                    trainerName = (trainerAccount.name && trainerAccount.name.trim()) || trainerAccount.username;
+                    console.log('[API] 최종 trainerName:', trainerName);
                 }
             } catch (error) {
                 console.error('[API] 트레이너 이름 조회 오류:', error);
