@@ -897,21 +897,45 @@ app.get('/api/email/test', async (req, res) => {
 // 계약서 이메일 전송 API
 app.post('/api/email/contract', async (req, res) => {
     try {
-        const { recipientEmail } = req.body;
+        const { 
+            recipientEmail, 
+            memberName, 
+            trainer, 
+            regdate, 
+            signatureData 
+        } = req.body;
         
         if (!recipientEmail) {
             return res.status(400).json({ message: '이메일 주소를 입력해주세요.' });
         }
         
-        // 기본 계약서 데이터 (회원 정보 없이)
+        if (!memberName || !trainer || !regdate || !signatureData) {
+            return res.status(400).json({ message: '필수 정보가 누락되었습니다.' });
+        }
+        
+        // 트레이너 이름 조회
+        const accountsPath = path.join(__dirname, '../data/accounts.json');
+        let trainerName = trainer; // 기본값은 ID
+        
+        if (fs.existsSync(accountsPath)) {
+            try {
+                const accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf-8'));
+                const trainerAccount = accounts.find(account => account.username === trainer);
+                if (trainerAccount) {
+                    trainerName = trainerAccount.name || trainerAccount.username;
+                }
+            } catch (error) {
+                console.error('[API] 트레이너 이름 조회 오류:', error);
+            }
+        }
+        
+        // 계약서 데이터 구성
         const contractData = {
-            name: '회원',
-            gender: '',
-            phone: '',
-            trainer: '',
-            center: '',
-            regdate: new Date().toISOString().split('T')[0],
-            sessions: ''
+            name: memberName,
+            trainer: trainer,
+            trainerName: trainerName,
+            regdate: regdate,
+            signatureData: signatureData
         };
         
         // 계약서 이메일 전송
@@ -1173,6 +1197,44 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
     } catch (error) {
         console.error('[API] 엑셀 파일 업로드 오류:', error);
         res.status(500).json({ message: '엑셀 파일 처리에 실패했습니다.' });
+    }
+});
+
+
+
+
+        
+
+
+// 트레이너 목록 조회 API
+app.get('/api/trainers', (req, res) => {
+    try {
+        const accountsPath = path.join(__dirname, '../data/accounts.json');
+        
+        if (!fs.existsSync(accountsPath)) {
+            return res.status(404).json({ 
+                message: '계정 파일을 찾을 수 없습니다.',
+                trainers: [] 
+            });
+        }
+        
+        const accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf-8'));
+        
+        // 트레이너만 필터링 (role이 'trainer'인 사용자)
+        const trainers = accounts.filter(account => account.role === 'trainer')
+            .map(trainer => ({
+                username: trainer.username,
+                name: trainer.name || trainer.username
+            }));
+        
+        res.json(trainers);
+        
+    } catch (error) {
+        console.error('[API] 트레이너 목록 조회 오류:', error);
+        res.status(500).json({ 
+            message: '트레이너 목록을 불러오는데 실패했습니다.',
+            trainers: [] 
+        });
     }
 });
 
