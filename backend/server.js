@@ -913,27 +913,19 @@ app.post('/api/email/contract', async (req, res) => {
             return res.status(400).json({ message: '필수 정보가 누락되었습니다.' });
         }
         
-        // 트레이너 이름 조회
-        const accountsPath = path.join(__dirname, '../data/accounts.json');
+        // 트레이너 이름 조회 (API 사용)
         let trainerName = trainer; // 기본값은 ID
         
-        if (fs.existsSync(accountsPath)) {
-            try {
-                const accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf-8'));
-                const trainerAccount = accounts.find(account => account.username === trainer);
-                if (trainerAccount) {
-                    console.log('[API] 트레이너 계정 정보:', {
-                        username: trainerAccount.username,
-                        name: trainerAccount.name,
-                        nameType: typeof trainerAccount.name,
-                        nameLength: trainerAccount.name ? trainerAccount.name.length : 0
-                    });
-                    trainerName = (trainerAccount.name && trainerAccount.name.trim()) || trainerAccount.username;
-                    console.log('[API] 최종 trainerName:', trainerName);
-                }
-            } catch (error) {
-                console.error('[API] 트레이너 이름 조회 오류:', error);
+        try {
+            const trainersRes = await fetch(`http://localhost:${PORT}/api/trainers`);
+            const trainers = await trainersRes.json();
+            
+            const trainerAccount = trainers.find(t => t.username === trainer);
+            if (trainerAccount) {
+                trainerName = trainerAccount.name;
             }
+        } catch (error) {
+            console.error('[API] 트레이너 이름 조회 오류:', error);
         }
         
         // 계약서 데이터 구성
