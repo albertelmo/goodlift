@@ -260,13 +260,42 @@ const migrateVipSessionField = async () => {
       // vip_session 컬럼이 없으면 추가
       const alterQuery = `
         ALTER TABLE members 
-        ADD COLUMN vip_session INTEGER DEFAULT 0 CHECK (vip_session >= 0 AND vip_session <= 9)
+        ADD COLUMN vip_session INTEGER DEFAULT 0 CHECK (vip_session >= 0 AND vip_session <= 99)
       `;
       await pool.query(alterQuery);
       console.log('[Migration] vip_session 컬럼이 추가되었습니다.');
+    } else {
+      // vip_session 컬럼이 이미 존재하면 제약 조건 업데이트
+      try {
+        // 기존 제약 조건 삭제 (제약 조건 이름을 찾아서 삭제)
+        const constraintQuery = `
+          SELECT constraint_name 
+          FROM information_schema.check_constraints 
+          WHERE constraint_schema = 'public' 
+          AND constraint_name LIKE '%vip_session%'
+        `;
+        const constraintResult = await pool.query(constraintQuery);
+        
+        if (constraintResult.rows.length > 0) {
+          const constraintName = constraintResult.rows[0].constraint_name;
+          await pool.query(`ALTER TABLE members DROP CONSTRAINT ${constraintName}`);
+          console.log(`[Migration] 기존 제약 조건 ${constraintName} 삭제됨`);
+        }
+        
+        // 새로운 제약 조건 추가
+        const newConstraintQuery = `
+          ALTER TABLE members 
+          ADD CONSTRAINT vip_session_range_check 
+          CHECK (vip_session >= 0 AND vip_session <= 99)
+        `;
+        await pool.query(newConstraintQuery);
+        console.log('[Migration] vip_session 제약 조건이 0~99로 업데이트되었습니다.');
+      } catch (constraintError) {
+        console.log('[Migration] 제약 조건 업데이트 중 오류 (무시됨):', constraintError.message);
+      }
     }
   } catch (error) {
-    console.error('[Migration] vip_session 컬럼 추가 오류:', error);
+    console.error('[Migration] vip_session 컬럼 마이그레이션 오류:', error);
   }
 };
 
@@ -274,7 +303,7 @@ const migrateVipSessionField = async () => {
 const initializeDatabase = async () => {
   try {
     await createMembersTable();
-    // await migrateVipSessionField(); // 마이그레이션 실행
+    await migrateVipSessionField(); // 마이그레이션 실행
     console.log('[PostgreSQL] 회원 데이터베이스 초기화 완료');
   } catch (error) {
     console.error('[PostgreSQL] 회원 데이터베이스 초기화 오류:', error);

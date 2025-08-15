@@ -393,7 +393,7 @@ function renderList(container) {
       <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:18px 16px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
         <h3 style="color:var(--primary);margin-top:0;margin-bottom:14px;font-size:1.1rem;">회원 정보 수정</h3>
         <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;"></div>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">VIP</b><br><input id="edit-vip-session" type="number" min="0" max="9" value="${member.vip_session || 0}" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;" oninput="this.value = this.value < 0 ? 0 : this.value > 9 ? 9 : this.value;"></div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">VIP</b><br><input id="edit-vip-session" type="number" min="0" max="99" value="${member.vip_session || 0}" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;" oninput="this.value = this.value < 0 ? 0 : this.value > 99 ? 99 : this.value;"></div>
         <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">성별</b><br>
           <select id="edit-gender" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
             <option value="male"${member.gender==='male'?' selected':''}>남성</option>
@@ -447,10 +447,10 @@ function renderList(container) {
       const vipSession = Number(document.getElementById('edit-vip-session').value)||0;
       
       // VIP 세션 범위 검증
-      if (vipSession < 0 || vipSession > 9) {
+      if (vipSession < 0 || vipSession > 99) {
         const resultDiv = document.getElementById('edit-modal-result');
         resultDiv.style.color = '#d32f2f';
-        resultDiv.innerText = 'VIP 세션은 0~9 사이의 값이어야 합니다.';
+        resultDiv.innerText = 'VIP 세션은 0~99 사이의 값이어야 합니다.';
         return;
       }
       
