@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { getKoreanYearMonth } = require('./utils');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -27,12 +28,9 @@ const createMonthlyStatsTable = async () => {
   }
 };
 
-// 현재 월의 년월 문자열 반환 (YYYY-MM)
+// 현재 월의 년월 문자열 반환 (YYYY-MM) - 한국시간 기준
 const getCurrentYearMonth = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  return `${year}-${month}`;
+  return getKoreanYearMonth();
 };
 
 // 월별 통계 가져오기 (조회 시 자동 생성)
@@ -72,12 +70,13 @@ const getMonthlyStats = async (yearMonth = null) => {
 // 올해 월별 통계 가져오기
 const getAllMonthlyStats = async () => {
   try {
-    // 올해 1월부터 현재 월까지의 년월 배열 생성 (최신 월이 맨 위)
+    // 올해 1월부터 현재 월까지의 년월 배열 생성 (최신 월이 맨 위) - 한국시간 기준
     const months = [];
     const currentDate = new Date();
-    const currentYear = currentDate.getFullYear();
+    const koreanTime = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+    const currentYear = koreanTime.getFullYear();
     
-    for (let month = currentDate.getMonth() + 1; month >= 1; month--) {
+    for (let month = koreanTime.getMonth() + 1; month >= 1; month--) {
       const yearMonth = `${currentYear}-${String(month).padStart(2, '0')}`;
       months.push(yearMonth);
     }

@@ -5,7 +5,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
-const { getKoreanDate } = require('./utils');
+const { getKoreanDate, getKoreanToday, parseKoreanDate } = require('./utils');
 
 require('dotenv').config();
 
@@ -630,13 +630,11 @@ app.get('/api/trainer-sessions', async (req, res) => {
             );
         }
         
-        // 세션 데이터 정리 (결석 자동 판단 포함)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // 세션 데이터 정리 (결석 자동 판단 포함) - 한국시간 기준
+        const today = getKoreanToday();
         
         const sessionsWithMemberInfo = filteredSessions.map(session => {
-            const sessionDate = new Date(session.date);
-            sessionDate.setHours(0, 0, 0, 0);
+            const sessionDate = parseKoreanDate(session.date);
             
             let displayStatus = session.status;
             
@@ -735,9 +733,8 @@ app.get('/api/stats', async (req, res) => {
       }
     });
     
-    // 통계 계산
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // 통계 계산 - 한국시간 기준
+    const today = getKoreanToday();
     
     // 완료된 세션 중 체험/무기명 회원 필터링
     const completedSessions = sessions.filter(s => s.status === '완료');
@@ -784,8 +781,7 @@ app.get('/api/stats', async (req, res) => {
         // 총 세션
         centerSessions.total[center] = (centerSessions.total[center] || 0) + 1;
         
-        const sessionDate = new Date(session.date);
-        sessionDate.setHours(0, 0, 0, 0);
+        const sessionDate = parseKoreanDate(session.date);
         
         if (session.status === '완료') {
           centerSessions.completed[center] = (centerSessions.completed[center] || 0) + 1;
@@ -802,13 +798,11 @@ app.get('/api/stats', async (req, res) => {
       completedSessions: completedSessions.length,
       completedTrialOrAnonymous: trialOrAnonymousSessions.length,
       scheduledSessions: sessions.filter(s => {
-        const sessionDate = new Date(s.date);
-        sessionDate.setHours(0, 0, 0, 0);
+        const sessionDate = parseKoreanDate(s.date);
         return s.status === '예정' && sessionDate >= today; // 오늘 이후의 예정 세션만
       }).length,
       absentSessions: sessions.filter(s => {
-        const sessionDate = new Date(s.date);
-        sessionDate.setHours(0, 0, 0, 0);
+        const sessionDate = parseKoreanDate(s.date);
         return s.status !== '완료' && sessionDate < today; // 오늘 이전의 미완료 세션
       }).length,
       totalValidMembers: totalValidMembers,
@@ -858,8 +852,7 @@ app.get('/api/stats', async (req, res) => {
       const trainer = trainerMap.get(trainerName);
       trainer.total++;
       
-      const sessionDate = new Date(session.date);
-      sessionDate.setHours(0, 0, 0, 0);
+      const sessionDate = parseKoreanDate(session.date);
       
       if (session.status === '완료') {
         trainer.completed++;
@@ -1040,7 +1033,7 @@ app.post('/api/members/import', upload.single('file'), async (req, res) => {
             console.error('[API] 센터/트레이너 정보 읽기 오류:', error);
         }
 
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD 형식
+        const today = getKoreanDate(); // 한국시간 기준 YYYY-MM-DD 형식
 
         // 데이터 처리 (헤더 제외)
         const members = [];

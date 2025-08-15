@@ -4,7 +4,21 @@ export const adminStats = {
 };
 
 let currentPeriod = 'month'; // 'day', 'week', 'month'
-let currentDate = new Date();
+
+// 한국시간 기준 현재 날짜 초기화
+const getKoreanDate = () => {
+  const now = new Date();
+  const koreanTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+  return koreanTime;
+};
+
+// 한국시간 기준으로 현재 날짜를 UTC로 변환하여 저장
+const getKoreanDateAsUTC = () => {
+  const koreanTime = getKoreanDate();
+  return new Date(koreanTime.getTime() - (9 * 60 * 60 * 1000));
+};
+
+let currentDate = getKoreanDateAsUTC();
 
 function render(container) {
   if (!container) return;
@@ -193,7 +207,7 @@ async function showRegistrationLogsModal(yearMonth) {
   }
 }
 
-// 등록 로그 모달 렌더링
+// 등록 로그 모달 렌더링 - 한국시간 기준
 function renderRegistrationLogsModal(logs, displayMonth, trainerMap) {
   if (!logs || logs.length === 0) {
     return `
@@ -294,17 +308,23 @@ function handleMonthlyStatRowClick() {
 }
 
 function navigateDate(delta) {
+  // 한국시간 기준으로 날짜 계산
+  const koreanTime = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
+  
   switch (currentPeriod) {
     case 'day':
-      currentDate.setDate(currentDate.getDate() + delta);
+      koreanTime.setDate(koreanTime.getDate() + delta);
       break;
     case 'week':
-      currentDate.setDate(currentDate.getDate() + (delta * 7));
+      koreanTime.setDate(koreanTime.getDate() + (delta * 7));
       break;
     case 'month':
-      currentDate.setMonth(currentDate.getMonth() + delta);
+      koreanTime.setMonth(koreanTime.getMonth() + delta);
       break;
   }
+  
+  // 계산된 한국시간을 UTC로 변환하여 저장
+  currentDate = new Date(koreanTime.getTime() - (9 * 60 * 60 * 1000));
   loadStats();
 }
 
@@ -312,24 +332,30 @@ function updateDateDisplay() {
   const dateElement = document.querySelector('#current-date');
   if (!dateElement) return;
 
+  // currentDate를 한국시간으로 변환
+  const koreanCurrentDate = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
+
   switch (currentPeriod) {
     case 'day':
-      const dayOfWeek = currentDate.toLocaleDateString('ko-KR', { weekday: 'short' });
-      dateElement.textContent = `${currentDate.toLocaleDateString('ko-KR', {
+      const dayOfWeek = koreanCurrentDate.toLocaleDateString('ko-KR', { weekday: 'short' });
+      dateElement.textContent = `${koreanCurrentDate.toLocaleDateString('ko-KR', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       })} (${dayOfWeek})`;
       break;
     case 'week':
-      const weekStart = new Date(currentDate);
-      weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+      const weekStart = new Date(koreanCurrentDate);
+      // 월요일(1)을 시작으로 하는 주간 계산
+      const currentDayOfWeek = koreanCurrentDate.getDay();
+      const daysToMonday = currentDayOfWeek === 0 ? 6 : currentDayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
+      weekStart.setDate(koreanCurrentDate.getDate() - daysToMonday);
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
       dateElement.textContent = `${weekStart.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}`;
       break;
     case 'month':
-      dateElement.textContent = currentDate.toLocaleDateString('ko-KR', {
+      dateElement.textContent = koreanCurrentDate.toLocaleDateString('ko-KR', {
         year: 'numeric',
         month: 'long'
       });
@@ -386,8 +412,10 @@ function calculateDateRange() {
       // 같은 날
       break;
     case 'week':
-      // 주의 시작 (일요일)과 끝 (토요일)
-      startDate.setDate(currentDate.getDate() - currentDate.getDay());
+      // 주의 시작 (월요일)과 끝 (일요일)
+      const dayOfWeek = currentDate.getDay();
+      const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
+      startDate.setDate(currentDate.getDate() - daysToMonday);
       endDate.setDate(startDate.getDate() + 6);
       break;
     case 'month':
@@ -398,9 +426,15 @@ function calculateDateRange() {
       break;
   }
   
+  // 한국시간 기준으로 날짜 문자열 생성
+  const getKoreanDateString = (date) => {
+    const koreanTime = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+    return koreanTime.toISOString().split('T')[0];
+  };
+  
   return {
-    startDate: startDate.toISOString().split('T')[0],
-    endDate: endDate.toISOString().split('T')[0]
+    startDate: getKoreanDateString(startDate),
+    endDate: getKoreanDateString(endDate)
   };
 }
 
@@ -538,7 +572,7 @@ async function loadMonthlyStats() {
   }
 }
 
-// 월별 통계 렌더링
+// 월별 통계 렌더링 - 한국시간 기준
 function renderMonthlyStats(monthlyStats) {
   if (!monthlyStats || !monthlyStats.length) {
     return '<div style="color:#888;text-align:center;padding:20px;">월별 데이터가 없습니다.</div>';
@@ -575,18 +609,19 @@ function renderMonthlyStats(monthlyStats) {
   `;
 } 
 
-// 현재 년월 반환 함수
+// 현재 년월 반환 함수 - 한국시간 기준
 function getCurrentYearMonth() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const koreanTime = getKoreanDate();
+  const year = koreanTime.getFullYear();
+  const month = String(koreanTime.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
 }
 
-// 통계 페이지에서 선택된 년월 반환 함수
+// 통계 페이지에서 선택된 년월 반환 함수 - 한국시간 기준
 function getSelectedYearMonth() {
-  const year = currentDate.getFullYear();
-  const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+  const koreanTime = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
+  const year = koreanTime.getFullYear();
+  const month = String(koreanTime.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
 }
 
@@ -623,7 +658,7 @@ async function showTrainerSessionsModal(trainer, trainerName, yearMonth) {
   }
 }
 
-// 트레이너 세션 모달 렌더링
+// 트레이너 세션 모달 렌더링 - 한국시간 기준
 function renderTrainerSessionsModal(data, trainerName, yearMonth) {
   const { sessions, summary } = data;
   const displayYearMonth = yearMonth ? `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월` : '';
@@ -736,10 +771,11 @@ function setupModalEventListeners() {
   }
 }
 
-// 날짜 포맷 함수
+// 날짜 포맷 함수 - 한국시간 기준
 function formatDate(dateStr) {
   const date = new Date(dateStr);
-  return date.toLocaleDateString('ko-KR', {
+  const koreanTime = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+  return koreanTime.toLocaleDateString('ko-KR', {
     month: '2-digit',
     day: '2-digit'
   });
