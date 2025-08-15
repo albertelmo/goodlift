@@ -49,6 +49,38 @@ membersDB.initializeDatabase();
 monthlyStatsDB.initializeDatabase();
 registrationLogsDB.initializeDatabase();
 
+// 트레이너 VIP 기능 필드 마이그레이션
+function migrateTrainerVipField() {
+    try {
+        if (!fs.existsSync(DATA_PATH)) {
+            return;
+        }
+
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        if (!raw) {
+            return;
+        }
+
+        let accounts = JSON.parse(raw);
+        let hasChanges = false;
+
+        accounts.forEach(account => {
+            if (account.role === 'trainer' && account.vip_member === undefined) {
+                account.vip_member = false; // 기본값: VIP 기능 사용 안함
+                hasChanges = true;
+            }
+        });
+
+        if (hasChanges) {
+            fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        }
+    } catch (error) {
+        console.error('[Migration] 트레이너 VIP 기능 필드 마이그레이션 오류:', error);
+    }
+}
+
+migrateTrainerVipField();
+
 // 파일 업로드 설정
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -114,7 +146,12 @@ app.get('/api/trainers', (req, res) => {
         if (raw) accounts = JSON.parse(raw);
     }
     const trainers = accounts.filter(acc => acc.role === 'trainer')
-        .map(({ username, name, role }) => ({ username, name, role }));
+        .map(({ username, name, role, vip_member }) => ({ 
+            username, 
+            name, 
+            role, 
+            vip_member: vip_member || false  // 기본값: VIP 기능 사용 안함
+        }));
     res.json(trainers);
 });
 
@@ -156,6 +193,48 @@ app.delete('/api/trainers/:username', async (req, res) => {
     } catch (error) {
         console.error('[API] 트레이너 삭제 오류:', error);
         res.status(500).json({ message: '트레이너 삭제에 실패했습니다.' });
+    }
+});
+
+// 트레이너 VIP 기능 설정 수정 API
+app.patch('/api/trainers/:username', async (req, res) => {
+    try {
+        const username = req.params.username;
+        const { vip_member, currentUser } = req.body;
+        
+        // 관리자 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!currentUserAccount || currentUserAccount.role !== 'admin') {
+            return res.status(403).json({ message: '관리자만 트레이너 설정을 수정할 수 있습니다.' });
+        }
+        
+        // 트레이너 찾기
+        const trainerIndex = accounts.findIndex(acc => acc.username === username && acc.role === 'trainer');
+        if (trainerIndex === -1) {
+            return res.status(404).json({ message: '트레이너를 찾을 수 없습니다.' });
+        }
+        
+        // VIP 기능 설정 업데이트
+        accounts[trainerIndex].vip_member = Boolean(vip_member);
+        fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        
+        res.json({ 
+            message: 'VIP 기능 설정이 업데이트되었습니다.',
+            trainer: {
+                username: accounts[trainerIndex].username,
+                name: accounts[trainerIndex].name,
+                vip_member: accounts[trainerIndex].vip_member
+            }
+        });
+    } catch (error) {
+        console.error('[API] 트레이너 VIP 기능 설정 수정 오류:', error);
+        res.status(500).json({ message: 'VIP 기능 설정 수정에 실패했습니다.' });
     }
 });
 
