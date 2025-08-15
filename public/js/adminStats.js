@@ -8,13 +8,16 @@ let currentPeriod = 'month'; // 'day', 'week', 'month'
 // 한국시간 기준 현재 날짜 초기화
 const getKoreanDate = () => {
   const now = new Date();
-  const koreanTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
-  return koreanTime;
+  // 브라우저는 이미 사용자의 로컬 시간대를 반환하므로 추가 변환 불필요
+  return now;
 };
 
-// 한국시간 기준으로 현재 날짜를 UTC로 변환하여 저장
+// 한국시간 기준으로 현재 날짜의 시작점(00:00:00)을 UTC로 변환하여 저장
 const getKoreanDateAsUTC = () => {
   const koreanTime = getKoreanDate();
+  // 한국시간의 시작점(00:00:00)으로 설정
+  koreanTime.setHours(0, 0, 0, 0);
+  // 한국시간을 UTC로 변환 (한국은 UTC+9)
   return new Date(koreanTime.getTime() - (9 * 60 * 60 * 1000));
 };
 
@@ -332,7 +335,7 @@ function updateDateDisplay() {
   const dateElement = document.querySelector('#current-date');
   if (!dateElement) return;
 
-  // currentDate를 한국시간으로 변환
+  // currentDate는 UTC로 저장되어 있으므로 한국시간으로 변환
   const koreanCurrentDate = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
 
   switch (currentPeriod) {
@@ -404,8 +407,10 @@ async function loadStats() {
 }
 
 function calculateDateRange() {
-  const startDate = new Date(currentDate);
-  const endDate = new Date(currentDate);
+  // currentDate를 한국시간으로 변환하여 계산
+  const koreanCurrentDate = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
+  const startDate = new Date(koreanCurrentDate);
+  const endDate = new Date(koreanCurrentDate);
   
   switch (currentPeriod) {
     case 'day':
@@ -413,9 +418,9 @@ function calculateDateRange() {
       break;
     case 'week':
       // 주의 시작 (월요일)과 끝 (일요일)
-      const dayOfWeek = currentDate.getDay();
+      const dayOfWeek = koreanCurrentDate.getDay();
       const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
-      startDate.setDate(currentDate.getDate() - daysToMonday);
+      startDate.setDate(koreanCurrentDate.getDate() - daysToMonday);
       endDate.setDate(startDate.getDate() + 6);
       break;
     case 'month':
@@ -428,8 +433,11 @@ function calculateDateRange() {
   
   // 한국시간 기준으로 날짜 문자열 생성
   const getKoreanDateString = (date) => {
-    const koreanTime = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
-    return koreanTime.toISOString().split('T')[0];
+    // 한국시간 기준으로 날짜 문자열 생성 (UTC 변환 없이)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
   
   return {
@@ -619,6 +627,7 @@ function getCurrentYearMonth() {
 
 // 통계 페이지에서 선택된 년월 반환 함수 - 한국시간 기준
 function getSelectedYearMonth() {
+  // currentDate는 UTC로 저장되어 있으므로 한국시간으로 변환
   const koreanTime = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
   const year = koreanTime.getFullYear();
   const month = String(koreanTime.getMonth() + 1).padStart(2, '0');
@@ -773,9 +782,11 @@ function setupModalEventListeners() {
 
 // 날짜 포맷 함수 - 한국시간 기준
 function formatDate(dateStr) {
+  // 서버에서 받은 날짜는 UTC 형식이므로 한국시간으로 변환
   const date = new Date(dateStr);
-  const koreanTime = new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
-  return koreanTime.toLocaleDateString('ko-KR', {
+  // UTC 날짜를 한국시간으로 변환 (9시간 추가)
+  const koreanDate = new Date(date.getTime() + (9 * 60 * 60 * 1000));
+  return koreanDate.toLocaleDateString('ko-KR', {
     month: '2-digit',
     day: '2-digit'
   });

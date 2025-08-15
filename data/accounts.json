@@ -17,7 +17,7 @@
     "password": "123",
     "name": "천성식",
     "role": "trainer",
-    "vip_member": true
+    "vip_member": false
   },
   {
     "username": "shy",

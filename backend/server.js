@@ -693,7 +693,9 @@ app.get('/api/trainer-sessions', async (req, res) => {
         // 년월을 시작일과 종료일로 변환
         const [year, month] = yearMonth.split('-');
         const startDate = `${year}-${month}-01`;
-        const endDate = new Date(year, month, 0).toISOString().split('T')[0]; // 해당 월의 마지막 날
+        // 해당 월의 마지막 날 계산 (한국시간 기준)
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
         
         // 세션 데이터 조회
         const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
@@ -714,14 +716,14 @@ app.get('/api/trainer-sessions', async (req, res) => {
         
         // 세션 데이터 정리 (결석 자동 판단 포함) - 한국시간 기준
         const today = getKoreanToday();
+        const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD 형식
         
         const sessionsWithMemberInfo = filteredSessions.map(session => {
-            const sessionDate = parseKoreanDate(session.date);
-            
             let displayStatus = session.status;
             
             // 날짜가 지났고 완료되지 않은 세션은 결석으로 표시
-            if (session.status !== '완료' && sessionDate < today) {
+            // session.date는 이미 YYYY-MM-DD 형식의 문자열
+            if (session.status !== '완료' && session.date < todayStr) {
                 displayStatus = '결석';
             }
             
@@ -817,6 +819,7 @@ app.get('/api/stats', async (req, res) => {
     
     // 통계 계산 - 한국시간 기준
     const today = getKoreanToday();
+    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD 형식
     
     // 완료된 세션 중 체험/무기명 회원 필터링
     const completedSessions = sessions.filter(s => s.status === '완료');
@@ -863,13 +866,12 @@ app.get('/api/stats', async (req, res) => {
         // 총 세션
         centerSessions.total[center] = (centerSessions.total[center] || 0) + 1;
         
-        const sessionDate = parseKoreanDate(session.date);
-        
+        // session.date는 이미 YYYY-MM-DD 형식의 문자열
         if (session.status === '완료') {
           centerSessions.completed[center] = (centerSessions.completed[center] || 0) + 1;
-        } else if (session.status === '예정' && sessionDate >= today) {
+        } else if (session.status === '예정' && session.date >= todayStr) {
           centerSessions.scheduled[center] = (centerSessions.scheduled[center] || 0) + 1;
-        } else if (sessionDate < today) {
+        } else if (session.date < todayStr) {
           centerSessions.absent[center] = (centerSessions.absent[center] || 0) + 1;
         }
       }
@@ -880,12 +882,10 @@ app.get('/api/stats', async (req, res) => {
       completedSessions: completedSessions.length,
       completedTrialOrAnonymous: trialOrAnonymousSessions.length,
       scheduledSessions: sessions.filter(s => {
-        const sessionDate = parseKoreanDate(s.date);
-        return s.status === '예정' && sessionDate >= today; // 오늘 이후의 예정 세션만
+        return s.status === '예정' && s.date >= todayStr; // 오늘 이후의 예정 세션만
       }).length,
       absentSessions: sessions.filter(s => {
-        const sessionDate = parseKoreanDate(s.date);
-        return s.status !== '완료' && sessionDate < today; // 오늘 이전의 미완료 세션
+        return s.status !== '완료' && s.date < todayStr; // 오늘 이전의 미완료 세션
       }).length,
       totalValidMembers: totalValidMembers,
       centerValidMembers: centerValidMembers,
@@ -934,17 +934,15 @@ app.get('/api/stats', async (req, res) => {
       const trainer = trainerMap.get(trainerName);
       trainer.total++;
       
-      const sessionDate = parseKoreanDate(session.date);
-      
       if (session.status === '완료') {
         trainer.completed++;
         // 체험/무기명 회원 체크
         if (session.member.startsWith('체험') || session.member.startsWith('무기명')) {
           trainer.completedTrialOrAnonymous++;
         }
-      } else if (session.status === '예정' && sessionDate >= today) {
+      } else if (session.status === '예정' && session.date >= todayStr) {
         trainer.scheduled++;
-      } else if (sessionDate < today) {
+      } else if (session.date < todayStr) {
         trainer.absent++;
       }
     });
