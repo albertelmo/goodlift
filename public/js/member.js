@@ -122,7 +122,7 @@ function renderList(container) {
       </div>
     </div>
     <div id="member-table-wrap" style="min-height:100px;display:block;"></div>
-    <div id="member-edit-modal-bg" style="display:none;"></div>
+    <div id="member-edit-modal-bg" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;"></div>
   `;
   
   const tableWrap = container.querySelector('#member-table-wrap');
@@ -194,7 +194,7 @@ function renderList(container) {
         }
         
         // 숫자 정렬
-        if (['sessions', 'remainSessions'].includes(sortColumn)) {
+        if (['sessions', 'remainSessions', 'vip_session'].includes(sortColumn)) {
           return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
         }
         
@@ -212,6 +212,9 @@ function renderList(container) {
         <th class="sortable-header" data-column="name" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
           이름 ${getSortIcon('name')}
         </th>
+        <th class="sortable-header" data-column="vip_session" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
+          VIP ${getSortIcon('vip_session')}
+        </th>
         <th class="sortable-header" data-column="gender" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
           성별 ${getSortIcon('gender')}
         </th>
@@ -219,7 +222,7 @@ function renderList(container) {
           전화번호 ${getSortIcon('phone')}
         </th>
         <th class="sortable-header" data-column="trainer" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
-          담당 트레이너 ${getSortIcon('trainer')}
+          트레이너 ${getSortIcon('trainer')}
         </th>
         <th class="sortable-header" data-column="center" style="text-align:center;cursor:pointer;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">
           센터 ${getSortIcon('center')}
@@ -238,8 +241,10 @@ function renderList(container) {
         </th>
       </tr></thead><tbody>`;
     members.forEach((m, idx) => {
+      const vipDisplay = m.vip_session > 0 ? m.vip_session : '-';
       html += `<tr class="member-row" data-idx="${idx}" style="cursor:pointer;">
         <td style="text-align:center;">${m.name}</td>
+        <td style="text-align:center;">${vipDisplay}</td>
         <td style="text-align:center;">${m.gender === 'male' ? '👨' : m.gender === 'female' ? '👩' : ''}</td>
         <td style="text-align:center;">${m.phone}</td>
         <td style="text-align:center;">${tMap[m.trainer] || m.trainer}</td>
@@ -385,37 +390,38 @@ function renderList(container) {
     const modalBg = document.getElementById('member-edit-modal-bg');
     modalBg.style.display = 'block';
     modalBg.innerHTML = `
-      <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:24px 20px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
-        <h3 style="color:var(--primary);margin-top:0;margin-bottom:18px;">회원 정보 수정</h3>
-        <div style="margin-bottom:10px;"><b>이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:6px 8px;margin-top:2px;"></div>
-        <div style="margin-bottom:10px;"><b>성별</b><br>
-          <select id="edit-gender" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
+      <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:18px 16px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:14px;font-size:1.1rem;">회원 정보 수정</h3>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;"></div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">VIP</b><br><input id="edit-vip-session" type="number" min="0" max="9" value="${member.vip_session || 0}" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;" oninput="this.value = this.value < 0 ? 0 : this.value > 9 ? 9 : this.value;"></div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">성별</b><br>
+          <select id="edit-gender" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
             <option value="male"${member.gender==='male'?' selected':''}>남성</option>
             <option value="female"${member.gender==='female'?' selected':''}>여성</option>
           </select>
         </div>
-        <div style="margin-bottom:10px;"><b>센터</b><br>
-          <select id="edit-center" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">센터</b><br>
+          <select id="edit-center" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
             <option value="">불러오는 중...</option>
           </select>
         </div>
-        <div style="margin-bottom:10px;"><b>상태</b><br>
-          <select id="edit-status" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">상태</b><br>
+          <select id="edit-status" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
             <option value="유효"${member.status==='유효'?' selected':''}>유효</option>
             <option value="정지"${member.status==='정지'?' selected':''}>정지</option>
             <option value="만료"${member.status==='만료'?' selected':''}>만료</option>
           </select>
         </div>
-        <div style="margin-bottom:10px;"><b>담당 트레이너</b><br>
-          <select id="edit-trainer" style="width:100%;padding:6px 8px;border-radius:6px;margin-top:2px;">
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">담당 트레이너</b><br>
+          <select id="edit-trainer" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
             ${trainers.map(t=>`<option value="${t.username}"${member.trainer===t.username?' selected':''}>${t.name}</option>`).join('')}
           </select>
         </div>
-        <div style="margin-bottom:10px;"><b>추가 세션</b><br><input id="edit-add-sessions" type="number" min="0" value="0" style="width:100%;border-radius:6px;padding:6px 8px;margin-top:2px;"></div>
-        <div id="edit-modal-result" style="min-height:22px;margin-bottom:8px;color:#1976d2;"></div>
-        <div style="display:flex;gap:12px;justify-content:flex-end;">
-          <button id="edit-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;">저장</button>
-          <button id="edit-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;">닫기</button>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">추가 세션</b><br><input id="edit-add-sessions" type="number" min="0" value="0" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;"></div>
+        <div id="edit-modal-result" style="min-height:18px;margin-bottom:6px;color:#1976d2;font-size:0.85rem;"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button id="edit-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;padding:6px;font-size:0.9rem;">저장</button>
+          <button id="edit-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;padding:6px;font-size:0.9rem;">닫기</button>
         </div>
       </div>
     `;
@@ -438,6 +444,16 @@ function renderList(container) {
       const addSessions = Number(document.getElementById('edit-add-sessions').value)||0;
       const gender = document.getElementById('edit-gender').value;
       const center = document.getElementById('edit-center').value;
+      const vipSession = Number(document.getElementById('edit-vip-session').value)||0;
+      
+      // VIP 세션 범위 검증
+      if (vipSession < 0 || vipSession > 9) {
+        const resultDiv = document.getElementById('edit-modal-result');
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = 'VIP 세션은 0~9 사이의 값이어야 합니다.';
+        return;
+      }
+      
       const resultDiv = document.getElementById('edit-modal-result');
       resultDiv.style.color = '#1976d2';
       resultDiv.innerText = '처리 중...';
@@ -445,7 +461,7 @@ function renderList(container) {
         const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status, trainer, addSessions, gender, center })
+          body: JSON.stringify({ status, trainer, addSessions, gender, center, vipSession })
         });
         const result = await res.json();
         if (res.ok) {
@@ -453,10 +469,12 @@ function renderList(container) {
           setTimeout(() => {
             modalBg.style.display = 'none';
             modalBg.innerHTML = '';
-            // 회원 관리 탭을 강제로 다시 렌더링
+            // 회원 목록 새로고침을 위해 탭을 다시 클릭
             const tabBar = document.getElementById('tabBar');
-            const memberTabBtn = Array.from(tabBar.children).find(btn => btn.textContent === '회원 관리');
-            if (memberTabBtn) memberTabBtn.click();
+            const memberTabBtn = Array.from(tabBar.children).find(btn => btn.textContent === 'Member');
+            if (memberTabBtn) {
+              memberTabBtn.click();
+            }
           }, 900);
         } else {
           resultDiv.style.color = '#d32f2f';
@@ -467,13 +485,41 @@ function renderList(container) {
         resultDiv.innerText = '수정에 실패했습니다.';
       }
     };
-    // 바깥 클릭 시 닫기
-    modalBg.onclick = function(e) {
+    // 바깥 클릭 시 닫기 (더 안전한 방식)
+    let isDragging = false;
+    let startX, startY;
+    
+    modalBg.addEventListener('mousedown', function(e) {
       if (e.target === modalBg) {
-        modalBg.style.display = 'none';
-        modalBg.innerHTML = '';
+        startX = e.clientX;
+        startY = e.clientY;
+        isDragging = false;
       }
-    };
+    });
+    
+    modalBg.addEventListener('mousemove', function(e) {
+      if (startX !== undefined && startY !== undefined) {
+        const deltaX = Math.abs(e.clientX - startX);
+        const deltaY = Math.abs(e.clientY - startY);
+        if (deltaX > 5 || deltaY > 5) {
+          isDragging = true;
+        }
+      }
+    });
+    
+    modalBg.addEventListener('mouseup', function(e) {
+      if (e.target === modalBg && !isDragging && startX !== undefined && startY !== undefined) {
+        const deltaX = Math.abs(e.clientX - startX);
+        const deltaY = Math.abs(e.clientY - startY);
+        if (deltaX < 5 && deltaY < 5) {
+          modalBg.style.display = 'none';
+          modalBg.innerHTML = '';
+        }
+      }
+      startX = undefined;
+      startY = undefined;
+      isDragging = false;
+    });
   }
 
   // 계약서 전송 버튼 이벤트

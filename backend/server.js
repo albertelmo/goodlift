@@ -79,7 +79,7 @@ function migrateTrainerVipField() {
     }
 }
 
-migrateTrainerVipField();
+// migrateTrainerVipField();
 
 // 파일 업로드 설정
 const storage = multer.memoryStorage();
@@ -422,11 +422,11 @@ app.post('/api/members/export', async (req, res) => {
     }
 });
 
-// 회원 정보 수정 (상태, 담당 트레이너, 세션수/잔여세션 추가, 성별, 센터, 전화번호)
+// 회원 정보 수정 (상태, 담당 트레이너, 세션수/잔여세션 추가, 성별, 센터, 전화번호, VIP 세션)
 app.patch('/api/members/:name', async (req, res) => {
     try {
         const name = req.params.name;
-        const { status, trainer, addSessions, gender, center, phone } = req.body; // addSessions: 추가할 세션 수(숫자)
+        const { status, trainer, addSessions, gender, center, phone, vipSession } = req.body; // addSessions: 추가할 세션 수(숫자)
         
         const updates = {};
         if (status) updates.status = status;
@@ -436,6 +436,9 @@ app.patch('/api/members/:name', async (req, res) => {
         if (phone !== undefined) updates.phone = phone; // 빈 문자열도 허용
         if (addSessions && !isNaN(Number(addSessions))) {
             updates.addSessions = Number(addSessions);
+        }
+        if (vipSession !== undefined && !isNaN(Number(vipSession))) {
+            updates.vipSession = Number(vipSession);
         }
         
         const member = await membersDB.updateMember(name, updates);

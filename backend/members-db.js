@@ -41,7 +41,7 @@ const getMembers = async (filters = {}) => {
     let query = `
       SELECT 
         id, name, gender, phone, trainer, center, 
-        regdate::text, sessions, remain_sessions, status
+        regdate::text, sessions, remain_sessions, status, vip_session
       FROM members
     `;
     const params = [];
@@ -68,7 +68,8 @@ const getMembers = async (filters = {}) => {
     // remainSessions 필드명을 camelCase로 변환
     return result.rows.map(row => ({
       ...row,
-      remainSessions: row.remain_sessions
+      remainSessions: row.remain_sessions,
+      vip_session: row.vip_session || 0
     }));
   } catch (error) {
     console.error('[PostgreSQL] 회원 조회 오류:', error);
@@ -80,20 +81,21 @@ const getMembers = async (filters = {}) => {
 const addMember = async (member) => {
   try {
     const query = `
-      INSERT INTO members (name, gender, phone, trainer, center, regdate, sessions, remain_sessions, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING id, name, gender, phone, trainer, center, regdate::text, sessions, remain_sessions, status
+      INSERT INTO members (name, gender, phone, trainer, center, regdate, sessions, remain_sessions, status, vip_session)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING id, name, gender, phone, trainer, center, regdate::text, sessions, remain_sessions, status, vip_session
     `;
     const values = [
       member.name, member.gender, member.phone, member.trainer, member.center,
-      member.regdate, member.sessions, member.remainSessions || member.sessions, member.status || '유효'
+      member.regdate, member.sessions, member.remainSessions || member.sessions, member.status || '유효', member.vip_session || 0
     ];
     const result = await pool.query(query, values);
     
     const row = result.rows[0];
     return {
       ...row,
-      remainSessions: row.remain_sessions
+      remainSessions: row.remain_sessions,
+      vip_session: row.vip_session || 0
     };
   } catch (error) {
     console.error('[PostgreSQL] 회원 추가 오류:', error);
@@ -136,6 +138,10 @@ const updateMember = async (name, updates) => {
       fields.push(`regdate = $${paramIndex++}`);
       values.push(add, add, getKoreanDate());
     }
+    if (updates.vipSession !== undefined && !isNaN(Number(updates.vipSession))) {
+      fields.push(`vip_session = $${paramIndex++}`);
+      values.push(Number(updates.vipSession));
+    }
 
     if (fields.length === 0) {
       throw new Error('수정할 필드가 없습니다.');
@@ -146,7 +152,7 @@ const updateMember = async (name, updates) => {
       UPDATE members 
       SET ${fields.join(', ')}
       WHERE name = $${paramIndex}
-      RETURNING id, name, gender, phone, trainer, center, regdate::text, sessions, remain_sessions, status
+      RETURNING id, name, gender, phone, trainer, center, regdate::text, sessions, remain_sessions, status, vip_session
     `;
     
     const result = await pool.query(query, values);
@@ -158,7 +164,8 @@ const updateMember = async (name, updates) => {
     const row = result.rows[0];
     return {
       ...row,
-      remainSessions: row.remain_sessions
+      remainSessions: row.remain_sessions,
+      vip_session: row.vip_session || 0
     };
   } catch (error) {
     console.error('[PostgreSQL] 회원 수정 오류:', error);
@@ -267,7 +274,7 @@ const migrateVipSessionField = async () => {
 const initializeDatabase = async () => {
   try {
     await createMembersTable();
-    await migrateVipSessionField(); // 마이그레이션 실행
+    // await migrateVipSessionField(); // 마이그레이션 실행
     console.log('[PostgreSQL] 회원 데이터베이스 초기화 완료');
   } catch (error) {
     console.error('[PostgreSQL] 회원 데이터베이스 초기화 오류:', error);

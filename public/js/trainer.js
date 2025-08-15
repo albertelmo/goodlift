@@ -681,92 +681,107 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   // 출석(사인) 화면
   function renderSignBody(sessionId, hasNoRemaining) {
     // 잔여세션 표시를 위해 세션 정보와 회원 정보 불러오기
-    fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}`)
-      .then(r=>r.json())
-      .then(allSessions => {
-        const session = allSessions.find(s => s.id === sessionId);
-        if (!session) return;
-        fetch('/api/members').then(r=>r.json()).then(members => {
-          const member = members.find(m => m.name === session.member);
-          const remain = member && member.remainSessions !== undefined ? member.remainSessions : '?';
-          document.getElementById('attend-modal-body').innerHTML = `
-            <div style=\"margin-bottom:8px;display:flex;align-items:center;gap:12px;justify-content:flex-end;\">
-              <span style=\"color:#388e3c;font-size:1.08em;\">잔여세션 ${remain}회</span>
-            </div>
-            <div style=\"margin-bottom:8px;text-align:center;\">
-              <span style=\"font-weight:600;color:#1976d2;\">${session.member} 회원님! 수고하셨습니다!</span>
-            </div>
-            <div style=\"text-align:center;margin-bottom:8px;\">
-              <canvas id=\"attend-sign-canvas\" width=\"240\" height=\"140\" style=\"border:1.5px solid #e3eaf5;border-radius:8px;background:#fff;\"></canvas>
-            </div>
-            <button id=\"attend-sign-ok\" style=\"margin:8px 0 0 0;display:block;margin-left:auto;margin-right:auto;\">확인</button>
-            <div id=\"attend-result\" style=\"min-height:20px;margin-top:8px;font-size:0.97rem;\"></div>
-          `;
-          // 사인 캔버스 (마우스+터치)
-          const canvas = document.getElementById('attend-sign-canvas');
-          let drawing = false, lastX = 0, lastY = 0;
-          canvas.onmousedown = e => { drawing = true; lastX = e.offsetX; lastY = e.offsetY; canvas.getContext('2d').moveTo(e.offsetX, e.offsetY); };
-          canvas.onmouseup = e => { drawing = false; };
-          canvas.onmouseleave = e => { drawing = false; };
-          canvas.onmousemove = e => {
-            if (drawing) {
-              const ctx = canvas.getContext('2d');
-              ctx.lineWidth = 2;
-              ctx.lineCap = 'round';
-              ctx.strokeStyle = '#1976d2';
-              ctx.lineTo(e.offsetX, e.offsetY);
-              ctx.stroke();
-              lastX = e.offsetX; lastY = e.offsetY;
-            }
-          };
-          canvas.ontouchstart = function(e) {
-            if (e.touches.length === 1) {
-              const rect = canvas.getBoundingClientRect();
-              const x = e.touches[0].clientX - rect.left;
-              const y = e.touches[0].clientY - rect.top;
-              drawing = true;
-              lastX = x; lastY = y;
-              canvas.getContext('2d').moveTo(x, y);
-            }
-          };
-          canvas.ontouchend = function(e) { drawing = false; };
-          canvas.ontouchcancel = function(e) { drawing = false; };
-          canvas.ontouchmove = function(e) {
-            if (drawing && e.touches.length === 1) {
-              const rect = canvas.getBoundingClientRect();
-              const x = e.touches[0].clientX - rect.left;
-              const y = e.touches[0].clientY - rect.top;
-              const ctx = canvas.getContext('2d');
-              ctx.lineWidth = 2;
-              ctx.lineCap = 'round';
-              ctx.strokeStyle = '#1976d2';
-              ctx.lineTo(x, y);
-              ctx.stroke();
-              lastX = x; lastY = y;
-            }
-            e.preventDefault();
-          };
-          document.getElementById('attend-sign-ok').onclick = async function() {
-            const resultDiv = document.getElementById('attend-result');
-            resultDiv.style.color = '#1976d2';
-            resultDiv.innerText = '처리 중...';
-            try {
-              const res = await fetch(`/api/sessions/${sessionId}/attend`, { method: 'PATCH' });
-              const result = await res.json();
-              if (res.ok) {
-                resultDiv.innerText = result.message;
-                setTimeout(() => { close(); renderCalUI(container); }, 700);
-              } else {
-                resultDiv.style.color = '#d32f2f';
-                resultDiv.innerText = result.message;
-              }
-            } catch {
-              resultDiv.style.color = '#d32f2f';
-              resultDiv.innerText = '출석 처리에 실패했습니다.';
-            }
-          };
-        });
-      });
+    Promise.all([
+      fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}`).then(r=>r.json()),
+      fetch('/api/members').then(r=>r.json()),
+      fetch('/api/trainers').then(r=>r.json())
+    ]).then(([allSessions, members, trainers]) => {
+      const session = allSessions.find(s => s.id === sessionId);
+      if (!session) return;
+      
+      const member = members.find(m => m.name === session.member);
+      const remain = member && member.remainSessions !== undefined ? member.remainSessions : '?';
+      
+      // VIP 표시 로직
+      const currentTrainer = trainers.find(t => t.username === localStorage.getItem('username'));
+      const trainerHasVip = currentTrainer && currentTrainer.vip_member;
+      const memberHasVip = member && member.vip_session > 0;
+      
+      let vipDisplay = '';
+      if (trainerHasVip && memberHasVip) {
+        vipDisplay = `<span style="display:inline-block;background:#1976d2;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.8em;font-weight:bold;margin-right:8px;">VIP ${member.vip_session}회</span>`;
+      }
+      
+      document.getElementById('attend-modal-body').innerHTML = `
+        <div style="margin-bottom:8px;display:flex;align-items:center;gap:12px;justify-content:space-between;">
+          <div>${vipDisplay}</div>
+          <span style="color:#388e3c;font-size:1.08em;">잔여세션 ${remain}회</span>
+        </div>
+        <div style="margin-bottom:8px;text-align:center;">
+          <span style="font-weight:600;color:#1976d2;">${session.member} 회원님! 수고하셨습니다!</span>
+        </div>
+        <div style="text-align:center;margin-bottom:8px;">
+          <canvas id="attend-sign-canvas" width="240" height="140" style="border:1.5px solid #e3eaf5;border-radius:8px;background:#fff;"></canvas>
+        </div>
+        <button id="attend-sign-ok" style="margin:8px 0 0 0;display:block;margin-left:auto;margin-right:auto;">확인</button>
+        <div id="attend-result" style="min-height:20px;margin-top:8px;font-size:0.97rem;"></div>
+      `;
+      
+      // 사인 캔버스 (마우스+터치)
+      const canvas = document.getElementById('attend-sign-canvas');
+      let drawing = false, lastX = 0, lastY = 0;
+      canvas.onmousedown = e => { drawing = true; lastX = e.offsetX; lastY = e.offsetY; canvas.getContext('2d').moveTo(e.offsetX, e.offsetY); };
+      canvas.onmouseup = e => { drawing = false; };
+      canvas.onmouseleave = e => { drawing = false; };
+      canvas.onmousemove = e => {
+        if (drawing) {
+          const ctx = canvas.getContext('2d');
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = '#1976d2';
+          ctx.lineTo(e.offsetX, e.offsetY);
+          ctx.stroke();
+          lastX = e.offsetX; lastY = e.offsetY;
+        }
+      };
+      canvas.ontouchstart = function(e) {
+        if (e.touches.length === 1) {
+          const rect = canvas.getBoundingClientRect();
+          const x = e.touches[0].clientX - rect.left;
+          const y = e.touches[0].clientY - rect.top;
+          drawing = true;
+          lastX = x; lastY = y;
+          canvas.getContext('2d').moveTo(x, y);
+        }
+      };
+      canvas.ontouchend = function(e) { drawing = false; };
+      canvas.ontouchcancel = function(e) { drawing = false; };
+      canvas.ontouchmove = function(e) {
+        if (drawing && e.touches.length === 1) {
+          const rect = canvas.getBoundingClientRect();
+          const x = e.touches[0].clientX - rect.left;
+          const y = e.touches[0].clientY - rect.top;
+          const ctx = canvas.getContext('2d');
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.strokeStyle = '#1976d2';
+          ctx.lineTo(x, y);
+          ctx.stroke();
+          lastX = x; lastY = y;
+        }
+        e.preventDefault();
+      };
+      
+      document.getElementById('attend-sign-ok').onclick = async function() {
+        const resultDiv = document.getElementById('attend-result');
+        resultDiv.style.color = '#1976d2';
+        resultDiv.innerText = '처리 중...';
+        try {
+          const res = await fetch(`/api/sessions/${sessionId}/attend`, { method: 'PATCH' });
+          const result = await res.json();
+          if (res.ok) {
+            resultDiv.innerText = result.message;
+            setTimeout(() => { close(); renderCalUI(container); }, 700);
+          } else {
+            resultDiv.style.color = '#d32f2f';
+            resultDiv.innerText = result.message;
+          }
+        } catch {
+          resultDiv.style.color = '#d32f2f';
+          resultDiv.innerText = '출석 처리에 실패했습니다.';
+        }
+      };
+    });
   }
   // 변경 화면
   function renderChangeBody(sessionId) {
