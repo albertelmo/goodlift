@@ -303,7 +303,7 @@ const migrateVipSessionField = async () => {
 const initializeDatabase = async () => {
   try {
     await createMembersTable();
-    await migrateVipSessionField(); // 마이그레이션 실행
+    // await migrateVipSessionField(); // 마이그레이션 실행
     console.log('[PostgreSQL] 회원 데이터베이스 초기화 완료');
   } catch (error) {
     console.error('[PostgreSQL] 회원 데이터베이스 초기화 오류:', error);
