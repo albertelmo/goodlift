@@ -238,10 +238,36 @@ const deleteMember = async (name) => {
   }
 };
 
+// vip_session 필드 마이그레이션
+const migrateVipSessionField = async () => {
+  try {
+    // vip_session 컬럼이 존재하는지 확인
+    const checkQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'members' AND column_name = 'vip_session'
+    `;
+    const checkResult = await pool.query(checkQuery);
+    
+    if (checkResult.rows.length === 0) {
+      // vip_session 컬럼이 없으면 추가
+      const alterQuery = `
+        ALTER TABLE members 
+        ADD COLUMN vip_session INTEGER DEFAULT 0 CHECK (vip_session >= 0 AND vip_session <= 9)
+      `;
+      await pool.query(alterQuery);
+      console.log('[Migration] vip_session 컬럼이 추가되었습니다.');
+    }
+  } catch (error) {
+    console.error('[Migration] vip_session 컬럼 추가 오류:', error);
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
     await createMembersTable();
+    await migrateVipSessionField(); // 마이그레이션 실행
     console.log('[PostgreSQL] 회원 데이터베이스 초기화 완료');
   } catch (error) {
     console.error('[PostgreSQL] 회원 데이터베이스 초기화 오류:', error);
