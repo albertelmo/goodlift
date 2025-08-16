@@ -153,7 +153,7 @@ const getSessionById = async (id) => {
 async function getSessionsByDateRange(startDate, endDate) {
   try {
     const query = `
-      SELECT * FROM sessions 
+      SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status FROM sessions 
       WHERE date >= $1 AND date <= $2 
       ORDER BY date ASC, time ASC
     `;

@@ -38,7 +38,7 @@
     "password": "123",
     "name": "이주영",
     "role": "trainer",
-    "vip_member": false
+    "vip_member": true
   },
   {
     "username": "wti",

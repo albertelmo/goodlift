@@ -819,7 +819,7 @@ app.get('/api/stats', async (req, res) => {
     
     // 통계 계산 - 한국시간 기준
     const today = getKoreanToday();
-    const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD 형식
+    const todayStr = getKoreanDate(); // YYYY-MM-DD 형식 (한국시간 기준)
     
     // 완료된 세션 중 체험/무기명 회원 필터링
     const completedSessions = sessions.filter(s => s.status === '완료');
