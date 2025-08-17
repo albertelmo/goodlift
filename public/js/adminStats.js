@@ -12,16 +12,16 @@ const getKoreanDate = () => {
   return now;
 };
 
-// 한국시간 기준으로 현재 날짜의 시작점(00:00:00)을 UTC로 변환하여 저장
+// 한국시간 기준으로 현재 날짜의 시작점(00:00:00)을 설정
 const getKoreanDateAsUTC = () => {
-  const koreanTime = getKoreanDate();
+  const now = new Date();
   // 한국시간의 시작점(00:00:00)으로 설정
-  koreanTime.setHours(0, 0, 0, 0);
-  // 한국시간을 UTC로 변환 (한국은 UTC+9)
-  return new Date(koreanTime.getTime() - (9 * 60 * 60 * 1000));
+  now.setHours(0, 0, 0, 0);
+  return now;
 };
 
-let currentDate = getKoreanDateAsUTC();
+let currentDate = new Date(); // 한국시간 기준 현재 날짜
+currentDate.setHours(0, 0, 0, 0); // 시간을 00:00:00으로 설정
 
 function render(container) {
   if (!container) return;
@@ -311,23 +311,22 @@ function handleMonthlyStatRowClick() {
 }
 
 function navigateDate(delta) {
-  // 한국시간 기준으로 날짜 계산
-  const koreanTime = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
+  // 한국시간 기준으로 날짜 계산 (UTC 변환 없이)
+  const newDate = new Date(currentDate);
   
   switch (currentPeriod) {
     case 'day':
-      koreanTime.setDate(koreanTime.getDate() + delta);
+      newDate.setDate(newDate.getDate() + delta);
       break;
     case 'week':
-      koreanTime.setDate(koreanTime.getDate() + (delta * 7));
+      newDate.setDate(newDate.getDate() + (delta * 7));
       break;
     case 'month':
-      koreanTime.setMonth(koreanTime.getMonth() + delta);
+      newDate.setMonth(newDate.getMonth() + delta);
       break;
   }
   
-  // 계산된 한국시간을 UTC로 변환하여 저장
-  currentDate = new Date(koreanTime.getTime() - (9 * 60 * 60 * 1000));
+  currentDate = newDate;
   loadStats();
 }
 
@@ -335,8 +334,8 @@ function updateDateDisplay() {
   const dateElement = document.querySelector('#current-date');
   if (!dateElement) return;
 
-  // currentDate는 UTC로 저장되어 있으므로 한국시간으로 변환
-  const koreanCurrentDate = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
+  // currentDate는 이미 한국시간으로 저장되어 있음
+  const koreanCurrentDate = new Date(currentDate);
 
   switch (currentPeriod) {
     case 'day':
@@ -407,8 +406,8 @@ async function loadStats() {
 }
 
 function calculateDateRange() {
-  // currentDate를 한국시간으로 변환하여 계산
-  const koreanCurrentDate = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
+  // currentDate는 이미 한국시간으로 저장되어 있음
+  const koreanCurrentDate = new Date(currentDate);
   const startDate = new Date(koreanCurrentDate);
   const endDate = new Date(koreanCurrentDate);
   
