@@ -836,12 +836,22 @@ app.get('/api/stats', async (req, res) => {
     
     // 센터별 유효회원수 계산
     const centerValidMembers = {};
+    // 전체 잔여세션수 계산
+    let totalRemainingSessions = 0;
+    // 센터별 잔여세션수 계산
+    const centerRemainingSessions = {};
+    
     members.forEach(member => {
         if (member.status === '유효' && 
             !member.name.startsWith('무기명') && 
             !member.name.startsWith('체험')) {
             const center = member.center;
             centerValidMembers[center] = (centerValidMembers[center] || 0) + 1;
+            
+            // 잔여세션수 계산
+            const remainingSessions = member.remainSessions || 0;
+            totalRemainingSessions += remainingSessions;
+            centerRemainingSessions[center] = (centerRemainingSessions[center] || 0) + remainingSessions;
         }
     });
     
@@ -890,6 +900,8 @@ app.get('/api/stats', async (req, res) => {
       totalValidMembers: totalValidMembers,
       centerValidMembers: centerValidMembers,
       centerSessions: centerSessions,
+      totalRemainingSessions: totalRemainingSessions,
+      centerRemainingSessions: centerRemainingSessions,
       trainerStats: []
     };
     

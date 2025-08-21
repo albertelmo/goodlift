@@ -137,7 +137,7 @@ function setupValidMembersTooltip() {
 
 // 센터별 툴팁 이벤트 설정
 function setupCenterTooltips() {
-  const cardIds = ['totalSessionsCard', 'completedSessionsCard', 'scheduledSessionsCard', 'absentSessionsCard'];
+  const cardIds = ['totalSessionsCard', 'completedSessionsCard', 'scheduledSessionsCard', 'absentSessionsCard', 'remainingSessionsCard'];
   
   cardIds.forEach(cardId => {
     const card = document.getElementById(cardId);
@@ -464,6 +464,13 @@ function renderStatsResults(stats) {
   // 센터별 결석 세션 툴팁 내용 생성
   const centerAbsentSessionsContent = generateCenterSessionsContent(stats.centerSessions, 'absent', '결석 세션');
   
+  // 센터별 잔여세션수 툴팁 내용 생성
+  const centerRemainingSessionsContent = stats.centerRemainingSessions ? 
+    Object.entries(stats.centerRemainingSessions)
+      .sort(([,a], [,b]) => b - a)
+      .map(([center, count]) => `<div>${center}: ${count}회</div>`)
+      .join('') : '센터별 데이터가 없습니다.';
+  
   return `
     <div class="stats-grid">
       <div class="stats-card" id="validMembersCard" style="position:relative;cursor:help;">
@@ -504,6 +511,14 @@ function renderStatsResults(stats) {
         <div class="center-tooltip" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;white-space:nowrap;z-index:1000;margin-top:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
           <div style="font-weight:600;margin-bottom:4px;text-align:center;">센터별 결석 세션</div>
           ${centerAbsentSessionsContent}
+        </div>
+      </div>
+      <div class="stats-card" id="remainingSessionsCard" style="position:relative;cursor:help;">
+        <div class="stats-card-title">잔여 세션수</div>
+        <div class="stats-card-value">${stats.totalRemainingSessions || 0}</div>
+        <div class="center-tooltip" style="display:none;position:absolute;top:100%;left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:8px 12px;border-radius:6px;font-size:0.8rem;white-space:nowrap;z-index:1000;margin-top:8px;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+          <div style="font-weight:600;margin-bottom:4px;text-align:center;">센터별 잔여세션수</div>
+          ${centerRemainingSessionsContent}
         </div>
       </div>
     </div>
