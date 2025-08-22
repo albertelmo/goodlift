@@ -409,7 +409,7 @@ function calculateDateRange() {
   // currentDate는 이미 한국시간으로 저장되어 있음
   const koreanCurrentDate = new Date(currentDate);
   const startDate = new Date(koreanCurrentDate);
-  const endDate = new Date(koreanCurrentDate);
+  let endDate = new Date(koreanCurrentDate);
   
   switch (currentPeriod) {
     case 'day':
@@ -420,6 +420,7 @@ function calculateDateRange() {
       const dayOfWeek = koreanCurrentDate.getDay();
       const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 일요일이면 6일 전, 아니면 (요일-1)일 전
       startDate.setDate(koreanCurrentDate.getDate() - daysToMonday);
+      endDate = new Date(startDate); // startDate의 복사본으로 설정
       endDate.setDate(startDate.getDate() + 6);
       break;
     case 'month':
