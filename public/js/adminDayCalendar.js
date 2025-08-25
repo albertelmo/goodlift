@@ -113,7 +113,7 @@ async function renderTable(tableWrap) {
     // 왼쪽 시간 칼럼: 30분 단위로 모든 시간 표시
     html += `<td class="adc-time">${hour}</td>`;
     sortedTrainers.forEach(t => {
-      // 세션이 이 시간에 시작하면 rowspan=2로 카드 표시
+      // 세션이 이 시간에 시작하면 세션 타입에 따라 표시
       const session = processedSessions.find(s => s.trainer === t.username && s.time === hour);
       
       // 이전 30분 셀에서 이미 rowspan=2로 표시된 경우, 이 셀은 display:none
@@ -123,6 +123,7 @@ async function renderTable(tableWrap) {
         const prevHour = hours[prevIdx];
         prevSession = processedSessions.find(s => s.trainer === t.username && s.time === prevHour);
       }
+      
       if (session) {
         // 상태를 영어 클래스명으로 변환
         let statusClass = 'reserved'; // 기본값
@@ -139,13 +140,28 @@ async function renderTable(tableWrap) {
           sessionClass += ' adc-no-remaining';
         }
         
-        html += `<td rowspan="2"><div class="${sessionClass}">
+        // 30분 세션은 1행에만 표시, 1시간 세션은 2행에 표시
+        const is30min = session['30min'] === true;
+        const rowspan = is30min ? 1 : 2;
+        
+        // 30분 세션용 클래스 추가
+        if (is30min) {
+          sessionClass += ' adc-session-30min';
+        }
+        
+        html += `<td rowspan="${rowspan}"><div class="${sessionClass}">
           <strong>${session.member} (${session.remainSessions})</strong>
           <div class="adc-status-label">${session.displayStatus}</div>
           ${session.hasNoRemainingSessions && session.status !== '완료' ? '<div style="color:#d32f2f;font-size:0.8em;">⚠️</div>' : ''}
         </div></td>`;
       } else if (prevSession) {
-        html += '<td style="display:none"></td>';
+        // 이전 세션이 1시간 세션이고 현재 시간이 그 세션의 두 번째 30분인 경우
+        const isPrevSession30min = prevSession['30min'] === true;
+        if (!isPrevSession30min) {
+          html += '<td style="display:none"></td>';
+        } else {
+          html += '<td></td>';
+        }
       } else {
         html += '<td></td>';
       }

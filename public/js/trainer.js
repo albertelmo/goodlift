@@ -1089,23 +1089,63 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
         const session = allSessions.find(s => s.id === sessionId);
         if (!session) return;
         document.getElementById('change-date-input').value = session.date;
-        // 시간 드롭다운 생성(중복 방지, 1시간 단위)
+        // 시간 드롭다운 생성(세션 타입에 따른 중복 방지)
         fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}&date=${session.date}`)
           .then(r=>r.json())
           .then(daySessions => {
+            const isCurrentSession30min = session['30min'] === true;
             const disabledTimes = new Set();
+            
             daySessions.filter(s=>s.id!==sessionId).forEach(s => {
               const [h, m] = s.time.split(':').map(Number);
-              if (!(h === 6 && m === 0)) {
-                let prevH = h, prevM = m - 30;
-                if (prevM < 0) { prevH--; prevM = 30; }
-                if (prevH >= 6) disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
-              }
-              disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-              if (!(h === 22 && m === 0)) {
-                let nextH = h, nextM = m + 30;
-                if (nextM >= 60) { nextH++; nextM = 0; }
-                if (nextH <= 22) disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+              const is30min = s['30min'] === true;
+              
+              if (isCurrentSession30min) {
+                // 현재 세션이 30분 세션인 경우: 30분 세션 모달 로직 적용
+                if (is30min) {
+                  // 30분 세션: 해당 시간만 제외
+                  disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                } else {
+                  // 1시간 세션: 해당 시간과 해당 세션 이후 30분 제외
+                  disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                  
+                  // 이후 30분 (22:00 초과하지 않는 경우)
+                  if (!(h === 22 && m === 0)) {
+                    let nextH = h, nextM = m + 30;
+                    if (nextM >= 60) { nextH++; nextM = 0; }
+                    if (nextH <= 22) {
+                      disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+                    }
+                  }
+                }
+              } else {
+                // 현재 세션이 1시간 세션인 경우: 1시간 세션 모달 로직 적용
+                if (is30min) {
+                  // 30분 세션: 해당 시간만 제외
+                  disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                } else {
+                  // 1시간 세션: 해당 시간과 이전 30분, 이후 30분 제외
+                  // 이전 30분 (6:00 미만이 아닌 경우)
+                  if (!(h === 6 && m === 0)) {
+                    let prevH = h, prevM = m - 30;
+                    if (prevM < 0) { prevH--; prevM = 30; }
+                    if (prevH >= 6) {
+                      disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
+                    }
+                  }
+                  
+                  // 해당 시간
+                  disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                  
+                  // 이후 30분 (22:00 초과하지 않는 경우)
+                  if (!(h === 22 && m === 0)) {
+                    let nextH = h, nextM = m + 30;
+                    if (nextM >= 60) { nextH++; nextM = 0; }
+                    if (nextH <= 22) {
+                      disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+                    }
+                  }
+                }
               }
             });
             let timeOpts = '';
@@ -1128,19 +1168,59 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
           fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}&date=${date}`)
             .then(r=>r.json())
             .then(daySessions => {
+              const isCurrentSession30min = session['30min'] === true;
               const disabledTimes = new Set();
+              
               daySessions.filter(s=>s.id!==sessionId).forEach(s => {
                 const [h, m] = s.time.split(':').map(Number);
-                if (!(h === 6 && m === 0)) {
-                  let prevH = h, prevM = m - 30;
-                  if (prevM < 0) { prevH--; prevM = 30; }
-                  if (prevH >= 6) disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
-                }
-                disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-                if (!(h === 22 && m === 0)) {
-                  let nextH = h, nextM = m + 30;
-                  if (nextM >= 60) { nextH++; nextM = 0; }
-                  if (nextH <= 22) disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+                const is30min = s['30min'] === true;
+                
+                if (isCurrentSession30min) {
+                  // 현재 세션이 30분 세션인 경우: 30분 세션 모달 로직 적용
+                  if (is30min) {
+                    // 30분 세션: 해당 시간만 제외
+                    disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                  } else {
+                    // 1시간 세션: 해당 시간과 해당 세션 이후 30분 제외
+                    disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                    
+                    // 이후 30분 (22:00 초과하지 않는 경우)
+                    if (!(h === 22 && m === 0)) {
+                      let nextH = h, nextM = m + 30;
+                      if (nextM >= 60) { nextH++; nextM = 0; }
+                      if (nextH <= 22) {
+                        disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+                      }
+                    }
+                  }
+                } else {
+                  // 현재 세션이 1시간 세션인 경우: 1시간 세션 모달 로직 적용
+                  if (is30min) {
+                    // 30분 세션: 해당 시간만 제외
+                    disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                  } else {
+                    // 1시간 세션: 해당 시간과 이전 30분, 이후 30분 제외
+                    // 이전 30분 (6:00 미만이 아닌 경우)
+                    if (!(h === 6 && m === 0)) {
+                      let prevH = h, prevM = m - 30;
+                      if (prevM < 0) { prevH--; prevM = 30; }
+                      if (prevH >= 6) {
+                        disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
+                      }
+                    }
+                    
+                    // 해당 시간
+                    disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                    
+                    // 이후 30분 (22:00 초과하지 않는 경우)
+                    if (!(h === 22 && m === 0)) {
+                      let nextH = h, nextM = m + 30;
+                      if (nextM >= 60) { nextH++; nextM = 0; }
+                      if (nextH <= 22) {
+                        disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+                      }
+                    }
+                  }
                 }
               });
               let timeOpts = '';

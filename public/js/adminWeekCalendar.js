@@ -491,7 +491,13 @@ function renderSessions(sessions, trainers, totalSessionsForWidth, offsetFromPre
     const isNarrow = cardWidth < 25; // 25% 미만이면 좁은 카드로 판단
     const layoutClass = isNarrow ? 'narrow' : '';
     
+    // 30분 세션용 클래스 추가
+    const is30min = session['30min'] === true;
+    
     let cardClass = `awc-session-card awc-status-${statusClass} ${layoutClass}`;
+    if (is30min) {
+      cardClass += ' awc-session-card-30min';
+    }
     if (session.hasNoRemainingSessions && session.status !== '완료') {
       cardClass += ' awc-no-remaining';
     }
