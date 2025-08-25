@@ -272,7 +272,7 @@ const migrate30minField = async () => {
 const initializeDatabase = async () => {
   try {
     await createSessionsTable();
-    await migrate30minField(); // 마이그레이션 실행
+    // await migrate30minField(); // 마이그레이션 실행
     console.log('[PostgreSQL] 데이터베이스 초기화 완료');
   } catch (error) {
     console.error('[PostgreSQL] 데이터베이스 초기화 오류:', error);

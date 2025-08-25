@@ -110,7 +110,7 @@ function migrateTrainer30minSessionField() {
 }
 
 // migrateTrainerVipField();
-migrateTrainer30minSessionField();
+// migrateTrainer30minSessionField();
 
 // 파일 업로드 설정
 const storage = multer.memoryStorage();
