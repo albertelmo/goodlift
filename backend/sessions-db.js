@@ -171,18 +171,33 @@ async function getSessionsByDateRange(startDate, endDate) {
 }
 
 // 시간 중복 체크 (같은 트레이너의 해당 시간 ±30분)
-const checkTimeConflict = async (trainer, date, time) => {
+const checkTimeConflict = async (trainer, date, time, is30min = false) => {
   try {
-    const query = `
-      SELECT COUNT(*) FROM sessions 
-      WHERE trainer = $1 
-        AND date = $2 
-        AND (
-          time = $3::time 
-          OR time = ($3::time - INTERVAL '30 minutes')
-          OR time = ($3::time + INTERVAL '30 minutes')
-        )
-    `;
+    let query;
+    if (is30min) {
+      // 30분 세션: 해당 시간과 이후 30분만 체크
+      query = `
+        SELECT COUNT(*) FROM sessions 
+        WHERE trainer = $1 
+          AND date = $2 
+          AND (
+            time = $3::time 
+            OR time = ($3::time + INTERVAL '30 minutes')
+          )
+      `;
+    } else {
+      // 1시간 세션: 이전 30분, 해당 시간, 다음 30분 체크
+      query = `
+        SELECT COUNT(*) FROM sessions 
+        WHERE trainer = $1 
+          AND date = $2 
+          AND (
+            time = $3::time 
+            OR time = ($3::time - INTERVAL '30 minutes')
+            OR time = ($3::time + INTERVAL '30 minutes')
+          )
+      `;
+    }
     const result = await pool.query(query, [trainer, date, time]);
     return parseInt(result.rows[0].count) > 0;
   } catch (error) {

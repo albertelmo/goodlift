@@ -43,7 +43,7 @@
     "name": "이주영",
     "role": "trainer",
     "vip_member": true,
-    "30min_session": "off"
+    "30min_session": "on"
   },
   {
     "username": "wti",

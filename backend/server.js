@@ -577,7 +577,8 @@ app.post('/api/sessions', async (req, res) => {
                 const hasConflict = await sessionsDB.checkTimeConflict(
                     trainer, 
                     sessionDate.toISOString().split('T')[0], 
-                    time
+                    time,
+                    req.body['30min'] || false
                 );
                 
                 if (!hasConflict) {
@@ -587,7 +588,8 @@ app.post('/api/sessions', async (req, res) => {
                         trainer,
                         date: sessionDate.toISOString().split('T')[0],
                         time,
-                        status: '예정'
+                        status: '예정',
+                        '30min': req.body['30min'] || false
                     });
                 }
             }
@@ -614,7 +616,8 @@ app.post('/api/sessions', async (req, res) => {
                 trainer,
                 date,
                 time,
-                status: '예정'
+                status: '예정',
+                '30min': req.body['30min'] || false
             };
             
             const session = await sessionsDB.addSession(newSession);

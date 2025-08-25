@@ -363,9 +363,13 @@ async function renderCalUI(container, forceDate) {
             // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
             if (s.hasNoRemainingSessions && s.status !== '완료') statusClass += ' no-remaining';
             
+            const is30min = s['30min'] === true;
+            const timeStyle = is30min ? 'style="color:#f57c00;"' : '';
+            const typeStyle = is30min ? 'style="color:#ff9800;"' : '';
+            
             html += `<div class="${itemClass}" data-id="${s.id}" data-no-remaining="${s.hasNoRemainingSessions && s.status !== '완료'}" ${itemStyle}>
-                <span class="tmc-session-time">${s.time}</span>
-                <span class="tmc-session-type">PT</span>
+                <span class="tmc-session-time" ${timeStyle}>${s.time}</span>
+                <span class="tmc-session-type" ${typeStyle}>${is30min ? '30분' : 'PT'}</span>
                 <span class="tmc-session-member">${s.member}</span>
                 <span class="tmc-session-status ${statusClass}">${s.displayStatus}</span>
                 ${s.hasNoRemainingSessions && s.status !== '완료' ? '<span style="color:#d32f2f;font-size:1.2em;margin-left:4px;">⚠️</span>' : ''}
@@ -376,6 +380,7 @@ async function renderCalUI(container, forceDate) {
         }
         html += `</div>
             <button class="tmc-fab" id="tmc-add-btn">+</button>
+            <button class="tmc-fab" id="tmc-add-30min-btn" style="display:none; bottom: 96px;">30min</button>
             <div class="tmc-modal-bg" id="tmc-modal-bg" style="display:none;"></div>
             <div class="tmc-modal" id="tmc-modal" style="display:none;">
                 <div class="tmc-modal-content">
@@ -411,6 +416,40 @@ async function renderCalUI(container, forceDate) {
                     </form>
                 </div>
             </div>
+            <div class="tmc-modal" id="tmc-30min-modal" style="display:none;">
+                <div class="tmc-modal-content">
+                    <h3>30분 세션 추가</h3>
+                    <form id="tmc-30min-session-add-form" style="display:flex;flex-direction:column;gap:12px;align-items:center;">
+                      <label style="width:100%;text-align:left;">트레이너
+                        <select name="trainer" id="tmc-30min-trainer-select" required style="width:180px;"></select>
+                      </label>
+                      <label style="width:100%;text-align:left;">회원
+                        <select name="member" id="tmc-30min-member-select" required style="width:180px;"></select>
+                      </label>
+                      <label style="width:100%;text-align:left;">날짜
+                        <input type="date" name="date" id="tmc-30min-date-input" required style="width:180px;">
+                      </label>
+                      <label style="width:100%;text-align:left;">시간
+                        <select name="time" id="tmc-30min-time-input" required style="width:180px;"></select>
+                      </label>
+                      <label style="width:100%;text-align:left;display:flex;align-items:center;gap:8px;">
+                        <input type="checkbox" name="repeat" id="tmc-30min-repeat-checkbox" style="width:auto;">
+                        <span>반복하기</span>
+                      </label>
+                      <label style="width:100%;text-align:left;opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;" id="tmc-30min-repeat-count-label">
+                        반복횟수
+                        <select name="repeatCount" id="tmc-30min-repeat-count-input" style="width:180px;">
+                          <option value="5">5회</option>
+                          <option value="10">10회</option>
+                          <option value="15">15회</option>
+                          <option value="20">20회</option>
+                        </select>
+                      </label>
+                      <button type="submit" style="width:180px;">등록</button>
+                      <div id="tmc-30min-session-add-result" style="min-height:20px;font-size:0.97rem;"></div>
+                    </form>
+                </div>
+            </div>
         </div>`;
         container.innerHTML = html;
         
@@ -420,7 +459,11 @@ async function renderCalUI(container, forceDate) {
         const trainerSel = document.getElementById('tmc-trainer-select');
         trainerSel.innerHTML = allTrainers.map(t => `<option value="${t.username}"${t.username === username ? ' selected' : ''}>${t.name}</option>`).join('');
         
-        // 트레이너 변경 시 회원 목록 업데이트 함수
+        // 30분 세션 모달: 트레이너 드롭다운 로딩
+        const trainer30minSel = document.getElementById('tmc-30min-trainer-select');
+        trainer30minSel.innerHTML = allTrainers.map(t => `<option value="${t.username}"${t.username === username ? ' selected' : ''}>${t.name}</option>`).join('');
+        
+        // 트레이너 변경 시 회원 목록 업데이트 함수 (일반 세션)
         async function updateMemberDropdown(selectedTrainer) {
             const memberSel = document.getElementById('tmc-member-select');
             const filteredMembers = members.filter(m => 
@@ -433,65 +476,207 @@ async function renderCalUI(container, forceDate) {
                 '<option value="">담당 회원 없음</option>';
         }
         
+        // 트레이너 변경 시 회원 목록 업데이트 함수 (30분 세션)
+        async function update30minMemberDropdown(selectedTrainer) {
+            const memberSel = document.getElementById('tmc-30min-member-select');
+            const filteredMembers = members.filter(m => 
+                m.trainer === selectedTrainer && 
+                m.remainSessions > 0 && 
+                m.status === '유효'
+            );
+            memberSel.innerHTML = filteredMembers.length ? 
+                filteredMembers.map(m => `<option value="${m.name}">${m.name}</option>`).join('') : 
+                '<option value="">담당 회원 없음</option>';
+        }
+        
         // 초기 회원 드롭다운 로딩 (현재 트레이너)
         await updateMemberDropdown(username);
+        await update30minMemberDropdown(username);
         
-        // 트레이너 변경 이벤트 리스너
+        // 시간 드롭다운 업데이트 함수 (현재 로그인한 트레이너 기준)
+        async function updateTimeDropdowns() {
+            const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${yyyy}-${mm}-${dd}`);
+            const daySessions = await daySessionsRes.json();
+            
+            // 1시간 세션 모달 시간 드롭다운 업데이트 (1시간 세션만 고려)
+            const disabledTimes1Hour = getDisabledTimes(daySessions, false);
+            const timeSel = document.getElementById('tmc-time-input');
+            let timeOpts = '';
+            for(let h=6; h<=22; h++) {
+                for(let m=0; m<60; m+=30) {
+                    if(h===22 && m>0) break;
+                    const hh = String(h).padStart(2,'0');
+                    const mm = String(m).padStart(2,'0');
+                    const val = `${hh}:${mm}`;
+                    timeOpts += `<option value="${val}"${disabledTimes1Hour.has(val)?' disabled':''}>${val}${disabledTimes1Hour.has(val)?' (예약불가)':''}</option>`;
+                }
+            }
+            timeSel.innerHTML = timeOpts;
+            
+            // 30분 세션 모달 시간 드롭다운 업데이트 (30분 세션만 고려)
+            const disabledTimes30Min = getDisabledTimes(daySessions, true);
+            const time30minSel = document.getElementById('tmc-30min-time-input');
+            let time30minOpts = '';
+            for(let h=6; h<=22; h++) {
+                for(let m=0; m<60; m+=30) {
+                    if(h===22 && m>0) break;
+                    const hh = String(h).padStart(2,'0');
+                    const mm = String(m).padStart(2,'0');
+                    const val = `${hh}:${mm}`;
+                    time30minOpts += `<option value="${val}"${disabledTimes30Min.has(val)?' disabled':''}>${val}${disabledTimes30Min.has(val)?' (예약불가)':''}</option>`;
+                }
+            }
+            time30minSel.innerHTML = time30minOpts;
+        }
+        
+        // 트레이너 변경 이벤트 리스너 (일반 세션)
         trainerSel.addEventListener('change', async function() {
             const selectedTrainer = this.value;
             await updateMemberDropdown(selectedTrainer);
         });
         
-        // 시간 드롭다운 06:00~22:00 30분 단위 생성 (중복 방지, 1시간 단위)
-        const timeSel = document.getElementById('tmc-time-input');
+        // 트레이너 변경 이벤트 리스너 (30분 세션)
+        trainer30minSel.addEventListener('change', async function() {
+            const selectedTrainer = this.value;
+            await update30minMemberDropdown(selectedTrainer);
+        });
+        
+        // 시간 충돌 체크 함수 (모달 타입에 따라 다르게 처리)
+        function getDisabledTimes(sessions, is30minModal = false) {
+            const disabledTimes = new Set();
+            
+            sessions.forEach(s => {
+                const [h, m] = s.time.split(':').map(Number);
+                const is30min = s['30min'] === true;
+                
+                if (is30minModal) {
+                    // 30분 세션 모달
+                    if (is30min) {
+                        // 30분 세션: 해당 시간만 제외
+                        disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                    } else {
+                        // 1시간 세션: 해당 시간과 해당 세션 이후 30분 제외
+                        disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                        
+                        // 이후 30분 (22:00 초과하지 않는 경우)
+                        if (!(h === 22 && m === 0)) {
+                            let nextH = h, nextM = m + 30;
+                            if (nextM >= 60) { nextH++; nextM = 0; }
+                            if (nextH <= 22) {
+                                disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+                            }
+                        }
+                    }
+                } else {
+                    // 1시간 세션 모달
+                    if (is30min) {
+                        // 30분 세션: 해당 시간만 제외
+                        disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                    } else {
+                        // 1시간 세션: 해당 시간과 이전 30분, 이후 30분 제외
+                        // 이전 30분 (6:00 미만이 아닌 경우)
+                        if (!(h === 6 && m === 0)) {
+                            let prevH = h, prevM = m - 30;
+                            if (prevM < 0) { prevH--; prevM = 30; }
+                            if (prevH >= 6) {
+                                disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
+                            }
+                        }
+                        
+                        // 해당 시간
+                        disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+                        
+                        // 이후 30분 (22:00 초과하지 않는 경우)
+                        if (!(h === 22 && m === 0)) {
+                            let nextH = h, nextM = m + 30;
+                            if (nextM >= 60) { nextH++; nextM = 0; }
+                            if (nextH <= 22) {
+                                disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            return disabledTimes;
+        }
+        
+        // 해당 날짜의 세션 데이터 가져오기
         const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${yyyy}-${mm}-${dd}`);
         const daySessions = await daySessionsRes.json();
         
-        // 예약된 시간대(이전 30분, 해당, 다음 30분) 모두 disabled 처리
-        const disabledTimes = new Set();
-        daySessions.forEach(s => {
-          const [h, m] = s.time.split(':').map(Number);
-          // 이전 30분
-          if (!(h === 6 && m === 0)) {
-            let prevH = h, prevM = m - 30;
-            if (prevM < 0) { prevH--; prevM = 30; }
-            if (prevH >= 6) disabledTimes.add(`${String(prevH).padStart(2,'0')}:${String(prevM).padStart(2,'0')}`);
-          }
-          // 해당 시간
-          disabledTimes.add(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
-          // 다음 30분
-          if (!(h === 22 && m === 0)) {
-            let nextH = h, nextM = m + 30;
-            if (nextM >= 60) { nextH++; nextM = 0; }
-            if (nextH <= 22) disabledTimes.add(`${String(nextH).padStart(2,'0')}:${String(nextM).padStart(2,'0')}`);
-          }
-        });
+        // 1시간 세션 모달 시간 드롭다운 초기화 (1시간 세션만 고려)
+        const disabledTimes1Hour = getDisabledTimes(daySessions, false);
+        const timeSel = document.getElementById('tmc-time-input');
         let timeOpts = '';
         for(let h=6; h<=22; h++) {
-          for(let m=0; m<60; m+=30) {
-            if(h===22 && m>0) break;
-            const hh = String(h).padStart(2,'0');
-            const mm = String(m).padStart(2,'0');
-            const val = `${hh}:${mm}`;
-            timeOpts += `<option value="${val}"${disabledTimes.has(val)?' disabled':''}>${val}${disabledTimes.has(val)?' (예약불가)':''}</option>`;
-          }
+            for(let m=0; m<60; m+=30) {
+                if(h===22 && m>0) break;
+                const hh = String(h).padStart(2,'0');
+                const mm = String(m).padStart(2,'0');
+                const val = `${hh}:${mm}`;
+                timeOpts += `<option value="${val}"${disabledTimes1Hour.has(val)?' disabled':''}>${val}${disabledTimes1Hour.has(val)?' (예약불가)':''}</option>`;
+            }
         }
         timeSel.innerHTML = timeOpts;
         
+        // 30분 세션 모달 시간 드롭다운 초기화 (30분 세션만 고려)
+        const disabledTimes30Min = getDisabledTimes(daySessions, true);
+        const time30minSel = document.getElementById('tmc-30min-time-input');
+        let time30minOpts = '';
+        for(let h=6; h<=22; h++) {
+            for(let m=0; m<60; m+=30) {
+                if(h===22 && m>0) break;
+                const hh = String(h).padStart(2,'0');
+                const mm = String(m).padStart(2,'0');
+                const val = `${hh}:${mm}`;
+                time30minOpts += `<option value="${val}"${disabledTimes30Min.has(val)?' disabled':''}>${val}${disabledTimes30Min.has(val)?' (예약불가)':''}</option>`;
+            }
+        }
+        time30minSel.innerHTML = time30minOpts;
+        
         document.getElementById('tmc-date-input').value = `${yyyy}-${mm}-${dd}`;
+        document.getElementById('tmc-30min-date-input').value = `${yyyy}-${mm}-${dd}`;
+        
+        // 트레이너 30분 세션 권한 확인 및 30min 버튼 표시
+        const currentTrainer = allTrainers.find(t => t.username === username);
+        const has30minPermission = currentTrainer && currentTrainer['30min_session'] === 'on';
+        
+        if (has30minPermission) {
+            document.getElementById('tmc-add-30min-btn').style.display = 'block';
+        }
+        
         document.getElementById('tmc-add-btn').onclick = function() {
             document.getElementById('tmc-modal-bg').style.display = 'block';
             document.getElementById('tmc-modal').style.display = 'block';
+        };
+        
+        document.getElementById('tmc-add-30min-btn').onclick = function() {
+            document.getElementById('tmc-modal-bg').style.display = 'block';
+            document.getElementById('tmc-30min-modal').style.display = 'block';
         };
 
         document.getElementById('tmc-modal-bg').onclick = function() {
             document.getElementById('tmc-modal-bg').style.display = 'none';
             document.getElementById('tmc-modal').style.display = 'none';
+            document.getElementById('tmc-30min-modal').style.display = 'none';
         };
         
         // 반복 체크박스 이벤트
         document.getElementById('tmc-repeat-checkbox').onchange = function() {
             const repeatCountLabel = document.getElementById('tmc-repeat-count-label');
+            if (this.checked) {
+                repeatCountLabel.style.opacity = '1';
+                repeatCountLabel.style.height = 'auto';
+            } else {
+                repeatCountLabel.style.opacity = '0';
+                repeatCountLabel.style.height = '0';
+            }
+        };
+        
+        // 30분 세션 반복 체크박스 이벤트
+        document.getElementById('tmc-30min-repeat-checkbox').onchange = function() {
+            const repeatCountLabel = document.getElementById('tmc-30min-repeat-count-label');
             if (this.checked) {
                 repeatCountLabel.style.opacity = '1';
                 repeatCountLabel.style.height = 'auto';
@@ -538,6 +723,49 @@ async function renderCalUI(container, forceDate) {
           } catch {
             resultDiv.style.color = '#d32f2f';
             resultDiv.innerText = '세션 추가에 실패했습니다.';
+          }
+        };
+        
+        // 30분 세션 폼 제출 이벤트 리스너
+        document.getElementById('tmc-30min-session-add-form').onsubmit = async function(e) {
+          e.preventDefault();
+          const form = e.target;
+          const data = Object.fromEntries(new FormData(form));
+          // 세션은 항상 현재 로그인한 트레이너로 등록
+          data.trainer = username;
+          data['30min'] = true; // 30분 세션 표시
+          const resultDiv = document.getElementById('tmc-30min-session-add-result');
+          resultDiv.style.color = '#1976d2';
+          resultDiv.innerText = '처리 중...';
+          try {
+            const res = await fetch('/api/sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            if (res.ok) {
+              resultDiv.style.color = '#1976d2';
+              resultDiv.innerText = result.message;
+              
+              // 반복 세션 추가 시 상세 정보 표시
+              if (result.total && result.total > 1) {
+                resultDiv.innerHTML += `<br><small style="color:#666;">총 ${result.total}회 중 ${result.added}회 추가됨${result.skipped > 0 ? ` (${result.skipped}회는 시간 중복으로 제외)` : ''}</small>`;
+              }
+              
+              form.reset();
+              document.getElementById('tmc-30min-date-input').value = `${yyyy}-${mm}-${dd}`;
+              document.getElementById('tmc-30min-repeat-checkbox').checked = false;
+              document.getElementById('tmc-30min-repeat-count-label').style.opacity = '0';
+              document.getElementById('tmc-30min-repeat-count-label').style.height = '0';
+              renderCalUI(container, dd); // 세션 추가 후 갱신
+            } else {
+              resultDiv.style.color = '#d32f2f';
+              resultDiv.innerText = result.message;
+            }
+          } catch {
+            resultDiv.style.color = '#d32f2f';
+            resultDiv.innerText = '30분 세션 추가에 실패했습니다.';
           }
         };
         // 날짜 클릭 시 해당 날짜로 이동
