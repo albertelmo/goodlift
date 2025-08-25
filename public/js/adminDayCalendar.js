@@ -101,73 +101,119 @@ async function renderTable(tableWrap) {
   // 트레이너를 가나다순으로 정렬
   const sortedTrainers = trainers.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   
-  // 표 렌더링
-  let html = '<div class="adc-table-scroll"><table class="adc-table"><thead><tr><th>시간</th>';
-  sortedTrainers.forEach(t => { html += `<th>${t.name}</th>`; });
-  html += '</tr></thead><tbody>';
-  // 30분 단위 행 생성, 세션은 rowspan=2로 표시
-  for (let i = 0; i < hours.length; i++) {
-    const hour = hours[i];
-    const [h, m] = hour.split(':').map(Number);
-    html += `<tr data-time="${hour}">`;
-    // 왼쪽 시간 칼럼: 30분 단위로 모든 시간 표시
-    html += `<td class="adc-time">${hour}</td>`;
-    sortedTrainers.forEach(t => {
-      // 세션이 이 시간에 시작하면 세션 타입에 따라 표시
-      const session = processedSessions.find(s => s.trainer === t.username && s.time === hour);
+  // CSS Grid 기반 캘린더 생성
+  const trainerCount = sortedTrainers.length;
+  const isMobile = window.innerWidth <= 768;
+  const timeColumnWidth = isMobile ? '50px' : 'auto';
+  let html = `<div class="adc-calendar-grid" style="grid-template-columns: ${timeColumnWidth} repeat(${trainerCount}, 1fr);">`;
+  
+  // 시간 라벨 행 (첫 번째 행)
+  html += '<div class="adc-time-header">시간</div>';
+  sortedTrainers.forEach(t => { 
+    html += `<div class="adc-trainer-header">${t.name}</div>`; 
+  });
+  
+  // 동적 시간 라벨 생성
+  hours.forEach((hour, hourIndex) => {
+    const gridRow = hourIndex + 2; // +2는 헤더 행 때문
+    html += `<div class="adc-time-label" data-time="${hour}" style="grid-row: ${gridRow}; grid-column: 1;">${hour}</div>`;
+  });
+  
+  // 각 트레이너별로 세션들을 30분 단위로 배치
+  sortedTrainers.forEach((trainer, trainerIndex) => {
+    const gridColumn = trainerIndex + 2; // +2는 시간 라벨 열 때문
+    
+    // 해당 트레이너의 세션들만 필터링
+    const trainerSessions = processedSessions.filter(s => s.trainer === trainer.username);
+    
+    // 각 30분 단위별로 세션 컨테이너 생성
+    hours.forEach((hour, hourIndex) => {
+      const [slotHour, slotMinute] = hour.split(':').map(Number);
+      const startRow = hourIndex + 2; // +2는 헤더 행 때문
       
-      // 이전 30분 셀에서 이미 rowspan=2로 표시된 경우, 이 셀은 display:none
-      const prevIdx = i - 1;
-      let prevSession = null;
-      if (prevIdx >= 0) {
-        const prevHour = hours[prevIdx];
-        prevSession = processedSessions.find(s => s.trainer === t.username && s.time === prevHour);
-      }
+      // 현재 슬롯에서 시작하는 세션들 찾기
+      const currentSlotSessions = trainerSessions.filter(session => {
+        const [sessionHour, sessionMinute] = session.time.split(':').map(Number);
+        return sessionHour === slotHour && sessionMinute === slotMinute;
+      });
       
-      if (session) {
-        // 상태를 영어 클래스명으로 변환
-        let statusClass = 'reserved'; // 기본값
-        if (session.displayStatus === '예정') statusClass = 'reserved';
-        else if (session.displayStatus === '완료') statusClass = 'attend';
-        else if (session.displayStatus === '사전') statusClass = 'pre';
-        else if (session.displayStatus === '결석') statusClass = 'absent';
-        else if (session.displayStatus === '취소') statusClass = 'cancel';
-        else if (session.displayStatus === '전체취소') statusClass = 'allcancel';
-        else if (session.displayStatus === '잔여세션 부족') statusClass = 'no-remaining';
-        
-        let sessionClass = `adc-session adc-status-${statusClass}`;
-        if (session.hasNoRemainingSessions && session.status !== '완료') {
-          sessionClass += ' adc-no-remaining';
-        }
-        
-        // 30분 세션은 1행에만 표시, 1시간 세션은 2행에 표시
-        const is30min = session['30min'] === true;
-        const rowspan = is30min ? 1 : 2;
-        
-        // 30분 세션용 클래스 추가
-        if (is30min) {
-          sessionClass += ' adc-session-30min';
-        }
-        
-        html += `<td rowspan="${rowspan}"><div class="${sessionClass}">
-          <strong>${session.member} (${session.remainSessions})</strong>
-          <div class="adc-status-label">${session.displayStatus}</div>
-          ${session.hasNoRemainingSessions && session.status !== '완료' ? '<div style="color:#d32f2f;font-size:0.8em;">⚠️</div>' : ''}
-        </div></td>`;
-      } else if (prevSession) {
-        // 이전 세션이 1시간 세션이고 현재 시간이 그 세션의 두 번째 30분인 경우
-        const isPrevSession30min = prevSession['30min'] === true;
-        if (!isPrevSession30min) {
-          html += '<td style="display:none"></td>';
-        } else {
-          html += '<td></td>';
-        }
-      } else {
-        html += '<td></td>';
-      }
+      // 세션 컨테이너 생성
+      const rowSpan = currentSlotSessions.length > 0 ? 2 : 1; // 세션이 있으면 2개 행
+      
+      // 1시간 단위(정각)인지 확인하여 구분선 추가
+      const isHourDivider = slotMinute === 0;
+      const hourDividerClass = isHourDivider ? 'hour-divider' : '';
+      
+      html += `<div class="adc-session-container ${hourDividerClass}" data-time="${hour}" style="grid-row: ${startRow} / ${startRow + rowSpan}; grid-column: ${gridColumn};">
+        ${renderSessions(currentSlotSessions, trainer)}
+      </div>`;
     });
-    html += '</tr>';
-  }
-  html += '</tbody></table></div>';
+  });
+  
+  html += '</div>';
   tableWrap.innerHTML = html;
+  
+  // 그리드 행 수 동적 업데이트
+  updateCalendarGrid(hours);
+}
+
+// 세션 렌더링 함수
+function renderSessions(sessions, trainer) {
+  if (sessions.length === 0) return '';
+  
+  return sessions.map((session) => {
+    // 상태를 영어 클래스명으로 변환
+    let statusClass = 'reserved'; // 기본값
+    if (session.displayStatus === '예정') statusClass = 'reserved';
+    else if (session.displayStatus === '완료') statusClass = 'attend';
+    else if (session.displayStatus === '사전') statusClass = 'pre';
+    else if (session.displayStatus === '결석') statusClass = 'absent';
+    else if (session.displayStatus === '취소') statusClass = 'cancel';
+    else if (session.displayStatus === '전체취소') statusClass = 'allcancel';
+    else if (session.displayStatus === '잔여세션 부족') statusClass = 'no-remaining';
+    
+    // 30분 세션용 클래스 추가
+    const is30min = session['30min'] === true;
+    
+    let cardClass = `adc-session-card adc-status-${statusClass}`;
+    if (is30min) {
+      cardClass += ' adc-session-card-30min';
+    }
+    if (session.hasNoRemainingSessions && session.status !== '완료') {
+      cardClass += ' adc-no-remaining';
+    }
+    
+    return `<div class="${cardClass}">
+      <div class="adc-session-member">${session.member} (${session.remainSessions})</div>
+      <div class="adc-session-status">${session.displayStatus}</div>
+      ${session.hasNoRemainingSessions && session.status !== '완료' ? '<div style="color:#d32f2f;font-size:0.7em;">⚠️</div>' : ''}
+    </div>`;
+  }).join('');
+}
+
+// 캘린더 그리드 업데이트 함수
+function updateCalendarGrid(timeSlots) {
+  const calendarGrid = document.querySelector('.adc-calendar-grid');
+  if (!calendarGrid) return;
+  
+  const gridRows = 1 + timeSlots.length; // 헤더 1개 + 시간 슬롯들
+  
+  // 반응형 행 높이 설정
+  const isMobile = window.innerWidth <= 768;
+  const isSmallMobile = window.innerWidth <= 480;
+  
+  let headerHeight, rowHeight;
+  if (isSmallMobile) {
+    headerHeight = '30px';
+    rowHeight = '14px';
+  } else if (isMobile) {
+    headerHeight = '35px';
+    rowHeight = '16px';
+  } else {
+    headerHeight = '50px';
+    rowHeight = '24px';
+  }
+  
+  // 그리드 행 수 업데이트
+  calendarGrid.style.gridTemplateRows = `${headerHeight} repeat(${timeSlots.length}, ${rowHeight})`;
 } 

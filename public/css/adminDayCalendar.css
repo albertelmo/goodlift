@@ -1,31 +1,64 @@
-/* 날짜별 세션 캘린더 (관리자용) - 현대적인 디자인 */
-/* 더 구체적인 선택자로 우선순위 높임 */
-#admin-day-calendar-root .adc-table th, 
-#admin-day-calendar-root .adc-table td {
-  border: 1px solid #e0e0e0;
-  text-align: center;
-  padding: 0;
-  background: #fff;
-  font-size: 12px;
-  min-width: 120px;
-  height: 20px;
-  position: relative;
-  vertical-align: top;
+/* 날짜별 세션 캘린더 (관리자용) - CSS Grid 기반 현대적인 디자인 */
+
+/* 캘린더 그리드 컨테이너 */
+.adc-calendar-grid {
+  display: grid;
+  grid-template-columns: auto repeat(auto-fit, 1fr); /* 시간 라벨 자동 조정 + 트레이너 칼럼 동적 배분 */
+  grid-template-rows: 50px repeat(17, 24px); /* 헤더 + 기본 17개 슬롯 (30px → 24px) */
+  gap: 1px;
+  background: #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  max-width: 100%;
+  overflow-x: auto;
 }
 
-#admin-day-calendar-root .adc-table th {
+/* 헤더 스타일 */
+.adc-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+/* 시간 헤더 */
+.adc-time-header {
   background: #f8f9fa;
   font-weight: bold;
   color: #333;
   font-size: 12px;
-  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-bottom: 2px solid #e0e0e0;
-  vertical-align: middle;
+  padding: 8px;
 }
 
-.adc-header {
-  margin-bottom: 20px;
+/* 트레이너 헤더 */
+.adc-trainer-header {
+  background: #f8f9fa;
+  font-weight: bold;
+  color: #333;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 2px solid #e0e0e0;
+  padding: 8px;
   text-align: center;
+}
+
+/* 시간 라벨 */
+.adc-time-label {
+  background: #f8f9fa;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border-right: 1px solid #ddd;
+  font-weight: 500;
+  z-index: 10;
 }
 
 .adc-date-nav {
@@ -134,43 +167,119 @@
   box-sizing: border-box;
 }
 
-.adc-session {
+/* 세션 컨테이너 */
+.adc-session-container {
+  background: white;
+  border-right: 1px solid #ddd;
+  border-bottom: 1px solid #ddd;
+  position: relative;
+  min-height: 24px; /* 30px → 24px로 축소 */
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+/* 시간 단위 세션 컨테이너 구분선 (1시간마다) */
+.adc-session-container.hour-divider {
+  border-bottom: 1px solid #f0f0f0 !important;
+  position: relative;
+}
+
+.adc-session-container.hour-divider::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #f0f0f0;
+  z-index: 1;
+}
+
+/* 세션 카드 */
+.adc-session-card {
   background: white;
   border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  padding: 4px 6px;
-  margin: 2px;
-  font-size: 10px;
-  font-weight: 500;
-  min-height: 34px;
-  max-width: 98%;
-  overflow: hidden;
-  border-left: 3px solid #1976d2;
-  transition: all 0.2s;
+  border-radius: 3px;
+  padding: 2px 4px;
+  font-size: 9px;
   cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  position: absolute;
+  z-index: 5;
+  height: 100%;
+  margin: 1px;
+  box-sizing: border-box;
+  width: 100%;
 }
 
-/* 30분 세션용 작은 카드 스타일 */
-.adc-session-30min {
-  min-height: 16px !important;
-  padding: 1px 3px !important;
+/* 30분 세션용 작은 카드 스타일 (데스크탑) */
+.adc-session-card-30min {
+  height: 50% !important;
+  padding: 2px 4px !important;
   font-size: 8px !important;
-  line-height: 1.0 !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  margin: 1px !important;
 }
 
-/* 30분 세션이 있는 셀의 높이 조정 */
-#admin-day-calendar-root .adc-table td[rowspan="1"] {
-  height: 16px !important;
+/* 30분 세션에서 회원 이름 우선 표시 */
+.adc-session-card-30min .adc-session-member {
+  font-size: 9px !important;
+  margin-bottom: 0 !important;
+  line-height: 1.1 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
 }
 
-.adc-session:hover {
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+/* 30분 세션에서 상태 표시는 작게 */
+.adc-session-card-30min .adc-session-status {
+  font-size: 6px !important;
+  padding: 0 1px !important;
+  margin-top: 1px !important;
+  line-height: 1 !important;
+  overflow: hidden !important;
+}
+
+/* 세션 카드 내부 요소들 */
+.adc-session-member {
+  font-size: 10px;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+
+.adc-session-status {
+  font-size: 7px;
+  font-weight: bold;
+  text-align: center;
+  padding: 1px 2px;
+  border-radius: 2px;
+  background: rgba(0,0,0,0.05);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adc-session-card:hover {
+  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
   transform: translateY(-1px);
+  z-index: 15;
 }
 
 .adc-session strong {
@@ -296,61 +405,166 @@
   border-top: 1px solid #1976d2;
 }
 
+/* CSS Grid 기반 12:00 파란색 구분선 */
+.adc-session-container[data-time="12:00"]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #1976d2;
+  z-index: 2;
+}
+
+/* CSS Grid 기반 17:00 파란색 구분선 */
+.adc-session-container[data-time="17:00"]::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #1976d2;
+  z-index: 2;
+}
+
 /* 반응형 디자인 */
 @media (max-width: 1200px) {
-  .adc-table {
-    min-width: 700px;
+  .adc-calendar-grid {
+    grid-template-columns: 70px repeat(auto-fit, minmax(120px, 1fr));
   }
   
-  .adc-table th, .adc-table td {
-    min-width: 100px;
-    font-size: 11px;
+  .adc-session-card {
+    font-size: 8px;
+    padding: 1px 3px;
   }
   
-  .adc-time {
-    font-size: 10px;
-  }
-  
-  .adc-session {
-    font-size: 9px;
-    padding: 3px 4px;
-    min-height: 34px;
-  }
-  
-  .adc-session strong {
+  .adc-session-member {
     font-size: 9px;
   }
   
-  .adc-status-label {
+  .adc-session-status {
     font-size: 6px;
   }
 }
 
 @media (max-width: 768px) {
-  .adc-table {
-    min-width: 600px;
+  .adc-calendar-grid {
+    grid-template-columns: 50px repeat(auto-fit, minmax(80px, 1fr));
+    grid-template-rows: 35px repeat(17, 16px); /* 행 높이 더 축소 */
   }
   
-  .adc-table th, .adc-table td {
-    min-width: 80px;
-    font-size: 10px;
+  .adc-session-container {
+    min-height: 16px; /* 행 높이 더 축소 */
   }
   
-  .adc-time {
-    font-size: 9px;
+  .adc-session-card {
+    font-size: 7px;
+    padding: 1px 2px;
   }
   
-  .adc-session {
-    font-size: 8px;
-    padding: 2px 3px;
-    min-height: 34px;
+  .adc-session-member {
+    font-size: 7px;
+    font-weight: bold;
   }
   
-  .adc-session strong {
-    font-size: 8px;
-  }
-  
-  .adc-status-label {
+  .adc-session-status {
     font-size: 5px;
+    font-weight: normal;
+  }
+  
+  /* 모바일에서 30분 세션 글씨 크기만 1시간 세션과 동일하게 */
+  .adc-session-card-30min {
+    height: 50% !important;
+    padding: 1px 2px !important;
+    font-size: 7px !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    margin: 1px !important;
+  }
+  
+  .adc-session-card-30min .adc-session-member {
+    font-size: 7px !important;
+    font-weight: bold !important;
+  }
+  
+  .adc-session-card-30min .adc-session-status {
+    font-size: 5px !important;
+    font-weight: normal !important;
+  }
+  
+  .adc-time-label {
+    font-size: 9px;
+    padding: 2px 4px;
+  }
+  
+  .adc-time-header,
+  .adc-trainer-header {
+    font-size: 10px;
+    padding: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .adc-calendar-grid {
+    grid-template-columns: 45px repeat(auto-fit, minmax(70px, 1fr));
+    grid-template-rows: 30px repeat(17, 14px); /* 더 작은 행 높이 */
+  }
+  
+  .adc-session-container {
+    min-height: 14px;
+  }
+  
+  .adc-session-card {
+    font-size: 6px;
+    padding: 1px;
+  }
+  
+  .adc-session-member {
+    font-size: 6px;
+    font-weight: bold;
+  }
+  
+  .adc-session-status {
+    font-size: 4px;
+    font-weight: normal;
+  }
+  
+  /* 작은 모바일에서 30분 세션 글씨 크기만 1시간 세션과 동일하게 */
+  .adc-session-card-30min {
+    height: 50% !important;
+    padding: 1px 2px !important;
+    font-size: 6px !important;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    width: 100% !important;
+    margin: 1px !important;
+  }
+  
+  .adc-session-card-30min .adc-session-member {
+    font-size: 6px !important;
+    font-weight: bold !important;
+  }
+  
+  .adc-session-card-30min .adc-session-status {
+    font-size: 4px !important;
+    font-weight: normal !important;
+  }
+  
+  .adc-time-label {
+    font-size: 8px;
+    padding: 1px 3px;
+  }
+  
+  .adc-time-header,
+  .adc-trainer-header {
+    font-size: 9px;
+    padding: 4px;
   }
 } 

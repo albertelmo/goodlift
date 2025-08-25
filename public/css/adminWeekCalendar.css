@@ -483,7 +483,7 @@
   
   .awc-calendar-grid {
     grid-template-columns: 50px repeat(7, 1fr);
-    grid-template-rows: 35px repeat(17, 50px);
+    grid-template-rows: 30px repeat(17, 35px);
   }
   
   .awc-time-header,
@@ -498,7 +498,7 @@
   }
   
   .awc-session-container {
-    min-height: 50px;
+    min-height: 35px;
   }
   
   .awc-session-card {
@@ -516,5 +516,44 @@
   
   .awc-session-status {
     font-size: 5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .awc-calendar-grid {
+    grid-template-columns: 45px repeat(7, 1fr);
+    grid-template-rows: 25px repeat(17, 25px);
+  }
+  
+  .awc-time-header,
+  .awc-date-header {
+    font-size: 9px;
+    padding: 2px 1px;
+  }
+  
+  .awc-time-label {
+    font-size: 8px;
+    padding: 1px;
+  }
+  
+  .awc-session-container {
+    min-height: 25px;
+  }
+  
+  .awc-session-card {
+    font-size: 6px;
+    padding: 1px;
+  }
+  
+  .awc-session-member {
+    font-size: 7px;
+  }
+  
+  .awc-session-trainer {
+    font-size: 5px;
+  }
+  
+  .awc-session-status {
+    font-size: 4px;
   }
 }
