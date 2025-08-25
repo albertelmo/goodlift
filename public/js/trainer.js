@@ -17,13 +17,18 @@ async function loadList() {
             html += '<th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">아이디</th>';
             html += '<th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">이름</th>';
             html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">VIP 기능</th>';
+            html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">30분 세션</th>';
             html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">삭제</th>';
             html += '</tr></thead><tbody>';
             
             trainers.forEach(tr => {
                 const vipStatus = tr.vip_member ? 'ON' : 'OFF';
-                const vipColor = tr.vip_member ? '#4caf50' : '#666';
-                const vipBgColor = tr.vip_member ? '#e8f5e8' : '#f5f5f5';
+                const vipColor = tr.vip_member ? '#2196f3' : '#666';
+                const vipBgColor = tr.vip_member ? '#e3f2fd' : '#f5f5f5';
+                
+                const thirtyMinStatus = tr['30min_session'] === 'on' ? 'ON' : 'OFF';
+                const thirtyMinColor = tr['30min_session'] === 'on' ? '#2196f3' : '#666';
+                const thirtyMinBgColor = tr['30min_session'] === 'on' ? '#e3f2fd' : '#f5f5f5';
                 
                 html += `<tr>
                     <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.username}</td>
@@ -32,6 +37,12 @@ async function loadList() {
                         <button class="vip-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-vip="${tr.vip_member}" 
                                 style="background:${vipBgColor};color:${vipColor};border:1px solid ${vipColor};padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.9rem;min-width:60px;text-align:center;display:inline-block;width:60px;">
                             ${vipStatus}
+                        </button>
+                    </td>
+                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
+                        <button class="thirty-min-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-thirty-min="${tr['30min_session']}" 
+                                style="background:${thirtyMinBgColor};color:${thirtyMinColor};border:1px solid ${thirtyMinColor};padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.9rem;min-width:60px;text-align:center;display:inline-block;width:60px;">
+                            ${thirtyMinStatus}
                         </button>
                     </td>
                     <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
@@ -46,6 +57,9 @@ async function loadList() {
             
             // VIP 기능 토글 버튼 이벤트 리스너 추가
             setupVipToggleListeners();
+            
+            // 30분 세션 토글 버튼 이벤트 리스너 추가
+            setupThirtyMinToggleListeners();
             
             // 기존 삭제 버튼 이벤트 리스너 추가
             setupDeleteTrainerListeners();
@@ -94,6 +108,49 @@ function setupVipToggleListeners() {
             } catch (error) {
                 console.error('VIP 기능 설정 변경 오류:', error);
                 alert('VIP 기능 설정 변경에 실패했습니다.');
+            }
+        });
+    });
+}
+
+// 30분 세션 토글 버튼 이벤트 리스너 설정
+function setupThirtyMinToggleListeners() {
+    const listDiv = document.getElementById('trainer-list');
+    if (!listDiv) return;
+    
+    listDiv.querySelectorAll('.thirty-min-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const username = this.getAttribute('data-username');
+            const name = this.getAttribute('data-name');
+            const currentThirtyMin = this.getAttribute('data-thirty-min') === 'on';
+            const newThirtyMin = !currentThirtyMin;
+            
+            const action = newThirtyMin ? '활성화' : '비활성화';
+            if (!confirm(`트레이너 "${name}"의 30분 세션 기능을 ${action}하시겠습니까?`)) {
+                return;
+            }
+            
+            try {
+                const currentUser = localStorage.getItem('username');
+                const res = await fetch(`/api/trainers/${encodeURIComponent(username)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        '30min_session': newThirtyMin ? 'on' : 'off',
+                        currentUser 
+                    })
+                });
+                const result = await res.json();
+                
+                if (res.ok) {
+                    alert(`30분 세션 기능이 ${action}되었습니다.`);
+                    loadList(); // 목록 새로고침
+                } else {
+                    alert(result.message || '30분 세션 기능 설정 변경에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('30분 세션 기능 설정 변경 오류:', error);
+                alert('30분 세션 기능 설정 변경에 실패했습니다.');
             }
         });
     });

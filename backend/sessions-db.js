@@ -33,7 +33,7 @@ const createSessionsTable = async () => {
 // 세션 목록 조회
 const getSessions = async (filters = {}) => {
   try {
-    let query = 'SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status FROM sessions';
+    let query = 'SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min" FROM sessions';
     const params = [];
     let paramIndex = 1;
 
@@ -73,11 +73,11 @@ const getSessions = async (filters = {}) => {
 const addSession = async (session) => {
   try {
     const query = `
-      INSERT INTO sessions (id, member, trainer, date, time, status)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status
+      INSERT INTO sessions (id, member, trainer, date, time, status, "30min")
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min"
     `;
-    const values = [session.id, session.member, session.trainer, session.date, session.time, session.status];
+    const values = [session.id, session.member, session.trainer, session.date, session.time, session.status, session['30min'] || false];
     const result = await pool.query(query, values);
     return result.rows[0];
   } catch (error) {
@@ -105,6 +105,10 @@ const updateSession = async (id, updates) => {
       fields.push(`status = $${paramIndex++}`);
       values.push(updates.status);
     }
+    if (updates['30min'] !== undefined) {
+      fields.push(`"30min" = $${paramIndex++}`);
+      values.push(updates['30min']);
+    }
 
     if (fields.length === 0) {
       throw new Error('업데이트할 필드가 없습니다.');
@@ -115,7 +119,7 @@ const updateSession = async (id, updates) => {
       UPDATE sessions 
       SET ${fields.join(', ')}
       WHERE id = $${paramIndex}
-      RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status
+      RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min"
     `;
     const result = await pool.query(query, values);
     return result.rows[0];
@@ -140,7 +144,7 @@ const deleteSession = async (id) => {
 // 세션 ID로 조회
 const getSessionById = async (id) => {
   try {
-    const query = 'SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status FROM sessions WHERE id = $1';
+    const query = 'SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min" FROM sessions WHERE id = $1';
     const result = await pool.query(query, [id]);
     return result.rows[0];
   } catch (error) {
@@ -153,7 +157,7 @@ const getSessionById = async (id) => {
 async function getSessionsByDateRange(startDate, endDate) {
   try {
     const query = `
-      SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status FROM sessions 
+      SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min" FROM sessions 
       WHERE date >= $1 AND date <= $2 
       ORDER BY date ASC, time ASC
     `;
@@ -197,11 +201,11 @@ const addMultipleSessions = async (sessions) => {
       const addedSessions = [];
       for (const session of sessions) {
         const query = `
-          INSERT INTO sessions (id, member, trainer, date, time, status)
-          VALUES ($1, $2, $3, $4, $5, $6)
-          RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status
+          INSERT INTO sessions (id, member, trainer, date, time, status, "30min")
+          VALUES ($1, $2, $3, $4, $5, $6, $7)
+          RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min"
         `;
-        const values = [session.id, session.member, session.trainer, session.date, session.time, session.status];
+        const values = [session.id, session.member, session.trainer, session.date, session.time, session.status, session['30min'] || false];
         const result = await client.query(query, values);
         addedSessions.push(result.rows[0]);
       }
@@ -237,10 +241,38 @@ const deleteSessionsByMember = async (memberName) => {
   }
 };
 
+// 30min 필드 마이그레이션
+const migrate30minField = async () => {
+  try {
+    // 30min 컬럼이 존재하는지 확인
+    const checkQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'sessions' AND column_name = '30min'
+    `;
+    const checkResult = await pool.query(checkQuery);
+    
+    if (checkResult.rows.length === 0) {
+      // 30min 컬럼이 없으면 추가
+      const alterQuery = `
+        ALTER TABLE sessions 
+        ADD COLUMN "30min" BOOLEAN DEFAULT false
+      `;
+      await pool.query(alterQuery);
+      console.log('[Migration] 30min 컬럼이 추가되었습니다.');
+    } else {
+      console.log('[Migration] 30min 컬럼이 이미 존재합니다.');
+    }
+  } catch (error) {
+    console.error('[Migration] 30min 컬럼 마이그레이션 오류:', error);
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
     await createSessionsTable();
+    await migrate30minField(); // 마이그레이션 실행
     console.log('[PostgreSQL] 데이터베이스 초기화 완료');
   } catch (error) {
     console.error('[PostgreSQL] 데이터베이스 초기화 오류:', error);
@@ -249,6 +281,7 @@ const initializeDatabase = async () => {
 
 module.exports = {
   initializeDatabase,
+  migrate30minField,
   getSessions,
   addSession,
   updateSession,

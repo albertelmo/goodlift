@@ -79,7 +79,38 @@ function migrateTrainerVipField() {
     }
 }
 
+// 트레이너 30분 세션 기능 필드 마이그레이션
+function migrateTrainer30minSessionField() {
+    try {
+        if (!fs.existsSync(DATA_PATH)) {
+            return;
+        }
+
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        if (!raw) {
+            return;
+        }
+
+        let accounts = JSON.parse(raw);
+        let hasChanges = false;
+
+        accounts.forEach(account => {
+            if (account.role === 'trainer' && account['30min_session'] === undefined) {
+                account['30min_session'] = 'off'; // 기본값: 30분 세션 기능 사용 안함
+                hasChanges = true;
+            }
+        });
+
+        if (hasChanges) {
+            fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        }
+    } catch (error) {
+        console.error('[Migration] 트레이너 30분 세션 기능 필드 마이그레이션 오류:', error);
+    }
+}
+
 // migrateTrainerVipField();
+migrateTrainer30minSessionField();
 
 // 파일 업로드 설정
 const storage = multer.memoryStorage();
@@ -146,11 +177,12 @@ app.get('/api/trainers', (req, res) => {
         if (raw) accounts = JSON.parse(raw);
     }
     const trainers = accounts.filter(acc => acc.role === 'trainer')
-        .map(({ username, name, role, vip_member }) => ({ 
+        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession }) => ({ 
             username, 
             name, 
             role, 
-            vip_member: vip_member || false  // 기본값: VIP 기능 사용 안함
+            vip_member: vip_member || false,  // 기본값: VIP 기능 사용 안함
+            '30min_session': thirtyMinSession || 'off'  // 기본값: 30분 세션 기능 사용 안함
         }));
     res.json(trainers);
 });
@@ -200,7 +232,7 @@ app.delete('/api/trainers/:username', async (req, res) => {
 app.patch('/api/trainers/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        const { vip_member, currentUser } = req.body;
+        const { vip_member, '30min_session': thirtyMinSession, currentUser } = req.body;
         
         // 관리자 권한 확인
         let accounts = [];
@@ -221,20 +253,32 @@ app.patch('/api/trainers/:username', async (req, res) => {
         }
         
         // VIP 기능 설정 업데이트
-        accounts[trainerIndex].vip_member = Boolean(vip_member);
+        if (vip_member !== undefined) {
+            accounts[trainerIndex].vip_member = Boolean(vip_member);
+        }
+        
+        // 30분 세션 기능 설정 업데이트
+        if (thirtyMinSession !== undefined) {
+            if (!['on', 'off'].includes(thirtyMinSession)) {
+                return res.status(400).json({ message: '30분 세션 설정은 "on" 또는 "off"만 가능합니다.' });
+            }
+            accounts[trainerIndex]['30min_session'] = thirtyMinSession;
+        }
+        
         fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
         
         res.json({ 
-            message: 'VIP 기능 설정이 업데이트되었습니다.',
+            message: '트레이너 설정이 업데이트되었습니다.',
             trainer: {
                 username: accounts[trainerIndex].username,
                 name: accounts[trainerIndex].name,
-                vip_member: accounts[trainerIndex].vip_member
+                vip_member: accounts[trainerIndex].vip_member,
+                '30min_session': accounts[trainerIndex]['30min_session']
             }
         });
     } catch (error) {
-        console.error('[API] 트레이너 VIP 기능 설정 수정 오류:', error);
-        res.status(500).json({ message: 'VIP 기능 설정 수정에 실패했습니다.' });
+        console.error('[API] 트레이너 설정 수정 오류:', error);
+        res.status(500).json({ message: '트레이너 설정 수정에 실패했습니다.' });
     }
 });
 

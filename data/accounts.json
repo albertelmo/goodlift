@@ -10,41 +10,47 @@
     "password": "123",
     "name": "김성현",
     "role": "trainer",
-    "vip_member": false
+    "vip_member": false,
+    "30min_session": "off"
   },
   {
     "username": "ssc",
     "password": "123",
     "name": "천성식",
     "role": "trainer",
-    "vip_member": false
+    "vip_member": false,
+    "30min_session": "on"
   },
   {
     "username": "shy",
     "password": "123",
     "name": "윤승환",
     "role": "trainer",
-    "vip_member": false
+    "vip_member": false,
+    "30min_session": "on"
   },
   {
     "username": "sjl",
     "password": "123",
     "name": "이승준",
     "role": "trainer",
-    "vip_member": true
+    "vip_member": true,
+    "30min_session": "on"
   },
   {
     "username": "jyl",
     "password": "123",
     "name": "이주영",
     "role": "trainer",
-    "vip_member": true
+    "vip_member": true,
+    "30min_session": "off"
   },
   {
     "username": "wti",
     "password": "123",
     "name": "임우택",
     "role": "trainer",
-    "vip_member": false
+    "vip_member": false,
+    "30min_session": "off"
   }
 ]
