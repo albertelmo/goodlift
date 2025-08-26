@@ -113,14 +113,23 @@ function renderList(container) {
         <button id="export-members-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:1.2rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="엑셀 다운로드">
           ⬇️
         </button>
-        <select id="search-type" style="padding:6px 6px;font-size:0.9rem;border:1.2px solid #bbb;border-radius:6px;width:90px;">
-          <option value="name">이름</option>
-          <option value="trainer">트레이너</option>
-          <option value="center">센터</option>
+        <select id="status-filter" style="padding:4px 4px;font-size:0.8rem;border:1px solid #bbb;border-radius:4px;width:70px;">
+          <option value="">상태</option>
+          <option value="유효">유효</option>
+          <option value="만료">만료</option>
+          <option value="정지">정지</option>
         </select>
-        <input id="member-search-input" type="text" placeholder="검색어 입력" style="padding:6px 10px;font-size:0.97rem;border:1.2px solid #bbb;border-radius:6px;width:160px;">
+        <select id="center-filter" style="padding:4px 4px;font-size:0.8rem;border:1px solid #bbb;border-radius:4px;width:100px;">
+          <option value="">센터</option>
+        </select>
+        <select id="search-type" style="padding:4px 4px;font-size:0.8rem;border:1px solid #bbb;border-radius:4px;width:75px;">
+          <option value="trainer">트레이너</option>
+          <option value="name">이름</option>
+        </select>
+        <input id="member-search-input" type="text" placeholder="검색어 입력" style="padding:4px 8px;font-size:0.85rem;border:1px solid #bbb;border-radius:4px;width:140px;">
       </div>
     </div>
+    <div id="filter-status" style="font-size:0.85rem;color:#999;margin-bottom:8px;min-height:16px;"></div>
     <div id="member-table-wrap" style="min-height:100px;display:block;"></div>
     <div id="member-edit-modal-bg" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;"></div>
   `;
@@ -138,17 +147,29 @@ function renderList(container) {
   
   let allMembers = [];
   let trainers = [];
+  let centers = [];
   let sortColumn = null;
   let sortDirection = 'asc'; // 'asc' 또는 'desc'
   let currentDisplayedMembers = []; // 현재 표시된 회원 목록 추적
+  let currentFilters = { keyword: '', searchType: 'trainer', statusFilter: '', centerFilter: '' }; // 현재 필터 상태 추적
   
   // 데이터 불러오기
   Promise.all([
     fetch('/api/members').then(r=>r.json()),
-    fetch('/api/trainers').then(r=>r.json())
-  ]).then(([members, trs]) => {
+    fetch('/api/trainers').then(r=>r.json()),
+    fetch('/api/centers').then(r=>r.json())
+  ]).then(([members, trs, cs]) => {
     allMembers = members;
     trainers = trs;
+    centers = cs;
+    
+    // 센터 필터 옵션 설정
+    const centerFilter = container.querySelector('#center-filter');
+    if (centerFilter) {
+      centerFilter.innerHTML = '<option value="">센터</option>' + 
+        centers.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+    }
+    
     renderTable(allMembers);
   }).catch((error)=>{
     console.error('[Member List] Error loading data:', error);
@@ -172,6 +193,7 @@ function renderList(container) {
     
     if (!members.length) {
       tableWrap.innerHTML = '<div style="color:#888;text-align:center;padding:20px;">등록된 회원이 없습니다.</div>';
+      currentDisplayedMembers = [];
       return;
     }
     
@@ -286,6 +308,64 @@ function renderList(container) {
     });
   }
   
+  // 필터링 함수
+  function filterMembers(members, searchKeyword, searchType, statusFilter, centerFilter) {
+    // 현재 필터 상태 저장
+    currentFilters = { keyword: searchKeyword, searchType, statusFilter, centerFilter };
+    
+    return members.filter(m => {
+      // 1. 상태 필터 적용
+      if (statusFilter && m.status !== statusFilter) {
+        return false;
+      }
+      
+      // 2. 센터 필터 적용
+      if (centerFilter && m.center !== centerFilter) {
+        return false;
+      }
+      
+      // 3. 검색어가 없으면 상태/센터 필터만 적용
+      if (!searchKeyword.trim()) {
+        return true;
+      }
+      
+      // 4. 검색어 필터 적용
+      switch (searchType) {
+        case 'name':
+          return m.name.includes(searchKeyword);
+        case 'trainer':
+          const trainerName = trainers.find(t => t.username === m.trainer)?.name || m.trainer;
+          return trainerName.includes(searchKeyword);
+        default:
+          return m.name.includes(searchKeyword);
+      }
+    });
+  }
+
+  // 필터 상태 표시 함수
+  function updateFilterStatus() {
+    const statusFilter = container.querySelector('#status-filter').value;
+    const centerFilter = container.querySelector('#center-filter').value;
+    const searchType = container.querySelector('#search-type').value;
+    const keyword = container.querySelector('#member-search-input').value.trim();
+    
+    let statusText = '';
+    if (statusFilter || centerFilter || keyword) {
+      statusText = '필터 적용됨';
+      if (statusFilter) statusText += ` (상태: ${statusFilter})`;
+      if (centerFilter) statusText += ` (센터: ${centerFilter})`;
+      if (keyword) statusText += ` (${searchType}: ${keyword})`;
+      statusText += ` - ${currentDisplayedMembers.length}명`;
+    }
+    
+    // 필터 상태 표시 영역 업데이트
+    const filterStatus = container.querySelector('#filter-status');
+    if (filterStatus) {
+      filterStatus.textContent = statusText;
+      filterStatus.style.color = statusText ? '#1976d2' : '#999';
+    }
+  }
+
   // 정렬 아이콘 생성 함수
   function getSortIcon(column) {
     if (sortColumn !== column) {
@@ -299,52 +379,55 @@ function renderList(container) {
   container.querySelector('#member-search-input').addEventListener('input', function() {
     const keyword = this.value.trim();
     const searchType = container.querySelector('#search-type').value;
+    const statusFilter = container.querySelector('#status-filter').value;
+    const centerFilter = container.querySelector('#center-filter').value;
     
-    if (!keyword) {
-      renderTable(allMembers);
-    } else {
-      const filtered = allMembers.filter(m => {
-        switch (searchType) {
-          case 'name':
-            return m.name.includes(keyword);
-          case 'trainer':
-            const trainerName = trainers.find(t => t.username === m.trainer)?.name || m.trainer;
-            return trainerName.includes(keyword);
-          case 'center':
-            return m.center.includes(keyword);
-          default:
-            return m.name.includes(keyword);
-        }
-      });
-      renderTable(filtered);
-    }
+    const filtered = filterMembers(allMembers, keyword, searchType, statusFilter, centerFilter);
+    renderTable(filtered);
+    updateFilterStatus();
   });
   
   // 검색 타입 변경 이벤트
   container.querySelector('#search-type').addEventListener('change', function() {
     const searchInput = container.querySelector('#member-search-input');
     const keyword = searchInput.value.trim();
+    const statusFilter = container.querySelector('#status-filter').value;
+    const centerFilter = container.querySelector('#center-filter').value;
     
-    if (keyword) {
-      // 검색어가 있으면 즉시 재검색
-      const searchType = this.value;
-      const filtered = allMembers.filter(m => {
-        switch (searchType) {
-          case 'name':
-            return m.name.includes(keyword);
-          case 'trainer':
-            const trainerName = trainers.find(t => t.username === m.trainer)?.name || m.trainer;
-            return trainerName.includes(keyword);
-          case 'center':
-            return m.center.includes(keyword);
-          default:
-            return m.name.includes(keyword);
-        }
-      });
-      renderTable(filtered);
-    }
+    const searchType = this.value;
+    const filtered = filterMembers(allMembers, keyword, searchType, statusFilter, centerFilter);
+    renderTable(filtered);
+    updateFilterStatus();
   });
   
+  // 상태 필터 변경 이벤트
+  container.querySelector('#status-filter').addEventListener('change', function() {
+    const searchInput = container.querySelector('#member-search-input');
+    const searchType = container.querySelector('#search-type').value;
+    const statusFilter = this.value;
+    const centerFilter = container.querySelector('#center-filter').value;
+    const keyword = searchInput.value.trim();
+    
+    const filtered = filterMembers(allMembers, keyword, searchType, statusFilter, centerFilter);
+    renderTable(filtered);
+    updateFilterStatus();
+  });
+
+  // 센터 필터 변경 이벤트
+  container.querySelector('#center-filter').addEventListener('change', function() {
+    const searchInput = container.querySelector('#member-search-input');
+    const searchType = container.querySelector('#search-type').value;
+    const statusFilter = container.querySelector('#status-filter').value;
+    const centerFilter = this.value;
+    const keyword = searchInput.value.trim();
+    
+    const filtered = filterMembers(allMembers, keyword, searchType, statusFilter, centerFilter);
+    renderTable(filtered);
+    updateFilterStatus();
+  });
+
+
+
   // 엑셀 다운로드 버튼 이벤트
   container.querySelector('#export-members-btn').addEventListener('click', async function() {
     if (currentDisplayedMembers.length === 0) {
@@ -353,7 +436,23 @@ function renderList(container) {
     }
     
     // 확인 메시지 추가
-    const confirmDownload = confirm(`현재 표시된 ${currentDisplayedMembers.length}명의 회원 정보를 다운로드하시겠습니까?`);
+    let confirmMessage = `현재 표시된 ${currentDisplayedMembers.length}명의 회원 정보를 다운로드하시겠습니까?`;
+    
+    // 필터 정보 추가
+    if (currentFilters.keyword || currentFilters.statusFilter || currentFilters.centerFilter) {
+      confirmMessage += '\n\n적용된 필터:';
+      if (currentFilters.keyword) {
+        confirmMessage += `\n- ${currentFilters.searchType}: ${currentFilters.keyword}`;
+      }
+      if (currentFilters.statusFilter) {
+        confirmMessage += `\n- 상태: ${currentFilters.statusFilter}`;
+      }
+      if (currentFilters.centerFilter) {
+        confirmMessage += `\n- 센터: ${currentFilters.centerFilter}`;
+      }
+    }
+    
+    const confirmDownload = confirm(confirmMessage);
     if (!confirmDownload) {
       return;
     }
