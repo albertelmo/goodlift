@@ -233,6 +233,21 @@ export async function renderMyMembers(container, username) {
 
 let calState = { year: null, month: null, today: null };
 
+// 월 변경 시 날짜 유효성 검사 및 조정 함수
+function adjustDateForMonthChange() {
+    const currentYear = calState.year;
+    const currentMonth = calState.month;
+    const currentDay = calState.today;
+    
+    // 새로운 월의 마지막 날짜 계산
+    const lastDayOfMonth = new Date(currentYear, currentMonth, 0).getDate();
+    
+    // 현재 선택된 날짜가 새로운 월에서 유효하지 않은 경우 조정
+    if (currentDay > lastDayOfMonth) {
+        calState.today = lastDayOfMonth;
+    }
+}
+
 export function renderSessionCalendar(container) {
     if (!container) return;
     // 상태 초기화(최초 진입 시 오늘로)
@@ -242,7 +257,37 @@ export function renderSessionCalendar(container) {
         calState.month = today.getMonth() + 1;
         calState.today = today.getDate();
     }
+    
+    // 초기 상태 유효성 검사
+    validateAndAdjustCalendarState();
+    
     renderCalUI(container);
+}
+
+// 캘린더 상태 유효성 검사 및 조정 함수
+function validateAndAdjustCalendarState() {
+    // 월 범위 검사
+    if (calState.month < 1 || calState.month > 12) {
+        console.error(`Invalid month state: ${calState.month}, resetting to current month`);
+        const today = new Date();
+        calState.month = today.getMonth() + 1;
+        calState.year = today.getFullYear();
+    }
+    
+    // 연도 범위 검사 (합리적인 범위)
+    if (calState.year < 2000 || calState.year > 2100) {
+        console.error(`Invalid year state: ${calState.year}, resetting to current year`);
+        const today = new Date();
+        calState.year = today.getFullYear();
+        calState.month = today.getMonth() + 1;
+    }
+    
+    // 날짜 유효성 검사
+    const lastDayOfMonth = new Date(calState.year, calState.month, 0).getDate();
+    if (calState.today < 1 || calState.today > lastDayOfMonth) {
+        console.error(`Invalid day state: ${calState.today}, adjusting to last day of month: ${lastDayOfMonth}`);
+        calState.today = lastDayOfMonth;
+    }
 }
 
 async function renderCalUI(container, forceDate) {
@@ -250,6 +295,17 @@ async function renderCalUI(container, forceDate) {
     const mm = String(calState.month).padStart(2, '0');
     let dd = String(calState.today).padStart(2, '0');
     if (forceDate) dd = forceDate;
+    
+    // 날짜 유효성 검사 및 조정
+    const currentMonth = calState.month;
+    const lastDayOfMonth = new Date(yyyy, currentMonth, 0).getDate();
+    const currentDay = parseInt(dd);
+    
+    if (currentDay > lastDayOfMonth) {
+        dd = String(lastDayOfMonth).padStart(2, '0');
+        calState.today = lastDayOfMonth;
+    }
+    
     const selectedDate = `${yyyy}-${mm}-${dd}`;
     const username = localStorage.getItem('username');
     
@@ -792,18 +848,26 @@ async function renderCalUI(container, forceDate) {
             const dx = endX - startX;
             if (Math.abs(dx) > 40) {
                 if (dx < 0) {
-                    calState.month++;
-                    if (calState.month > 12) {
+                    // 다음달로 이동 (안전한 월 변경)
+                    if (calState.month === 12) {
                         calState.month = 1;
                         calState.year++;
+                    } else {
+                        calState.month++;
                     }
+                    // 날짜 유효성 검사 및 조정
+                    adjustDateForMonthChange();
                     renderCalUI(container);
                 } else {
-                    calState.month--;
-                    if (calState.month < 1) {
+                    // 이전달로 이동 (안전한 월 변경)
+                    if (calState.month === 1) {
                         calState.month = 12;
                         calState.year--;
+                    } else {
+                        calState.month--;
                     }
+                    // 날짜 유효성 검사 및 조정
+                    adjustDateForMonthChange();
                     renderCalUI(container);
                 }
             }
@@ -827,8 +891,22 @@ async function renderCalUI(container, forceDate) {
 function renderSimpleMonth(year, month, today) {
     // month: '06' 형태
     const m = Number(month);
+    
+    // 날짜 유효성 검사
+    if (m < 1 || m > 12) {
+        console.error(`Invalid month: ${m}`);
+        return '';
+    }
+    
     const first = new Date(year, m-1, 1);
     const last = new Date(year, m, 0);
+    
+    // 날짜 객체 유효성 검사
+    if (isNaN(first.getTime()) || isNaN(last.getTime())) {
+        console.error(`Invalid date range for year: ${year}, month: ${m}`);
+        return '';
+    }
+    
     let html = '';
     let day = 1 - first.getDay();
     for (let w=0; w<6; w++) {
@@ -849,8 +927,22 @@ function renderSimpleMonth(year, month, today) {
 
 function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
     const m = Number(month);
+    
+    // 날짜 유효성 검사
+    if (m < 1 || m > 12) {
+        console.error(`Invalid month: ${m}`);
+        return '';
+    }
+    
     const first = new Date(year, m-1, 1);
     const last = new Date(year, m, 0);
+    
+    // 날짜 객체 유효성 검사
+    if (isNaN(first.getTime()) || isNaN(last.getTime())) {
+        console.error(`Invalid date range for year: ${year}, month: ${m}`);
+        return '';
+    }
+    
     let html = '';
     let day = 1 - first.getDay();
     for (let w=0; w<6; w++) {
