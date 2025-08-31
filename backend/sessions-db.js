@@ -6,6 +6,54 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// 날짜 유효성 검사 및 수정 함수
+const validateAndFixDate = (dateString) => {
+  if (!dateString || typeof dateString !== 'string') {
+    return null;
+  }
+  
+  try {
+    // 날짜 형식 검사 (YYYY-MM-DD)
+    const dateRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+    const match = dateString.match(dateRegex);
+    
+    if (!match) {
+      console.warn(`[Date Validation] Invalid date format: ${dateString}`);
+      return null;
+    }
+    
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    const day = parseInt(match[3]);
+    
+    // 기본 범위 검사
+    if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+      console.warn(`[Date Validation] Date out of range: ${dateString}`);
+      return null;
+    }
+    
+    // 실제 날짜 유효성 검사
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      console.warn(`[Date Validation] Invalid date: ${dateString}, adjusting...`);
+      
+      // 해당 월의 마지막 날짜로 조정
+      const lastDay = new Date(year, month, 0).getDate();
+      const adjustedDay = Math.min(day, lastDay);
+      
+      const adjustedDate = `${year}-${String(month).padStart(2, '0')}-${String(adjustedDay).padStart(2, '0')}`;
+      console.log(`[Date Validation] Adjusted date: ${dateString} -> ${adjustedDate}`);
+      
+      return adjustedDate;
+    }
+    
+    return dateString;
+  } catch (error) {
+    console.error(`[Date Validation] Error validating date ${dateString}:`, error);
+    return null;
+  }
+};
+
 // 세션 테이블 생성
 const createSessionsTable = async () => {
   try {
@@ -44,16 +92,30 @@ const getSessions = async (filters = {}) => {
       params.push(filters.trainer);
     }
     if (filters.date) {
-      conditions.push(`date = $${paramIndex++}`);
-      params.push(filters.date);
+      const validatedDate = validateAndFixDate(filters.date);
+      if (validatedDate) {
+        conditions.push(`date = $${paramIndex++}`);
+        params.push(validatedDate);
+      } else {
+        console.warn(`[Date Validation] Skipping invalid date filter: ${filters.date}`);
+      }
     }
     if (filters.week) {
-      conditions.push(`date >= $${paramIndex++} AND date <= $${paramIndex++}`);
-      const weekStart = new Date(filters.week);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      params.push(weekStart.toISOString().split('T')[0]);
-      params.push(weekEnd.toISOString().split('T')[0]);
+      const validatedWeekStart = validateAndFixDate(filters.week);
+      if (validatedWeekStart) {
+        const weekStart = new Date(validatedWeekStart);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        
+        const validatedWeekEnd = validateAndFixDate(weekEnd.toISOString().split('T')[0]);
+        if (validatedWeekStart && validatedWeekEnd) {
+          conditions.push(`date >= $${paramIndex++} AND date <= $${paramIndex++}`);
+          params.push(validatedWeekStart);
+          params.push(validatedWeekEnd);
+        }
+      } else {
+        console.warn(`[Date Validation] Skipping invalid week filter: ${filters.week}`);
+      }
     }
 
     if (conditions.length > 0) {
@@ -72,12 +134,18 @@ const getSessions = async (filters = {}) => {
 // 세션 추가
 const addSession = async (session) => {
   try {
+    // 날짜 유효성 검사 및 수정
+    const validatedDate = validateAndFixDate(session.date);
+    if (!validatedDate) {
+      throw new Error(`Invalid date: ${session.date}`);
+    }
+    
     const query = `
       INSERT INTO sessions (id, member, trainer, date, time, status, "30min")
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min"
     `;
-    const values = [session.id, session.member, session.trainer, session.date, session.time, session.status, session['30min'] || false];
+    const values = [session.id, session.member, session.trainer, validatedDate, session.time, session.status, session['30min'] || false];
     const result = await pool.query(query, values);
     return result.rows[0];
   } catch (error) {
@@ -94,8 +162,13 @@ const updateSession = async (id, updates) => {
     let paramIndex = 1;
 
     if (updates.date) {
-      fields.push(`date = $${paramIndex++}`);
-      values.push(updates.date);
+      const validatedDate = validateAndFixDate(updates.date);
+      if (validatedDate) {
+        fields.push(`date = $${paramIndex++}`);
+        values.push(validatedDate);
+      } else {
+        throw new Error(`Invalid date: ${updates.date}`);
+      }
     }
     if (updates.time) {
       fields.push(`time = $${paramIndex++}`);
@@ -156,13 +229,21 @@ const getSessionById = async (id) => {
 // 날짜 범위로 세션 조회
 async function getSessionsByDateRange(startDate, endDate) {
   try {
+    // 날짜 유효성 검사 및 수정
+    const validatedStartDate = validateAndFixDate(startDate);
+    const validatedEndDate = validateAndFixDate(endDate);
+    
+    if (!validatedStartDate || !validatedEndDate) {
+      throw new Error(`Invalid date range: startDate=${startDate}, endDate=${endDate}`);
+    }
+    
     const query = `
       SELECT id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min" FROM sessions 
       WHERE date >= $1 AND date <= $2 
       ORDER BY date ASC, time ASC
     `;
     
-    const result = await pool.query(query, [startDate, endDate]);
+    const result = await pool.query(query, [validatedStartDate, validatedEndDate]);
     return result.rows;
   } catch (error) {
     console.error('날짜 범위 세션 조회 오류:', error);
@@ -173,6 +254,12 @@ async function getSessionsByDateRange(startDate, endDate) {
 // 시간 중복 체크 (같은 트레이너의 해당 시간 ±30분)
 const checkTimeConflict = async (trainer, date, time, is30min = false) => {
   try {
+    // 날짜 유효성 검사 및 수정
+    const validatedDate = validateAndFixDate(date);
+    if (!validatedDate) {
+      throw new Error(`Invalid date in time conflict check: ${date}`);
+    }
+    
     let query;
     if (is30min) {
       // 30분 세션: 해당 시간과 이후 30분만 체크
@@ -198,7 +285,7 @@ const checkTimeConflict = async (trainer, date, time, is30min = false) => {
           )
       `;
     }
-    const result = await pool.query(query, [trainer, date, time]);
+    const result = await pool.query(query, [trainer, validatedDate, time]);
     return parseInt(result.rows[0].count) > 0;
   } catch (error) {
     console.error('[PostgreSQL] 시간 중복 체크 오류:', error);
@@ -215,12 +302,18 @@ const addMultipleSessions = async (sessions) => {
       
       const addedSessions = [];
       for (const session of sessions) {
+        // 날짜 유효성 검사 및 수정
+        const validatedDate = validateAndFixDate(session.date);
+        if (!validatedDate) {
+          throw new Error(`Invalid date in session ${session.id}: ${session.date}`);
+        }
+        
         const query = `
           INSERT INTO sessions (id, member, trainer, date, time, status, "30min")
           VALUES ($1, $2, $3, $4, $5, $6, $7)
           RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min"
         `;
-        const values = [session.id, session.member, session.trainer, session.date, session.time, session.status, session['30min'] || false];
+        const values = [session.id, session.member, session.trainer, validatedDate, session.time, session.status, session['30min'] || false];
         const result = await client.query(query, values);
         addedSessions.push(result.rows[0]);
       }
