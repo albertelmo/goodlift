@@ -317,5 +317,18 @@ module.exports = {
   updateMember,
   decrementRemainSessions,
   getMemberByName,
-  deleteMember
+  deleteMember,
+  // 센터 이름 일괄 변경 (oldName -> newName)
+  renameCenter: async (oldName, newName) => {
+    try {
+      const result = await pool.query(
+        'UPDATE members SET center = $2 WHERE center = $1',
+        [oldName, newName]
+      );
+      return { updated: result.rowCount };
+    } catch (error) {
+      console.error('[PostgreSQL] 회원 센터명 일괄 변경 오류:', error);
+      throw error;
+    }
+  }
 }; 

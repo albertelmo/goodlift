@@ -48,10 +48,45 @@ async function loadList() {
         } else {
             let html = '<ul style="padding-left:0;list-style:none;">';
             centers.forEach(c => {
-                html += `<li style=\"padding:8px 0;border-bottom:1px solid #e3eaf5;display:flex;align-items:center;justify-content:space-between;\">🏢 <span>${c.name}</span> <button class=\"center-delete-btn\" data-name=\"${encodeURIComponent(c.name)}\" style=\"background:#fff;color:#d32f2f;border:1px solid #d32f2f;padding:4px 12px;border-radius:4px;font-size:0.95rem;cursor:pointer;transition:background 0.2s;\">삭제</button></li>`;
+                html += `<li style=\"padding:8px 0;border-bottom:1px solid #e3eaf5;display:flex;align-items:center;justify-content:space-between;\">` +
+                        `🏢 <span>${c.name}</span>` +
+                        `<span>` +
+                        `<button class=\"center-edit-btn\" data-name=\"${encodeURIComponent(c.name)}\" style=\"margin-right:8px;background:#fff;color:#1976d2;border:1px solid #1976d2;padding:4px 12px;border-radius:4px;font-size:0.95rem;cursor:pointer;transition:background 0.2s;\">수정</button>` +
+                        `<button class=\"center-delete-btn\" data-name=\"${encodeURIComponent(c.name)}\" style=\"background:#fff;color:#d32f2f;border:1px solid #d32f2f;padding:4px 12px;border-radius:4px;font-size:0.95rem;cursor:pointer;transition:background 0.2s;\">삭제</button>` +
+                        `</span>` +
+                        `</li>`;
             });
             html += '</ul>';
             if (listDiv) listDiv.innerHTML = html;
+            // 수정 버튼 이벤트 바인딩
+            document.querySelectorAll('.center-edit-btn').forEach(btn => {
+                btn.onclick = async function() {
+                    const oldName = decodeURIComponent(btn.getAttribute('data-name'));
+                    const newName = prompt('새 센터 이름을 입력하세요.', oldName);
+                    if (newName === null) return; // 취소
+                    const trimmed = newName.trim();
+                    if (!trimmed) {
+                        alert('올바른 센터 이름을 입력해주세요.');
+                        return;
+                    }
+                    if (trimmed === oldName) return; // 변경 없음
+                    try {
+                        const res = await fetch(`/api/centers/${encodeURIComponent(oldName)}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ newName: trimmed })
+                        });
+                        const result = await res.json();
+                        if (res.ok) {
+                            center.loadList();
+                        } else {
+                            alert(result.message || '센터 이름 변경에 실패했습니다.');
+                        }
+                    } catch (e) {
+                        alert('센터 이름 변경에 실패했습니다.');
+                    }
+                };
+            });
             // 삭제 버튼 이벤트 바인딩
             document.querySelectorAll('.center-delete-btn').forEach(btn => {
                 btn.onclick = async function() {

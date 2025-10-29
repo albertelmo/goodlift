@@ -354,6 +354,64 @@ app.post('/api/centers', (req, res) => {
     res.json({ message: '센터가 추가되었습니다.', center: newCenter });
 });
 
+// 센터 이름 변경 (이름 기반 참조 전역 갱신)
+app.put('/api/centers/:name', async (req, res) => {
+    try {
+        const oldName = decodeURIComponent(req.params.name);
+        const { newName } = req.body || {};
+        if (!oldName) {
+            return res.status(400).json({ message: '기존 센터 이름이 필요합니다.' });
+        }
+        if (!newName || typeof newName !== 'string' || !newName.trim()) {
+            return res.status(400).json({ message: '새 센터 이름을 입력해주세요.' });
+        }
+
+        // 1) centers.json 검증 및 중복 확인
+        let centers = [];
+        if (fs.existsSync(CENTERS_PATH)) {
+            const raw = fs.readFileSync(CENTERS_PATH, 'utf-8');
+            if (raw) centers = JSON.parse(raw);
+        }
+        const idx = centers.findIndex(c => c.name === oldName);
+        if (idx === -1) {
+            return res.status(404).json({ message: '센터를 찾을 수 없습니다.' });
+        }
+        if (centers.some(c => c.name === newName.trim())) {
+            return res.status(409).json({ message: '이미 존재하는 센터 이름입니다.' });
+        }
+
+        // 2) DB 업데이트 (members, registration_logs)
+        await membersDB.renameCenter(oldName, newName.trim());
+        await registrationLogsDB.renameCenterInLogs(oldName, newName.trim());
+
+        // 3) accounts.json 업데이트 (role=center 의 center 필드)
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        let accountsChanged = false;
+        accounts.forEach(acc => {
+            if (acc.role === 'center' && acc.center === oldName) {
+                acc.center = newName.trim();
+                accountsChanged = true;
+            }
+        });
+        if (accountsChanged) {
+            fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        }
+
+        // 4) centers.json 이름 변경
+        centers[idx].name = newName.trim();
+        fs.writeFileSync(CENTERS_PATH, JSON.stringify(centers, null, 2));
+
+        res.json({ message: '센터 이름이 변경되었습니다.', center: { name: newName.trim() } });
+    } catch (error) {
+        console.error('[API] 센터 이름 변경 오류:', error);
+        res.status(500).json({ message: '센터 이름 변경에 실패했습니다.' });
+    }
+});
+
 // 센터 삭제
 app.delete('/api/centers/:name', async (req, res) => {
     try {

@@ -99,5 +99,18 @@ module.exports = {
   initializeDatabase,
   addLog,
   getLogsByMonth,
-  getAllLogs
+  getAllLogs,
+  // 등록 로그의 센터명 일괄 변경 (oldName -> newName)
+  renameCenterInLogs: async (oldName, newName) => {
+    try {
+      const result = await pool.query(
+        'UPDATE registration_logs SET center = $2 WHERE center = $1',
+        [oldName, newName]
+      );
+      return { updated: result.rowCount };
+    } catch (error) {
+      console.error('[PostgreSQL] 등록 로그 센터명 일괄 변경 오류:', error);
+      throw error;
+    }
+  }
 }; 
