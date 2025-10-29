@@ -134,10 +134,33 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // 회원가입 API
 app.post('/api/signup', (req, res) => {
-    const { username, password, name, role } = req.body;
+    const { username, password, name, role, center } = req.body;
     if (!username || !password || !name || !role) {
         return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
     }
+
+    // 허용 역할 검증: admin | center | trainer
+    const allowedRoles = ['admin', 'center', 'trainer'];
+    if (!allowedRoles.includes(role)) {
+        return res.status(400).json({ message: '올바른 역할을 선택해주세요.' });
+    }
+
+    // 센터관리자일 경우 센터 필수 및 존재 검증
+    if (role === 'center') {
+        if (!center || typeof center !== 'string' || !center.trim()) {
+            return res.status(400).json({ message: '센터관리자 등록 시 센터를 선택해주세요.' });
+        }
+        let centers = [];
+        if (fs.existsSync(CENTERS_PATH)) {
+            const rawCenters = fs.readFileSync(CENTERS_PATH, 'utf-8');
+            if (rawCenters) centers = JSON.parse(rawCenters);
+        }
+        const exists = centers.some(c => c.name === center.trim());
+        if (!exists) {
+            return res.status(400).json({ message: '존재하지 않는 센터입니다.' });
+        }
+    }
+
     let accounts = [];
     if (fs.existsSync(DATA_PATH)) {
         const raw = fs.readFileSync(DATA_PATH, 'utf-8');
@@ -146,7 +169,12 @@ app.post('/api/signup', (req, res) => {
     if (accounts.find(acc => acc.username === username)) {
         return res.status(409).json({ message: '이미 존재하는 아이디입니다.' });
     }
-    accounts.push({ username, password, name, role });
+
+    const newAccount = { username, password, name, role };
+    if (role === 'center') {
+        newAccount.center = center.trim();
+    }
+    accounts.push(newAccount);
     fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
     res.json({ message: '회원가입이 완료되었습니다.' });
 });
@@ -166,7 +194,11 @@ app.post('/api/login', (req, res) => {
     if (!user) {
         return res.status(401).json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
     }
-    res.json({ message: '로그인 성공!', role: user.role, name: user.name });
+    const response = { message: '로그인 성공!', role: user.role, name: user.name };
+    if (user.role === 'center' && user.center) {
+        response.center = user.center;
+    }
+    res.json(response);
 });
 
 // 트레이너 리스트 API
@@ -470,13 +502,38 @@ app.post('/api/members/export', async (req, res) => {
 app.patch('/api/members/:name', async (req, res) => {
     try {
         const name = req.params.name;
-        const { status, trainer, addSessions, gender, center, phone, vipSession } = req.body; // addSessions: 추가할 세션 수(숫자)
+        const { status, trainer, addSessions, gender, center, phone, vipSession, currentUser } = req.body; // addSessions: 추가할 세션 수(숫자)
+        
+        // 센터관리자 권한 확인 및 센터 제한
+        let userRole = null;
+        let userCenter = null;
+        if (currentUser) {
+            let accounts = [];
+            if (fs.existsSync(DATA_PATH)) {
+                const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+                if (raw) accounts = JSON.parse(raw);
+            }
+            const userAccount = accounts.find(acc => acc.username === currentUser);
+            if (userAccount) {
+                userRole = userAccount.role;
+                userCenter = userAccount.center;
+            }
+        }
         
         const updates = {};
         if (status) updates.status = status;
         if (trainer) updates.trainer = trainer;
         if (gender) updates.gender = gender;
-        if (center) updates.center = center;
+        
+        // 센터관리자인 경우 센터 변경 제한
+        if (userRole === 'center' && userCenter) {
+            // 센터관리자는 자신의 센터로만 설정 가능
+            updates.center = userCenter;
+        } else if (center) {
+            // 관리자나 트레이너는 센터 변경 가능
+            updates.center = center;
+        }
+        
         if (phone !== undefined) updates.phone = phone; // 빈 문자열도 허용
         if (addSessions && !isNaN(Number(addSessions))) {
             updates.addSessions = Number(addSessions);

@@ -52,5 +52,12 @@
     "role": "trainer",
     "vip_member": false,
     "30min_session": "off"
+  },
+  {
+    "username": "ca",
+    "password": "123",
+    "name": "관리자(스탠다드PT 위례점)",
+    "role": "center",
+    "center": "스탠다드PT 위례점"
   }
 ]

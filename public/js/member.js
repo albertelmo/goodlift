@@ -49,7 +49,19 @@ function renderAddForm(container) {
   });
   fetch('/api/centers').then(r=>r.json()).then(cs=>{
     const sel = document.getElementById('member-center-select');
-    sel.innerHTML = '<option value="">선택</option>' + cs.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+    const userRole = localStorage.getItem('role');
+    const userCenter = localStorage.getItem('center');
+    
+    if (userRole === 'center' && userCenter) {
+      // 센터관리자인 경우 자신의 센터로 고정
+      sel.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
+      sel.disabled = true;
+      sel.style.backgroundColor = '#f5f5f5';
+      sel.style.color = '#666';
+    } else {
+      // 관리자나 트레이너인 경우 모든 센터 선택 가능
+      sel.innerHTML = '<option value="">선택</option>' + cs.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+    }
   });
   // 폼 제출 이벤트(API 연동)
   document.getElementById('member-add-form').onsubmit = async function(e) {
@@ -57,6 +69,13 @@ function renderAddForm(container) {
     const form = e.target;
     const data = Object.fromEntries(new FormData(form));
     data.sessions = Number(data.sessions);
+    
+    // 센터관리자인 경우 센터 정보 강제 추가 (disabled 필드는 FormData에 포함되지 않음)
+    const userRole = localStorage.getItem('role');
+    const userCenter = localStorage.getItem('center');
+    if (userRole === 'center' && userCenter) {
+      data.center = userCenter;
+    }
     const resultDiv = document.getElementById('member-add-result');
     resultDiv.style.color = '#1976d2';
     resultDiv.innerText = '처리 중...';
@@ -159,15 +178,33 @@ function renderList(container) {
     fetch('/api/trainers').then(r=>r.json()),
     fetch('/api/centers').then(r=>r.json())
   ]).then(([members, trs, cs]) => {
-    allMembers = members;
+    // 센터관리자인 경우 자신의 센터 회원만 필터링
+    const userRole = localStorage.getItem('role');
+    const userCenter = localStorage.getItem('center');
+    
+    if (userRole === 'center' && userCenter) {
+      allMembers = members.filter(member => member.center === userCenter);
+    } else {
+      allMembers = members;
+    }
+    
     trainers = trs;
     centers = cs;
     
     // 센터 필터 옵션 설정
     const centerFilter = container.querySelector('#center-filter');
     if (centerFilter) {
-      centerFilter.innerHTML = '<option value="">센터</option>' + 
-        centers.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+      if (userRole === 'center' && userCenter) {
+        // 센터관리자인 경우 자신의 센터만 표시
+        centerFilter.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
+        centerFilter.disabled = true;
+        centerFilter.style.backgroundColor = '#f5f5f5';
+        centerFilter.style.color = '#666';
+      } else {
+        // 관리자나 트레이너인 경우 모든 센터 표시
+        centerFilter.innerHTML = '<option value="">센터</option>' + 
+          centers.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+      }
     }
     
     renderTable(allMembers);
@@ -303,7 +340,17 @@ function renderList(container) {
     tableWrap.querySelectorAll('.member-row').forEach(row => {
       row.addEventListener('click', function() {
         const idx = this.getAttribute('data-idx');
-        showEditModal(members[idx]);
+        const member = members[idx];
+        const userRole = localStorage.getItem('role');
+        const userCenter = localStorage.getItem('center');
+        
+        // 센터관리자인 경우 자신의 센터 회원만 수정 가능
+        if (userRole === 'center' && userCenter && member.center !== userCenter) {
+          alert('다른 센터의 회원은 수정할 수 없습니다.');
+          return;
+        }
+        
+        showEditModal(member);
       });
     });
   }
@@ -528,7 +575,20 @@ function renderList(container) {
     // 센터 드롭다운 로딩
     fetch('/api/centers').then(r=>r.json()).then(centers=>{
       const centerSel = document.getElementById('edit-center');
-      centerSel.innerHTML = '<option value="">선택</option>' + centers.map(c=>`<option value="${c.name}"${member.center===c.name?' selected':''}>${c.name}</option>`).join('');
+      const userRole = localStorage.getItem('role');
+      const userCenter = localStorage.getItem('center');
+      
+      if (userRole === 'center' && userCenter) {
+        // 센터관리자인 경우 자신의 센터로 강제 고정 (회원의 센터와 관계없이)
+        centerSel.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
+        centerSel.disabled = true;
+        centerSel.style.backgroundColor = '#f5f5f5';
+        centerSel.style.color = '#666';
+        centerSel.title = '센터관리자는 자신의 센터만 관리할 수 있습니다.';
+      } else {
+        // 관리자나 트레이너인 경우 모든 센터 선택 가능
+        centerSel.innerHTML = '<option value="">선택</option>' + centers.map(c=>`<option value="${c.name}"${member.center===c.name?' selected':''}>${c.name}</option>`).join('');
+      }
     });
 
     // 닫기 버튼
@@ -557,10 +617,11 @@ function renderList(container) {
       resultDiv.style.color = '#1976d2';
       resultDiv.innerText = '처리 중...';
       try {
+        const currentUser = localStorage.getItem('username');
         const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status, trainer, addSessions, gender, center, vipSession })
+          body: JSON.stringify({ status, trainer, addSessions, gender, center, vipSession, currentUser })
         });
         const result = await res.json();
         if (res.ok) {

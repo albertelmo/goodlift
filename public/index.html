@@ -60,7 +60,14 @@
                     <label for="signup-role">역할:</label>
                     <select id="signup-role" name="role" required>
                         <option value="admin">관리자</option>
+                        <option value="center">센터관리자</option>
                         <option value="trainer">트레이너</option>
+                    </select>
+                </div>
+                <div class="form-row" id="signup-center-row" style="display:none;">
+                    <label for="signup-center">센터 선택:</label>
+                    <select id="signup-center" name="center">
+                        <option value="">센터 선택</option>
                     </select>
                 </div>
                 <button type="submit">회원가입</button>

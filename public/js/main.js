@@ -28,17 +28,52 @@ window.addEventListener('DOMContentLoaded', function() {
         document.getElementById('signupSection').style.display = 'block';
         // 관리자 계정 존재 여부 확인
         const roleSelect = document.getElementById('signup-role');
+        const centerRow = document.getElementById('signup-center-row');
+        const centerSelect = document.getElementById('signup-center');
         const res = await fetch('/api/admin-exists');
         const data = await res.json();
         if (data.exists) {
             roleSelect.value = 'trainer';
             roleSelect.querySelector('option[value="admin"]').disabled = true;
             roleSelect.querySelector('option[value="trainer"]').disabled = false;
+            roleSelect.querySelector('option[value="center"]').disabled = false;
         } else {
             roleSelect.value = 'admin';
             roleSelect.querySelector('option[value="admin"]').disabled = false;
             roleSelect.querySelector('option[value="trainer"]').disabled = false;
+            roleSelect.querySelector('option[value="center"]').disabled = false;
         }
+
+        // 센터 목록 로드 함수
+        async function loadCentersIntoSelect() {
+            try {
+                const resp = await fetch('/api/centers');
+                const centers = await resp.json();
+                centerSelect.innerHTML = '<option value="">센터 선택</option>';
+                centers.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.name;
+                    opt.textContent = c.name;
+                    centerSelect.appendChild(opt);
+                });
+            } catch (e) {
+                // 실패 시 기본 옵션 유지
+            }
+        }
+
+        // 역할 변경 시 센터 선택 표시/숨김
+        const toggleCenterRow = async () => {
+            if (roleSelect.value === 'center') {
+                centerRow.style.display = 'block';
+                await loadCentersIntoSelect();
+            } else {
+                centerRow.style.display = 'none';
+                centerSelect.value = '';
+            }
+        };
+        roleSelect.onchange = toggleCenterRow;
+        // 초기 상태 반영
+        toggleCenterRow();
     };
     document.getElementById('backToLoginBtn').onclick = function() {
         document.getElementById('signupSection').style.display = 'none';
@@ -64,6 +99,9 @@ window.addEventListener('DOMContentLoaded', function() {
             localStorage.setItem('role', result.role);
             localStorage.setItem('name', result.name);
             localStorage.setItem('username', data.username);
+            if (result.center) {
+                localStorage.setItem('center', result.center);
+            }
             showMainSection(result.role, result.name);
             document.getElementById('logoutBtn').style.display = 'inline-block';
             document.getElementById('settingsBtn').style.display = 'inline-block';
@@ -80,12 +118,21 @@ window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('signup-result').innerText = '비밀번호가 일치하지 않습니다.';
             return;
         }
+        const role = document.getElementById('signup-role').value;
+        const centerValue = document.getElementById('signup-center') ? document.getElementById('signup-center').value : '';
+        if (role === 'center' && !centerValue) {
+            document.getElementById('signup-result').innerText = '센터관리자 등록 시 센터를 선택해주세요.';
+            return;
+        }
         const data = {
             username: document.getElementById('signup-username').value,
             password,
             name: document.getElementById('signup-name').value,
-            role: document.getElementById('signup-role').value
+            role
         };
+        if (role === 'center') {
+            data.center = centerValue;
+        }
         const res = await fetch('/api/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -149,18 +196,33 @@ const trainerTabs = [
     { label: '📅', content: '<div id="session-calendar"></div>' },
     { label: '👤', content: '<div id="my-member-list"></div>' }
 ];
+
+// 센터관리자용 탭 (Center, Trainer 탭 제외)
+const centerTabs = [
+    { label: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
+    { label: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
+    { label: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: 'Stat', content: '<div id="admin-stats-root"></div>' }
+];
 function showMainSection(role, name) {
     document.getElementById('authSection').style.display = 'none';
     document.getElementById('mainSection').style.display = 'block';
     document.getElementById('logoutBtn').style.display = 'inline-block';
     
-    // 관리자일 때만 secretBtn 표시
+    // 관리자일 때만 secretBtn 표시 (센터관리자는 제외)
     const secretBtn = document.getElementById('secretBtn');
     if (secretBtn) {
         secretBtn.style.display = role === 'admin' ? 'inline-block' : 'none';
     }
     
-    let tabs = role === 'admin' ? adminTabs : trainerTabs;
+    let tabs;
+    if (role === 'admin') {
+        tabs = adminTabs;
+    } else if (role === 'center') {
+        tabs = centerTabs;
+    } else {
+        tabs = trainerTabs;
+    }
     renderTabs(tabs);
 }
 function renderTabs(tabs) {
