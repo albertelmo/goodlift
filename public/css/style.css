@@ -543,9 +543,28 @@ li, td, th {
         border-radius: 0;
         padding: 18px 4px 12px 4px;
     }
+    .tab-bar {
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+    }
+    .tab-bar::-webkit-scrollbar {
+        height: 4px;
+    }
+    .tab-bar::-webkit-scrollbar-track {
+        background: #f1f1f1;
+    }
+    .tab-bar::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 2px;
+    }
     .tab-bar button {
-        font-size: 1.08rem;
-        padding: 14px 2px;
+        flex: 0 0 auto;
+        min-width: 70px;
+        font-size: 0.9rem;
+        padding: 12px 12px 10px 12px;
+        white-space: nowrap;
     }
     .tab-content {
         padding: 18px 6px;
@@ -746,6 +765,38 @@ li, td, th {
     width: auto !important;
     box-sizing: border-box;
 }
+/* 지출 내역 모달 전용 스타일 (PC) */
+#expenseAddModal .expense-form-row {
+    margin-bottom: 6px;
+}
+
+#expenseAddModal .expense-form-row label {
+    flex: 0 0 110px;
+    margin-bottom: 0;
+    text-align: right;
+    margin-right: 10px;
+}
+
+#expenseAddModal .expense-form-row input {
+    flex: 1;
+    min-width: 0;
+}
+
+#expenseAddModal .expense-label-trainers {
+    align-self: flex-start;
+    padding-top: 4px;
+}
+
+#expenseAddModal .expense-trainers-list {
+    flex: 1;
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 4px;
+    background: #f9f9f9;
+}
+
 @media (max-width: 600px) {
     .form-row {
         flex-direction: column;
@@ -755,6 +806,31 @@ li, td, th {
         text-align: left;
         margin-right: 0;
         margin-bottom: 4px;
+    }
+    
+    /* 지출 내역 모달 - 모바일 최적화 */
+    #expenseAddModal .expense-form-row {
+        flex-direction: column;
+        align-items: stretch;
+        margin-bottom: 8px;
+    }
+    
+    #expenseAddModal .expense-form-row label {
+        text-align: left;
+        margin-right: 0;
+        margin-bottom: 1px;
+        flex: none;
+        padding-top: 0;
+        font-size: 0.95rem;
+    }
+    
+    #expenseAddModal .expense-form-row input {
+        width: 100%;
+        margin-top: 0;
+    }
+    
+    #expenseAddModal .expense-label-trainers {
+        padding-top: 0;
     }
 } 
 

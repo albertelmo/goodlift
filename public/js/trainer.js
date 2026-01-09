@@ -211,15 +211,9 @@ export async function renderMyMembers(container, username) {
         
         let html = '';
         
-        // 지출 내역 추가 버튼 추가
-        html += '<div style="margin-bottom:18px;text-align:right;">';
-        html += '<button id="addExpenseBtn" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:500;">💳 지출 내역 추가</button>';
-        html += '</div>';
-        
         if (!myMembers.length) {
             html += '<div style="color:#888;text-align:center;">담당 회원이 없습니다.</div>';
             container.innerHTML = html;
-            setupExpenseAddButton(username);
             return;
         }
         html += `<table style="width:100%;border-collapse:collapse;margin-top:18px;">
@@ -236,9 +230,6 @@ export async function renderMyMembers(container, username) {
         });
         html += '</tbody></table>';
         container.innerHTML = html;
-        
-        // 지출 내역 추가 버튼 이벤트 설정
-        setupExpenseAddButton(username);
     } catch {
         container.innerHTML = '<div style="color:#d32f2f;text-align:center;">회원 목록을 불러오지 못했습니다.</div>';
     }
@@ -450,6 +441,7 @@ async function renderCalUI(container, forceDate) {
         html += `</div>
             <button class="tmc-fab" id="tmc-add-btn">+</button>
             <button class="tmc-fab" id="tmc-add-30min-btn" style="display:none; bottom: 96px;">30min</button>
+            <button class="tmc-fab" id="tmc-add-expense-btn" style="bottom: 32px; left: 24px; right: auto; background: #1976d2; font-size: 1.5rem; width: 48px; height: 48px; box-shadow: 0 4px 16px #1976d240; z-index: 1002;">💳</button>
             <div class="tmc-modal-bg" id="tmc-modal-bg" style="display:none;"></div>
             <div class="tmc-modal" id="tmc-modal" style="display:none;">
                 <div class="tmc-modal-content">
@@ -521,6 +513,9 @@ async function renderCalUI(container, forceDate) {
             </div>
         </div>`;
         container.innerHTML = html;
+        
+        // 지출 내역 추가 버튼 이벤트 설정
+        setupExpenseAddButton(username);
         
         // 세션 추가 모달: 트레이너 드롭다운 로딩
         const trainersRes = await fetch('/api/trainers');
@@ -983,9 +978,9 @@ function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
     return html;
 }
 
-// 지출 내역 추가 버튼 설정
+// 지출 내역 추가 버튼 설정 (캘린더 화면용)
 function setupExpenseAddButton(username) {
-    const addExpenseBtn = document.getElementById('addExpenseBtn');
+    const addExpenseBtn = document.getElementById('tmc-add-expense-btn');
     if (!addExpenseBtn) return;
     
     addExpenseBtn.onclick = () => {
@@ -1001,6 +996,21 @@ async function showExpenseAddModal(username) {
     const resultDiv = document.getElementById('expenseAddResult');
     const trainersListDiv = document.getElementById('expense-trainers-list');
     const datetimeInput = document.getElementById('expense-datetime');
+    const expenseTypeMeal = document.getElementById('expense-type-meal');
+    const expenseTypePurchase = document.getElementById('expense-type-purchase');
+    const purchaseItemRow = document.getElementById('expense-purchase-item-row');
+    const trainersRow = document.getElementById('expense-trainers-row');
+    const centerRow = document.getElementById('expense-center-row');
+    const centerSelect = document.getElementById('expense-center');
+    
+    // 세션 추가 버튼들 숨기기 (모달이 열렸을 때)
+    const sessionAddBtn = document.getElementById('tmc-add-btn');
+    const session30minBtn = document.getElementById('tmc-add-30min-btn');
+    if (sessionAddBtn) sessionAddBtn.style.display = 'none';
+    if (session30minBtn && session30minBtn.style.display !== 'none') {
+        session30minBtn.dataset.wasVisible = 'true';
+        session30minBtn.style.display = 'none';
+    }
     
     // 모달 표시
     modalBg.style.display = 'block';
@@ -1008,6 +1018,11 @@ async function showExpenseAddModal(username) {
     
     // 결과 메시지 초기화
     resultDiv.textContent = '';
+    
+    // 지출 유형 기본값: 식대
+    expenseTypeMeal.checked = true;
+    expenseTypePurchase.checked = false;
+    updateExpenseTypeFields();
     
     // 현재 시간을 기본값으로 설정 (datetime-local 형식)
     const now = new Date();
@@ -1018,8 +1033,64 @@ async function showExpenseAddModal(username) {
     const minutes = String(now.getMinutes()).padStart(2, '0');
     datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
     
-    // 금액 입력 초기화
+    // 입력 필드 초기화
     document.getElementById('expense-amount').value = '';
+    document.getElementById('expense-purchase-item').value = '';
+    centerSelect.value = '';
+    
+    // 금액 입력 필드에 콤마 포맷팅 추가
+    const amountInput = document.getElementById('expense-amount');
+    // input 타입을 text로 변경 (number 타입은 콤마를 허용하지 않음)
+    amountInput.type = 'text';
+    amountInput.setAttribute('inputmode', 'numeric'); // 모바일에서 숫자 키패드 표시
+    
+    amountInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/,/g, ''); // 기존 콤마 제거
+        if (value === '') {
+            e.target.value = '';
+            return;
+        }
+        // 숫자만 허용 (문자 제거)
+        value = value.replace(/\D/g, '');
+        
+        if (value === '') {
+            e.target.value = '';
+            return;
+        }
+        
+        // 천 단위 콤마 추가
+        const numValue = parseInt(value, 10);
+        if (!isNaN(numValue)) {
+            e.target.value = numValue.toLocaleString('ko-KR');
+        } else {
+            e.target.value = '';
+        }
+    });
+    
+    // 지출 유형 변경 이벤트
+    expenseTypeMeal.onchange = updateExpenseTypeFields;
+    expenseTypePurchase.onchange = updateExpenseTypeFields;
+    
+    // 지출 유형에 따른 필드 표시/숨김
+    function updateExpenseTypeFields() {
+        const isMeal = expenseTypeMeal.checked;
+        
+        if (isMeal) {
+            // 식대: 트레이너 목록 표시, 구매물품/센터 숨김
+            purchaseItemRow.style.display = 'none';
+            trainersRow.style.display = 'flex';
+            centerRow.style.display = 'none';
+            document.getElementById('expense-purchase-item').removeAttribute('required');
+            centerSelect.removeAttribute('required');
+        } else {
+            // 구매: 구매물품/센터 표시, 트레이너 목록 숨김
+            purchaseItemRow.style.display = 'flex';
+            trainersRow.style.display = 'none';
+            centerRow.style.display = 'flex';
+            document.getElementById('expense-purchase-item').setAttribute('required', 'required');
+            centerSelect.setAttribute('required', 'required');
+        }
+    }
     
     // 트레이너 목록 로드 및 체크박스 생성
     try {
@@ -1028,33 +1099,51 @@ async function showExpenseAddModal(username) {
         
         if (trainers.length === 0) {
             trainersListDiv.innerHTML = '<div style="color:#888;text-align:center;">트레이너가 없습니다.</div>';
-            return;
+        } else {
+            let html = '';
+            trainers.forEach(trainer => {
+                const isCurrentUser = trainer.username === username;
+                html += `<label style="display:flex;align-items:center;padding:2px 0;cursor:pointer;">
+                    <input type="checkbox" name="participantTrainers" value="${trainer.username}" 
+                           ${isCurrentUser ? 'checked disabled' : ''} 
+                           style="margin-right:6px;width:18px;height:18px;cursor:pointer;flex-shrink:0;">
+                    <span style="font-size:0.9rem;">${trainer.name} (${trainer.username})</span>
+                    ${isCurrentUser ? '<span style="margin-left:6px;color:#1976d2;font-size:0.8rem;">(본인)</span>' : ''}
+                </label>`;
+            });
+            trainersListDiv.innerHTML = html;
         }
-        
-        let html = '';
-        trainers.forEach(trainer => {
-            const isCurrentUser = trainer.username === username;
-            html += `<label style="display:flex;align-items:center;padding:4px 0;cursor:pointer;">
-                <input type="checkbox" name="participantTrainers" value="${trainer.username}" 
-                       ${isCurrentUser ? 'checked disabled' : ''} 
-                       style="margin-right:8px;width:18px;height:18px;cursor:pointer;flex-shrink:0;">
-                <span style="font-size:0.9rem;">${trainer.name} (${trainer.username})</span>
-                ${isCurrentUser ? '<span style="margin-left:6px;color:#1976d2;font-size:0.8rem;">(본인)</span>' : ''}
-            </label>`;
-        });
-        trainersListDiv.innerHTML = html;
     } catch (error) {
         console.error('트레이너 목록 로드 오류:', error);
         trainersListDiv.innerHTML = '<div style="color:#d32f2f;">트레이너 목록을 불러오지 못했습니다.</div>';
+    }
+    
+    // 센터 목록 로드
+    try {
+        const res = await fetch('/api/centers');
+        const centers = await res.json();
+        
+        centerSelect.innerHTML = '<option value="">센터를 선택하세요</option>';
+        centers.forEach(center => {
+            const option = document.createElement('option');
+            option.value = center.name;
+            option.textContent = center.name;
+            centerSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('센터 목록 로드 오류:', error);
+        centerSelect.innerHTML = '<option value="">센터 목록을 불러오지 못했습니다.</option>';
     }
     
     // 폼 제출 이벤트
     form.onsubmit = async (e) => {
         e.preventDefault();
         
+        const expenseType = expenseTypeMeal.checked ? 'meal' : 'purchase';
         const datetime = datetimeInput.value;
-        const amount = parseInt(document.getElementById('expense-amount').value);
-        const checkboxes = form.querySelectorAll('input[name="participantTrainers"]:checked');
+        // 금액에서 콤마 제거 후 숫자로 변환
+        const amountValue = document.getElementById('expense-amount').value.replace(/,/g, '');
+        const amount = parseInt(amountValue);
         
         // 유효성 검사
         if (!datetime) {
@@ -1067,24 +1156,47 @@ async function showExpenseAddModal(username) {
             return;
         }
         
-        if (checkboxes.length === 0) {
-            resultDiv.textContent = '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.';
-            return;
-        }
+        let requestBody = {
+            trainer: username,
+            expenseType: expenseType,
+            amount: amount,
+            datetime: datetime
+        };
         
-        const participantTrainers = Array.from(checkboxes).map(cb => cb.value);
+        if (expenseType === 'meal') {
+            // 식대: 함께 지출한 트레이너 필수
+            const checkboxes = form.querySelectorAll('input[name="participantTrainers"]:checked');
+            if (checkboxes.length === 0) {
+                resultDiv.textContent = '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.';
+                return;
+            }
+            const participantTrainers = Array.from(checkboxes).map(cb => cb.value);
+            requestBody.participantTrainers = participantTrainers;
+        } else {
+            // 구매: 구매물품, 센터 필수
+            const purchaseItem = document.getElementById('expense-purchase-item').value.trim();
+            const center = centerSelect.value;
+            
+            if (!purchaseItem) {
+                resultDiv.textContent = '구매물품을 입력해주세요.';
+                return;
+            }
+            
+            if (!center) {
+                resultDiv.textContent = '센터를 선택해주세요.';
+                return;
+            }
+            
+            requestBody.purchaseItem = purchaseItem;
+            requestBody.center = center;
+        }
         
         // API 호출
         try {
             const res = await fetch('/api/expenses', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    trainer: username,
-                    amount: amount,
-                    datetime: datetime,
-                    participantTrainers: participantTrainers
-                })
+                body: JSON.stringify(requestBody)
             });
             
             const result = await res.json();
@@ -1110,10 +1222,17 @@ async function showExpenseAddModal(username) {
     
     // 취소 버튼 이벤트
     document.getElementById('closeExpenseAddBtn').onclick = closeExpenseAddModal;
+    
+    // 모달 배경 클릭 시 닫기
     modalBg.onclick = (e) => {
         if (e.target === modalBg) {
             closeExpenseAddModal();
         }
+    };
+    
+    // 모달 내부 클릭 시 이벤트 전파 방지 (모달이 닫히지 않도록)
+    modal.onclick = (e) => {
+        e.stopPropagation();
     };
 }
 
@@ -1128,6 +1247,23 @@ function closeExpenseAddModal() {
     modal.style.display = 'none';
     form.reset();
     resultDiv.textContent = '';
+    
+    // 지출 유형 기본값으로 리셋
+    document.getElementById('expense-type-meal').checked = true;
+    document.getElementById('expense-type-purchase').checked = false;
+    document.getElementById('expense-purchase-item-row').style.display = 'none';
+    document.getElementById('expense-trainers-row').style.display = 'flex';
+    document.getElementById('expense-center-row').style.display = 'none';
+    
+    // 세션 추가 버튼들 다시 표시 (모달이 닫혔을 때)
+    const sessionAddBtn = document.getElementById('tmc-add-btn');
+    const session30minBtn = document.getElementById('tmc-add-30min-btn');
+    if (sessionAddBtn) sessionAddBtn.style.display = 'flex';
+    // 30분 버튼은 원래 표시되어 있었으면 다시 표시
+    if (session30minBtn && session30minBtn.dataset.wasVisible === 'true') {
+        session30minBtn.style.display = 'block';
+        delete session30minBtn.dataset.wasVisible;
+    }
 }
 
 export const trainer = { loadList, renderMyMembers, renderSessionCalendar };
