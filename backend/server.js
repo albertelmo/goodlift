@@ -1977,19 +1977,29 @@ app.get('/api/expenses', async (req, res) => {
         const trainerMap = {};
         accounts.forEach(acc => {
             if (acc.role === 'trainer') {
-                trainerMap[acc.username] = acc.name;
+                // 이름에서 "(아이디)" 형식 제거하여 이름만 저장
+                const nameOnly = acc.name ? acc.name.replace(/\s*\([^)]*\)\s*$/, '').trim() : acc.username;
+                trainerMap[acc.username] = nameOnly;
             }
         });
         
         // 트레이너 이름 추가 및 함께 지출한 트레이너 이름 매핑
         const expensesWithNames = expenses.map(expense => {
-            const participantNames = (expense.participantTrainers || []).map(username => 
-                trainerMap[username] || username
-            );
+            const participantNames = (expense.participantTrainers || []).map(username => {
+                const name = trainerMap[username];
+                if (name) {
+                    // 이름에서 "(아이디)" 형식 제거
+                    return name.replace(/\s*\([^)]*\)\s*$/, '').trim();
+                }
+                return username;
+            });
+            
+            const trainerName = trainerMap[expense.trainer];
+            const trainerNameOnly = trainerName ? trainerName.replace(/\s*\([^)]*\)\s*$/, '').trim() : expense.trainer;
             
             return {
                 ...expense,
-                trainerName: trainerMap[expense.trainer] || expense.trainer,
+                trainerName: trainerNameOnly,
                 participantTrainerNames: participantNames
             };
         });

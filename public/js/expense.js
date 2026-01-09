@@ -244,7 +244,8 @@ function createMealRow(expense) {
   const dateStr = `${year}-${month}-${day}`;
   const timeStr = `${hours}:${minutes}`;
   
-  const participantNames = expense.participantTrainerNames || expense.participantTrainers || [];
+  // 백엔드에서 이미 이름으로 변환되어 전달되므로 participantTrainerNames만 사용
+  const participantNames = expense.participantTrainerNames || [];
   const participantStr = participantNames.join(', ');
   
   row.innerHTML = `
