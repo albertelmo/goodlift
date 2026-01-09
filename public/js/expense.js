@@ -234,6 +234,7 @@ function createMealRow(expense) {
   const row = document.createElement('tr');
   row.style.borderBottom = '1px solid #eee';
   
+  // 백엔드에서 이미 한국 시간(Asia/Seoul)으로 변환되어 반환되므로, 그대로 사용
   const datetime = new Date(expense.datetime);
   const year = datetime.getFullYear();
   const month = String(datetime.getMonth() + 1).padStart(2, '0');
@@ -270,6 +271,7 @@ function createPurchaseRow(expense) {
   const row = document.createElement('tr');
   row.style.borderBottom = '1px solid #eee';
   
+  // 백엔드에서 이미 한국 시간(Asia/Seoul)으로 변환되어 반환되므로, 그대로 사용
   const datetime = new Date(expense.datetime);
   const year = datetime.getFullYear();
   const month = String(datetime.getMonth() + 1).padStart(2, '0');

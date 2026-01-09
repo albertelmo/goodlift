@@ -252,10 +252,16 @@ const getExpenses = async (filters = {}) => {
       params.push(filters.offset);
     }
     
-    const result = await pool.query(query, params);
+    // 한국 시간대(Asia/Seoul)로 변환하여 조회
+    let queryWithTimezone = query.replace(
+      'SELECT id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at',
+      'SELECT id, trainer, expense_type, amount, datetime AT TIME ZONE \'UTC\' AT TIME ZONE \'Asia/Seoul\' as datetime, participant_trainers, purchase_item, center, created_at, updated_at'
+    );
+    
+    const result = await pool.query(queryWithTimezone, params);
     
     // camelCase로 변환
-    // datetime은 UTC로 반환되므로, 프론트엔드에서 한국 시간으로 변환
+    // datetime은 이미 한국 시간(Asia/Seoul)으로 변환되어 반환됨
     return result.rows.map(row => ({
       id: row.id,
       trainer: row.trainer,
