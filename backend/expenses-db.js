@@ -255,6 +255,7 @@ const getExpenses = async (filters = {}) => {
     const result = await pool.query(query, params);
     
     // camelCase로 변환
+    // datetime은 UTC로 반환되므로, 프론트엔드에서 한국 시간으로 변환
     return result.rows.map(row => ({
       id: row.id,
       trainer: row.trainer,
