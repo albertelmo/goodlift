@@ -252,10 +252,11 @@ const getExpenses = async (filters = {}) => {
       params.push(filters.offset);
     }
     
-    // 한국 시간대(Asia/Seoul)로 변환하여 조회
+    // TIMESTAMP (WITHOUT TIME ZONE)을 한국 시간(Asia/Seoul)으로 해석
+    // 저장 시 한국 시간으로 저장되었으므로, 한국 시간대로 해석
     let queryWithTimezone = query.replace(
       'SELECT id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at',
-      'SELECT id, trainer, expense_type, amount, datetime AT TIME ZONE \'UTC\' AT TIME ZONE \'Asia/Seoul\' as datetime, participant_trainers, purchase_item, center, created_at, updated_at'
+      'SELECT id, trainer, expense_type, amount, datetime AT TIME ZONE \'Asia/Seoul\' as datetime, participant_trainers, purchase_item, center, created_at, updated_at'
     );
     
     const result = await pool.query(queryWithTimezone, params);
