@@ -4,6 +4,7 @@ import { member } from './member.js';
 import { adminDayCalendar } from './adminDayCalendar.js';
 import { adminWeekCalendar } from './adminWeekCalendar.js';
 import { adminStats } from './adminStats.js';
+import { expense } from './expense.js';
 
 // 회원가입 폼 표시 및 자동 로그인 처리
 window.addEventListener('DOMContentLoaded', function() {
@@ -190,7 +191,8 @@ const adminTabs = [
         <div id="center-list"></div>
     </div>` },
     { label: 'Trainer', content: '<div id="trainer-list-loading">트레이너 목록을 불러오는 중...</div><div id="trainer-list"></div>' },
-    { label: 'Stat', content: '<div id="admin-stats-root"></div>' }
+    { label: 'Stat', content: '<div id="admin-stats-root"></div>' },
+    { label: 'Expense', content: '<div id="expense-root"></div>' }
 ];
 const trainerTabs = [
     { label: '📅', content: '<div id="session-calendar"></div>' },
@@ -264,6 +266,9 @@ function renderTabs(tabs) {
             if (tab.label === 'Stat') {
                 adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
             }
+            if (tab.label === 'Expense') {
+                expense.render(tabContent.querySelector('#expense-root') || tabContent);
+            }
         };
         tabBar.appendChild(btn);
     });
@@ -292,6 +297,9 @@ function renderTabs(tabs) {
     }
     if (tabs[0].label === 'Stat') {
         adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
+    }
+    if (tabs[0].label === 'Expense') {
+        expense.render(tabContent.querySelector('#expense-root') || tabContent);
     }
 }
 

@@ -208,11 +208,21 @@ export async function renderMyMembers(container, username) {
             const bRemain = b.remainSessions !== undefined ? b.remainSessions : -1;
             return aRemain - bRemain; // 오름차순 (잔여세션 적은 순)
         });
+        
+        let html = '';
+        
+        // 지출 내역 추가 버튼 추가
+        html += '<div style="margin-bottom:18px;text-align:right;">';
+        html += '<button id="addExpenseBtn" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;font-weight:500;">💳 지출 내역 추가</button>';
+        html += '</div>';
+        
         if (!myMembers.length) {
-            container.innerHTML = '<div style="color:#888;text-align:center;">담당 회원이 없습니다.</div>';
+            html += '<div style="color:#888;text-align:center;">담당 회원이 없습니다.</div>';
+            container.innerHTML = html;
+            setupExpenseAddButton(username);
             return;
         }
-        let html = `<table style="width:100%;border-collapse:collapse;margin-top:18px;">
+        html += `<table style="width:100%;border-collapse:collapse;margin-top:18px;">
           <thead><tr>
             <th style="text-align:center;">이름</th><th style="text-align:center;">세션 수</th><th style="text-align:center;">잔여세션</th><th style="text-align:center;">상태</th>
           </tr></thead><tbody>`;
@@ -226,6 +236,9 @@ export async function renderMyMembers(container, username) {
         });
         html += '</tbody></table>';
         container.innerHTML = html;
+        
+        // 지출 내역 추가 버튼 이벤트 설정
+        setupExpenseAddButton(username);
     } catch {
         container.innerHTML = '<div style="color:#d32f2f;text-align:center;">회원 목록을 불러오지 못했습니다.</div>';
     }
@@ -968,6 +981,153 @@ function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
         if (day > last.getDate()) break;
     }
     return html;
+}
+
+// 지출 내역 추가 버튼 설정
+function setupExpenseAddButton(username) {
+    const addExpenseBtn = document.getElementById('addExpenseBtn');
+    if (!addExpenseBtn) return;
+    
+    addExpenseBtn.onclick = () => {
+        showExpenseAddModal(username);
+    };
+}
+
+// 지출 내역 추가 모달 표시
+async function showExpenseAddModal(username) {
+    const modalBg = document.getElementById('expenseAddModalBg');
+    const modal = document.getElementById('expenseAddModal');
+    const form = document.getElementById('expenseAddForm');
+    const resultDiv = document.getElementById('expenseAddResult');
+    const trainersListDiv = document.getElementById('expense-trainers-list');
+    const datetimeInput = document.getElementById('expense-datetime');
+    
+    // 모달 표시
+    modalBg.style.display = 'block';
+    modal.style.display = 'block';
+    
+    // 결과 메시지 초기화
+    resultDiv.textContent = '';
+    
+    // 현재 시간을 기본값으로 설정 (datetime-local 형식)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    datetimeInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+    
+    // 금액 입력 초기화
+    document.getElementById('expense-amount').value = '';
+    
+    // 트레이너 목록 로드 및 체크박스 생성
+    try {
+        const res = await fetch('/api/trainers');
+        const trainers = await res.json();
+        
+        if (trainers.length === 0) {
+            trainersListDiv.innerHTML = '<div style="color:#888;text-align:center;">트레이너가 없습니다.</div>';
+            return;
+        }
+        
+        let html = '';
+        trainers.forEach(trainer => {
+            const isCurrentUser = trainer.username === username;
+            html += `<label style="display:flex;align-items:center;padding:6px 0;cursor:pointer;">
+                <input type="checkbox" name="participantTrainers" value="${trainer.username}" 
+                       ${isCurrentUser ? 'checked disabled' : ''} 
+                       style="margin-right:8px;width:18px;height:18px;cursor:pointer;">
+                <span style="font-size:0.95rem;">${trainer.name} (${trainer.username})</span>
+                ${isCurrentUser ? '<span style="margin-left:8px;color:#1976d2;font-size:0.85rem;">(본인)</span>' : ''}
+            </label>`;
+        });
+        trainersListDiv.innerHTML = html;
+    } catch (error) {
+        console.error('트레이너 목록 로드 오류:', error);
+        trainersListDiv.innerHTML = '<div style="color:#d32f2f;">트레이너 목록을 불러오지 못했습니다.</div>';
+    }
+    
+    // 폼 제출 이벤트
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        
+        const datetime = datetimeInput.value;
+        const amount = parseInt(document.getElementById('expense-amount').value);
+        const checkboxes = form.querySelectorAll('input[name="participantTrainers"]:checked');
+        
+        // 유효성 검사
+        if (!datetime) {
+            resultDiv.textContent = '시각을 입력해주세요.';
+            return;
+        }
+        
+        if (isNaN(amount) || amount < 0) {
+            resultDiv.textContent = '올바른 금액을 입력해주세요.';
+            return;
+        }
+        
+        if (checkboxes.length === 0) {
+            resultDiv.textContent = '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.';
+            return;
+        }
+        
+        const participantTrainers = Array.from(checkboxes).map(cb => cb.value);
+        
+        // API 호출
+        try {
+            const res = await fetch('/api/expenses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    trainer: username,
+                    amount: amount,
+                    datetime: datetime,
+                    participantTrainers: participantTrainers
+                })
+            });
+            
+            const result = await res.json();
+            
+            if (res.ok) {
+                resultDiv.textContent = '지출 내역이 등록되었습니다.';
+                resultDiv.style.color = '#1976d2';
+                
+                // 1.5초 후 모달 닫기
+                setTimeout(() => {
+                    closeExpenseAddModal();
+                }, 1500);
+            } else {
+                resultDiv.textContent = result.message || '지출 내역 등록에 실패했습니다.';
+                resultDiv.style.color = '#d32f2f';
+            }
+        } catch (error) {
+            console.error('지출 내역 등록 오류:', error);
+            resultDiv.textContent = '지출 내역 등록 중 오류가 발생했습니다.';
+            resultDiv.style.color = '#d32f2f';
+        }
+    };
+    
+    // 취소 버튼 이벤트
+    document.getElementById('closeExpenseAddBtn').onclick = closeExpenseAddModal;
+    modalBg.onclick = (e) => {
+        if (e.target === modalBg) {
+            closeExpenseAddModal();
+        }
+    };
+}
+
+// 지출 내역 추가 모달 닫기
+function closeExpenseAddModal() {
+    const modalBg = document.getElementById('expenseAddModalBg');
+    const modal = document.getElementById('expenseAddModal');
+    const form = document.getElementById('expenseAddForm');
+    const resultDiv = document.getElementById('expenseAddResult');
+    
+    modalBg.style.display = 'none';
+    modal.style.display = 'none';
+    form.reset();
+    resultDiv.textContent = '';
 }
 
 export const trainer = { loadList, renderMyMembers, renderSessionCalendar };

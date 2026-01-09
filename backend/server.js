@@ -14,6 +14,7 @@ const sessionsDB = require('./sessions-db');
 const membersDB = require('./members-db');
 const monthlyStatsDB = require('./monthly-stats-db');
 const registrationLogsDB = require('./registration-logs-db');
+const expensesDB = require('./expenses-db');
 
 // 이메일 서비스 모듈
 const emailService = require('./email-service');
@@ -48,6 +49,7 @@ sessionsDB.initializeDatabase();
 membersDB.initializeDatabase();
 monthlyStatsDB.initializeDatabase();
 registrationLogsDB.initializeDatabase();
+expensesDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -1590,6 +1592,144 @@ app.get('/api/registration-logs/:yearMonth', async (req, res) => {
     } catch (error) {
         console.error('[API] 등록 로그 조회 오류:', error);
         res.status(500).json({ message: '등록 로그 조회에 실패했습니다.' });
+    }
+});
+
+// 지출 내역 추가 API (트레이너만 가능)
+app.post('/api/expenses', async (req, res) => {
+    try {
+        const { trainer, amount, datetime, participantTrainers } = req.body;
+        
+        // 필수 필드 검증
+        if (!trainer || amount === undefined || !datetime || !participantTrainers || !Array.isArray(participantTrainers)) {
+            return res.status(400).json({ message: '모든 필수 항목을 입력해주세요.' });
+        }
+        
+        // 금액 검증
+        const numAmount = Number(amount);
+        if (isNaN(numAmount) || numAmount < 0) {
+            return res.status(400).json({ message: '금액은 0 이상의 숫자여야 합니다.' });
+        }
+        
+        // 함께 지출한 트레이너 검증 (최소 1명 이상)
+        if (participantTrainers.length === 0) {
+            return res.status(400).json({ message: '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.' });
+        }
+        
+        // datetime 처리: datetime-local 입력값을 한국시간 TIMESTAMP로 변환
+        // 입력 형식: "2025-01-15T12:30" (로컬 시간)
+        // 저장 형식: "2025-01-15 12:30:00+09:00" (한국시간)
+        let datetimeValue;
+        try {
+            // datetime-local 형식인 경우
+            if (datetime.includes('T')) {
+                // 한국시간으로 해석 (UTC+9)
+                const [datePart, timePart] = datetime.split('T');
+                datetimeValue = `${datePart} ${timePart}:00+09:00`;
+            } else {
+                // 이미 TIMESTAMP 형식인 경우
+                datetimeValue = datetime;
+            }
+        } catch (error) {
+            return res.status(400).json({ message: '올바른 날짜 형식을 입력해주세요.' });
+        }
+        
+        const expenseData = {
+            trainer,
+            amount: numAmount,
+            datetime: datetimeValue,
+            participantTrainers
+        };
+        
+        const expense = await expensesDB.addExpense(expenseData);
+        
+        res.json({ 
+            message: '지출 내역이 추가되었습니다.',
+            expense 
+        });
+    } catch (error) {
+        console.error('[API] 지출 내역 추가 오류:', error);
+        res.status(500).json({ message: '지출 내역 추가에 실패했습니다.' });
+    }
+});
+
+// 지출 내역 조회 API (관리자만 가능)
+app.get('/api/expenses', async (req, res) => {
+    try {
+        const { trainer, startDate, endDate, limit, offset } = req.query;
+        
+        const filters = {};
+        if (trainer) filters.trainer = trainer;
+        if (startDate) filters.startDate = startDate;
+        if (endDate) filters.endDate = endDate;
+        if (limit) filters.limit = parseInt(limit);
+        if (offset) filters.offset = parseInt(offset);
+        
+        const expenses = await expensesDB.getExpenses(filters);
+        
+        // 트레이너 이름 매핑을 위한 계정 정보 조회
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const trainerMap = {};
+        accounts.forEach(acc => {
+            if (acc.role === 'trainer') {
+                trainerMap[acc.username] = acc.name;
+            }
+        });
+        
+        // 트레이너 이름 추가 및 함께 지출한 트레이너 이름 매핑
+        const expensesWithNames = expenses.map(expense => {
+            const participantNames = expense.participantTrainers.map(username => 
+                trainerMap[username] || username
+            );
+            
+            return {
+                ...expense,
+                trainerName: trainerMap[expense.trainer] || expense.trainer,
+                participantTrainerNames: participantNames
+            };
+        });
+        
+        // 요약 정보 계산
+        const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+        const summary = {
+            totalAmount,
+            count: expenses.length
+        };
+        
+        res.json({
+            expenses: expensesWithNames,
+            total: expenses.length,
+            summary
+        });
+    } catch (error) {
+        console.error('[API] 지출 내역 조회 오류:', error);
+        res.status(500).json({ message: '지출 내역 조회에 실패했습니다.' });
+    }
+});
+
+// 지출 내역 삭제 API (관리자만 가능)
+app.delete('/api/expenses/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        
+        if (isNaN(id)) {
+            return res.status(400).json({ message: '올바른 지출 내역 ID를 입력해주세요.' });
+        }
+        
+        await expensesDB.deleteExpense(id);
+        
+        res.json({ message: '지출 내역이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 지출 내역 삭제 오류:', error);
+        if (error.message === '지출 내역을 찾을 수 없습니다.') {
+            res.status(404).json({ message: '지출 내역을 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '지출 내역 삭제에 실패했습니다.' });
+        }
     }
 });
 

@@ -239,6 +239,31 @@
         </div>
       </div>
     </div>
+
+    <!-- 지출 내역 추가 모달 -->
+    <div id="expenseAddModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="expenseAddModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:32px 28px 24px 28px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:400px;max-width:90vw;max-height:80vh;overflow-y:auto;">
+      <h3 style="margin-top:0;margin-bottom:18px;color:#1976d2;font-size:1.15rem;">💳 지출 내역 등록</h3>
+      <form id="expenseAddForm">
+        <div class="form-row">
+          <label for="expense-datetime">시각 *</label>
+          <input type="datetime-local" id="expense-datetime" name="datetime" required>
+        </div>
+        <div class="form-row">
+          <label for="expense-amount">금액 *</label>
+          <input type="number" id="expense-amount" name="amount" min="0" placeholder="원" required>
+        </div>
+        <div class="form-row">
+          <label>함께 지출한 트레이너 *</label>
+          <div id="expense-trainers-list" style="max-height:200px;overflow-y:auto;border:1px solid #ddd;border-radius:4px;padding:8px;background:#f9f9f9;"></div>
+        </div>
+        <div id="expenseAddResult" style="min-height:22px;color:#d32f2f;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+          <button type="button" id="closeExpenseAddBtn" style="background:#eee;color:#1976d2;">취소</button>
+          <button type="submit">등록</button>
+        </div>
+      </form>
+    </div>
     <div id="mainSection">
         <div id="tabBar" class="tab-bar"></div>
         <div id="tabContent" class="tab-content"></div>
@@ -246,5 +271,6 @@
     <script type="module" src="js/main.js"></script>
     <script type="module" src="js/adminDayCalendar.js"></script>
     <script type="module" src="js/secret.js"></script>
+    <script type="module" src="js/expense.js"></script>
 </body>
 </html>
