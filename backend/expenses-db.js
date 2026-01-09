@@ -23,9 +23,12 @@ const createExpensesTable = async () => {
         CREATE TABLE expenses (
           id SERIAL PRIMARY KEY,
           trainer VARCHAR(100) NOT NULL,
+          expense_type VARCHAR(20) NOT NULL CHECK (expense_type IN ('meal', 'purchase')),
           amount INTEGER NOT NULL CHECK (amount >= 0),
           datetime TIMESTAMP NOT NULL,
-          participant_trainers TEXT[] NOT NULL,
+          participant_trainers TEXT[],
+          purchase_item VARCHAR(200),
+          center VARCHAR(100),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -35,9 +38,77 @@ const createExpensesTable = async () => {
       console.log('[PostgreSQL] 지출 내역 테이블이 생성되었습니다.');
     } else {
       console.log('[PostgreSQL] 지출 내역 테이블이 이미 존재합니다.');
+      // 기존 테이블에 컬럼 추가 (마이그레이션)
+      await addExpenseColumnsIfNotExists();
     }
   } catch (error) {
     console.error('[PostgreSQL] 지출 내역 테이블 생성 오류:', error);
+  }
+};
+
+// 기존 테이블에 컬럼 추가 (마이그레이션)
+const addExpenseColumnsIfNotExists = async () => {
+  try {
+    // expense_type 컬럼 확인 및 추가
+    const checkExpenseTypeQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'expenses' AND column_name = 'expense_type'
+    `;
+    const checkExpenseTypeResult = await pool.query(checkExpenseTypeQuery);
+    
+    if (checkExpenseTypeResult.rows.length === 0) {
+      await pool.query(`
+        ALTER TABLE expenses 
+        ADD COLUMN expense_type VARCHAR(20) CHECK (expense_type IN ('meal', 'purchase'))
+      `);
+      // 기존 데이터는 모두 'meal'로 설정
+      await pool.query(`UPDATE expenses SET expense_type = 'meal' WHERE expense_type IS NULL`);
+      // NOT NULL 제약조건 추가
+      await pool.query(`ALTER TABLE expenses ALTER COLUMN expense_type SET NOT NULL`);
+      console.log('[PostgreSQL] expense_type 컬럼이 추가되었습니다.');
+    }
+    
+    // purchase_item 컬럼 확인 및 추가
+    const checkPurchaseItemQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'expenses' AND column_name = 'purchase_item'
+    `;
+    const checkPurchaseItemResult = await pool.query(checkPurchaseItemQuery);
+    
+    if (checkPurchaseItemResult.rows.length === 0) {
+      await pool.query(`ALTER TABLE expenses ADD COLUMN purchase_item VARCHAR(200)`);
+      console.log('[PostgreSQL] purchase_item 컬럼이 추가되었습니다.');
+    }
+    
+    // center 컬럼 확인 및 추가
+    const checkCenterQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'expenses' AND column_name = 'center'
+    `;
+    const checkCenterResult = await pool.query(checkCenterQuery);
+    
+    if (checkCenterResult.rows.length === 0) {
+      await pool.query(`ALTER TABLE expenses ADD COLUMN center VARCHAR(100)`);
+      console.log('[PostgreSQL] center 컬럼이 추가되었습니다.');
+    }
+    
+    // participant_trainers를 NULL 허용으로 변경 (구매일 때는 NULL)
+    const checkParticipantTrainersQuery = `
+      SELECT is_nullable 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'expenses' AND column_name = 'participant_trainers'
+    `;
+    const checkParticipantTrainersResult = await pool.query(checkParticipantTrainersQuery);
+    
+    if (checkParticipantTrainersResult.rows.length > 0 && checkParticipantTrainersResult.rows[0].is_nullable === 'NO') {
+      await pool.query(`ALTER TABLE expenses ALTER COLUMN participant_trainers DROP NOT NULL`);
+      console.log('[PostgreSQL] participant_trainers 컬럼이 NULL 허용으로 변경되었습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 컬럼 추가 오류:', error);
   }
 };
 
@@ -77,26 +148,53 @@ const createExpensesIndexes = async () => {
 // 지출 내역 추가
 const addExpense = async (expenseData) => {
   try {
-    const query = `
-      INSERT INTO expenses (trainer, amount, datetime, participant_trainers)
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, trainer, amount, datetime, participant_trainers, created_at, updated_at
-    `;
-    const values = [
-      expenseData.trainer,
-      expenseData.amount,
-      expenseData.datetime, // TIMESTAMP 형식 (YYYY-MM-DD HH:mm:ss)
-      expenseData.participantTrainers // TEXT[] 배열
-    ];
+    const expenseType = expenseData.expenseType || 'meal'; // 기본값: meal
+    
+    let query, values;
+    
+    if (expenseType === 'meal') {
+      // 식대: participant_trainers 필수
+      query = `
+        INSERT INTO expenses (trainer, expense_type, amount, datetime, participant_trainers)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at
+      `;
+      values = [
+        expenseData.trainer,
+        expenseType,
+        expenseData.amount,
+        expenseData.datetime,
+        expenseData.participantTrainers || []
+      ];
+    } else {
+      // 구매: purchase_item, center 필수
+      query = `
+        INSERT INTO expenses (trainer, expense_type, amount, datetime, purchase_item, center)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at
+      `;
+      values = [
+        expenseData.trainer,
+        expenseType,
+        expenseData.amount,
+        expenseData.datetime,
+        expenseData.purchaseItem,
+        expenseData.center
+      ];
+    }
+    
     const result = await pool.query(query, values);
     
     const row = result.rows[0];
     return {
       id: row.id,
       trainer: row.trainer,
+      expenseType: row.expense_type,
       amount: row.amount,
       datetime: row.datetime,
-      participantTrainers: row.participant_trainers,
+      participantTrainers: row.participant_trainers || [],
+      purchaseItem: row.purchase_item || null,
+      center: row.center || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -110,7 +208,7 @@ const addExpense = async (expenseData) => {
 const getExpenses = async (filters = {}) => {
   try {
     let query = `
-      SELECT id, trainer, amount, datetime, participant_trainers, created_at, updated_at
+      SELECT id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at
       FROM expenses
     `;
     const params = [];
@@ -160,9 +258,12 @@ const getExpenses = async (filters = {}) => {
     return result.rows.map(row => ({
       id: row.id,
       trainer: row.trainer,
+      expenseType: row.expense_type,
       amount: row.amount,
       datetime: row.datetime,
-      participantTrainers: row.participant_trainers,
+      participantTrainers: row.participant_trainers || [],
+      purchaseItem: row.purchase_item || null,
+      center: row.center || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     }));
@@ -193,7 +294,7 @@ const deleteExpense = async (id) => {
 const getExpenseById = async (id) => {
   try {
     const query = `
-      SELECT id, trainer, amount, datetime, participant_trainers, created_at, updated_at
+      SELECT id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at
       FROM expenses 
       WHERE id = $1
     `;
@@ -207,9 +308,12 @@ const getExpenseById = async (id) => {
     return {
       id: row.id,
       trainer: row.trainer,
+      expenseType: row.expense_type,
       amount: row.amount,
       datetime: row.datetime,
-      participantTrainers: row.participant_trainers,
+      participantTrainers: row.participant_trainers || [],
+      purchaseItem: row.purchase_item || null,
+      center: row.center || null,
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };

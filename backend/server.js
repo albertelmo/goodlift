@@ -1875,11 +1875,17 @@ app.get('/api/registration-logs/:yearMonth', async (req, res) => {
 // 지출 내역 추가 API (트레이너만 가능)
 app.post('/api/expenses', async (req, res) => {
     try {
-        const { trainer, amount, datetime, participantTrainers } = req.body;
+        const { trainer, expenseType, amount, datetime, participantTrainers, purchaseItem, center } = req.body;
         
-        // 필수 필드 검증
-        if (!trainer || amount === undefined || !datetime || !participantTrainers || !Array.isArray(participantTrainers)) {
+        // 기본 필수 필드 검증
+        if (!trainer || amount === undefined || !datetime) {
             return res.status(400).json({ message: '모든 필수 항목을 입력해주세요.' });
+        }
+        
+        // 지출 유형 검증
+        const type = expenseType || 'meal'; // 기본값: meal
+        if (type !== 'meal' && type !== 'purchase') {
+            return res.status(400).json({ message: '지출 유형은 meal 또는 purchase여야 합니다.' });
         }
         
         // 금액 검증
@@ -1888,9 +1894,20 @@ app.post('/api/expenses', async (req, res) => {
             return res.status(400).json({ message: '금액은 0 이상의 숫자여야 합니다.' });
         }
         
-        // 함께 지출한 트레이너 검증 (최소 1명 이상)
-        if (participantTrainers.length === 0) {
-            return res.status(400).json({ message: '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.' });
+        // 지출 유형별 필수 필드 검증
+        if (type === 'meal') {
+            // 식대: 함께 지출한 트레이너 필수
+            if (!participantTrainers || !Array.isArray(participantTrainers) || participantTrainers.length === 0) {
+                return res.status(400).json({ message: '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.' });
+            }
+        } else {
+            // 구매: 구매물품, 센터 필수
+            if (!purchaseItem || !purchaseItem.trim()) {
+                return res.status(400).json({ message: '구매물품을 입력해주세요.' });
+            }
+            if (!center || !center.trim()) {
+                return res.status(400).json({ message: '센터를 선택해주세요.' });
+            }
         }
         
         // datetime 처리: datetime-local 입력값을 한국시간 TIMESTAMP로 변환
@@ -1913,10 +1930,17 @@ app.post('/api/expenses', async (req, res) => {
         
         const expenseData = {
             trainer,
+            expenseType: type,
             amount: numAmount,
-            datetime: datetimeValue,
-            participantTrainers
+            datetime: datetimeValue
         };
+        
+        if (type === 'meal') {
+            expenseData.participantTrainers = participantTrainers;
+        } else {
+            expenseData.purchaseItem = purchaseItem.trim();
+            expenseData.center = center.trim();
+        }
         
         const expense = await expensesDB.addExpense(expenseData);
         
@@ -1959,7 +1983,7 @@ app.get('/api/expenses', async (req, res) => {
         
         // 트레이너 이름 추가 및 함께 지출한 트레이너 이름 매핑
         const expensesWithNames = expenses.map(expense => {
-            const participantNames = expense.participantTrainers.map(username => 
+            const participantNames = (expense.participantTrainers || []).map(username => 
                 trainerMap[username] || username
             );
             
