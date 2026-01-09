@@ -1200,6 +1200,283 @@ app.post('/api/email/contract', async (req, res) => {
     }
 });
 
+// 엑셀 파일 파싱 API (Database 탭용)
+app.post('/api/database/parse-excel', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: '파일을 선택해주세요.' });
+        }
+
+        // 파일 크기 검증 (10MB 제한)
+        if (req.file.size > 10 * 1024 * 1024) {
+            return res.status(400).json({ message: '파일 크기는 10MB 이하여야 합니다.' });
+        }
+
+        // 엑셀 파일 읽기
+        let data = [];
+        try {
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(req.file.buffer);
+            
+            if (workbook.worksheets.length === 0) {
+                return res.status(400).json({ message: '엑셀 파일에 시트가 없습니다.' });
+            }
+            
+            const worksheet = workbook.worksheets[0];
+            const rows = [];
+            
+            // 최대 컬럼 수 확인 (모든 행을 먼저 확인)
+            let maxColumnCount = 0;
+            worksheet.eachRow((row, rowNumber) => {
+                row.eachCell((cell, colNumber) => {
+                    if (colNumber > maxColumnCount) {
+                        maxColumnCount = colNumber;
+                    }
+                });
+            });
+            
+            // 모든 행 읽기 (빈 셀 포함)
+            worksheet.eachRow((row, rowNumber) => {
+                // colNumber는 1부터 시작하므로 배열 크기는 maxColumnCount
+                const rowData = new Array(maxColumnCount).fill(null);
+                row.eachCell((cell, colNumber) => {
+                    // colNumber는 1부터 시작하므로 인덱스는 colNumber - 1
+                    rowData[colNumber - 1] = cell.value;
+                });
+                rows.push(rowData);
+            });
+            
+            data = rows;
+        } catch (excelError) {
+            console.error('[API] 엑셀 파일 읽기 오류:', excelError);
+            return res.status(400).json({ message: '엑셀 파일을 읽을 수 없습니다. 파일이 손상되었거나 지원하지 않는 형식입니다.' });
+        }
+
+        // 데이터가 비어있는지 확인
+        if (!data || data.length < 2) {
+            return res.status(400).json({ message: '엑셀 파일에 데이터가 없습니다. (헤더 제외 최소 1개 행 필요)' });
+        }
+
+        // 헤더 확인 (첫 번째 행)
+        const headers = data[0];
+        if (!headers || headers.length === 0) {
+            return res.status(400).json({ message: '엑셀 파일의 첫 번째 행(헤더)을 읽을 수 없습니다.' });
+        }
+
+        // 헬퍼 함수: 띄어쓰기 제거 후 비교
+        const normalizeHeader = (header) => {
+            if (!header) return '';
+            return String(header).trim().replace(/\s+/g, ''); // 모든 공백 제거
+        };
+        
+        // 헬퍼 함수: 날짜 형식인지 확인 (회원상태와 최근방문일 구분용)
+        const isDateValue = (value) => {
+            if (!value) return false;
+            const str = String(value).trim();
+            // 날짜 형식 패턴: YYYY-MM-DD, YYYY.MM.DD, YYYY/MM/DD, 또는 날짜+시간
+            return /^\d{4}[-.\/]\d{1,2}[-.\/]\d{1,2}/.test(str) || /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}/.test(str);
+        };
+
+        // 필수 컬럼 정의 (띄어쓰기 무시하고 매칭)
+        const requiredColumnMap = {
+            '회원이름': '회원 이름',
+            '연락처': '연락처',
+            '회원상태': '회원상태',
+            '최근방문일': '최근방문일',
+            '상품명': '상품명',
+            '전체기간': '전체기간'
+        };
+
+        // 정규화된 헤더 맵 생성
+        const normalizedHeaders = headers.map((h, idx) => ({
+            original: String(h || '').trim(),
+            normalized: normalizeHeader(h),
+            index: idx
+        }));
+
+        // 컬럼 인덱스 찾기 (띄어쓰기 무시)
+        const findColumnIndex = (targetKey) => {
+            const normalizedTarget = normalizeHeader(targetKey);
+            const found = normalizedHeaders.find(h => h.normalized === normalizedTarget);
+            return found ? found.index : -1;
+        };
+
+        const nameIndex = findColumnIndex('회원 이름');
+        const phoneIndex = findColumnIndex('연락처');
+        let statusIndex = findColumnIndex('회원상태');
+        const recentVisitIndex = findColumnIndex('최근방문일');
+        const productNameIndex = findColumnIndex('상품명');
+        const totalPeriodIndex = findColumnIndex('전체기간');
+        
+        // statusIndex 검증: 만약 찾은 인덱스의 데이터가 날짜 형식이면, 다른 컬럼을 찾아봐야 함
+        if (statusIndex >= 0 && data.length > 1) {
+            // 첫 번째 데이터 행에서 해당 인덱스의 값을 확인
+            const firstRow = data[1];
+            if (firstRow && firstRow[statusIndex] && isDateValue(firstRow[statusIndex])) {
+                // "회원상태"와 유사한 다른 컬럼들을 찾아봄
+                const possibleStatusHeaders = normalizedHeaders.filter(h => 
+                    h.normalized.includes('상태') || 
+                    h.normalized.includes('유효') || 
+                    h.normalized.includes('만료')
+                );
+                if (possibleStatusHeaders.length > 0) {
+                    // 첫 번째 후보를 사용 (또는 더 정확한 매칭 로직 사용)
+                    const candidate = possibleStatusHeaders.find(h => {
+                        if (data.length > 1 && data[1][h.index]) {
+                            const val = String(data[1][h.index]).trim();
+                            // 날짜 형식이 아니고, "유효" 또는 "만료" 같은 값인지 확인
+                            return !isDateValue(val) && (val.includes('유효') || val.includes('만료') || val.length < 10);
+                        }
+                        return false;
+                    });
+                    if (candidate) {
+                        statusIndex = candidate.index;
+                    } else {
+                        // 날짜가 아닌 첫 번째 후보 사용
+                        const nonDateCandidate = possibleStatusHeaders.find(h => {
+                            if (data.length > 1 && data[1][h.index]) {
+                                return !isDateValue(data[1][h.index]);
+                            }
+                            return false;
+                        });
+                        if (nonDateCandidate) {
+                            statusIndex = nonDateCandidate.index;
+                        }
+                    }
+                }
+            }
+        }
+        
+        
+
+        // 필수 컬럼 존재 여부 확인
+        const missingColumns = [];
+        if (nameIndex === -1) missingColumns.push('회원 이름');
+        if (phoneIndex === -1) missingColumns.push('연락처');
+        if (statusIndex === -1) missingColumns.push('회원상태');
+        if (recentVisitIndex === -1) missingColumns.push('최근방문일');
+        if (productNameIndex === -1) missingColumns.push('상품명');
+        if (totalPeriodIndex === -1) missingColumns.push('전체기간');
+
+        if (missingColumns.length > 0) {
+            return res.status(400).json({ 
+                message: `필수 컬럼을 찾을 수 없습니다: ${missingColumns.join(', ')}`,
+                availableHeaders: headers.filter(h => h).map(h => String(h).trim())
+            });
+        }
+
+        // 회원별로 데이터 그룹화
+        const memberMap = new Map();
+
+        // 데이터 처리 (헤더 제외)
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            if (row.length === 0 || row.every(cell => !cell)) continue; // 빈 행 스킵
+
+            const name = String(row[nameIndex] || '').trim();
+            if (!name) continue; // 이름이 없으면 스킵
+
+            // 데이터 추출 (인덱스 검증 포함)
+            const phone = phoneIndex >= 0 ? String(row[phoneIndex] || '').trim() : '';
+            const status = statusIndex >= 0 ? String(row[statusIndex] || '').trim() : '';
+            const recentVisit = recentVisitIndex >= 0 && row[recentVisitIndex] ? String(row[recentVisitIndex]).trim() : '';
+            const productName = productNameIndex >= 0 && row[productNameIndex] ? String(row[productNameIndex]).trim() : '';
+            const totalPeriod = totalPeriodIndex >= 0 && row[totalPeriodIndex] ? String(row[totalPeriodIndex]).trim() : '';
+
+            if (!memberMap.has(name)) {
+                // 새로운 회원 추가
+                // 상품명별 전체기간을 저장하기 위한 맵
+                const productPeriodMap = {};
+                if (productName && totalPeriod) {
+                    productPeriodMap[productName] = totalPeriod;
+                }
+                
+                memberMap.set(name, {
+                    name: name,
+                    phone: phone,
+                    status: status,
+                    recentVisit: recentVisit,
+                    productNames: productName ? [productName] : [],
+                    productPeriodMap: productPeriodMap, // 상품명별 기간 맵
+                    totalPeriod: totalPeriod || '0'
+                });
+            } else {
+                // 기존 회원 정보 업데이트
+                const member = memberMap.get(name);
+                
+                // productPeriodMap이 없으면 초기화
+                if (!member.productPeriodMap) {
+                    member.productPeriodMap = {};
+                }
+                
+                // 상품명 추가 (중복 허용)
+                if (productName) {
+                    member.productNames.push(productName);
+                    // 상품명별 기간 저장
+                    if (totalPeriod) {
+                        // 같은 상품명이 여러 번 나올 수 있으므로 합산
+                        if (member.productPeriodMap[productName]) {
+                            const currentPeriod = parsePeriodToNumber(member.productPeriodMap[productName]);
+                            const newPeriod = parsePeriodToNumber(totalPeriod);
+                            member.productPeriodMap[productName] = String(currentPeriod + newPeriod);
+                        } else {
+                            member.productPeriodMap[productName] = totalPeriod;
+                        }
+                    }
+                }
+                
+                // 전체기간 합산 (숫자로 변환 가능한 경우) - 모든 상품의 기간 합
+                if (totalPeriod) {
+                    const currentPeriod = parsePeriodToNumber(member.totalPeriod);
+                    const newPeriod = parsePeriodToNumber(totalPeriod);
+                    member.totalPeriod = String(currentPeriod + newPeriod);
+                }
+                
+                // 최근 방문 시간 업데이트 (더 최근 것으로)
+                if (recentVisit && (!member.recentVisit || recentVisit > member.recentVisit)) {
+                    member.recentVisit = recentVisit;
+                }
+            }
+        }
+
+        // Map을 배열로 변환
+        const members = Array.from(memberMap.values());
+        
+        // 모든 상품명 수집 (중복 제거)
+        const allProductNames = new Set();
+        members.forEach(member => {
+            if (member.productNames) {
+                member.productNames.forEach(productName => {
+                    if (productName) {
+                        allProductNames.add(productName);
+                    }
+                });
+            }
+        });
+        const uniqueProductNames = Array.from(allProductNames).sort();
+
+        res.json({
+            message: '엑셀 파일 파싱이 완료되었습니다.',
+            members: members,
+            total: members.length,
+            allProductNames: uniqueProductNames // 모든 상품명 목록
+        });
+
+    } catch (error) {
+        console.error('[API] 엑셀 파일 파싱 오류:', error);
+        res.status(500).json({ message: '엑셀 파일 파싱에 실패했습니다.' });
+    }
+});
+
+// 기간 문자열을 숫자로 변환하는 헬퍼 함수 (예: "3개월" -> 3, "6개월" -> 6)
+function parsePeriodToNumber(periodStr) {
+    if (!periodStr) return 0;
+    const str = String(periodStr).trim();
+    // 숫자만 추출
+    const match = str.match(/\d+/);
+    return match ? parseInt(match[0]) : 0;
+}
+
 // 엑셀 파일 업로드 및 회원 일괄 추가 API
 app.post('/api/members/import', upload.single('file'), async (req, res) => {
     try {

@@ -1034,12 +1034,12 @@ async function showExpenseAddModal(username) {
         let html = '';
         trainers.forEach(trainer => {
             const isCurrentUser = trainer.username === username;
-            html += `<label style="display:flex;align-items:center;padding:6px 0;cursor:pointer;">
+            html += `<label style="display:flex;align-items:center;padding:4px 0;cursor:pointer;">
                 <input type="checkbox" name="participantTrainers" value="${trainer.username}" 
                        ${isCurrentUser ? 'checked disabled' : ''} 
-                       style="margin-right:8px;width:18px;height:18px;cursor:pointer;">
-                <span style="font-size:0.95rem;">${trainer.name} (${trainer.username})</span>
-                ${isCurrentUser ? '<span style="margin-left:8px;color:#1976d2;font-size:0.85rem;">(본인)</span>' : ''}
+                       style="margin-right:8px;width:18px;height:18px;cursor:pointer;flex-shrink:0;">
+                <span style="font-size:0.9rem;">${trainer.name} (${trainer.username})</span>
+                ${isCurrentUser ? '<span style="margin-left:6px;color:#1976d2;font-size:0.8rem;">(본인)</span>' : ''}
             </label>`;
         });
         trainersListDiv.innerHTML = html;
