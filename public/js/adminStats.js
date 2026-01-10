@@ -759,10 +759,10 @@ function renderTrainerSessionsModal(data, trainerName, yearMonth) {
   `;
 }
 
-// 모달 표시 함수
+// 모달 표시 함수 (회원 세션 모달은 유지)
 function showModal(content) {
-  // 기존 모달 제거
-  const existingModal = document.querySelector('.modal-overlay');
+  // 기존 모달 제거 (회원 세션 모달은 제외)
+  const existingModal = document.querySelector('.modal-overlay:not(.member-sessions-modal-overlay)');
   if (existingModal) {
     existingModal.remove();
   }
@@ -770,6 +770,7 @@ function showModal(content) {
   // 새 모달 생성
   const modalOverlay = document.createElement('div');
   modalOverlay.className = 'modal-overlay';
+  modalOverlay.style.zIndex = '10000'; // 회원 세션 모달보다 아래
   modalOverlay.innerHTML = content;
   
   document.body.appendChild(modalOverlay);
@@ -785,9 +786,9 @@ function showModal(content) {
   }, 50);
 }
 
-// 모달 닫기 함수
+// 모달 닫기 함수 (회원 세션 모달 제외)
 function closeModal() {
-  const modalOverlay = document.querySelector('.modal-overlay');
+  const modalOverlay = document.querySelector('.modal-overlay:not(.member-sessions-modal-overlay)');
   if (modalOverlay) {
     modalOverlay.style.opacity = '0';
     setTimeout(() => {
@@ -798,7 +799,7 @@ function closeModal() {
 
 // 모달 이벤트 리스너 설정
 function setupModalEventListeners() {
-  const modalOverlay = document.querySelector('.modal-overlay');
+  const modalOverlay = document.querySelector('.modal-overlay:not(.member-sessions-modal-overlay)');
   if (!modalOverlay) return;
   
   // 배경 클릭 시 닫기
@@ -819,6 +820,137 @@ function setupModalEventListeners() {
   }
   
   // 회원수 클릭은 인라인 핸들러로 처리 (onclick 속성 사용)
+}
+
+// 회원 세션 모달 전용 이벤트 리스너 설정
+function setupMemberSessionsModalEventListeners() {
+  const modalOverlay = document.querySelector('.member-sessions-modal-overlay');
+  if (!modalOverlay) return;
+  
+  // 배경 클릭 시 이 모달만 닫기 (상세통계 모달은 유지)
+  const handleBackgroundClick = (e) => {
+    if (e.target === modalOverlay) {
+      closeMemberSessionsModal();
+    }
+  };
+  modalOverlay.addEventListener('click', handleBackgroundClick);
+  
+  // X 버튼 클릭 시 이 모달만 닫기
+  const closeBtn = modalOverlay.querySelector('#modal-close-btn');
+  if (closeBtn) {
+    const handleCloseClick = () => {
+      closeMemberSessionsModal();
+    };
+    closeBtn.addEventListener('click', handleCloseClick);
+  }
+  
+  // 정렬 기능 설정
+  setupMemberSessionsSorting();
+}
+
+// 회원 세션 테이블 정렬 기능 설정
+function setupMemberSessionsSorting() {
+  const table = document.getElementById('member-sessions-table');
+  if (!table || table.dataset.sortListenerAdded) return;
+  
+  let currentSort = { column: null, direction: 'asc' };
+  
+  table.addEventListener('click', (e) => {
+    const header = e.target.closest('.member-sessions-sortable');
+    if (!header) return;
+    
+    const column = header.getAttribute('data-sort');
+    if (!column) return;
+    
+    // 같은 컬럼 클릭 시 정렬 방향 전환
+    if (currentSort.column === column) {
+      currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+      currentSort.column = column;
+      currentSort.direction = 'asc';
+    }
+    
+    // 정렬 아이콘 업데이트
+    const allHeaders = table.querySelectorAll('.member-sessions-sortable');
+    allHeaders.forEach(h => {
+      const icon = h.querySelector('.sort-icon');
+      if (!icon) return;
+      
+      if (h === header) {
+        icon.textContent = currentSort.direction === 'asc' ? '↑' : '↓';
+        icon.style.color = '#1976d2';
+        icon.style.fontSize = '0.8rem';
+        icon.style.marginLeft = '4px';
+      } else {
+        icon.textContent = '↕';
+        icon.style.color = '#999';
+        icon.style.fontSize = '0.8rem';
+        icon.style.marginLeft = '4px';
+      }
+    });
+    
+    // 정렬 적용
+    sortMemberSessionsTable(currentSort.column, currentSort.direction);
+  });
+  
+  table.dataset.sortListenerAdded = 'true';
+}
+
+// 회원 세션 테이블 정렬 적용
+function sortMemberSessionsTable(column, direction) {
+  const tbody = document.getElementById('member-sessions-tbody');
+  if (!tbody) return;
+  
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  
+  rows.sort((a, b) => {
+    let aVal, bVal;
+    
+    switch (column) {
+      case 'name':
+        aVal = a.getAttribute('data-member-name') || '';
+        bVal = b.getAttribute('data-member-name') || '';
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+        break;
+      case 'remaining':
+        aVal = parseInt(a.getAttribute('data-remaining') || '0', 10);
+        bVal = parseInt(b.getAttribute('data-remaining') || '0', 10);
+        break;
+      case 'completed':
+        aVal = parseInt(a.getAttribute('data-completed') || '0', 10);
+        bVal = parseInt(b.getAttribute('data-completed') || '0', 10);
+        break;
+      case 'scheduled':
+        aVal = parseInt(a.getAttribute('data-scheduled') || '0', 10);
+        bVal = parseInt(b.getAttribute('data-scheduled') || '0', 10);
+        break;
+      case 'total':
+        aVal = parseInt(a.getAttribute('data-total') || '0', 10);
+        bVal = parseInt(b.getAttribute('data-total') || '0', 10);
+        break;
+      default:
+        return 0;
+    }
+    
+    if (aVal < bVal) return direction === 'asc' ? -1 : 1;
+    if (aVal > bVal) return direction === 'asc' ? 1 : -1;
+    return 0;
+  });
+  
+  // 정렬된 행으로 tbody 업데이트
+  rows.forEach(row => tbody.appendChild(row));
+}
+
+// 회원 세션 모달만 닫는 함수
+function closeMemberSessionsModal() {
+  const modalOverlay = document.querySelector('.member-sessions-modal-overlay');
+  if (modalOverlay) {
+    modalOverlay.style.opacity = '0';
+    setTimeout(() => {
+      modalOverlay.remove();
+    }, 300);
+  }
 }
 
 // 날짜 포맷 함수 - 한국시간 기준
@@ -1043,11 +1175,11 @@ async function handleMemberCountClick(event, element) {
 // 전역 스코프에 함수 노출 (인라인 핸들러에서 사용)
 window.handleMemberCountClick = handleMemberCountClick;
 
-// 회원 세션 현황 모달 표시 함수
+// 회원 세션 현황 모달 표시 함수 (트레이너 상세통계 모달은 유지)
 async function showMemberSessionsModal(trainer, trainerName, center, yearMonth) {
   try {
-    // 로딩 모달 표시
-    showModal(`
+    // 로딩 모달 표시 (상세통계 모달은 닫지 않음)
+    showMemberSessionsModalContent(`
       <div style="text-align:center;padding:40px;">
         <div>${trainerName} - ${center} 회원 세션 현황을 불러오는 중...</div>
       </div>
@@ -1063,17 +1195,44 @@ async function showMemberSessionsModal(trainer, trainerName, center, yearMonth) 
     
     // 모달 내용 렌더링
     const modalContent = renderMemberSessionsModal(data, trainerName, center, yearMonth);
-    showModal(modalContent);
+    showMemberSessionsModalContent(modalContent);
     
   } catch (error) {
     console.error('회원 세션 현황 조회 오류:', error);
-    showModal(`
+    showMemberSessionsModalContent(`
       <div style="text-align:center;padding:40px;color:#d32f2f;">
         <div>회원 세션 현황 조회에 실패했습니다.</div>
         <div style="font-size:0.9em;margin-top:10px;">${error.message}</div>
       </div>
     `);
   }
+}
+
+// 회원 세션 현황 모달만 표시하는 함수 (상세통계 모달은 유지)
+function showMemberSessionsModalContent(content) {
+  // 기존 회원 세션 모달만 찾아서 제거
+  const existingMemberModal = document.querySelector('.member-sessions-modal-overlay');
+  if (existingMemberModal) {
+    existingMemberModal.remove();
+  }
+  
+  // 새 모달 생성 (상세통계 모달과 구분하기 위한 클래스 추가)
+  const modalOverlay = document.createElement('div');
+  modalOverlay.className = 'modal-overlay member-sessions-modal-overlay';
+  modalOverlay.style.zIndex = '10001'; // 상세통계 모달보다 위에 표시
+  modalOverlay.innerHTML = content;
+  
+  document.body.appendChild(modalOverlay);
+  
+  // 모달 표시 애니메이션
+  setTimeout(() => {
+    modalOverlay.style.opacity = '1';
+  }, 10);
+  
+  // 모달 이벤트 리스너 설정
+  setTimeout(() => {
+    setupMemberSessionsModalEventListeners();
+  }, 50);
 }
 
 // 전역 스코프에 함수 노출 (인라인 핸들러에서 사용)
@@ -1096,12 +1255,24 @@ function renderMemberSessionsModal(data, trainerName, center, yearMonth) {
     `;
   }
   
-  const membersHTML = members.map(member => `
-    <tr style="border-bottom:1px solid #eee;">
+  // 총 수업수 계산 및 정렬을 위해 데이터 준비
+  const membersWithTotal = members.map(member => ({
+    ...member,
+    total: (member.completed || 0) + (member.scheduled || 0) + (member.absent || 0)
+  }));
+  
+  const membersHTML = membersWithTotal.map(member => `
+    <tr data-member-name="${member.memberName}" 
+        data-remaining="${member.remainingSessions || 0}" 
+        data-completed="${member.completed || 0}" 
+        data-scheduled="${member.scheduled || 0}" 
+        data-total="${member.total}" 
+        style="border-bottom:1px solid #eee;">
       <td style="padding:10px 12px;text-align:left;font-size:0.9rem;">${member.memberName}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#4caf50;font-weight:600;">${member.completed}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#2196f3;font-weight:600;">${member.scheduled}</td>
-      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#f44336;font-weight:600;">${member.absent}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#ff9800;font-weight:600;">${member.remainingSessions || 0}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#4caf50;font-weight:600;">${member.completed || 0}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#2196f3;font-weight:600;">${member.scheduled || 0}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#333;font-weight:600;">${member.total}</td>
     </tr>
   `).join('');
   
@@ -1110,16 +1281,27 @@ function renderMemberSessionsModal(data, trainerName, center, yearMonth) {
       <button id="modal-close-btn" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       <h3 style="color:#1976d2;margin-bottom:8px;text-align:center;padding-right:35px;font-size:1.1rem;">${trainerName} - ${center}</h3>
       <div style="text-align:center;color:#888;font-size:0.85rem;margin-bottom:16px;">${displayYearMonth} 세션 현황</div>
-      <table style="width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+      <table id="member-sessions-table" style="width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
         <thead>
           <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
-            <th style="padding:12px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;">회원명</th>
-            <th style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;">완료수업수</th>
-            <th style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;">예정수업수</th>
-            <th style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;">결석수</th>
+            <th class="member-sessions-sortable" data-sort="name" style="padding:12px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
+              회원명 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+            </th>
+            <th class="member-sessions-sortable" data-sort="remaining" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
+              잔여세션수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+            </th>
+            <th class="member-sessions-sortable" data-sort="completed" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
+              완료수업수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+            </th>
+            <th class="member-sessions-sortable" data-sort="scheduled" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
+              예정수업수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+            </th>
+            <th class="member-sessions-sortable" data-sort="total" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
+              총 수업수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+            </th>
           </tr>
         </thead>
-        <tbody>
+        <tbody id="member-sessions-tbody">
           ${membersHTML}
         </tbody>
       </table>

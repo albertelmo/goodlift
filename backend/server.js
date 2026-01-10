@@ -1255,6 +1255,7 @@ app.get('/api/member-sessions-by-center', async (req, res) => {
       
       return {
         memberName: member.name,
+        remainingSessions: member.remainSessions || 0,
         completed,
         scheduled,
         absent
