@@ -1,6 +1,7 @@
 import { center } from './center.js';
 import { trainer } from './trainer.js';
 import { member } from './member.js';
+import { trial } from './trial.js';
 import { adminDayCalendar } from './adminDayCalendar.js';
 import { adminWeekCalendar } from './adminWeekCalendar.js';
 import { adminStats } from './adminStats.js';
@@ -182,15 +183,7 @@ const adminTabs = [
     { label: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
-    { label: 'Center', content: `<div style='max-width:400px;margin:0 auto;'>
-        <form id="center-add-form" style="display:flex;gap:8px;margin-bottom:18px;">
-            <input type="text" id="center-name" placeholder="센터 이름" required style="flex:1;">
-            <button type="submit">센터 추가</button>
-        </form>
-        <div id="center-add-result" style="min-height:24px;margin-bottom:10px;"></div>
-        <div id="center-list-loading">센터 목록을 불러오는 중...</div>
-        <div id="center-list"></div>
-    </div>` },
+    { label: 'Trial', content: '<div id="trial-root"></div>' },
     { label: 'Trainer', content: '<div id="trainer-list-loading">트레이너 목록을 불러오는 중...</div><div id="trainer-list"></div>' },
     { label: 'Stat', content: '<div id="admin-stats-root"></div>' },
     { label: 'Expense', content: '<div id="expense-root"></div>' },
@@ -206,6 +199,7 @@ const centerTabs = [
     { label: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: 'Trial', content: '<div id="trial-root"></div>' },
     { label: 'Stat', content: '<div id="admin-stats-root"></div>' }
 ];
 function showMainSection(role, name) {
@@ -245,9 +239,6 @@ function renderTabs(tabs) {
             if (tab.label === 'Trainer') {
                 trainer.loadList();
             }
-            if (tab.label === 'Center') {
-                center.setupTab();
-            }
             if (tab.label === 'Today') {
                 adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
             }
@@ -257,6 +248,9 @@ function renderTabs(tabs) {
             if (tab.label === 'Member') {
                 member.renderAddForm(document.getElementById('member-add'));
                 member.renderList(document.getElementById('member-list'));
+            }
+            if (tab.label === 'Trial') {
+                trial.render(document.getElementById('trial-root'));
             }
             if (tab.label === '내 회원 리스트' || tab.label === '👤') {
                 const username = localStorage.getItem('username');
@@ -280,9 +274,6 @@ function renderTabs(tabs) {
     if (tabs[0].label === 'Trainer') {
         trainer.loadList();
     }
-    if (tabs[0].label === 'Center') {
-        center.setupTab();
-    }
     if (tabs[0].label === 'Today') {
         adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
     }
@@ -292,6 +283,9 @@ function renderTabs(tabs) {
     if (tabs[0].label === 'Member') {
         member.renderAddForm(document.getElementById('member-add'));
         member.renderList(document.getElementById('member-list'));
+    }
+    if (tabs[0].label === 'Trial') {
+        trial.render(document.getElementById('trial-root'));
     }
     if (tabs[0].label === '내 회원 리스트' || tabs[0].label === '👤') {
         const username = localStorage.getItem('username');

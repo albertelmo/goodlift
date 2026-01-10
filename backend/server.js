@@ -5,7 +5,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const ExcelJS = require('exceljs');
-const { getKoreanDate, getKoreanToday, parseKoreanDate } = require('./utils');
+const { getKoreanDate, getKoreanToday, parseKoreanDate, getKoreanYearMonth } = require('./utils');
 
 require('dotenv').config();
 
@@ -1274,6 +1274,98 @@ app.get('/api/member-sessions-by-center', async (req, res) => {
   } catch (error) {
     console.error('[API] 회원 세션 현황 조회 오류:', error);
     res.status(500).json({ message: '회원 세션 현황을 불러오지 못했습니다.' });
+  }
+});
+
+// 체험/무기명 세션 조회 API (센터별, 월별)
+app.get('/api/trial-sessions', async (req, res) => {
+  try {
+    const { yearMonth } = req.query;
+    
+    // 년월이 없으면 현재 년월 사용
+    const targetYearMonth = yearMonth || getKoreanYearMonth();
+    const [year, month] = targetYearMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    
+    // 세션 데이터 조회
+    const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
+    
+    // 체험/무기명 세션 필터링
+    const trialSessions = sessions.filter(s => 
+      s.member.startsWith('체험') || s.member.startsWith('무기명')
+    );
+    
+    // 회원 데이터 조회 (센터 정보를 위해)
+    const members = await membersDB.getMembers();
+    const memberCenterMap = {};
+    members.forEach(member => {
+      memberCenterMap[member.name] = member.center;
+    });
+    
+    // 트레이너 ID를 이름으로 매핑
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    const trainers = accounts.filter(acc => acc.role === 'trainer')
+      .map(({ username, name }) => ({ username, name }));
+    const trainerNameMap = {};
+    trainers.forEach(trainer => {
+      trainerNameMap[trainer.username] = trainer.name;
+    });
+    
+    // 센터별로 그룹화
+    const centerGroups = {};
+    
+    trialSessions.forEach(session => {
+      // 센터 정보 찾기: 먼저 members에서, 없으면 트레이너의 기본 센터 사용
+      let center = memberCenterMap[session.member];
+      if (!center) {
+        // 트레이너 정보에서 센터 찾기
+        const trainerAccount = accounts.find(acc => acc.username === session.trainer);
+        if (trainerAccount && trainerAccount.center) {
+          center = trainerAccount.center;
+        } else {
+          center = '미지정';
+        }
+      }
+      
+      if (!centerGroups[center]) {
+        centerGroups[center] = [];
+      }
+      
+      centerGroups[center].push({
+        id: session.id,
+        member: session.member,
+        trainer: trainerNameMap[session.trainer] || session.trainer,
+        date: session.date,
+        time: session.time,
+        status: session.status
+      });
+    });
+    
+    // 센터별로 날짜, 시간순 정렬
+    Object.keys(centerGroups).forEach(center => {
+      centerGroups[center].sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateA.getTime() - dateB.getTime();
+        }
+        return a.time.localeCompare(b.time);
+      });
+    });
+    
+    res.json({
+      yearMonth: targetYearMonth,
+      centers: centerGroups
+    });
+  } catch (error) {
+    console.error('[API] 체험/무기명 세션 조회 오류:', error);
+    res.status(500).json({ message: '체험/무기명 세션 조회에 실패했습니다.' });
   }
 });
 
