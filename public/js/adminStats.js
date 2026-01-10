@@ -1277,7 +1277,7 @@ function renderMemberSessionsModal(data, trainerName, center, yearMonth) {
   `).join('');
   
   return `
-    <div style="max-width:800px;max-height:700px;overflow-y:auto;position:relative;padding:20px;">
+    <div class="member-sessions-modal-content" style="max-width:800px;max-height:700px;overflow-y:auto;position:relative;padding:20px;">
       <button id="modal-close-btn" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       <h3 style="color:#1976d2;margin-bottom:8px;text-align:center;padding-right:35px;font-size:1.1rem;">${trainerName} - ${center}</h3>
       <div style="text-align:center;color:#888;font-size:0.85rem;margin-bottom:16px;">${displayYearMonth} 세션 현황</div>
@@ -1288,16 +1288,16 @@ function renderMemberSessionsModal(data, trainerName, center, yearMonth) {
               회원명 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
             </th>
             <th class="member-sessions-sortable" data-sort="remaining" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
-              잔여세션수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+              잔여 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
             </th>
             <th class="member-sessions-sortable" data-sort="completed" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
-              완료수업수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+              완료 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
             </th>
             <th class="member-sessions-sortable" data-sort="scheduled" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
-              예정수업수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+              예정 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
             </th>
             <th class="member-sessions-sortable" data-sort="total" style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;cursor:pointer;user-select:none;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e8f4f8'" onmouseout="this.style.backgroundColor='#f5f5f5'">
-              총 수업수 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
+              합계 <span class="sort-icon" style="color:#999;font-size:0.8rem;margin-left:4px;">↕</span>
             </th>
           </tr>
         </thead>

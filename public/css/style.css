@@ -1459,4 +1459,86 @@ li, td, th {
   #sessionInfoContent strong {
     min-width: auto;
   }
+}
+
+/* 회원 세션 현황 모달 모바일 스타일 */
+@media (max-width: 600px) {
+  .member-sessions-modal-overlay .member-sessions-modal-content {
+    max-width: 95vw !important;
+    padding: 12px !important;
+    max-height: 85vh !important;
+  }
+  
+  .member-sessions-modal-overlay .member-sessions-modal-content h3 {
+    font-size: 0.9rem !important;
+    padding-right: 30px !important;
+  }
+  
+  .member-sessions-modal-overlay #member-sessions-table th,
+  .member-sessions-modal-overlay #member-sessions-table td {
+    padding: 8px 6px !important;
+    font-size: 0.8rem !important;
+  }
+  
+  .member-sessions-modal-overlay #member-sessions-table th {
+    font-size: 0.75rem !important;
+  }
+  
+  .member-sessions-modal-overlay .sort-icon {
+    font-size: 0.7rem !important;
+    margin-left: 2px !important;
+  }
+}
+
+/* 트레이너 상세통계 모달 모바일 스타일 */
+@media (max-width: 600px) {
+  .modal-overlay:not(.member-sessions-modal-overlay) > div[style*="max-width:620px"] {
+    max-width: 85.5vw !important;
+    width: 85.5vw !important;
+    padding: 12px !important;
+  }
+  
+  .all-trainers-detail-stats-container {
+    padding: 10px !important;
+  }
+  
+  .trainer-detail-section {
+    padding: 8px 10px !important;
+    margin-bottom: 10px !important;
+  }
+  
+  .trainer-detail-section h3 {
+    font-size: 0.75rem !important;
+  }
+  
+  .center-stat-card {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    padding: 6px 8px !important;
+  }
+  
+  .center-stat-card h4 {
+    font-size: 0.7rem !important;
+  }
+  
+  .center-stat-grid {
+    gap: 4px !important;
+  }
+  
+  .center-stat-grid .stat-item {
+    padding: 3px 4px !important;
+  }
+  
+  .center-stat-grid .stat-item > div:first-child {
+    font-size: 0.6rem !important;
+  }
+  
+  .center-stat-grid .stat-item > div:last-child {
+    font-size: 0.8rem !important;
+  }
+  
+  .member-count-clickable {
+    font-size: 0.8rem !important;
+  }
 } 
