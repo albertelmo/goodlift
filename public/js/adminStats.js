@@ -3,6 +3,9 @@ export const adminStats = {
   render
 };
 
+// 회원수 클릭 핸들러 (인라인 핸들러에서 호출) - 함수 선언 전에 전역 노출을 위한 참조
+let handleMemberCountClickRef = null;
+
 let currentPeriod = 'month'; // 'day', 'week', 'month'
 
 // 한국시간 기준 현재 날짜 초기화
@@ -659,6 +662,13 @@ function getSelectedYearMonth() {
   return `${year}-${month}`;
 }
 
+// 전역 스코프에 함수 노출 (인라인 핸들러에서 사용)
+// 모듈이 로드될 때 함수를 전역 스코프에 노출
+if (typeof window !== 'undefined') {
+  window.getSelectedYearMonth = getSelectedYearMonth;
+  // showMemberSessionsModal과 handleMemberCountClick은 함수 선언 이후에 전역 노출됨
+}
+
 // 트레이너 세션 모달 표시 함수
 async function showTrainerSessionsModal(trainer, trainerName, yearMonth) {
   try {
@@ -769,8 +779,10 @@ function showModal(content) {
     modalOverlay.style.opacity = '1';
   }, 10);
   
-  // 모달 이벤트 리스너 설정
-  setupModalEventListeners();
+  // 모달 이벤트 리스너 설정 (DOM이 완전히 렌더링된 후)
+  setTimeout(() => {
+    setupModalEventListeners();
+  }, 50);
 }
 
 // 모달 닫기 함수
@@ -787,22 +799,26 @@ function closeModal() {
 // 모달 이벤트 리스너 설정
 function setupModalEventListeners() {
   const modalOverlay = document.querySelector('.modal-overlay');
-  if (modalOverlay) {
-    // 배경 클릭 시 닫기
-    modalOverlay.addEventListener('click', (e) => {
-      if (e.target === modalOverlay) {
-        closeModal();
-      }
-    });
-    
-    // X 버튼 클릭 시 닫기
-    const closeBtn = modalOverlay.querySelector('#modal-close-btn');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        closeModal();
-      });
+  if (!modalOverlay) return;
+  
+  // 배경 클릭 시 닫기
+  const handleBackgroundClick = (e) => {
+    if (e.target === modalOverlay) {
+      closeModal();
     }
+  };
+  modalOverlay.addEventListener('click', handleBackgroundClick);
+  
+  // X 버튼 클릭 시 닫기
+  const closeBtn = modalOverlay.querySelector('#modal-close-btn');
+  if (closeBtn) {
+    const handleCloseClick = () => {
+      closeModal();
+    };
+    closeBtn.addEventListener('click', handleCloseClick);
   }
+  
+  // 회원수 클릭은 인라인 핸들러로 처리 (onclick 속성 사용)
 }
 
 // 날짜 포맷 함수 - 한국시간 기준
@@ -838,11 +854,13 @@ async function showAllTrainersDetailStatsModal(trainerStats) {
     
     const modalContent = renderAllTrainersDetailStatsModal(trainerStats, centerOrder);
     showModal(modalContent);
+    // 모달 이벤트 리스너는 showModal 함수 내부의 setupModalEventListeners에서 설정됨
   } catch (error) {
     console.error('센터 목록 조회 오류:', error);
     // 에러 발생 시 가나다순 정렬로 대체
     const modalContent = renderAllTrainersDetailStatsModal(trainerStats, []);
     showModal(modalContent);
+    // 모달 이벤트 리스너는 showModal 함수 내부의 setupModalEventListeners에서 설정됨
   }
 }
 
@@ -904,7 +922,16 @@ function renderAllTrainersDetailStatsModal(trainerStats, centerOrder = []) {
           <div class="center-stat-grid" style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;">
             <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
               <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">회원수</div>
-              <div style="font-size:0.9rem;font-weight:bold;color:#1976d2;line-height:1.2;">${stats.memberCount || 0}명</div>
+              <div class="member-count-clickable" 
+                   data-trainer="${trainer.username}" 
+                   data-trainer-name="${trainer.name}"
+                   data-center="${center}"
+                   onclick="if(window.handleMemberCountClick){window.handleMemberCountClick(event,this);}"
+                   style="font-size:0.9rem;font-weight:bold;color:#1976d2;line-height:1.2;cursor:pointer;text-decoration:underline;user-select:none;" 
+                   onmouseover="this.style.color='#1565c0'" 
+                   onmouseout="this.style.color='#1976d2'">
+                ${stats.memberCount || 0}명
+              </div>
             </div>
             <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
               <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">총 세션</div>
@@ -977,4 +1004,125 @@ function setupDetailStatsButton(trainerStats) {
       showAllTrainersDetailStatsModal(trainerStats);
     });
   }
+  
+  // 회원수 클릭 이벤트는 모달이 표시된 후에 설정됨 (showAllTrainersDetailStatsModal 함수 내부에서 호출)
+}
+
+
+// 회원수 클릭 핸들러 (인라인 핸들러에서 호출)
+async function handleMemberCountClick(event, element) {
+  if (event) {
+    event.stopPropagation();
+    event.preventDefault();
+  }
+  
+  const el = element || (event ? event.currentTarget : null);
+  if (!el) {
+    console.error('요소를 찾을 수 없습니다');
+    return;
+  }
+  
+  const trainer = el.getAttribute('data-trainer');
+  const trainerName = el.getAttribute('data-trainer-name');
+  const center = el.getAttribute('data-center');
+  
+  if (!trainer || !trainerName || !center) {
+    console.error('필수 데이터가 없습니다:', { trainer, trainerName, center });
+    return;
+  }
+  
+  const selectedYearMonth = getSelectedYearMonth();
+  if (!selectedYearMonth) {
+    console.error('년월 정보를 가져올 수 없습니다');
+    return;
+  }
+  
+  await showMemberSessionsModal(trainer, trainerName, center, selectedYearMonth);
+}
+
+// 전역 스코프에 함수 노출 (인라인 핸들러에서 사용)
+window.handleMemberCountClick = handleMemberCountClick;
+
+// 회원 세션 현황 모달 표시 함수
+async function showMemberSessionsModal(trainer, trainerName, center, yearMonth) {
+  try {
+    // 로딩 모달 표시
+    showModal(`
+      <div style="text-align:center;padding:40px;">
+        <div>${trainerName} - ${center} 회원 세션 현황을 불러오는 중...</div>
+      </div>
+    `);
+    
+    // API 호출
+    const response = await fetch(`/api/member-sessions-by-center?trainer=${encodeURIComponent(trainer)}&center=${encodeURIComponent(center)}&yearMonth=${yearMonth}`);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.message || '회원 세션 현황 조회에 실패했습니다.');
+    }
+    
+    // 모달 내용 렌더링
+    const modalContent = renderMemberSessionsModal(data, trainerName, center, yearMonth);
+    showModal(modalContent);
+    
+  } catch (error) {
+    console.error('회원 세션 현황 조회 오류:', error);
+    showModal(`
+      <div style="text-align:center;padding:40px;color:#d32f2f;">
+        <div>회원 세션 현황 조회에 실패했습니다.</div>
+        <div style="font-size:0.9em;margin-top:10px;">${error.message}</div>
+      </div>
+    `);
+  }
+}
+
+// 전역 스코프에 함수 노출 (인라인 핸들러에서 사용)
+if (typeof window !== 'undefined') {
+  window.showMemberSessionsModal = showMemberSessionsModal;
+}
+
+// 회원 세션 현황 모달 렌더링 함수
+function renderMemberSessionsModal(data, trainerName, center, yearMonth) {
+  const displayYearMonth = yearMonth ? `${yearMonth.split('-')[0]}년 ${yearMonth.split('-')[1]}월` : '';
+  const { members } = data;
+  
+  if (!members || members.length === 0) {
+    return `
+      <div style="max-width:800px;max-height:700px;overflow-y:auto;position:relative;padding:20px;">
+        <button id="modal-close-btn" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        <h3 style="color:#1976d2;margin-bottom:16px;text-align:center;padding-right:35px;">${trainerName} - ${center}</h3>
+        <div style="color:#888;text-align:center;padding:40px;">회원 데이터가 없습니다.</div>
+      </div>
+    `;
+  }
+  
+  const membersHTML = members.map(member => `
+    <tr style="border-bottom:1px solid #eee;">
+      <td style="padding:10px 12px;text-align:left;font-size:0.9rem;">${member.memberName}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#4caf50;font-weight:600;">${member.completed}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#2196f3;font-weight:600;">${member.scheduled}</td>
+      <td style="padding:10px 12px;text-align:center;font-size:0.9rem;color:#f44336;font-weight:600;">${member.absent}</td>
+    </tr>
+  `).join('');
+  
+  return `
+    <div style="max-width:800px;max-height:700px;overflow-y:auto;position:relative;padding:20px;">
+      <button id="modal-close-btn" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      <h3 style="color:#1976d2;margin-bottom:8px;text-align:center;padding-right:35px;font-size:1.1rem;">${trainerName} - ${center}</h3>
+      <div style="text-align:center;color:#888;font-size:0.85rem;margin-bottom:16px;">${displayYearMonth} 세션 현황</div>
+      <table style="width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        <thead>
+          <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
+            <th style="padding:12px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;">회원명</th>
+            <th style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;">완료수업수</th>
+            <th style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;">예정수업수</th>
+            <th style="padding:12px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;">결석수</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${membersHTML}
+        </tbody>
+      </table>
+    </div>
+  `;
 } 

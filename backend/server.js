@@ -1190,6 +1190,92 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// 트레이너별 센터별 회원 세션 현황 조회 API
+app.get('/api/member-sessions-by-center', async (req, res) => {
+  try {
+    const { trainer, center, yearMonth } = req.query;
+    
+    if (!trainer || !center || !yearMonth) {
+      return res.status(400).json({ message: '트레이너, 센터, 년월 정보가 필요합니다.' });
+    }
+    
+    // 년월을 시작일과 종료일로 변환
+    const [year, month] = yearMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    
+    // 세션 데이터 조회
+    const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
+    
+    // 회원 데이터 조회
+    const members = await membersDB.getMembers();
+    
+    // 트레이너 ID를 이름으로 매핑
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    const trainers = accounts.filter(acc => acc.role === 'trainer')
+      .map(({ username, name }) => ({ username, name }));
+    const trainerNameMap = {};
+    trainers.forEach(trainer => {
+      trainerNameMap[trainer.username] = trainer.name;
+    });
+    
+    // 해당 트레이너의 해당 센터 회원 필터링
+    const trainerName = trainerNameMap[trainer] || trainer;
+    const targetMembers = members.filter(member => 
+      member.status === '유효' && 
+      !member.name.startsWith('무기명') && 
+      !member.name.startsWith('체험') &&
+      member.trainer === trainer &&
+      member.center === center
+    );
+    
+    // 한국시간 기준 오늘 날짜
+    const today = getKoreanToday();
+    const todayStr = getKoreanDate();
+    
+    // 회원별 세션 통계 계산
+    const memberStats = targetMembers.map(member => {
+      const memberSessions = sessions.filter(s => 
+        s.member === member.name && 
+        (trainerNameMap[s.trainer] || s.trainer) === trainerName
+      );
+      
+      const completed = memberSessions.filter(s => s.status === '완료').length;
+      const scheduled = memberSessions.filter(s => 
+        s.status === '예정' && s.date >= todayStr
+      ).length;
+      const absent = memberSessions.filter(s => 
+        s.status !== '완료' && s.date < todayStr
+      ).length;
+      
+      return {
+        memberName: member.name,
+        completed,
+        scheduled,
+        absent
+      };
+    });
+    
+    // 회원명 가나다순 정렬
+    memberStats.sort((a, b) => a.memberName.localeCompare(b.memberName, 'ko'));
+    
+    res.json({
+      trainer: trainerName,
+      center,
+      yearMonth,
+      members: memberStats
+    });
+  } catch (error) {
+    console.error('[API] 회원 세션 현황 조회 오류:', error);
+    res.status(500).json({ message: '회원 세션 현황을 불러오지 못했습니다.' });
+  }
+});
+
 // 이메일 설정 테스트 API
 app.get('/api/email/test', async (req, res) => {
     try {
