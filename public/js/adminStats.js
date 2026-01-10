@@ -385,6 +385,8 @@ async function loadStats() {
       resultsElement.innerHTML = renderStatsResults(stats);
       // 트레이너 행 이벤트 리스너 다시 설정
       setupTrainerRowEventListeners();
+      // 상세통계 버튼 이벤트 리스너 설정
+      setupDetailStatsButton(stats.trainerStats || []);
       // 툴팁 이벤트 설정
       setupValidMembersTooltip();
       setupCenterTooltips();
@@ -524,7 +526,15 @@ function renderStatsResults(stats) {
       </div>
     </div>
     <div class="stats-details">
-      <h4>트레이너별 통계</h4>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h4 style="margin:0;">트레이너별 통계</h4>
+        <button id="trainer-detail-stats-btn" 
+                style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;transition:background-color 0.2s;" 
+                onmouseover="this.style.backgroundColor='#1565c0'" 
+                onmouseout="this.style.backgroundColor='#1976d2'">
+          상세통계
+        </button>
+      </div>
       <div class="trainer-stats">
         ${renderTrainerStats(stats.trainerStats || [])}
       </div>
@@ -815,5 +825,156 @@ function getStatusClass(status) {
     case '결석': return 'absent';
     case '잔여세션 부족': return 'no-remaining';
     default: return 'pending';
+  }
+}
+
+// 전체 트레이너 상세통계 모달 표시 함수
+async function showAllTrainersDetailStatsModal(trainerStats) {
+  try {
+    // 센터 목록 가져오기 (DB 순서 유지)
+    const centersResponse = await fetch('/api/centers');
+    const centersData = await centersResponse.json();
+    const centerOrder = centersData.map(c => c.name); // 센터 순서 배열
+    
+    const modalContent = renderAllTrainersDetailStatsModal(trainerStats, centerOrder);
+    showModal(modalContent);
+  } catch (error) {
+    console.error('센터 목록 조회 오류:', error);
+    // 에러 발생 시 가나다순 정렬로 대체
+    const modalContent = renderAllTrainersDetailStatsModal(trainerStats, []);
+    showModal(modalContent);
+  }
+}
+
+// 전체 트레이너 상세통계 모달 렌더링 함수
+function renderAllTrainersDetailStatsModal(trainerStats, centerOrder = []) {
+  const selectedYearMonth = getSelectedYearMonth();
+  const displayYearMonth = selectedYearMonth ? `${selectedYearMonth.split('-')[0]}년 ${selectedYearMonth.split('-')[1]}월` : '';
+  
+  // 트레이너가 없는 경우
+  if (!trainerStats || trainerStats.length === 0) {
+    return `
+      <div style="max-width:1400px;max-height:90vh;overflow-y:auto;position:relative;padding:16px;">
+        <button id="modal-close-btn" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        <h3 style="color:#1976d2;margin-bottom:12px;text-align:center;padding-right:35px;font-size:1.1rem;">전체 트레이너 상세통계 - ${displayYearMonth}</h3>
+        <div style="color:#888;text-align:center;padding:40px;font-size:0.85rem;">트레이너 데이터가 없습니다.</div>
+      </div>
+    `;
+  }
+  
+  // 트레이너별 통계 HTML 생성 (가나다순 정렬)
+  const sortedTrainerStats = [...trainerStats].sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  
+  const trainerStatsHTML = sortedTrainerStats.map(trainer => {
+    // 센터별 통계가 없는 트레이너 처리
+    if (!trainer.centerStats || Object.keys(trainer.centerStats).length === 0) {
+      return `
+        <div class="trainer-detail-section" style="margin-bottom:12px;padding:10px 12px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;">
+          <h3 style="margin:0 0 8px 0;color:#1976d2;font-size:0.9rem;display:flex;align-items:center;font-weight:600;">
+            👤 ${trainer.name}
+          </h3>
+          <div style="color:#888;text-align:center;padding:12px;font-size:0.75rem;">센터별 데이터가 없습니다.</div>
+        </div>
+      `;
+    }
+    
+    // 센터별 통계 HTML 생성 (DB 배열 순서대로)
+    const centerEntries = Object.entries(trainer.centerStats || {});
+    
+    // 센터 순서가 있으면 그 순서대로 정렬, 없으면 가나다순 정렬
+    const sortedCenterEntries = centerOrder.length > 0
+      ? centerEntries.sort(([centerA], [centerB]) => {
+          const indexA = centerOrder.indexOf(centerA);
+          const indexB = centerOrder.indexOf(centerB);
+          // 순서 배열에 없는 경우 맨 뒤로
+          if (indexA === -1 && indexB === -1) return centerA.localeCompare(centerB, 'ko');
+          if (indexA === -1) return 1;
+          if (indexB === -1) return -1;
+          return indexA - indexB;
+        })
+      : centerEntries.sort(([centerA], [centerB]) => centerA.localeCompare(centerB, 'ko'));
+    
+    const centerStatsHTML = sortedCenterEntries
+      .map(([center, stats]) => `
+        <div class="center-stat-card" style="padding:8px 10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #1976d2;flex:1;min-width:220px;max-width:280px;">
+          <h4 style="margin:0 0 6px 0;color:#1976d2;font-size:0.75rem;display:flex;align-items:center;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            📍 ${center}
+          </h4>
+          <div class="center-stat-grid" style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;">
+            <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
+              <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">회원수</div>
+              <div style="font-size:0.9rem;font-weight:bold;color:#1976d2;line-height:1.2;">${stats.memberCount || 0}명</div>
+            </div>
+            <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
+              <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">총 세션</div>
+              <div style="font-size:0.9rem;font-weight:bold;color:#333;line-height:1.2;">${stats.total || 0}개</div>
+            </div>
+            <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
+              <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">완료</div>
+              <div style="font-size:0.9rem;font-weight:bold;color:#4caf50;line-height:1.2;">
+                ${stats.completed || 0}개
+                ${stats.completedTrialOrAnonymous > 0 ? `<span style="font-size:0.6rem;color:#888;display:block;margin-top:1px;">(${stats.completedTrialOrAnonymous})</span>` : ''}
+              </div>
+            </div>
+            <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
+              <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">예정</div>
+              <div style="font-size:0.9rem;font-weight:bold;color:#2196f3;line-height:1.2;">${stats.scheduled || 0}개</div>
+            </div>
+            <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
+              <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">결석</div>
+              <div style="font-size:0.9rem;font-weight:bold;color:#f44336;line-height:1.2;">${stats.absent || 0}개</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+    
+    return `
+      <div class="trainer-detail-section" style="margin-bottom:12px;padding:10px 12px;background:#fff;border-radius:6px;border:1px solid #e0e0e0;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+        <h3 style="margin:0 0 8px 0;color:#1976d2;font-size:0.85rem;display:flex;align-items:center;padding-bottom:6px;border-bottom:1px solid #e0e0e0;font-weight:600;">
+          👤 ${trainer.name}
+          <span style="margin-left:8px;font-size:0.7rem;color:#888;font-weight:normal;">
+            (전체: 회원 ${trainer.memberCount || 0}명, 세션 ${trainer.total || 0}개)
+          </span>
+        </h3>
+        <div class="trainer-centers-container" style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${centerStatsHTML || '<div style="color:#888;font-size:0.7rem;padding:8px;">센터별 데이터가 없습니다.</div>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  return `
+    <div style="max-width:1400px;max-height:90vh;overflow-y:auto;position:relative;padding:16px;background:#f5f5f5;">
+      <button id="modal-close-btn" 
+              style="position:fixed;top:16px;right:16px;background:#fff;border:2px solid #ddd;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all 0.2s;z-index:1001;box-shadow:0 2px 4px rgba(0,0,0,0.1);" 
+              onmouseover="this.style.backgroundColor='#f0f0f0';this.style.borderColor='#999';" 
+              onmouseout="this.style.backgroundColor='#fff';this.style.borderColor='#ddd';">
+        ×
+      </button>
+      <h2 style="color:#1976d2;margin:0 0 6px 0;text-align:center;padding-right:40px;font-size:1.1rem;font-weight:600;">
+        전체 트레이너 상세통계
+      </h2>
+      <div style="text-align:center;color:#888;font-size:0.8rem;margin-bottom:16px;">
+        ${displayYearMonth}
+      </div>
+      <div class="all-trainers-detail-stats-container" style="background:#fff;padding:14px;border-radius:6px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+        ${trainerStatsHTML}
+      </div>
+    </div>
+  `;
+}
+
+// 상세통계 버튼 이벤트 리스너 설정 함수
+function setupDetailStatsButton(trainerStats) {
+  const detailStatsBtn = document.getElementById('trainer-detail-stats-btn');
+  if (detailStatsBtn) {
+    // 기존 이벤트 리스너 제거 (중복 방지)
+    const newBtn = detailStatsBtn.cloneNode(true);
+    detailStatsBtn.parentNode.replaceChild(newBtn, detailStatsBtn);
+    
+    // 새 이벤트 리스너 추가
+    newBtn.addEventListener('click', () => {
+      showAllTrainersDetailStatsModal(trainerStats);
+    });
   }
 } 

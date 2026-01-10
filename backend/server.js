@@ -1084,13 +1084,15 @@ app.get('/api/stats', async (req, res) => {
         completedTrialOrAnonymous: 0,
         scheduled: 0,
         absent: 0,
-        memberCount: trainerMemberCount[trainerName] || 0
+        memberCount: trainerMemberCount[trainerName] || 0,
+        centerStats: {} // 센터별 통계 객체 추가
       });
     });
     
     // 세션 데이터로 통계 업데이트
     sessions.forEach(session => {
       const trainerName = trainerNameMap[session.trainer] || session.trainer; // 이름이 없으면 ID 사용
+      const center = memberCenterMap[session.member]; // 회원의 센터 정보
       
       if (!trainerMap.has(trainerName)) {
         // 트레이너 이름으로 username 찾기
@@ -1103,13 +1105,44 @@ app.get('/api/stats', async (req, res) => {
           completedTrialOrAnonymous: 0,
           scheduled: 0,
           absent: 0,
-          memberCount: trainerMemberCount[trainerName] || 0
+          memberCount: trainerMemberCount[trainerName] || 0,
+          centerStats: {} // 센터별 통계 객체 추가
         });
       }
       
       const trainer = trainerMap.get(trainerName);
       trainer.total++;
       
+      // 센터별 통계 계산 (센터가 있는 경우)
+      if (center) {
+        if (!trainer.centerStats[center]) {
+          trainer.centerStats[center] = {
+            memberCount: 0,
+            total: 0,
+            completed: 0,
+            completedTrialOrAnonymous: 0,
+            scheduled: 0,
+            absent: 0
+          };
+        }
+        
+        const centerStat = trainer.centerStats[center];
+        centerStat.total++;
+        
+        if (session.status === '완료') {
+          centerStat.completed++;
+          // 체험/무기명 회원 체크
+          if (session.member.startsWith('체험') || session.member.startsWith('무기명')) {
+            centerStat.completedTrialOrAnonymous++;
+          }
+        } else if (session.status === '예정' && session.date >= todayStr) {
+          centerStat.scheduled++;
+        } else if (session.date < todayStr) {
+          centerStat.absent++;
+        }
+      }
+      
+      // 전체 통계 계산
       if (session.status === '완료') {
         trainer.completed++;
         // 체험/무기명 회원 체크
@@ -1120,6 +1153,31 @@ app.get('/api/stats', async (req, res) => {
         trainer.scheduled++;
       } else if (session.date < todayStr) {
         trainer.absent++;
+      }
+    });
+    
+    // 트레이너별 센터별 회원수 계산
+    members.forEach(member => {
+      if (member.status === '유효' && 
+          !member.name.startsWith('무기명') && 
+          !member.name.startsWith('체험')) {
+        const trainerName = trainerNameMap[member.trainer] || member.trainer;
+        const trainer = trainerMap.get(trainerName);
+        
+        if (trainer && member.center) {
+          // 센터별 통계가 없으면 초기화
+          if (!trainer.centerStats[member.center]) {
+            trainer.centerStats[member.center] = {
+              memberCount: 0,
+              total: 0,
+              completed: 0,
+              completedTrialOrAnonymous: 0,
+              scheduled: 0,
+              absent: 0
+            };
+          }
+          trainer.centerStats[member.center].memberCount++;
+        }
       }
     });
     
