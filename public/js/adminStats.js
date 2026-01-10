@@ -854,7 +854,7 @@ function renderAllTrainersDetailStatsModal(trainerStats, centerOrder = []) {
   // 트레이너가 없는 경우
   if (!trainerStats || trainerStats.length === 0) {
     return `
-      <div style="max-width:1440px;width:81vw;max-height:90vh;overflow-y:auto;position:relative;padding:16px;">
+      <div style="max-width:620px;width:70vw;max-height:90vh;overflow-y:auto;position:relative;padding:16px;">
         <button id="modal-close-btn" style="position:absolute;top:8px;right:8px;background:none;border:none;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
         <h3 style="color:#1976d2;margin-bottom:12px;text-align:center;padding-right:35px;font-size:1.1rem;">전체 트레이너 상세통계 - ${displayYearMonth}</h3>
         <div style="color:#888;text-align:center;padding:40px;font-size:0.85rem;">트레이너 데이터가 없습니다.</div>
@@ -894,9 +894,10 @@ function renderAllTrainersDetailStatsModal(trainerStats, centerOrder = []) {
         })
       : centerEntries.sort(([centerA], [centerB]) => centerA.localeCompare(centerB, 'ko'));
     
+    // 센터 카드는 고정 크기로 유지하고 줄바꿈되도록 설정 (카드 폭: 300px, 모달 폭이 좁아서 자연스럽게 줄바꿈)
     const centerStatsHTML = sortedCenterEntries
       .map(([center, stats]) => `
-        <div class="center-stat-card" style="padding:8px 10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #1976d2;flex:1;min-width:220px;max-width:320px;">
+        <div class="center-stat-card" style="padding:8px 10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #1976d2;flex: 0 0 auto;width:300px;min-width:300px;">
           <h4 style="margin:0 0 6px 0;color:#1976d2;font-size:0.75rem;display:flex;align-items:center;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
             📍 ${center}
           </h4>
@@ -944,7 +945,7 @@ function renderAllTrainersDetailStatsModal(trainerStats, centerOrder = []) {
   }).join('');
   
   return `
-    <div style="max-width:1440px;width:81vw;max-height:90vh;overflow-y:auto;position:relative;padding:16px;background:#f5f5f5;">
+    <div style="max-width:620px;width:70vw;max-height:90vh;overflow-y:auto;position:relative;padding:16px;background:#f5f5f5;">
       <button id="modal-close-btn" 
               style="position:fixed;top:16px;right:16px;background:#fff;border:2px solid #ddd;font-size:18px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all 0.2s;z-index:1001;box-shadow:0 2px 4px rgba(0,0,0,0.1);" 
               onmouseover="this.style.backgroundColor='#f0f0f0';this.style.borderColor='#999';" 
