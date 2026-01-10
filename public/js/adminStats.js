@@ -894,10 +894,10 @@ function renderAllTrainersDetailStatsModal(trainerStats, centerOrder = []) {
         })
       : centerEntries.sort(([centerA], [centerB]) => centerA.localeCompare(centerB, 'ko'));
     
-    // 센터 카드는 고정 크기로 유지하고 줄바꿈되도록 설정 (카드 폭: 300px, 모달 폭이 좁아서 자연스럽게 줄바꿈)
+    // 센터 카드는 고정 크기로 유지하고 줄바꿈되도록 설정 (카드 폭: 450px, 모달 폭이 좁아서 자연스럽게 줄바꿈)
     const centerStatsHTML = sortedCenterEntries
       .map(([center, stats]) => `
-        <div class="center-stat-card" style="padding:8px 10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #1976d2;flex: 0 0 auto;width:300px;min-width:300px;">
+        <div class="center-stat-card" style="padding:8px 10px;background:#f8f9fa;border-radius:6px;border-left:3px solid #1976d2;flex: 0 0 auto;width:450px;min-width:450px;">
           <h4 style="margin:0 0 6px 0;color:#1976d2;font-size:0.75rem;display:flex;align-items:center;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
             📍 ${center}
           </h4>
@@ -913,8 +913,7 @@ function renderAllTrainersDetailStatsModal(trainerStats, centerOrder = []) {
             <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
               <div style="font-size:0.65rem;color:#666;margin-bottom:1px;line-height:1.1;">완료</div>
               <div style="font-size:0.9rem;font-weight:bold;color:#4caf50;line-height:1.2;">
-                ${stats.completed || 0}개
-                ${stats.completedTrialOrAnonymous > 0 ? `<span style="font-size:0.6rem;color:#888;display:block;margin-top:1px;">(${stats.completedTrialOrAnonymous})</span>` : ''}
+                ${stats.completed || 0}개${stats.completedTrialOrAnonymous > 0 ? `<span style="font-size:0.75rem;color:#888;margin-left:4px;">(${stats.completedTrialOrAnonymous})</span>` : ''}
               </div>
             </div>
             <div class="stat-item" style="padding:4px 6px;background:#fff;border-radius:4px;">
