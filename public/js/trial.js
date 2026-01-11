@@ -177,7 +177,7 @@ function renderTrialSessions(data, centerOrder) {
             <tbody>
               ${trials.map(trial => {
                 const date = new Date(trial.date);
-                const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                const dateStr = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
                 const resultValue = trial.result || '미등록';
                 
                 return `
@@ -189,8 +189,8 @@ function renderTrialSessions(data, centerOrder) {
                     <td style="padding:10px 8px;font-size:0.9rem;">${trial.gender || '-'}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
+                    <td style="padding:10px 8px;font-size:0.9rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
+                    <td style="padding:10px 8px;font-size:0.9rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;">${resultValue}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;">
                       <button class="trial-edit-btn" data-trial-id="${trial.id}" data-trial-data='${JSON.stringify(trial)}' style="background:#1976d2;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;">수정</button>
