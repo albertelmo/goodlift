@@ -363,6 +363,13 @@ const upload = multer({
 
 app.use(cors());
 app.use(express.json());
+
+// manifest.json을 올바른 Content-Type으로 제공
+app.get('/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.sendFile(path.join(__dirname, '../public/manifest.json'));
+});
+
 app.use(express.static(path.join(__dirname, '../public')));
 
 // 회원가입 API
