@@ -9,7 +9,7 @@ const STATIC_CACHE_URLS = [
   '/css/style.css',
   '/css/adminDayCalendar.css',
   '/css/adminWeekCalendar.css',
-  '/img/logo.jpg',
+  '/img/logo.png',
   '/js/main.js',
   '/manifest.json'
 ];
