@@ -15,6 +15,138 @@ const membersDB = require('./members-db');
 const monthlyStatsDB = require('./monthly-stats-db');
 const registrationLogsDB = require('./registration-logs-db');
 const expensesDB = require('./expenses-db');
+const trialsDB = require('./trials-db');
+
+// 무기명/체험 세션 판별 함수
+function isTrialSession(memberName) {
+  return memberName && (
+    memberName.startsWith('무기명') || 
+    memberName.startsWith('체험')
+  );
+}
+
+// 트레이너별 시간대별 센터 매핑 함수
+async function getCenterByTrainerAndTime(trainer, time, memberCenter) {
+  try {
+    // 센터 목록 조회 (순서대로 1,2,3 호점)
+    let centers = [];
+    if (fs.existsSync(CENTERS_PATH)) {
+      const raw = fs.readFileSync(CENTERS_PATH, 'utf-8');
+      if (raw) centers = JSON.parse(raw);
+    }
+    
+    // 트레이너 이름을 username으로 매핑
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    
+    const trainerAccount = accounts.find(acc => acc.username === trainer || acc.name === trainer);
+    if (!trainerAccount) {
+      return memberCenter || '미지정';
+    }
+    
+    const trainerName = trainerAccount.name;
+    const timeHour = parseInt(time.split(':')[0]);
+    
+    // 센터 인덱스 매핑 (0-based)
+    const centerIndex1 = centers.length > 0 ? centers[0].name : null; // 1호점
+    const centerIndex2 = centers.length > 1 ? centers[1].name : null; // 2호점
+    const centerIndex3 = centers.length > 2 ? centers[2].name : null; // 3호점
+    
+    // 트레이너별 시간대별 센터 매핑
+    if (trainerName === '김성현') {
+      // 기본은 회원 DB, 15시 이후(15시 포함) 세션은 3호점
+      if (timeHour >= 15) {
+        return centerIndex3 || memberCenter || '미지정';
+      }
+      return memberCenter || '미지정';
+    } else if (trainerName === '천성식') {
+      // 기본은 회원 DB, 17시 전(17시 포함 안함) 세션은 3호점
+      if (timeHour < 17) {
+        return centerIndex3 || memberCenter || '미지정';
+      }
+      return memberCenter || '미지정';
+    } else if (trainerName === '윤승환') {
+      // 기본은 회원 DB, 17시 이후(17시 포함) 세션은 1호점
+      if (timeHour >= 17) {
+        return centerIndex1 || memberCenter || '미지정';
+      }
+      return memberCenter || '미지정';
+    } else if (trainerName === '이주영') {
+      // 기본은 회원 DB, 15시 이후(15시 포함) 세션은 2호점
+      if (timeHour >= 15) {
+        return centerIndex2 || memberCenter || '미지정';
+      }
+      return memberCenter || '미지정';
+    }
+    
+    // 매핑되지 않은 트레이너는 회원 DB의 center 사용
+    return memberCenter || '미지정';
+  } catch (error) {
+    console.error('[API] 센터 매핑 오류:', error);
+    return memberCenter || '미지정';
+  }
+}
+
+// 세션에서 trial 생성/업데이트 동기화
+async function syncTrialWithSession(session, action = 'create') {
+  try {
+    if (!isTrialSession(session.member)) {
+      return; // 무기명/체험이 아니면 처리하지 않음
+    }
+
+    // 회원 정보에서 center 조회
+    const member = await membersDB.getMemberByName(session.member);
+    const memberCenter = member ? member.center : null;
+    
+    // 트레이너별 시간대별 센터 매핑
+    const center = await getCenterByTrainerAndTime(session.trainer, session.time, memberCenter);
+
+    if (action === 'create') {
+      // trial 생성
+      const trial = {
+        session_id: session.id,
+        center: center,
+        date: session.date,
+        time: session.time,
+        trainer: session.trainer,
+        member_name: session.member
+      };
+      await trialsDB.addTrial(trial);
+    } else if (action === 'update') {
+      // trial 업데이트
+      const existingTrial = await trialsDB.getTrialBySessionId(session.id);
+      if (existingTrial) {
+        const updates = {
+          date: session.date,
+          time: session.time,
+          center: center,
+          member_name: session.member
+        };
+        await trialsDB.updateTrialBySessionId(session.id, updates);
+      } else {
+        // trial이 없으면 생성 (수정 전에는 일반 세션이었을 수 있음)
+        const trial = {
+          session_id: session.id,
+          center: center,
+          date: session.date,
+          time: session.time,
+          trainer: session.trainer,
+          member_name: session.member
+        };
+        await trialsDB.addTrial(trial);
+      }
+    } else if (action === 'delete') {
+      // trial 삭제
+      await trialsDB.deleteTrialBySessionId(session.id);
+    }
+  } catch (error) {
+    // trial 동기화 실패해도 세션 작업은 계속 진행
+    console.error('[API] Trial 동기화 오류:', error);
+  }
+}
 
 // 이메일 서비스 모듈
 const emailService = require('./email-service');
@@ -47,9 +179,106 @@ if (!fs.existsSync(DATA_DIR)) {
 // PostgreSQL 데이터베이스 초기화
 sessionsDB.initializeDatabase();
 membersDB.initializeDatabase();
+
+// Trial 마이그레이션 자동 실행 (서버 시작 시 한 번만)
+async function runTrialMigration() {
+  const MIGRATION_FLAG_FILE = path.join(DATA_DIR, '.trial-migration-done');
+  
+  // 마이그레이션이 이미 완료되었는지 확인
+  if (fs.existsSync(MIGRATION_FLAG_FILE)) {
+    console.log('[Migration] Trial 마이그레이션이 이미 완료되었습니다. 건너뜀.');
+    return;
+  }
+  
+  try {
+    console.log('[Migration] Trial 마이그레이션 자동 실행 시작');
+    
+    // 모든 세션 조회
+    const allSessions = await sessionsDB.getSessions({});
+    
+    // 무기명/체험 세션 필터링
+    const trialSessions = allSessions.filter(session => 
+      isTrialSession(session.member)
+    );
+    
+    console.log(`[Migration] 무기명/체험 세션 ${trialSessions.length}개 발견`);
+    
+    // 트레이너 정보 및 센터 정보 조회
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    
+    // 회원 정보 조회
+    const members = await membersDB.getMembers();
+    const memberCenterMap = {};
+    members.forEach(member => {
+      memberCenterMap[member.name] = member.center;
+    });
+    
+    let createdCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+    
+    // 각 세션을 trial DB에 생성
+    for (const session of trialSessions) {
+      try {
+        // 이미 trial이 존재하는지 확인 (session_id로)
+        const existingTrial = await trialsDB.getTrialBySessionId(session.id);
+        if (existingTrial) {
+          skippedCount++;
+          continue;
+        }
+        
+        // 회원 정보에서 center 조회
+        const member = await membersDB.getMemberByName(session.member);
+        const memberCenter = member ? member.center : null;
+        
+        // 트레이너별 시간대별 센터 매핑
+        const center = await getCenterByTrainerAndTime(session.trainer, session.time, memberCenter);
+        
+        // trial 생성
+        const trial = {
+          session_id: session.id,
+          center: center,
+          date: session.date,
+          time: session.time,
+          trainer: session.trainer,
+          member_name: session.member
+        };
+        
+        await trialsDB.addTrial(trial);
+        createdCount++;
+      } catch (error) {
+        console.error(`[Migration] 세션 ${session.id} 마이그레이션 오류:`, error);
+        errorCount++;
+      }
+    }
+    
+    console.log(`[Migration] Trial 마이그레이션 완료: 생성 ${createdCount}개, 건너뜀 ${skippedCount}개, 오류 ${errorCount}개`);
+    
+    // 마이그레이션 완료 플래그 파일 생성
+    fs.writeFileSync(MIGRATION_FLAG_FILE, JSON.stringify({
+      completedAt: new Date().toISOString(),
+      total: trialSessions.length,
+      created: createdCount,
+      skipped: skippedCount,
+      errors: errorCount
+    }, null, 2));
+    console.log('[Migration] 마이그레이션 완료 플래그 파일 생성됨');
+  } catch (error) {
+    console.error('[Migration] Trial 마이그레이션 오류:', error);
+    // 마이그레이션 실패 시에도 플래그 파일을 생성하지 않음 (재시도 가능)
+  }
+}
+
+// 서버 시작 시 마이그레이션 실행
+runTrialMigration();
 monthlyStatsDB.initializeDatabase();
 registrationLogsDB.initializeDatabase();
 expensesDB.initializeDatabase();
+trialsDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -718,6 +947,11 @@ app.post('/api/sessions', async (req, res) => {
             const addedSessions = await sessionsDB.addMultipleSessions(sessions);
             const skipped = count - sessions.length;
             
+            // 무기명/체험 세션이면 trial DB에 자동 등록
+            for (const addedSession of addedSessions) {
+              await syncTrialWithSession(addedSession, 'create');
+            }
+            
             res.json({ 
                 message: '세션이 추가되었습니다.', 
                 session: addedSessions[0],
@@ -738,6 +972,10 @@ app.post('/api/sessions', async (req, res) => {
             };
             
             const session = await sessionsDB.addSession(newSession);
+            
+            // 무기명/체험 세션이면 trial DB에 자동 등록
+            await syncTrialWithSession(session, 'create');
+            
             res.json({ message: '세션이 추가되었습니다.', session });
         }
     } catch (error) {
@@ -777,7 +1015,18 @@ app.patch('/api/sessions/:id', async (req, res) => {
         const session = await sessionsDB.getSessionById(sessionId);
         if (!session) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
         
+        const wasTrialSession = isTrialSession(session.member);
+        
         const updatedSession = await sessionsDB.updateSession(sessionId, { date, time });
+        
+        // 무기명/체험 세션이면 trial DB도 업데이트
+        if (isTrialSession(updatedSession.member)) {
+          await syncTrialWithSession(updatedSession, 'update');
+        } else if (wasTrialSession) {
+          // 무기명/체험에서 일반으로 변경된 경우 trial 삭제
+          await syncTrialWithSession(session, 'delete');
+        }
+        
         res.json({ message: '세션이 변경되었습니다.', session: updatedSession });
     } catch (error) {
         console.error('[API] 세션 변경 오류:', error);
@@ -790,6 +1039,11 @@ app.delete('/api/sessions/:id', async (req, res) => {
         const sessionId = req.params.id;
         const session = await sessionsDB.getSessionById(sessionId);
         if (!session) return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
+        
+        // 무기명/체험 세션이면 trial DB도 삭제
+        if (isTrialSession(session.member)) {
+          await syncTrialWithSession(session, 'delete');
+        }
         
         await sessionsDB.deleteSession(sessionId);
         res.json({ message: '세션이 삭제되었습니다.' });
@@ -1366,6 +1620,173 @@ app.get('/api/trial-sessions', async (req, res) => {
   } catch (error) {
     console.error('[API] 체험/무기명 세션 조회 오류:', error);
     res.status(500).json({ message: '체험/무기명 세션 조회에 실패했습니다.' });
+  }
+});
+
+
+// Trial (신규 상담) API
+// Trial 목록 조회 (센터별, 월별)
+app.get('/api/trials', async (req, res) => {
+  try {
+    const { trainer, date, startDate, endDate, yearMonth } = req.query;
+    
+    const filters = {};
+    if (trainer) filters.trainer = trainer;
+    if (date) filters.date = date;
+    if (startDate && endDate) {
+      filters.startDate = startDate;
+      filters.endDate = endDate;
+    }
+    if (yearMonth) filters.yearMonth = yearMonth;
+    
+    const trials = await trialsDB.getTrials(filters);
+    
+    // 트레이너 ID를 이름으로 매핑 및 센터 정보 가져오기
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    const trainers = accounts.filter(acc => acc.role === 'trainer');
+    const trainerNameMap = {};
+    const trainerCenterMap = {};
+    trainers.forEach(trainer => {
+      trainerNameMap[trainer.username] = trainer.name;
+      trainerCenterMap[trainer.username] = trainer.center || '미지정';
+    });
+    
+    // 센터별로 그룹화
+    const centerGroups = {};
+    
+    trials.forEach(trial => {
+      // DB에 저장된 center 값이 있으면 사용, 없으면 트레이너의 센터 정보 사용
+      const center = trial.center || trainerCenterMap[trial.trainer] || '미지정';
+      
+      if (!centerGroups[center]) {
+        centerGroups[center] = [];
+      }
+      
+      centerGroups[center].push({
+        id: trial.id,
+        center: center,
+        date: trial.date,
+        time: trial.time,
+        trainer: trainerNameMap[trial.trainer] || trial.trainer,
+        member_name: trial.member_name || '',
+        gender: trial.gender || '',
+        phone: trial.phone || '',
+        source: trial.source || '',
+        purpose: trial.purpose || '',
+        notes: trial.notes || '',
+        result: trial.result || '',
+        created_at: trial.created_at,
+        updated_at: trial.updated_at
+      });
+    });
+    
+    // 센터별로 날짜, 시간순 정렬
+    Object.keys(centerGroups).forEach(center => {
+      centerGroups[center].sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        if (dateA.getTime() !== dateB.getTime()) {
+          return dateA.getTime() - dateB.getTime();
+        }
+        return a.time.localeCompare(b.time);
+      });
+    });
+    
+    const targetYearMonth = yearMonth || getKoreanYearMonth();
+    res.json({
+      yearMonth: targetYearMonth,
+      centers: centerGroups
+    });
+  } catch (error) {
+    console.error('[API] Trial 목록 조회 오류:', error);
+    res.status(500).json({ message: 'Trial 목록 조회에 실패했습니다.' });
+  }
+});
+
+// Trial ID로 조회
+app.get('/api/trials/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const trial = await trialsDB.getTrialById(id);
+    
+    if (!trial) {
+      return res.status(404).json({ message: 'Trial을 찾을 수 없습니다.' });
+    }
+    
+    res.json(trial);
+  } catch (error) {
+    console.error('[API] Trial 조회 오류:', error);
+    res.status(500).json({ message: 'Trial 조회에 실패했습니다.' });
+  }
+});
+
+// Trial 추가
+app.post('/api/trials', async (req, res) => {
+  try {
+    const { center, date, time, trainer, member_name, gender, phone, source, purpose, notes, result } = req.body;
+    
+    // 필수 필드 검증
+    if (!date || !time || !trainer) {
+      return res.status(400).json({ message: '날짜, 시각, 트레이너는 필수 항목입니다.' });
+    }
+    
+    const newTrial = {
+      center,
+      date,
+      time,
+      trainer,
+      member_name,
+      gender,
+      phone,
+      source,
+      purpose,
+      notes,
+      result
+    };
+    
+    const trial = await trialsDB.addTrial(newTrial);
+    res.json({ message: 'Trial이 추가되었습니다.', trial });
+  } catch (error) {
+    console.error('[API] Trial 추가 오류:', error);
+    res.status(500).json({ message: 'Trial 추가에 실패했습니다.' });
+  }
+});
+
+// Trial 수정
+app.patch('/api/trials/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    
+    const trial = await trialsDB.updateTrial(id, updates);
+    res.json({ message: 'Trial이 수정되었습니다.', trial });
+  } catch (error) {
+    console.error('[API] Trial 수정 오류:', error);
+    if (error.message === 'Trial을 찾을 수 없습니다.') {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: 'Trial 수정에 실패했습니다.' });
+    }
+  }
+});
+
+// Trial 삭제
+app.delete('/api/trials/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await trialsDB.deleteTrial(id);
+    res.json({ message: 'Trial이 삭제되었습니다.' });
+  } catch (error) {
+    console.error('[API] Trial 삭제 오류:', error);
+    if (error.message === 'Trial을 찾을 수 없습니다.') {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: 'Trial 삭제에 실패했습니다.' });
+    }
   }
 });
 
