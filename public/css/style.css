@@ -1541,4 +1541,53 @@ li, td, th {
   .member-count-clickable {
     font-size: 0.8rem !important;
   }
+}
+
+/* Renew tab responsive layout */
+@media (max-width: 1000px) {
+  .renew-trainer-table {
+    flex: 0 0 calc(25% - 12px) !important;
+  }
+}
+
+@media (max-width: 800px) {
+  .renew-trainer-table {
+    flex: 0 0 calc(33.333% - 11px) !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .renew-trainer-table {
+    flex: 0 0 calc(50% - 8px) !important;
+  }
+  
+  .renew-edit-modal {
+    min-width: 280px !important;
+    max-width: 95vw !important;
+    padding: 16px !important;
+  }
+  
+  /* 재등록 현황 테이블 모바일 스타일 */
+  .renew-trainer-table table th,
+  .renew-trainer-table table td {
+    padding: 2px 1px !important;
+    font-size: 0.6rem !important;
+  }
+  
+  .renew-trainer-table table th:nth-child(2),
+  .renew-trainer-table table th:nth-child(3),
+  .renew-trainer-table table th:nth-child(4),
+  .renew-trainer-table table td:nth-child(2),
+  .renew-trainer-table table td:nth-child(3),
+  .renew-trainer-table table td:nth-child(4) {
+    min-width: 25px !important;
+    max-width: 30px !important;
+    width: auto !important;
+  }
+  
+  .renew-trainer-table table th:nth-child(1),
+  .renew-trainer-table table td:nth-child(1) {
+    max-width: 35px !important;
+    min-width: 30px !important;
+  }
 } 

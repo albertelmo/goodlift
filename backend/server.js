@@ -16,6 +16,7 @@ const monthlyStatsDB = require('./monthly-stats-db');
 const registrationLogsDB = require('./registration-logs-db');
 const expensesDB = require('./expenses-db');
 const trialsDB = require('./trials-db');
+const renewalsDB = require('./renewals-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -279,6 +280,7 @@ monthlyStatsDB.initializeDatabase();
 registrationLogsDB.initializeDatabase();
 expensesDB.initializeDatabase();
 trialsDB.initializeDatabase();
+renewalsDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -1786,6 +1788,196 @@ app.delete('/api/trials/:id', async (req, res) => {
       res.status(404).json({ message: error.message });
     } else {
       res.status(500).json({ message: 'Trial 삭제에 실패했습니다.' });
+    }
+  }
+});
+
+// Renewals (재등록 현황) API
+// Renewals 목록 조회 (센터별, 월별)
+app.get('/api/renewals', async (req, res) => {
+  try {
+    const filters = {};
+    if (req.query.center) filters.center = req.query.center;
+    if (req.query.trainer) filters.trainer = req.query.trainer;
+    if (req.query.month) filters.month = req.query.month;
+    if (req.query.status) filters.status = req.query.status;
+    
+    // month가 없으면 현재 년월 사용
+    if (!filters.month) {
+      filters.month = getKoreanYearMonth();
+    }
+    
+    const renewals = await renewalsDB.getRenewals(filters);
+    
+    // 트레이너 ID를 이름으로 매핑
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    const trainers = accounts.filter(acc => acc.role === 'trainer');
+    const trainerNameMap = {};
+    trainers.forEach(trainer => {
+      trainerNameMap[trainer.username] = trainer.name;
+    });
+    
+    // 센터별로 그룹화
+    const centerGroups = {};
+    
+    renewals.forEach(renewal => {
+      if (!centerGroups[renewal.center]) {
+        centerGroups[renewal.center] = [];
+      }
+      
+      centerGroups[renewal.center].push({
+        id: renewal.id,
+        center: renewal.center,
+        trainer: trainerNameMap[renewal.trainer] || renewal.trainer,
+        trainer_username: renewal.trainer,
+        member_names: renewal.member_names || [],
+        expected_sessions: renewal.expected_sessions,
+        actual_sessions: renewal.actual_sessions,
+        status: renewal.status,
+        created_at: renewal.created_at,
+        updated_at: renewal.updated_at
+      });
+    });
+    
+    res.json(centerGroups);
+  } catch (error) {
+    console.error('[API] Renewals 조회 오류:', error);
+    res.status(500).json({ message: '재등록 현황 조회에 실패했습니다.' });
+  }
+});
+
+// 센터/트레이너별 회원 목록 조회
+app.get('/api/members-by-trainer-center', async (req, res) => {
+  try {
+    const { trainer, center } = req.query;
+    
+    if (!trainer || !center) {
+      return res.status(400).json({ message: '트레이너와 센터 정보가 필요합니다.' });
+    }
+    
+    const members = await membersDB.getMembers({ trainer, status: '유효' });
+    
+    // 해당 센터의 회원만 필터링 (무기명/체험 제외)
+    const filteredMembers = members.filter(member => 
+      member.center === center &&
+      !member.name.startsWith('무기명') &&
+      !member.name.startsWith('체험')
+    );
+    
+    res.json(filteredMembers.map(m => ({
+      name: m.name,
+      gender: m.gender,
+      phone: m.phone,
+      remainSessions: m.remainSessions || 0
+    })));
+  } catch (error) {
+    console.error('[API] 회원 목록 조회 오류:', error);
+    res.status(500).json({ message: '회원 목록 조회에 실패했습니다.' });
+  }
+});
+
+// Renewal 추가
+app.post('/api/renewals', async (req, res) => {
+  try {
+    const { center, trainer, month, member_names, expected_sessions } = req.body;
+    
+    if (!center || !trainer || !member_names || !Array.isArray(member_names) || member_names.length === 0 || !expected_sessions || typeof expected_sessions !== 'object') {
+      return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
+    }
+    
+    // month가 없으면 현재 년월 사용
+    const targetMonth = month || getKoreanYearMonth();
+    
+    // 같은 센터/트레이너/월 조합이 이미 있는지 확인
+    const existingRenewals = await renewalsDB.getRenewals({ center, trainer, month: targetMonth });
+    if (existingRenewals.length > 0) {
+      return res.status(400).json({ message: '이미 해당 센터/트레이너/월에 대한 재등록 현황이 존재합니다. 수정 기능을 사용해주세요.' });
+    }
+    
+    // 초기 상태는 모든 회원을 '예상'으로 설정
+    const initialStatus = {};
+    member_names.forEach(name => {
+      initialStatus[name] = '예상';
+    });
+    
+    const renewal = {
+      center,
+      trainer,
+      month: targetMonth,
+      member_names,
+      expected_sessions: expected_sessions, // { "회원1": 10, "회원2": 20 } 형식
+      status: initialStatus
+    };
+    
+    const result = await renewalsDB.addRenewal(renewal);
+    res.json({ message: '재등록 현황이 추가되었습니다.', renewal: result });
+  } catch (error) {
+    console.error('[API] Renewal 추가 오류:', error);
+    res.status(500).json({ message: '재등록 현황 추가에 실패했습니다.' });
+  }
+});
+
+// Renewal 수정 (회원 추가/삭제, 실제 재등록 수업수 및 상태)
+app.patch('/api/renewals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { member_names, expected_sessions, actual_sessions, status } = req.body;
+    
+    if (member_names === undefined || !Array.isArray(member_names)) {
+      return res.status(400).json({ message: '회원 목록을 입력해주세요.' });
+    }
+    
+    if (member_names.length === 0) {
+      return res.status(400).json({ message: '최소 1명 이상의 회원을 선택해주세요.' });
+    }
+    
+    if (expected_sessions === undefined || typeof expected_sessions !== 'object') {
+      return res.status(400).json({ message: '예상 재등록 수업수를 입력해주세요.' });
+    }
+    
+    if (actual_sessions === undefined || typeof actual_sessions !== 'object') {
+      return res.status(400).json({ message: '실제 재등록 수업수를 입력해주세요.' });
+    }
+    
+    if (status === undefined || typeof status !== 'object') {
+      return res.status(400).json({ message: '회원별 상태를 입력해주세요.' });
+    }
+    
+    const updates = {
+      member_names: member_names,
+      expected_sessions: expected_sessions, // { "회원1": 10, "회원2": 20 } 형식
+      actual_sessions: actual_sessions, // { "회원1": 10, "회원2": 20 } 형식
+      status: status // { "회원1": "완료", "회원2": "예상" } 형식
+    };
+    
+    const renewal = await renewalsDB.updateRenewal(id, updates);
+    res.json({ message: '재등록 현황이 수정되었습니다.', renewal });
+  } catch (error) {
+    console.error('[API] Renewal 수정 오류:', error);
+    if (error.message === 'Renewal을 찾을 수 없습니다.') {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: '재등록 현황 수정에 실패했습니다.' });
+    }
+  }
+});
+
+// Renewal 삭제
+app.delete('/api/renewals/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await renewalsDB.deleteRenewal(id);
+    res.json({ message: '재등록 현황이 삭제되었습니다.' });
+  } catch (error) {
+    console.error('[API] Renewal 삭제 오류:', error);
+    if (error.message === 'Renewal을 찾을 수 없습니다.') {
+      res.status(404).json({ message: error.message });
+    } else {
+      res.status(500).json({ message: '재등록 현황 삭제에 실패했습니다.' });
     }
   }
 });

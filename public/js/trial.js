@@ -221,7 +221,15 @@ function setupTrialEditListeners() {
   });
 }
 
-function showTrialEditModal(trial) {
+async function showTrialEditModal(trial) {
+  // 센터 목록 조회
+  const centersResponse = await fetch('/api/centers');
+  const centers = await centersResponse.json();
+  
+  // 트레이너 목록 조회
+  const trainersResponse = await fetch('/api/trainers');
+  const trainers = await trainersResponse.json();
+  
   const date = new Date(trial.date);
   const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   
@@ -234,6 +242,22 @@ function showTrialEditModal(trial) {
       </div>
       
       <form id="trial-edit-form" style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">센터 *</label>
+          <select id="trial-edit-center" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            ${centers.map(center => `<option value="${center.name}" ${trial.center === center.name ? 'selected' : ''}>${center.name}</option>`).join('')}
+          </select>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">트레이너 *</label>
+          <select id="trial-edit-trainer" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            ${trainers.map(trainer => `<option value="${trainer.username}" ${trial.trainer === trainer.name ? 'selected' : ''}>${trainer.name}</option>`).join('')}
+          </select>
+        </div>
+        
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">회원명</label>
           <input type="text" id="trial-edit-member-name" value="${trial.member_name || ''}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
@@ -350,6 +374,8 @@ function showTrialEditModal(trial) {
   document.getElementById('trial-edit-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     
+    const center = document.getElementById('trial-edit-center').value;
+    const trainer = document.getElementById('trial-edit-trainer').value;
     const memberName = document.getElementById('trial-edit-member-name').value.trim();
     const gender = document.getElementById('trial-edit-gender').value || null;
     const phone = document.getElementById('trial-edit-phone').value.trim() || null;
@@ -372,6 +398,8 @@ function showTrialEditModal(trial) {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
+          center: center,
+          trainer: trainer,
           member_name: memberName || null,
           gender: gender,
           phone: phone,

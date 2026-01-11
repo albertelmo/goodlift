@@ -2,6 +2,7 @@ import { center } from './center.js';
 import { trainer } from './trainer.js';
 import { member } from './member.js';
 import { trial } from './trial.js';
+import { renew } from './renew.js';
 import { adminDayCalendar } from './adminDayCalendar.js';
 import { adminWeekCalendar } from './adminWeekCalendar.js';
 import { adminStats } from './adminStats.js';
@@ -184,7 +185,7 @@ const adminTabs = [
     { label: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
     { label: 'Trial', content: '<div id="trial-root"></div>' },
-    { label: 'Trainer', content: '<div id="trainer-list-loading">트레이너 목록을 불러오는 중...</div><div id="trainer-list"></div>' },
+    { label: 'Renew', content: '<div id="renew-root"></div>' },
     { label: 'Stat', content: '<div id="admin-stats-root"></div>' },
     { label: 'Expense', content: '<div id="expense-root"></div>' },
     { label: 'Database', content: '<div id="database-root"></div>' }
@@ -236,9 +237,6 @@ function renderTabs(tabs) {
             Array.from(tabBar.children).forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             tabContent.innerHTML = tab.content;
-            if (tab.label === 'Trainer') {
-                trainer.loadList();
-            }
             if (tab.label === 'Today') {
                 adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
             }
@@ -251,6 +249,9 @@ function renderTabs(tabs) {
             }
             if (tab.label === 'Trial') {
                 trial.render(document.getElementById('trial-root'));
+            }
+            if (tab.label === 'Renew') {
+                renew.render(document.getElementById('renew-root'));
             }
             if (tab.label === '내 회원 리스트' || tab.label === '👤') {
                 const username = localStorage.getItem('username');
@@ -271,9 +272,6 @@ function renderTabs(tabs) {
         };
         tabBar.appendChild(btn);
     });
-    if (tabs[0].label === 'Trainer') {
-        trainer.loadList();
-    }
     if (tabs[0].label === 'Today') {
         adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
     }
@@ -286,6 +284,9 @@ function renderTabs(tabs) {
     }
     if (tabs[0].label === 'Trial') {
         trial.render(document.getElementById('trial-root'));
+    }
+    if (tabs[0].label === 'Renew') {
+        renew.render(document.getElementById('renew-root'));
     }
     if (tabs[0].label === '내 회원 리스트' || tabs[0].label === '👤') {
         const username = localStorage.getItem('username');
