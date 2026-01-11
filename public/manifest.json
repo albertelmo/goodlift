@@ -1,0 +1,25 @@
+{
+  "name": "GoodLift - 헬스장 회원관리 시스템",
+  "short_name": "GoodLift",
+  "description": "헬스장 회원관리 및 PT 세션 관리 시스템",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f7faff",
+  "theme_color": "#1976d2",
+  "icons": [
+    {
+      "src": "/img/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/img/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ]
+}

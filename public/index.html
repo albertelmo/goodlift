@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <title>GoodLift</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1976d2">
+    <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/adminDayCalendar.css">
     <link rel="stylesheet" href="css/adminWeekCalendar.css">
@@ -296,5 +298,43 @@
     <script type="module" src="js/secret.js"></script>
     <script type="module" src="js/expense.js"></script>
     <script type="module" src="js/database.js"></script>
+    <script>
+        // Service Worker 등록
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then((registration) => {
+                        console.log('[PWA] Service Worker 등록 성공:', registration.scope);
+                        
+                        // 업데이트 확인
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            console.log('[PWA] 새로운 Service Worker 발견');
+                            
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // 새 버전이 설치되었음을 알림
+                                    console.log('[PWA] 새로운 버전 사용 가능');
+                                }
+                            });
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('[PWA] Service Worker 등록 실패:', error);
+                    });
+            });
+            
+            // Service Worker 업데이트 확인
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!refreshing) {
+                    refreshing = true;
+                    console.log('[PWA] Service Worker 업데이트, 페이지 새로고침');
+                    // 페이지 새로고침 (선택사항)
+                    // window.location.reload();
+                }
+            });
+        }
+    </script>
 </body>
 </html>
