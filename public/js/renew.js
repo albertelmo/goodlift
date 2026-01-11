@@ -906,16 +906,16 @@ async function showRenewAddModal() {
       
       closeRenewAddModal();
       // 데이터 다시 로드
-      const yearMonth = getSelectedYearMonth();
+      const reloadYearMonth = getSelectedYearMonth();
       fetch('/api/centers')
         .then(r => r.json())
         .then(centers => {
           const centerOrder = centers.map(c => c.name);
-          loadRenewSessions(yearMonth, centerOrder);
+          loadRenewSessions(reloadYearMonth, centerOrder);
         })
         .catch(err => {
           console.error('센터 목록 조회 오류:', err);
-          loadRenewSessions(yearMonth, []);
+          loadRenewSessions(reloadYearMonth, []);
         });
     } catch (error) {
       console.error('Renewal 추가 오류:', error);
