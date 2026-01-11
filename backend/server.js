@@ -273,8 +273,8 @@ async function runTrialMigration() {
   }
 }
 
-// 서버 시작 시 마이그레이션 실행
-runTrialMigration();
+// 서버 시작 시 마이그레이션 실행 (마이그레이션 완료 - 주석 처리)
+// runTrialMigration();
 monthlyStatsDB.initializeDatabase();
 registrationLogsDB.initializeDatabase();
 expensesDB.initializeDatabase();
