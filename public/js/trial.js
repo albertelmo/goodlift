@@ -187,8 +187,8 @@ function renderTrialSessions(data, centerOrder) {
                     <td style="padding:10px 8px;font-size:0.9rem;">${trial.trainer || ''}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;">${trial.member_name || '-'}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;">${trial.gender || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">${trial.phone || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">${trial.source || '-'}</td>
+                    <td style="padding:10px 8px;font-size:0.9rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
+                    <td style="padding:10px 8px;font-size:0.9rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
                     <td style="padding:10px 8px;font-size:0.9rem;">${resultValue}</td>
