@@ -17,6 +17,11 @@ function getCurrentYearMonth() {
 
 // 선택된 년월 가져오기 (YYYY-MM 형식)
 function getSelectedYearMonth() {
+  // currentDate가 초기화되지 않았으면 현재 날짜 사용
+  if (!currentDate) {
+    currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+  }
   const koreanTime = new Date(currentDate.getTime() + (9 * 60 * 60 * 1000));
   const year = koreanTime.getFullYear();
   const month = String(koreanTime.getMonth() + 1).padStart(2, '0');
@@ -421,9 +426,12 @@ async function showRenewEditModal(renewal) {
         
         <div id="renew-edit-result-message" style="min-height:24px;color:#d32f2f;font-size:0.85rem;"></div>
         
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
-          <button type="button" id="renew-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
-          <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
+        <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;margin-top:8px;">
+          <button type="button" id="renew-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">삭제</button>
+          <div style="display:flex;gap:10px;">
+            <button type="button" id="renew-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
+            <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
+          </div>
         </div>
       </form>
     </div>
@@ -477,6 +485,41 @@ async function showRenewEditModal(renewal) {
   }
   
   const renewalId = renewal.id; // 클로저 문제 방지를 위해 미리 저장
+  
+  // 삭제 버튼 클릭 이벤트
+  document.getElementById('renew-edit-delete-btn').addEventListener('click', async function() {
+    if (!confirm('정말로 이 재등록 현황을 삭제하시겠습니까?')) {
+      return;
+    }
+    
+    const deleteBtn = document.getElementById('renew-edit-delete-btn');
+    deleteBtn.disabled = true;
+    deleteBtn.textContent = '삭제 중...';
+    
+    try {
+      const response = await fetch(`/api/renewals/${renewalId}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '삭제에 실패했습니다.');
+      }
+      
+      closeRenewEditModal();
+      
+      // 리스트 새로고침
+      const container = document.querySelector('#renew-content')?.closest('[id^="tab-"]');
+      if (container) {
+        loadRenewData(container);
+      }
+    } catch (error) {
+      console.error('재등록 현황 삭제 오류:', error);
+      alert(error.message || '삭제에 실패했습니다.');
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = '삭제';
+    }
+  });
   
   document.getElementById('renew-edit-form').addEventListener('submit', async function(e) {
     e.preventDefault();
