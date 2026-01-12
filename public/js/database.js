@@ -158,7 +158,7 @@ function render(container) {
             </select>
           </div>
           <div>
-            <label style="display:block;margin-bottom:6px;font-size:0.9rem;color:#666;">회원상태</label>
+            <label style="display:block;margin-bottom:6px;font-size:0.9rem;color:#666;">상태</label>
             <select id="database-filter-status" style="padding:8px;border:1px solid #ddd;border-radius:4px;font-size:0.9rem;min-width:120px;">
               <option value="all">전체</option>
               <option value="유효">유효</option>
@@ -302,10 +302,13 @@ function render(container) {
                     성향 <span class="sort-icon">↕</span>
                   </th>
                   <th class="sortable" data-sort="status" style="padding:12px 8px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
-                    회원상태 <span class="sort-icon">↕</span>
+                    상태 <span class="sort-icon">↕</span>
                   </th>
                   <th class="sortable" data-sort="recentVisit" style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     최근방문일 <span class="sort-icon">↕</span>
+                  </th>
+                  <th class="sortable" data-sort="endDate" style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                    종료일 <span class="sort-icon">↕</span>
                   </th>
                   <th style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;">상품명</th>
                   <th class="sortable" data-sort="totalPeriod" style="padding:12px 8px;text-align:right;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
@@ -368,7 +371,7 @@ function render(container) {
       <!-- 재등록 현황 모달 -->
       <div id="database-renewal-status-modal-bg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
       <div id="database-renewal-status-modal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:10px;box-shadow:0 8px 32px #1976d240;min-width:600px;max-width:95vw;max-height:90vh;overflow-y:auto;">
-        <h3 style="margin-top:0;margin-bottom:12px;color:#1976d2;font-size:1rem;">📊 재등록 현황</h3>
+        <h3 style="margin-top:0;margin-bottom:12px;color:#1976d2;font-size:1rem;">📊 등록 현황</h3>
         
         <!-- 회원정보 선택 -->
         <div style="margin-bottom:12px;padding:10px;background:#f5f5f5;border-radius:6px;">
@@ -404,7 +407,7 @@ function render(container) {
         
         <!-- 비교 버튼 -->
         <div style="margin-bottom:12px;text-align:center;">
-          <button id="database-renewal-compare-btn" style="background:#4caf50;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:0.9rem;font-weight:600;">재등록 현황 분석</button>
+          <button id="database-renewal-compare-btn" style="background:#4caf50;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:0.9rem;font-weight:600;">등록 현황 분석</button>
         </div>
         
         <div id="database-renewal-loading" style="display:none;text-align:center;padding:12px;color:#888;font-size:0.8rem;">분석 중...</div>
@@ -922,7 +925,7 @@ function setupEventListeners(container) {
       }
       
       // 필터링된 멤버 사용 (없으면 전체 멤버 사용)
-      const membersToSave = window.databaseFilteredMembers || window.databaseAllMembers || [];
+      let membersToSave = window.databaseFilteredMembers || window.databaseAllMembers || [];
       
       if (membersToSave.length === 0) {
         if (resultDiv) {
@@ -931,6 +934,14 @@ function setupEventListeners(container) {
         }
         return;
       }
+      
+      // 저장 전에 tendency 계산 (방문일 기준 설정 사용)
+      const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
+      const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
+      membersToSave = membersToSave.map(member => ({
+        ...member,
+        tendency: member.tendency || calculateTendency(member.recentVisit, greenDays, yellowDays)
+      }));
       
       // 기존 데이터 덮어쓰기 확인
       if (!confirm(`해당 센터(${center})의 ${yearMonth} 데이터가 이미 있다면 덮어쓰기 됩니다.\n현재 필터링된 ${membersToSave.length}명의 데이터가 저장됩니다. 계속하시겠습니까?`)) {
@@ -1387,18 +1398,10 @@ function setupEventListeners(container) {
       const isRenewal = matchedSales.length > 0;
       const salesNames = matchedSales.flatMap(sale => sale.salesNames || []).filter((v, i, a) => a.indexOf(v) === i);
       
-      // 성향 계산 (기존 로직 사용)
-      const greenDays = 15;
-      const yellowDays = 30;
-      let tendency = 'red';
-      if (member.recentVisit) {
-        const daysSinceVisit = Math.floor((new Date() - new Date(member.recentVisit)) / (1000 * 60 * 60 * 24));
-        if (daysSinceVisit <= greenDays) {
-          tendency = 'green';
-        } else if (daysSinceVisit <= yellowDays) {
-          tendency = 'yellow';
-        }
-      }
+      // 성향 계산 (방문일 기준 설정 사용, 없으면 기본값 15/30)
+      const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
+      const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
+      const tendency = calculateTendency(member.recentVisit, greenDays, yellowDays);
       
       // 최근 방문일 (일까지만)
       let recentVisitDate = '';
@@ -1494,6 +1497,8 @@ function setupEventListeners(container) {
       { text: '연락처', sort: 'phone', sortable: true },
       { text: '성향', sort: 'tendency', sortable: true },
       { text: '최근 방문일', sort: 'recentVisit', sortable: true },
+      { text: '종료일', sort: 'endDate', sortable: true },
+      { text: '상태', sort: 'status', sortable: true },
       { text: '전체기간', sort: 'totalPeriod', sortable: true },
       { text: '재등록', sort: 'isRenewal', sortable: true },
       { text: '매출 이름', sort: null, sortable: false }
@@ -1573,6 +1578,44 @@ function setupEventListeners(container) {
       recentVisitCell.style.padding = '5px 4px';
       recentVisitCell.style.fontSize = '0.75rem';
       row.appendChild(recentVisitCell);
+      
+      // 종료일
+      const endDateCell = document.createElement('td');
+      let endDateDisplay = '-';
+      if (result.memberData && result.memberData.endDate) {
+        const endDateStr = String(result.memberData.endDate).trim();
+        endDateDisplay = endDateStr.split(/[\sT]/)[0] || endDateStr;
+      }
+      endDateCell.textContent = endDateDisplay;
+      endDateCell.style.padding = '5px 4px';
+      endDateCell.style.fontSize = '0.75rem';
+      row.appendChild(endDateCell);
+      
+      // 상태 (재등록인 경우 "재등록", 아니면 종료일 기준으로 계산)
+      const statusCell = document.createElement('td');
+      let calculatedStatus = result.memberData?.status || '유효';
+      
+      // 재등록인 경우 "재등록"으로 표시
+      if (result.isRenewal) {
+        calculatedStatus = '재등록';
+      } else if (result.memberData && result.memberData.endDate) {
+        const endDateStr = String(result.memberData.endDate).trim();
+        const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
+        if (endDateOnly) {
+          const endDate = parseDateString(endDateOnly);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (endDate && !isNaN(endDate.getTime())) {
+            calculatedStatus = endDate < today ? '만료' : '유효';
+          }
+        }
+      }
+      statusCell.textContent = calculatedStatus;
+      statusCell.style.padding = '5px 4px';
+      statusCell.style.fontSize = '0.75rem';
+      statusCell.style.color = calculatedStatus === '재등록' ? '#4caf50' : calculatedStatus === '유효' ? '#1976d2' : '#d32f2f';
+      statusCell.style.fontWeight = '500';
+      row.appendChild(statusCell);
       
       // 전체기간
       const periodCell = document.createElement('td');
@@ -1680,6 +1723,53 @@ function setupEventListeners(container) {
           aVal = a.recentVisit ? new Date(a.recentVisit).getTime() : 0;
           bVal = b.recentVisit ? new Date(b.recentVisit).getTime() : 0;
           break;
+        case 'endDate':
+          const aEndDate = a.memberData?.endDate ? parseDateString(String(a.memberData.endDate).trim().split(/[\sT]/)[0]) : null;
+          const bEndDate = b.memberData?.endDate ? parseDateString(String(b.memberData.endDate).trim().split(/[\sT]/)[0]) : null;
+          aVal = aEndDate && !isNaN(aEndDate.getTime()) ? aEndDate.getTime() : 0;
+          bVal = bEndDate && !isNaN(bEndDate.getTime()) ? bEndDate.getTime() : 0;
+          break;
+        case 'status':
+          // 재등록인 경우 "재등록", 아니면 종료일 기준으로 상태 계산
+          let aStatus = a.memberData?.status || '유효';
+          let bStatus = b.memberData?.status || '유효';
+          
+          // 재등록인 경우 "재등록"으로 표시
+          if (a.isRenewal) {
+            aStatus = '재등록';
+          } else if (a.memberData?.endDate) {
+            const aEndDateStr = String(a.memberData.endDate).trim();
+            const aEndDateOnly = aEndDateStr.split(/[\sT]/)[0] || aEndDateStr;
+            if (aEndDateOnly) {
+              const aEndDate = parseDateString(aEndDateOnly);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              if (aEndDate && !isNaN(aEndDate.getTime())) {
+                aStatus = aEndDate < today ? '만료' : '유효';
+              }
+            }
+          }
+          
+          if (b.isRenewal) {
+            bStatus = '재등록';
+          } else if (b.memberData?.endDate) {
+            const bEndDateStr = String(b.memberData.endDate).trim();
+            const bEndDateOnly = bEndDateStr.split(/[\sT]/)[0] || bEndDateStr;
+            if (bEndDateOnly) {
+              const bEndDate = parseDateString(bEndDateOnly);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              if (bEndDate && !isNaN(bEndDate.getTime())) {
+                bStatus = bEndDate < today ? '만료' : '유효';
+              }
+            }
+          }
+          
+          // 정렬 순서: 재등록 > 유효 > 만료
+          const statusOrder = { '재등록': 1, '유효': 2, '만료': 3 };
+          aVal = statusOrder[aStatus] || 2;
+          bVal = statusOrder[bStatus] || 2;
+          break;
         case 'totalPeriod':
           // 기간을 숫자로 변환 (예: "12개월" -> 12)
           const parsePeriod = (period) => {
@@ -1747,6 +1837,44 @@ function setupEventListeners(container) {
       recentVisitCell.style.padding = '5px 4px';
       recentVisitCell.style.fontSize = '0.75rem';
       row.appendChild(recentVisitCell);
+      
+      // 종료일
+      const endDateCell = document.createElement('td');
+      let endDateDisplay = '-';
+      if (result.memberData && result.memberData.endDate) {
+        const endDateStr = String(result.memberData.endDate).trim();
+        endDateDisplay = endDateStr.split(/[\sT]/)[0] || endDateStr;
+      }
+      endDateCell.textContent = endDateDisplay;
+      endDateCell.style.padding = '5px 4px';
+      endDateCell.style.fontSize = '0.75rem';
+      row.appendChild(endDateCell);
+      
+      // 상태 (재등록인 경우 "재등록", 아니면 종료일 기준으로 계산)
+      const statusCell = document.createElement('td');
+      let calculatedStatus = result.memberData?.status || '유효';
+      
+      // 재등록인 경우 "재등록"으로 표시
+      if (result.isRenewal) {
+        calculatedStatus = '재등록';
+      } else if (result.memberData && result.memberData.endDate) {
+        const endDateStr = String(result.memberData.endDate).trim();
+        const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
+        if (endDateOnly) {
+          const endDate = parseDateString(endDateOnly);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (endDate && !isNaN(endDate.getTime())) {
+            calculatedStatus = endDate < today ? '만료' : '유효';
+          }
+        }
+      }
+      statusCell.textContent = calculatedStatus;
+      statusCell.style.padding = '5px 4px';
+      statusCell.style.fontSize = '0.75rem';
+      statusCell.style.color = calculatedStatus === '재등록' ? '#4caf50' : calculatedStatus === '유효' ? '#1976d2' : '#d32f2f';
+      statusCell.style.fontWeight = '500';
+      row.appendChild(statusCell);
       
       // 전체기간
       const periodCell = document.createElement('td');
@@ -2118,7 +2246,23 @@ function setupEventListeners(container) {
         <div>${memberData.totalPeriod || '0'}</div>
         
         <div style="font-weight:600;color:#666;">회원 상태:</div>
-        <div>${memberData.status || ''}</div>
+        <div>${(() => {
+          // 종료일 기준으로 상태 계산
+          let calculatedStatus = memberData.status || '유효';
+          if (memberData.endDate) {
+            const endDateStr = String(memberData.endDate).trim();
+            const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
+            if (endDateOnly) {
+              const endDate = parseDateString(endDateOnly);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              if (endDate && !isNaN(endDate.getTime())) {
+                calculatedStatus = endDate < today ? '만료' : '유효';
+              }
+            }
+          }
+          return calculatedStatus;
+        })()}</div>
         
         <div style="font-weight:600;color:#666;">상품명:</div>
         <div>${(memberData.productNames || []).join(', ') || ''}</div>
@@ -2372,16 +2516,39 @@ function setupEventListeners(container) {
           // 데이터 저장
           window.databaseAllMembers = result.members;
           
-          // 필터링 UI 숨기기
-          const productSelectSection = document.getElementById('database-product-select-section');
-          const visitCriteriaSection = document.getElementById('database-visit-criteria-section');
-          const filterSection = document.getElementById('database-filter-section');
-          if (productSelectSection) productSelectSection.style.display = 'none';
-          if (visitCriteriaSection) visitCriteriaSection.style.display = 'none';
-          if (filterSection) filterSection.style.display = 'none';
+          // 상품명 선택 UI 표시 (상품명이 있는 경우)
+          const allProductNames = new Set();
+          result.members.forEach(member => {
+            if (member.productNames) {
+              member.productNames.forEach(productName => {
+                if (productName) {
+                  allProductNames.add(productName);
+                }
+              });
+            }
+          });
+          const uniqueProductNames = Array.from(allProductNames).sort();
+          if (uniqueProductNames.length > 0) {
+            displayProductSelectors(uniqueProductNames);
+          }
           
-          // 데이터만 표시 (필터링 없이)
-          displayMembers(window.databaseAllMembers, [], false);
+          // 방문일 기준 설정 UI 표시 (성향 계산을 위해 필요)
+          const visitCriteriaSection = document.getElementById('database-visit-criteria-section');
+          if (visitCriteriaSection) {
+            visitCriteriaSection.style.display = 'block';
+          }
+          
+          // 필터링 UI 표시
+          const filterSection = document.getElementById('database-filter-section');
+          if (filterSection) {
+            filterSection.style.display = 'block';
+          }
+          
+          // 필터링 기능 초기화
+          setupFiltering();
+          
+          // 데이터 표시 (필터링 적용)
+          displayMembers(window.databaseAllMembers, []);
           
           // DB 저장 버튼 표시
           const saveBtn = document.getElementById('database-save-btn');
@@ -2644,22 +2811,47 @@ function applyFilters(members, selectedProducts) {
     }).filter(m => m !== null);
   }
   
-  // 성향 필터링
+  // 성향 필터링 (저장된 tendency 값 사용)
   const tendencyFilter = document.getElementById('database-filter-tendency')?.value;
   if (tendencyFilter && tendencyFilter !== 'all') {
-    const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
-    const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
-    
     filtered = filtered.filter(member => {
-      const tendency = calculateTendency(member.recentVisit, greenDays, yellowDays);
+      // 저장된 tendency 값 사용 (없으면 계산, 하위 호환성)
+      let tendency = member.tendency;
+      if (!tendency && member.recentVisit) {
+        const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
+        const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
+        tendency = calculateTendency(member.recentVisit, greenDays, yellowDays);
+      }
+      tendency = tendency || 'red';
       return tendency === tendencyFilter;
     });
   }
   
-  // 회원상태 필터링
+  // 상태 필터링 (종료일 기준으로 계산된 상태 사용)
   const statusFilter = document.getElementById('database-filter-status')?.value;
   if (statusFilter && statusFilter !== 'all') {
-    filtered = filtered.filter(member => member.status === statusFilter);
+    filtered = filtered.filter(member => {
+      // 종료일 기준으로 상태 계산
+      let calculatedStatus = member.status || '유효';
+      if (member.endDate) {
+        const endDateStr = String(member.endDate).trim();
+        const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
+        if (endDateOnly) {
+          const endDate = parseDateString(endDateOnly);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          
+          if (endDate && !isNaN(endDate.getTime())) {
+            if (endDate < today) {
+              calculatedStatus = '만료';
+            } else {
+              calculatedStatus = '유효';
+            }
+          }
+        }
+      }
+      return calculatedStatus === statusFilter;
+    });
   }
   
   return filtered;
@@ -2682,21 +2874,66 @@ function applySorting(members, column, direction) {
         bVal = (b.phone || '').replace(/[^0-9]/g, '');
         break;
       case 'tendency':
-        const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
-        const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
-        const aTendency = calculateTendency(a.recentVisit, greenDays, yellowDays);
-        const bTendency = calculateTendency(b.recentVisit, greenDays, yellowDays);
+        // 저장된 tendency 값 사용 (없으면 계산, 하위 호환성)
+        let aTendency = a.tendency;
+        let bTendency = b.tendency;
+        if (!aTendency && a.recentVisit) {
+          const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
+          const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
+          aTendency = calculateTendency(a.recentVisit, greenDays, yellowDays);
+        }
+        if (!bTendency && b.recentVisit) {
+          const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
+          const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
+          bTendency = calculateTendency(b.recentVisit, greenDays, yellowDays);
+        }
+        aTendency = aTendency || 'red';
+        bTendency = bTendency || 'red';
         const tendencyOrder = { 'green': 1, 'yellow': 2, 'red': 3 };
         aVal = tendencyOrder[aTendency] || 3;
         bVal = tendencyOrder[bTendency] || 3;
         break;
       case 'status':
-        aVal = (a.status || '').toLowerCase();
-        bVal = (b.status || '').toLowerCase();
+        // 종료일 기준으로 상태 계산
+        let aStatus = a.status || '유효';
+        let bStatus = b.status || '유효';
+        
+        if (a.endDate) {
+          const aEndDateStr = String(a.endDate).trim();
+          const aEndDateOnly = aEndDateStr.split(/[\sT]/)[0] || aEndDateStr;
+          if (aEndDateOnly) {
+            const aEndDate = parseDateString(aEndDateOnly);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (aEndDate && !isNaN(aEndDate.getTime())) {
+              aStatus = aEndDate < today ? '만료' : '유효';
+            }
+          }
+        }
+        
+        if (b.endDate) {
+          const bEndDateStr = String(b.endDate).trim();
+          const bEndDateOnly = bEndDateStr.split(/[\sT]/)[0] || bEndDateStr;
+          if (bEndDateOnly) {
+            const bEndDate = parseDateString(bEndDateOnly);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (bEndDate && !isNaN(bEndDate.getTime())) {
+              bStatus = bEndDate < today ? '만료' : '유효';
+            }
+          }
+        }
+        
+        aVal = aStatus.toLowerCase();
+        bVal = bStatus.toLowerCase();
         break;
       case 'recentVisit':
         aVal = parseDateToTimestamp(a.recentVisit);
         bVal = parseDateToTimestamp(b.recentVisit);
+        break;
+      case 'endDate':
+        aVal = parseDateToTimestamp(a.endDate);
+        bVal = parseDateToTimestamp(b.endDate);
         break;
       case 'totalPeriod':
         aVal = parsePeriodToNumber(a.totalPeriod || '0');
@@ -2809,22 +3046,47 @@ function displayMembers(members, selectedProducts, applyFiltersAndSort = true) {
   emptyDiv.style.display = 'none';
   tableContainer.style.display = 'block';
   
-  // 방문일 기준 가져오기
-  const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
-  const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
-  
   // 테이블 렌더링
   tableBody.innerHTML = '';
   filteredMembers.forEach(member => {
     const row = document.createElement('tr');
     row.style.borderBottom = '1px solid #eee';
     
-    // 회원상태 색상
-    const statusColor = member.status === '유효' ? '#1976d2' : '#d32f2f';
-    const statusBg = member.status === '유효' ? '#e3f2fd' : '#ffebee';
+    // 상태 계산 (종료일 기준)
+    let calculatedStatus = member.status || '유효'; // 기본값
+    if (member.endDate) {
+      const endDateStr = String(member.endDate).trim();
+      const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
+      if (endDateOnly) {
+        const endDate = parseDateString(endDateOnly);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (endDate && !isNaN(endDate.getTime())) {
+          // 종료일이 오늘보다 이전이면 "만료"
+          if (endDate < today) {
+            calculatedStatus = '만료';
+          } else {
+            calculatedStatus = '유효';
+          }
+        }
+      }
+    }
     
-    // 성향 계산 (최근 방문일 기준)
-    const tendency = calculateTendency(member.recentVisit, greenDays, yellowDays);
+    // 상태 색상
+    const statusColor = calculatedStatus === '유효' ? '#1976d2' : '#d32f2f';
+    const statusBg = calculatedStatus === '유효' ? '#e3f2fd' : '#ffebee';
+    
+    // 성향 사용 (저장된 값이 있으면 사용, 없으면 계산)
+    let tendency = member.tendency;
+    if (!tendency && member.recentVisit) {
+      // 저장된 tendency가 없으면 계산 (하위 호환성)
+      const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
+      const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
+      tendency = calculateTendency(member.recentVisit, greenDays, yellowDays);
+    }
+    tendency = tendency || 'red'; // 기본값
+    
     const tendencyColor = tendency === 'green' ? '#4caf50' : tendency === 'yellow' ? '#ffc107' : '#f44336';
     const tendencyBg = tendency === 'green' ? '#e8f5e9' : tendency === 'yellow' ? '#fff9c4' : '#ffebee';
     const tendencyText = tendency === 'green' ? 'Green' : tendency === 'yellow' ? 'Yellow' : 'Red';
@@ -2837,6 +3099,22 @@ function displayMembers(members, selectedProducts, applyFiltersAndSort = true) {
     // 전체기간 (숫자로 표시)
     const totalPeriodStr = member.totalPeriod || '0';
     
+    // 최근 방문일 날짜만 표시 (시간 제거)
+    let recentVisitDisplay = '-';
+    if (member.recentVisit) {
+      const dateStr = String(member.recentVisit).trim();
+      // 공백이나 T로 구분된 경우 첫 번째 부분만 사용 (날짜 부분)
+      recentVisitDisplay = dateStr.split(/[\sT]/)[0] || dateStr;
+    }
+    
+    // 종료일 날짜만 표시 (시간 제거)
+    let endDateDisplay = '-';
+    if (member.endDate) {
+      const dateStr = String(member.endDate).trim();
+      // 공백이나 T로 구분된 경우 첫 번째 부분만 사용 (날짜 부분)
+      endDateDisplay = dateStr.split(/[\sT]/)[0] || dateStr;
+    }
+    
     row.innerHTML = `
       <td style="padding:12px 8px;font-size:0.9rem;font-weight:500;">${member.name || '-'}</td>
       <td style="padding:12px 8px;font-size:0.9rem;">${member.phone || '-'}</td>
@@ -2847,10 +3125,11 @@ function displayMembers(members, selectedProducts, applyFiltersAndSort = true) {
       </td>
       <td style="padding:12px 8px;text-align:center;">
         <span style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:0.85rem;font-weight:500;background:${statusBg};color:${statusColor};">
-          ${member.status || '-'}
+          ${calculatedStatus}
         </span>
       </td>
-      <td style="padding:12px 8px;font-size:0.9rem;color:#666;">${member.recentVisit || '-'}</td>
+      <td style="padding:12px 8px;font-size:0.9rem;color:#666;">${recentVisitDisplay}</td>
+      <td style="padding:12px 8px;font-size:0.9rem;color:#666;">${endDateDisplay}</td>
       <td style="padding:12px 8px;font-size:0.9rem;color:#666;max-width:300px;line-height:1.6;">${productNamesHtml}</td>
       <td style="padding:12px 8px;text-align:right;font-size:0.9rem;font-weight:500;color:#1976d2;">${totalPeriodStr}</td>
     `;
@@ -2888,18 +3167,20 @@ function downloadToExcel(members) {
     return;
   }
   
-  // 방문일 기준 가져오기
-  const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
-  const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
-  
   // CSV 형식으로 변환
-  const headers = ['회원 이름', '연락처', '성향', '회원상태', '최근방문일', '상품명', '전체기간'];
+  const headers = ['회원 이름', '연락처', '성향', '상태', '최근방문일', '상품명', '전체기간'];
   let csv = '\uFEFF'; // UTF-8 BOM 추가 (한글 깨짐 방지)
   csv += headers.join(',') + '\n';
   
   members.forEach(member => {
-    // 성향 계산
-    const tendency = calculateTendency(member.recentVisit, greenDays, yellowDays);
+    // 성향 사용 (저장된 값이 있으면 사용, 없으면 계산, 하위 호환성)
+    let tendency = member.tendency;
+    if (!tendency && member.recentVisit) {
+      const greenDays = parseInt(document.getElementById('database-green-days')?.value || '15', 10);
+      const yellowDays = parseInt(document.getElementById('database-yellow-days')?.value || '30', 10);
+      tendency = calculateTendency(member.recentVisit, greenDays, yellowDays);
+    }
+    tendency = tendency || 'red';
     const tendencyText = tendency === 'green' ? 'Green' : tendency === 'yellow' ? 'Yellow' : 'Red';
     
     // 상품명 (여러 개인 경우 줄바꿈 대신 쉼표로 구분)
@@ -2915,7 +3196,23 @@ function downloadToExcel(members) {
       `"${(member.name || '').replace(/"/g, '""')}"`,
       `"${(member.phone || '').replace(/"/g, '""')}"`,
       `"${tendencyText}"`,
-      `"${(member.status || '').replace(/"/g, '""')}"`,
+      `"${(() => {
+        // 종료일 기준으로 상태 계산
+        let calculatedStatus = member.status || '유효';
+        if (member.endDate) {
+          const endDateStr = String(member.endDate).trim();
+          const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
+          if (endDateOnly) {
+            const endDate = parseDateString(endDateOnly);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (endDate && !isNaN(endDate.getTime())) {
+              calculatedStatus = endDate < today ? '만료' : '유효';
+            }
+          }
+        }
+        return calculatedStatus;
+      })().replace(/"/g, '""')}"`,
       `"${(member.recentVisit || '').replace(/"/g, '""')}"`,
       `"${productNamesStr.replace(/"/g, '""')}"`,
       `"${totalPeriodStr.replace(/"/g, '""')}"`
@@ -2941,6 +3238,35 @@ function downloadToExcel(members) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+// 날짜 문자열 파싱 함수 (다양한 형식 지원)
+function parseDateString(dateStr) {
+  if (!dateStr) return null;
+  
+  const str = String(dateStr).trim();
+  let date = null;
+  
+  // YYYY.MM.DD 형식
+  if (str.match(/^\d{4}\.\d{2}\.\d{2}$/)) {
+    const [year, month, day] = str.split('.').map(Number);
+    date = new Date(year, month - 1, day);
+  }
+  // YYYY-MM-DD 형식
+  else if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
+    date = new Date(str.split(' ')[0]);
+  }
+  // YYYY/MM/DD 형식
+  else if (str.match(/^\d{4}\/\d{2}\/\d{2}/)) {
+    date = new Date(str.split(' ')[0].replace(/\//g, '-'));
+  }
+  
+  if (date && !isNaN(date.getTime())) {
+    date.setHours(0, 0, 0, 0);
+    return date;
+  }
+  
+  return null;
 }
 
 // 성향 계산 함수 (최근 방문일 기준)
