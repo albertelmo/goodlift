@@ -28,6 +28,8 @@ const createParsedMemberSnapshotsTable = async () => {
           phone VARCHAR(20),
           status VARCHAR(20),
           recent_visit VARCHAR(20),
+          end_date VARCHAR(20),
+          tendency VARCHAR(10),
           product_names TEXT[],
           product_period_map JSONB,
           total_period VARCHAR(20),
@@ -115,6 +117,34 @@ const migrateParsedMemberSnapshotsTable = async () => {
       console.log('[PostgreSQL] Parsed Member Snapshots 테이블에 year_month 인덱스가 추가되었습니다.');
     }
     
+    // tendency 컬럼 존재 여부 확인 및 추가
+    const checkTendencyColumn = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'parsed_member_snapshots' AND column_name = 'tendency'
+    `);
+    if (checkTendencyColumn.rows.length === 0) {
+      await pool.query(`
+        ALTER TABLE parsed_member_snapshots 
+        ADD COLUMN tendency VARCHAR(10)
+      `);
+      console.log('[PostgreSQL] Parsed Member Snapshots 테이블에 tendency 컬럼이 추가되었습니다.');
+    }
+    
+    // end_date 컬럼 존재 여부 확인 및 추가
+    const checkEndDateColumn = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'parsed_member_snapshots' AND column_name = 'end_date'
+    `);
+    if (checkEndDateColumn.rows.length === 0) {
+      await pool.query(`
+        ALTER TABLE parsed_member_snapshots 
+        ADD COLUMN end_date VARCHAR(20)
+      `);
+      console.log('[PostgreSQL] Parsed Member Snapshots 테이블에 end_date 컬럼이 추가되었습니다.');
+    }
+    
   } catch (error) {
     console.error('[PostgreSQL] Parsed Member Snapshots 테이블 마이그레이션 오류:', error);
   }
@@ -137,10 +167,10 @@ const saveSnapshot = async (center, yearMonth, members) => {
     for (const member of members) {
       const query = `
         INSERT INTO parsed_member_snapshots (
-          center, year_month, member_name, phone, status, recent_visit,
+          center, year_month, member_name, phone, status, recent_visit, end_date, tendency,
           product_names, product_period_map, total_period
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `;
       const values = [
         center,
@@ -149,6 +179,8 @@ const saveSnapshot = async (center, yearMonth, members) => {
         member.phone || null,
         member.status || null,
         member.recentVisit || null,
+        member.endDate || null,
+        member.tendency || null,
         member.productNames || [],
         member.productPeriodMap || null,
         member.totalPeriod || '0'
@@ -174,7 +206,7 @@ const getSnapshot = async (center, yearMonth) => {
   try {
     let query = `
       SELECT 
-        center, year_month, member_name, phone, status, recent_visit,
+        center, year_month, member_name, phone, status, recent_visit, end_date, tendency,
         product_names, product_period_map, total_period,
         created_at AT TIME ZONE 'Asia/Seoul' as created_at,
         updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
@@ -197,6 +229,8 @@ const getSnapshot = async (center, yearMonth) => {
       phone: row.phone || '',
       status: row.status || '',
       recentVisit: row.recent_visit || '',
+      endDate: row.end_date || '',
+      tendency: row.tendency || null,
       productNames: row.product_names || [],
       productPeriodMap: (() => {
         if (row.product_period_map === null || row.product_period_map === undefined) return null;

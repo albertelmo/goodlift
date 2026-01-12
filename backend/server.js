@@ -2166,6 +2166,7 @@ app.post('/api/database/parse-excel', upload.single('file'), async (req, res) =>
         const phoneIndex = findColumnIndex('연락처');
         let statusIndex = findColumnIndex('회원상태');
         const recentVisitIndex = findColumnIndex('최근방문일');
+        const endDateIndex = findColumnIndex('회원권 종료일'); // 선택적 필드
         const productNameIndex = findColumnIndex('상품명');
         const totalPeriodIndex = findColumnIndex('전체기간');
         
@@ -2241,6 +2242,7 @@ app.post('/api/database/parse-excel', upload.single('file'), async (req, res) =>
             const phone = phoneIndex >= 0 ? String(row[phoneIndex] || '').trim() : '';
             const status = statusIndex >= 0 ? String(row[statusIndex] || '').trim() : '';
             const recentVisit = recentVisitIndex >= 0 && row[recentVisitIndex] ? String(row[recentVisitIndex]).trim() : '';
+            const endDate = endDateIndex >= 0 && row[endDateIndex] ? String(row[endDateIndex]).trim() : '';
             const productName = productNameIndex >= 0 && row[productNameIndex] ? String(row[productNameIndex]).trim() : '';
             const totalPeriod = totalPeriodIndex >= 0 && row[totalPeriodIndex] ? String(row[totalPeriodIndex]).trim() : '';
 
@@ -2257,6 +2259,7 @@ app.post('/api/database/parse-excel', upload.single('file'), async (req, res) =>
                     phone: phone,
                     status: status,
                     recentVisit: recentVisit,
+                    endDate: endDate,
                     productNames: productName ? [productName] : [],
                     productPeriodMap: productPeriodMap, // 상품명별 기간 맵
                     totalPeriod: totalPeriod || '0'
