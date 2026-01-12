@@ -84,12 +84,17 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     fetch(request)
       .then((response) => {
-        // 응답이 유효하면 캐시에 저장 (동적 캐싱)
+        // 응답이 유효하고, 지원되는 스킴인 경우에만 캐시에 저장 (동적 캐싱)
+        // chrome-extension, chrome 등의 스킴은 캐시하지 않음
         if (response && response.status === 200) {
-          const responseToCache = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseToCache);
-          });
+          const url = new URL(request.url);
+          // http/https 스킴만 캐시
+          if (url.protocol === 'http:' || url.protocol === 'https:') {
+            const responseToCache = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => {
+              cache.put(request, responseToCache);
+            });
+          }
         }
         return response;
       })

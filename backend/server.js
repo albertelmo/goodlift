@@ -17,6 +17,8 @@ const registrationLogsDB = require('./registration-logs-db');
 const expensesDB = require('./expenses-db');
 const trialsDB = require('./trials-db');
 const renewalsDB = require('./renewals-db');
+const parsedMemberSnapshotsDB = require('./parsed-member-snapshots-db');
+const parsedSalesSnapshotsDB = require('./parsed-sales-snapshots-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -281,6 +283,8 @@ registrationLogsDB.initializeDatabase();
 expensesDB.initializeDatabase();
 trialsDB.initializeDatabase();
 renewalsDB.initializeDatabase();
+parsedMemberSnapshotsDB.initializeDatabase();
+parsedSalesSnapshotsDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -2322,6 +2326,327 @@ app.post('/api/database/parse-excel', upload.single('file'), async (req, res) =>
     } catch (error) {
         console.error('[API] 엑셀 파일 파싱 오류:', error);
         res.status(500).json({ message: '엑셀 파일 파싱에 실패했습니다.' });
+    }
+});
+
+// 매출정보 엑셀 파일 파싱 API (Database 탭용)
+app.post('/api/database/parse-sales-excel', upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: '파일을 선택해주세요.' });
+        }
+
+        // 파일 크기 검증 (10MB 제한)
+        if (req.file.size > 10 * 1024 * 1024) {
+            return res.status(400).json({ message: '파일 크기는 10MB 이하여야 합니다.' });
+        }
+
+        // 엑셀 파일 읽기
+        let data = [];
+        try {
+            const workbook = new ExcelJS.Workbook();
+            await workbook.xlsx.load(req.file.buffer);
+            
+            if (workbook.worksheets.length === 0) {
+                return res.status(400).json({ message: '엑셀 파일에 시트가 없습니다.' });
+            }
+            
+            const worksheet = workbook.worksheets[0];
+            const rows = [];
+            
+            // 최대 컬럼 수 확인 (모든 행을 먼저 확인)
+            let maxColumnCount = 0;
+            worksheet.eachRow((row, rowNumber) => {
+                row.eachCell((cell, colNumber) => {
+                    if (colNumber > maxColumnCount) {
+                        maxColumnCount = colNumber;
+                    }
+                });
+            });
+            
+            // 모든 행 읽기 (빈 셀 포함)
+            worksheet.eachRow((row, rowNumber) => {
+                const rowData = new Array(maxColumnCount).fill(null);
+                row.eachCell((cell, colNumber) => {
+                    rowData[colNumber - 1] = cell.value;
+                });
+                rows.push(rowData);
+            });
+            
+            data = rows;
+        } catch (excelError) {
+            console.error('[API] 엑셀 파일 읽기 오류:', excelError);
+            return res.status(400).json({ message: '엑셀 파일을 읽을 수 없습니다. 파일이 손상되었거나 지원하지 않는 형식입니다.' });
+        }
+
+        // 데이터가 비어있는지 확인
+        if (!data || data.length < 2) {
+            return res.status(400).json({ message: '엑셀 파일에 데이터가 없습니다. (헤더 제외 최소 1개 행 필요)' });
+        }
+
+        // 헤더 확인 (첫 번째 행)
+        const headers = data[0];
+        if (!headers || headers.length === 0) {
+            return res.status(400).json({ message: '엑셀 파일의 첫 번째 행(헤더)을 읽을 수 없습니다.' });
+        }
+
+        // 헬퍼 함수: 띄어쓰기 제거 후 비교
+        const normalizeHeader = (header) => {
+            if (!header) return '';
+            return String(header).trim().replace(/\s+/g, ''); // 모든 공백 제거
+        };
+
+        // 정규화된 헤더 맵 생성
+        const normalizedHeaders = headers.map((h, idx) => ({
+            original: String(h || '').trim(),
+            normalized: normalizeHeader(h),
+            index: idx
+        }));
+
+        // 컬럼 인덱스 찾기 (띄어쓰기 무시)
+        const findColumnIndex = (targetKey) => {
+            const normalizedTarget = normalizeHeader(targetKey);
+            const found = normalizedHeaders.find(h => h.normalized === normalizedTarget);
+            return found ? found.index : -1;
+        };
+
+        // 필수 컬럼 찾기
+        const nameIndex = findColumnIndex('회원 이름');
+        const phoneIndex = findColumnIndex('연락처');
+        const salesNameIndex = findColumnIndex('매출 이름');
+
+        // 필수 컬럼 존재 여부 확인
+        const missingColumns = [];
+        if (nameIndex === -1) missingColumns.push('회원 이름');
+        if (phoneIndex === -1) missingColumns.push('연락처');
+        if (salesNameIndex === -1) missingColumns.push('매출 이름');
+
+        if (missingColumns.length > 0) {
+            return res.status(400).json({ 
+                message: `필수 컬럼을 찾을 수 없습니다: ${missingColumns.join(', ')}`,
+                availableHeaders: headers.filter(h => h).map(h => String(h).trim())
+            });
+        }
+
+        // 회원별로 데이터 그룹화 (회원 이름 + 연락처를 키로 사용)
+        const salesMap = new Map();
+
+        // 데이터 처리 (헤더 제외)
+        for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            if (row.length === 0 || row.every(cell => !cell)) continue; // 빈 행 스킵
+
+            const name = String(row[nameIndex] || '').trim();
+            const phone = String(row[phoneIndex] || '').trim();
+            const salesName = String(row[salesNameIndex] || '').trim();
+
+            // 회원 이름과 연락처가 모두 있어야 함
+            if (!name || !phone) continue;
+
+            // 키: 회원 이름 + 연락처
+            const memberKey = `${name}|${phone}`;
+
+            if (!salesMap.has(memberKey)) {
+                // 새로운 회원 추가
+                salesMap.set(memberKey, {
+                    memberName: name,
+                    phone: phone,
+                    salesNames: salesName ? [salesName] : []
+                });
+            } else {
+                // 기존 회원 정보 업데이트 (매출 이름 추가)
+                const sales = salesMap.get(memberKey);
+                if (salesName && !sales.salesNames.includes(salesName)) {
+                    sales.salesNames.push(salesName);
+                }
+            }
+        }
+
+        // Map을 배열로 변환
+        const sales = Array.from(salesMap.values());
+        
+        // 모든 매출 이름 수집 (중복 제거)
+        const allSalesNames = new Set();
+        sales.forEach(sale => {
+            if (sale.salesNames) {
+                sale.salesNames.forEach(salesName => {
+                    if (salesName) {
+                        allSalesNames.add(salesName);
+                    }
+                });
+            }
+        });
+        const uniqueSalesNames = Array.from(allSalesNames).sort();
+
+        res.json({
+            message: '매출정보 엑셀 파일 파싱이 완료되었습니다.',
+            sales: sales,
+            total: sales.length,
+            allSalesNames: uniqueSalesNames // 모든 매출 이름 목록
+        });
+
+    } catch (error) {
+        console.error('[API] 매출정보 엑셀 파일 파싱 오류:', error);
+        res.status(500).json({ message: '매출정보 엑셀 파일 파싱에 실패했습니다.' });
+    }
+});
+
+// 파싱된 회원 정보 스냅샷 저장 API
+app.post('/api/database/snapshots', async (req, res) => {
+    try {
+        const { center, yearMonth, members } = req.body;
+        
+        if (!center || !yearMonth || !members || !Array.isArray(members)) {
+            return res.status(400).json({ message: '센터, 연도/월, 회원 목록이 필요합니다.' });
+        }
+        
+        // yearMonth 형식 검증 (YYYY-MM)
+        if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+            return res.status(400).json({ message: '연도/월 형식이 올바르지 않습니다. (YYYY-MM)' });
+        }
+        
+        const result = await parsedMemberSnapshotsDB.saveSnapshot(center, yearMonth, members);
+        
+        res.json({
+            message: '스냅샷이 저장되었습니다.',
+            savedCount: result.savedCount
+        });
+    } catch (error) {
+        console.error('[API] 스냅샷 저장 오류:', error);
+        res.status(500).json({ message: '스냅샷 저장에 실패했습니다.' });
+    }
+});
+
+// 파싱된 회원 정보 스냅샷 조회 API
+app.get('/api/database/snapshots', async (req, res) => {
+    try {
+        const { center, yearMonth } = req.query;
+        
+        if (!yearMonth) {
+            return res.status(400).json({ message: '연도/월이 필요합니다.' });
+        }
+        
+        const result = await parsedMemberSnapshotsDB.getSnapshot(center || null, yearMonth);
+        res.json(result);
+    } catch (error) {
+        console.error('[API] 스냅샷 조회 오류:', error);
+        res.status(500).json({ message: '스냅샷 조회에 실패했습니다.' });
+    }
+});
+
+// 파싱된 회원 정보 스냅샷 목록 조회 API
+app.get('/api/database/snapshots/list', async (req, res) => {
+    try {
+        const { center, yearMonth, year } = req.query;
+        const filters = {};
+        if (center) filters.center = center;
+        if (yearMonth) filters.yearMonth = yearMonth;
+        if (year) filters.year = year;
+        
+        const snapshots = await parsedMemberSnapshotsDB.getSnapshotList(filters);
+        res.json({ snapshots });
+    } catch (error) {
+        console.error('[API] 스냅샷 목록 조회 오류:', error);
+        res.status(500).json({ message: '스냅샷 목록 조회에 실패했습니다.' });
+    }
+});
+
+// 파싱된 회원 정보 스냅샷 삭제 API
+app.delete('/api/database/snapshots', async (req, res) => {
+    try {
+        const { center, yearMonth } = req.query;
+        
+        if (!center || !yearMonth) {
+            return res.status(400).json({ message: '센터와 연도/월이 필요합니다.' });
+        }
+        
+        const result = await parsedMemberSnapshotsDB.deleteSnapshot(center, yearMonth);
+        res.json({
+            message: '스냅샷이 삭제되었습니다.',
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('[API] 스냅샷 삭제 오류:', error);
+        res.status(500).json({ message: '스냅샷 삭제에 실패했습니다.' });
+    }
+});
+
+// 파싱된 매출정보 스냅샷 저장 API
+app.post('/api/database/sales-snapshots', async (req, res) => {
+    try {
+        const { center, yearMonth, sales } = req.body;
+        
+        if (!center || !yearMonth || !sales || !Array.isArray(sales)) {
+            return res.status(400).json({ message: '센터, 연도/월, 매출 목록이 필요합니다.' });
+        }
+        
+        // yearMonth 형식 검증 (YYYY-MM)
+        if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
+            return res.status(400).json({ message: '연도/월 형식이 올바르지 않습니다. (YYYY-MM)' });
+        }
+        
+        const result = await parsedSalesSnapshotsDB.saveSnapshot(center, yearMonth, sales);
+        
+        res.json({
+            message: '매출정보 스냅샷이 저장되었습니다.',
+            savedCount: result.savedCount
+        });
+    } catch (error) {
+        console.error('[API] 매출정보 스냅샷 저장 오류:', error);
+        res.status(500).json({ message: '매출정보 스냅샷 저장에 실패했습니다.' });
+    }
+});
+
+// 파싱된 매출정보 스냅샷 조회 API
+app.get('/api/database/sales-snapshots', async (req, res) => {
+    try {
+        const { center, yearMonth } = req.query;
+        
+        if (!yearMonth) {
+            return res.status(400).json({ message: '연도/월이 필요합니다.' });
+        }
+        
+        const result = await parsedSalesSnapshotsDB.getSnapshot(center || null, yearMonth);
+        res.json(result);
+    } catch (error) {
+        console.error('[API] 매출정보 스냅샷 조회 오류:', error);
+        res.status(500).json({ message: '매출정보 스냅샷 조회에 실패했습니다.' });
+    }
+});
+
+// 파싱된 매출정보 스냅샷 목록 조회 API
+app.get('/api/database/sales-snapshots/list', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.center) filters.center = req.query.center;
+        if (req.query.yearMonth) filters.yearMonth = req.query.yearMonth;
+        if (req.query.year) filters.year = req.query.year;
+        
+        const snapshots = await parsedSalesSnapshotsDB.getSnapshotList(filters);
+        res.json({ snapshots });
+    } catch (error) {
+        console.error('[API] 매출정보 스냅샷 목록 조회 오류:', error);
+        res.status(500).json({ message: '매출정보 스냅샷 목록 조회에 실패했습니다.' });
+    }
+});
+
+// 파싱된 매출정보 스냅샷 삭제 API
+app.delete('/api/database/sales-snapshots', async (req, res) => {
+    try {
+        const { center, yearMonth } = req.query;
+        
+        if (!center || !yearMonth) {
+            return res.status(400).json({ message: '센터와 연도/월이 필요합니다.' });
+        }
+        
+        const result = await parsedSalesSnapshotsDB.deleteSnapshot(center, yearMonth);
+        res.json({
+            message: '매출정보 스냅샷이 삭제되었습니다.',
+            deletedCount: result.deletedCount
+        });
+    } catch (error) {
+        console.error('[API] 매출정보 스냅샷 삭제 오류:', error);
+        res.status(500).json({ message: '매출정보 스냅샷 삭제에 실패했습니다.' });
     }
 });
 
