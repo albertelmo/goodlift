@@ -65,7 +65,7 @@ function render(container) {
               저장된 정보 불러오기
             </div>
             <button id="database-renewal-status-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">
-              재등록 현황
+              등록 현황
             </button>
             <!-- 데이터 타입 선택 -->
             <div style="display:flex;gap:12px;align-items:center;">
@@ -197,6 +197,24 @@ function render(container) {
         </div>
       </div>
 
+      <!-- 신규등록 현황 결과 섹션 -->
+      <div id="database-new-registration-results-section" style="display:none;background:#f5f5f5;padding:16px;border-radius:8px;margin-bottom:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            <h4 style="margin:0;color:#333;font-size:1.1rem;">신규등록 현황</h4>
+            <div id="database-new-registration-stats" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:0.85rem;color:#666;">
+              <!-- 통계가 여기에 표시됩니다 -->
+            </div>
+          </div>
+          <button id="database-new-registration-download-excel-btn" style="background:#4caf50;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">
+            📥 엑셀 다운로드
+          </button>
+        </div>
+        <div id="database-new-registration-results-table" style="overflow-x:auto;">
+          <!-- 결과 테이블이 여기에 표시됩니다 -->
+        </div>
+      </div>
+      
       <!-- 재등록 현황 결과 섹션 -->
       <div id="database-renewal-results-section" style="display:none;background:#f5f5f5;padding:16px;border-radius:8px;margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
@@ -461,6 +479,10 @@ function clearOtherDataType(type) {
     const renewalResultsSection = document.getElementById('database-renewal-results-section');
     if (renewalResultsSection) renewalResultsSection.style.display = 'none';
     
+    // 신규등록 현황 결과 숨기기
+    const newRegistrationResultsSection = document.getElementById('database-new-registration-results-section');
+    if (newRegistrationResultsSection) newRegistrationResultsSection.style.display = 'none';
+    
     // 매출정보 데이터 초기화
     window.databaseAllSales = null;
     window.databaseFilteredSales = null;
@@ -484,6 +506,10 @@ function clearOtherDataType(type) {
     // 재등록 현황 결과 숨기기
     const renewalResultsSection = document.getElementById('database-renewal-results-section');
     if (renewalResultsSection) renewalResultsSection.style.display = 'none';
+    
+    // 신규등록 현황 결과 숨기기
+    const newRegistrationResultsSection = document.getElementById('database-new-registration-results-section');
+    if (newRegistrationResultsSection) newRegistrationResultsSection.style.display = 'none';
     
     // 회원정보 데이터 초기화
     window.databaseAllMembers = null;
@@ -1290,7 +1316,7 @@ function setupEventListeners(container) {
         }
         
         // 재등록 현황 분석
-        const renewalResults = analyzeRenewalStatus(memberResult.members, salesResult.sales || []);
+        const analysisResults = analyzeRenewalStatus(memberResult.members, salesResult.sales || []);
         
         // 원본 회원 정보 저장 (회원 이름 클릭 시 사용)
         window.renewalMemberData = memberResult.members;
@@ -1304,16 +1330,25 @@ function setupEventListeners(container) {
         // 다른 섹션 숨기기
         clearOtherDataType('renewal');
         
-        // 결과를 Database 탭 메인 영역에 표시
-        displayRenewalResults(renewalResults);
+        // 신규등록 현황 표시
+        if (analysisResults.newRegistrationResults.length > 0) {
+          displayNewRegistrationResults(analysisResults.newRegistrationResults);
+          const newRegistrationSection = document.getElementById('database-new-registration-results-section');
+          if (newRegistrationSection) {
+            newRegistrationSection.style.display = 'block';
+          }
+          setupNewRegistrationDownloadButton(analysisResults.newRegistrationResults);
+        }
         
+        // 재등록 현황 표시
+        displayRenewalResults(analysisResults.renewalResults);
         const resultsSection = document.getElementById('database-renewal-results-section');
         if (resultsSection) {
           resultsSection.style.display = 'block';
         }
         
         // 다운로드 버튼 이벤트 리스너 설정
-        setupRenewalDownloadButton(renewalResults);
+        setupRenewalDownloadButton(analysisResults.renewalResults);
       } catch (error) {
         console.error('재등록 현황 분석 오류:', error);
         if (loadingEl) loadingEl.style.display = 'none';
@@ -1327,6 +1362,13 @@ function setupEventListeners(container) {
   
   // 재등록 현황 분석 함수
   function analyzeRenewalStatus(members, sales) {
+    // 회원정보를 회원명+연락처로 인덱싱
+    const membersMap = new Map();
+    members.forEach(member => {
+      const key = `${member.name || ''}_${member.phone || ''}`;
+      membersMap.set(key, member);
+    });
+    
     // 매출정보를 회원명+연락처로 인덱싱
     const salesMap = new Map();
     sales.forEach(sale => {
@@ -1338,7 +1380,7 @@ function setupEventListeners(container) {
     });
     
     // 회원정보를 순회하며 재등록 여부 확인
-    const results = members.map(member => {
+    const renewalResults = members.map(member => {
       const key = `${member.name || ''}_${member.phone || ''}`;
       const matchedSales = salesMap.get(key) || [];
       
@@ -1377,7 +1419,30 @@ function setupEventListeners(container) {
       };
     });
     
-    return results;
+    // 신규등록 회원 찾기 (매출정보에는 있지만 회원정보에는 없는 회원)
+    const newRegistrationResults = [];
+    sales.forEach(sale => {
+      const key = `${sale.memberName || ''}_${sale.phone || ''}`;
+      if (!membersMap.has(key)) {
+        // 이미 추가된 회원인지 확인 (중복 방지)
+        const existing = newRegistrationResults.find(r => r.name === sale.memberName && r.phone === sale.phone);
+        if (!existing) {
+          newRegistrationResults.push({
+            name: sale.memberName || '',
+            phone: sale.phone || '',
+            salesNames: sale.salesNames || []
+          });
+        } else {
+          // 이미 있는 경우 매출 이름 추가
+          existing.salesNames = [...new Set([...existing.salesNames, ...(sale.salesNames || [])])];
+        }
+      }
+    });
+    
+    return {
+      renewalResults: renewalResults,
+      newRegistrationResults: newRegistrationResults
+    };
   }
   
   // 재등록 현황 결과 표시
@@ -1708,6 +1773,269 @@ function setupEventListeners(container) {
       
       tbody.appendChild(row);
     });
+  }
+  
+  // 신규등록 현황 결과 표시
+  function displayNewRegistrationResults(results) {
+    const resultsTable = document.getElementById('database-new-registration-results-table');
+    const statsEl = document.getElementById('database-new-registration-stats');
+    if (!resultsTable) return;
+    
+    // 매출 이름별 판매 개수 집계
+    const salesNameCount = {};
+    results.forEach(result => {
+      if (result.salesNames && result.salesNames.length > 0) {
+        result.salesNames.forEach(salesName => {
+          if (salesName) {
+            salesNameCount[salesName] = (salesNameCount[salesName] || 0) + 1;
+          }
+        });
+      }
+    });
+    
+    // 통계 표시
+    if (statsEl) {
+      let statsHTML = `<span style="font-weight:600;">총 ${results.length}명</span>`;
+      
+      // 매출 이름별 판매 개수 표시
+      const salesNameEntries = Object.entries(salesNameCount).sort((a, b) => b[1] - a[1]);
+      if (salesNameEntries.length > 0) {
+        statsHTML += ' <span style="margin-left:12px;color:#1976d2;">|</span>';
+        salesNameEntries.forEach(([salesName, count]) => {
+          statsHTML += ` <span style="margin-left:8px;"><strong>${salesName}:</strong> ${count}개</span>`;
+        });
+      }
+      
+      statsEl.innerHTML = statsHTML;
+    }
+    
+    resultsTable.innerHTML = '';
+    
+    const table = document.createElement('table');
+    table.style.width = '100%';
+    table.style.borderCollapse = 'collapse';
+    table.style.fontSize = '0.75rem';
+    table.style.lineHeight = '1.3';
+    
+    // 헤더
+    const thead = document.createElement('thead');
+    const headerRow = document.createElement('tr');
+    headerRow.style.background = '#f5f5f5';
+    headerRow.style.borderBottom = '1px solid #ddd';
+    
+    const headers = [
+      { text: '회원명', sort: 'name', sortable: true },
+      { text: '연락처', sort: 'phone', sortable: true },
+      { text: '매출 이름', sort: null, sortable: false }
+    ];
+    
+    headers.forEach(header => {
+      const th = document.createElement('th');
+      th.style.padding = '6px 4px';
+      th.style.textAlign = 'left';
+      th.style.fontWeight = '600';
+      th.style.fontSize = '0.75rem';
+      
+      if (header.sortable) {
+        th.className = 'sortable';
+        th.setAttribute('data-sort', header.sort);
+        th.style.cursor = 'pointer';
+        th.style.userSelect = 'none';
+        
+        const textSpan = document.createElement('span');
+        textSpan.textContent = header.text;
+        th.appendChild(textSpan);
+        
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'sort-icon';
+        iconSpan.textContent = '↕';
+        iconSpan.style.marginLeft = '4px';
+        iconSpan.style.color = '#999';
+        iconSpan.style.fontSize = '0.7rem';
+        th.appendChild(iconSpan);
+      } else {
+        th.textContent = header.text;
+      }
+      
+      headerRow.appendChild(th);
+    });
+    
+    thead.appendChild(headerRow);
+    table.appendChild(thead);
+    
+    // 본문
+    const tbody = document.createElement('tbody');
+    results.forEach(result => {
+      const row = document.createElement('tr');
+      row.style.borderBottom = '1px solid #eee';
+      
+      // 회원명
+      const nameCell = document.createElement('td');
+      nameCell.textContent = result.name;
+      nameCell.style.padding = '5px 4px';
+      nameCell.style.fontSize = '0.75rem';
+      row.appendChild(nameCell);
+      
+      // 연락처
+      const phoneCell = document.createElement('td');
+      phoneCell.textContent = result.phone;
+      phoneCell.style.padding = '5px 4px';
+      phoneCell.style.fontSize = '0.75rem';
+      row.appendChild(phoneCell);
+      
+      // 매출 이름
+      const salesNamesCell = document.createElement('td');
+      salesNamesCell.textContent = result.salesNames.join(', ') || '';
+      salesNamesCell.style.padding = '5px 4px';
+      salesNamesCell.style.fontSize = '0.75rem';
+      row.appendChild(salesNamesCell);
+      
+      tbody.appendChild(row);
+    });
+    
+    table.appendChild(tbody);
+    resultsTable.appendChild(table);
+    
+    // 테이블에 ID 추가 (정렬 기능을 위해)
+    table.id = 'database-new-registration-table';
+    
+    // 정렬 기능 설정
+    setupNewRegistrationSorting(table, results);
+  }
+  
+  // 신규등록 현황 정렬 상태
+  let currentNewRegistrationSort = { column: null, direction: 'asc' };
+  
+  // 신규등록 현황 정렬 기능 설정
+  function setupNewRegistrationSorting(table, results) {
+    if (!table) return;
+    
+    if (!table.dataset.newRegistrationSortListenerAdded) {
+      table.addEventListener('click', (e) => {
+        const header = e.target.closest('.sortable');
+        if (!header) return;
+        
+        const column = header.getAttribute('data-sort');
+        if (!column) return;
+        
+        if (currentNewRegistrationSort.column === column) {
+          currentNewRegistrationSort.direction = currentNewRegistrationSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentNewRegistrationSort.column = column;
+          currentNewRegistrationSort.direction = 'asc';
+        }
+        
+        const allHeaders = table.querySelectorAll('.sortable');
+        allHeaders.forEach(h => {
+          const icon = h.querySelector('.sort-icon');
+          if (h === header) {
+            icon.textContent = currentNewRegistrationSort.direction === 'asc' ? '↑' : '↓';
+            icon.style.color = '#1976d2';
+          } else {
+            icon.textContent = '↕';
+            icon.style.color = '#999';
+          }
+        });
+        
+        applyNewRegistrationSorting(table, results);
+      });
+      
+      table.dataset.newRegistrationSortListenerAdded = 'true';
+    }
+  }
+  
+  // 신규등록 현황 정렬 적용
+  function applyNewRegistrationSorting(table, results) {
+    if (!table || !results) return;
+    
+    const sortedResults = [...results].sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (currentNewRegistrationSort.column) {
+        case 'name':
+          aVal = (a.name || '').toLowerCase();
+          bVal = (b.name || '').toLowerCase();
+          break;
+        case 'phone':
+          aVal = (a.phone || '').replace(/[^0-9]/g, '');
+          bVal = (b.phone || '').replace(/[^0-9]/g, '');
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aVal < bVal) return currentNewRegistrationSort.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return currentNewRegistrationSort.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+    
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    sortedResults.forEach(result => {
+      const row = document.createElement('tr');
+      row.style.borderBottom = '1px solid #eee';
+      
+      const nameCell = document.createElement('td');
+      nameCell.textContent = result.name;
+      nameCell.style.padding = '5px 4px';
+      nameCell.style.fontSize = '0.75rem';
+      row.appendChild(nameCell);
+      
+      const phoneCell = document.createElement('td');
+      phoneCell.textContent = result.phone;
+      phoneCell.style.padding = '5px 4px';
+      phoneCell.style.fontSize = '0.75rem';
+      row.appendChild(phoneCell);
+      
+      const salesNamesCell = document.createElement('td');
+      salesNamesCell.textContent = result.salesNames.join(', ') || '';
+      salesNamesCell.style.padding = '5px 4px';
+      salesNamesCell.style.fontSize = '0.75rem';
+      row.appendChild(salesNamesCell);
+      
+      tbody.appendChild(row);
+    });
+  }
+  
+  // 신규등록 현황 엑셀 다운로드 버튼 설정
+  function setupNewRegistrationDownloadButton(results) {
+    const downloadBtn = document.getElementById('database-new-registration-download-excel-btn');
+    if (!downloadBtn) return;
+    
+    downloadBtn.onclick = null;
+    
+    downloadBtn.onclick = () => {
+      if (!results || results.length === 0) {
+        alert('다운로드할 데이터가 없습니다.');
+        return;
+      }
+      
+      let csv = '회원명,연락처,매출 이름\n';
+      results.forEach(result => {
+        const name = (result.name || '').replace(/,/g, '');
+        const phone = (result.phone || '').replace(/,/g, '');
+        const salesNames = (result.salesNames || []).join('; ').replace(/,/g, '');
+        csv += `${name},${phone},${salesNames}\n`;
+      });
+      
+      const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      const filename = `신규등록현황_${dateStr}.csv`;
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
   }
   
   // 재등록 현황 엑셀 다운로드 버튼 설정
@@ -2427,6 +2755,10 @@ function displayMembers(members, selectedProducts, applyFiltersAndSort = true) {
   const renewalResultsSection = document.getElementById('database-renewal-results-section');
   if (renewalResultsSection) renewalResultsSection.style.display = 'none';
   
+  // 신규등록 현황 결과 숨기기
+  const newRegistrationResultsSection = document.getElementById('database-new-registration-results-section');
+  if (newRegistrationResultsSection) newRegistrationResultsSection.style.display = 'none';
+  
   const section = document.getElementById('database-members-section');
   const loading = document.getElementById('database-loading');
   const tableContainer = document.getElementById('database-table-container');
@@ -2730,6 +3062,10 @@ function displaySales(sales, selectedSalesNames = []) {
   // 재등록 현황 결과 숨기기
   const renewalResultsSection = document.getElementById('database-renewal-results-section');
   if (renewalResultsSection) renewalResultsSection.style.display = 'none';
+  
+  // 신규등록 현황 결과 숨기기
+  const newRegistrationResultsSection = document.getElementById('database-new-registration-results-section');
+  if (newRegistrationResultsSection) newRegistrationResultsSection.style.display = 'none';
   
   const section = document.getElementById('database-sales-section');
   const loading = document.getElementById('database-sales-loading');
