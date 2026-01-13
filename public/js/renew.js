@@ -207,7 +207,9 @@ function renderRenewSessions(data, centerOrder) {
               
               return `
                 <tr style="border-bottom:1px solid #f0f0f0;">
-                  <td style="padding:4px 3px;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px;">${memberName}</td>
+                  <td style="padding:4px 3px;font-size:0.75rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px;">
+                    <span class="renew-member-name" data-member-name="${memberName}" style="cursor:pointer;color:#1976d2;text-decoration:underline;text-decoration-color:rgba(25,118,210,0.3);" onmouseover="this.style.textDecorationColor='#1976d2'" onmouseout="this.style.textDecorationColor='rgba(25,118,210,0.3)'">${memberName}</span>
+                  </td>
                   <td style="padding:4px 3px;font-size:0.75rem;text-align:right;">${expected}</td>
                   <td style="padding:4px 3px;font-size:0.75rem;text-align:right;">
                     ${actual !== null && actual !== undefined && actual !== 0 ? actual : '-'}
@@ -301,6 +303,9 @@ function renderRenewSessions(data, centerOrder) {
   
   // 수정 버튼 이벤트 리스너
   setupRenewEditListeners();
+  
+  // 회원명 클릭 이벤트 리스너
+  setupMemberNameClickListeners();
 }
 
 function setupRenewEditListeners() {
@@ -310,6 +315,158 @@ function setupRenewEditListeners() {
       showRenewEditModal(renewalData);
     });
   });
+}
+
+async function setupMemberNameClickListeners() {
+  document.querySelectorAll('.renew-member-name').forEach(element => {
+    element.addEventListener('click', async function() {
+      const memberName = this.getAttribute('data-member-name');
+      await showMemberInfoPopup(memberName, this);
+    });
+  });
+}
+
+async function showMemberInfoPopup(memberName, triggerElement) {
+  try {
+    // 회원 정보 조회
+    const response = await fetch(`/api/members?trainer=${encodeURIComponent('')}`);
+    const members = await response.json();
+    const member = members.find(m => m.name === memberName);
+    
+    if (!member) {
+      alert('회원 정보를 찾을 수 없습니다.');
+      return;
+    }
+    
+    // 이번달 완료한 수업수 조회
+    const yearMonth = getSelectedYearMonth();
+    const [year, month] = yearMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    
+    // 세션 조회 (이번달 날짜 범위로 조회)
+    const sessionsResponse = await fetch(`/api/sessions?startDate=${startDate}&endDate=${endDate}&member=${encodeURIComponent(memberName)}`);
+    const allSessions = await sessionsResponse.json();
+    
+    // 완료된 세션만 필터링
+    const completedSessions = allSessions.filter(session => session.status === '완료');
+    const completedCount = completedSessions.length;
+    
+    // 기존 팝업 제거
+    const existingPopup = document.querySelector('.renew-member-info-popup');
+    if (existingPopup) {
+      existingPopup.remove();
+    }
+    
+    // 팝업 생성
+    const popup = document.createElement('div');
+    popup.className = 'renew-member-info-popup';
+    popup.style.cssText = `
+      position: fixed;
+      z-index: 1002;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      padding: 16px 20px;
+      min-width: 200px;
+      max-width: 300px;
+      font-size: 0.9rem;
+      border: 1px solid #e0e0e0;
+    `;
+    
+    // 트리거 요소의 위치 계산 (뷰포트 기준)
+    const rect = triggerElement.getBoundingClientRect();
+    
+    // 팝업 위치 설정 (트리거 요소 아래, 오른쪽)
+    const popupWidth = 250;
+    const popupHeight = 120;
+    const margin = 8;
+    
+    let top = rect.bottom + margin;
+    let left = rect.left;
+    
+    // 화면 밖으로 나가지 않도록 조정 (뷰포트 기준)
+    if (left + popupWidth > window.innerWidth) {
+      left = window.innerWidth - popupWidth - margin;
+    }
+    if (left < margin) {
+      left = margin;
+    }
+    
+    if (top + popupHeight > window.innerHeight) {
+      // 아래 공간이 부족하면 위쪽에 표시
+      top = rect.top - popupHeight - margin;
+      if (top < margin) {
+        // 위쪽도 부족하면 화면 중앙에 표시
+        top = (window.innerHeight - popupHeight) / 2;
+      }
+    }
+    
+    popup.style.top = `${top}px`;
+    popup.style.left = `${left}px`;
+    
+    // 팝업 내용
+    popup.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;border-bottom:1px solid #e0e0e0;padding-bottom:8px;">
+        <h4 style="margin:0;color:#1976d2;font-size:1rem;font-weight:600;">회원 정보</h4>
+        <button class="renew-member-info-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;width:24px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:#666;font-weight:500;">회원명:</span>
+          <span style="color:#333;font-weight:600;">${member.name}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:#666;font-weight:500;">이번달 완료:</span>
+          <span style="color:#4caf50;font-weight:600;">${completedCount}회</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:#666;font-weight:500;">잔여세션:</span>
+          <span style="color:#1976d2;font-weight:600;">${member.remainSessions || 0}회</span>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(popup);
+    
+    // 닫기 버튼 이벤트
+    popup.querySelector('.renew-member-info-close').addEventListener('click', () => {
+      popup.remove();
+    });
+    
+    // 배경 클릭 시 닫기
+    const overlay = document.createElement('div');
+    overlay.style.cssText = `
+      position: fixed;
+      z-index: 1001;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: transparent;
+    `;
+    document.body.appendChild(overlay);
+    
+    overlay.addEventListener('click', () => {
+      popup.remove();
+      overlay.remove();
+    });
+    
+    // ESC 키로 닫기
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        popup.remove();
+        overlay.remove();
+        document.removeEventListener('keydown', handleEsc);
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    
+  } catch (error) {
+    console.error('회원 정보 조회 오류:', error);
+    alert('회원 정보를 불러오는 중 오류가 발생했습니다.');
+  }
 }
 
 async function showRenewEditModal(renewal) {

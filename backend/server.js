@@ -899,10 +899,28 @@ app.delete('/api/members/:name', async (req, res) => {
     }
 });
 
-// 세션 목록 조회 (트레이너, 날짜별, 주간 필터)
+// 세션 목록 조회 (트레이너, 날짜별, 주간 필터, 날짜 범위)
 app.get('/api/sessions', async (req, res) => {
     try {
-        const { trainer, date, week } = req.query;
+        const { trainer, date, week, startDate, endDate, member } = req.query;
+        
+        // 날짜 범위가 있으면 날짜 범위로 조회
+        if (startDate && endDate) {
+            let sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
+            
+            // 추가 필터링
+            if (trainer) {
+                sessions = sessions.filter(s => s.trainer === trainer);
+            }
+            if (member) {
+                sessions = sessions.filter(s => s.member === member);
+            }
+            
+            res.json(sessions);
+            return;
+        }
+        
+        // 기존 필터 방식
         const filters = {};
         if (trainer) filters.trainer = trainer;
         if (date) filters.date = date;
