@@ -199,7 +199,22 @@ function renderRenewSessions(data, centerOrder) {
             const actualSessions = renewal.actual_sessions || {};
             const statuses = renewal.status || {};
             
-            const tableRows = memberNames.map(memberName => {
+            // 회원 목록을 상태 순서대로 정렬 (예상 > 완료 > 이월 > 만료)
+            const statusOrder = { '예상': 1, '완료': 2, '이월': 3, '만료': 4 };
+            const sortedMemberNames = [...memberNames].sort((a, b) => {
+              const statusA = statuses[a] || '예상';
+              const statusB = statuses[b] || '예상';
+              const orderA = statusOrder[statusA] || 5;
+              const orderB = statusOrder[statusB] || 5;
+              
+              // 상태 순서가 같으면 이름순으로 정렬
+              if (orderA === orderB) {
+                return a.localeCompare(b, 'ko');
+              }
+              return orderA - orderB;
+            });
+            
+            const tableRows = sortedMemberNames.map(memberName => {
               const expected = expectedSessions[memberName] || 0;
               const actual = actualSessions[memberName] !== undefined ? actualSessions[memberName] : null;
               const status = statuses[memberName] || '예상';
