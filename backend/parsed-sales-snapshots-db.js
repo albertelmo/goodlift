@@ -149,6 +149,25 @@ const saveSnapshot = async (center, yearMonth, sales) => {
       savedCount++;
     }
     
+    // 같은 달의 회원정보에서 이름/연락처가 일치하는 회원의 상태를 "재등록"으로 업데이트
+    for (const sale of sales) {
+      const memberName = sale.memberName || '';
+      const phone = sale.phone || '';
+      
+      if (memberName && phone) {
+        // 같은 센터, 같은 연월, 같은 이름, 같은 연락처를 가진 회원 찾아서 상태 업데이트
+        await client.query(
+          `UPDATE parsed_member_snapshots 
+           SET status = '재등록', updated_at = CURRENT_TIMESTAMP
+           WHERE center = $1 
+           AND year_month = $2 
+           AND member_name = $3 
+           AND phone = $4`,
+          [center, yearMonth, memberName, phone]
+        );
+      }
+    }
+    
     await client.query('COMMIT');
     return { savedCount };
   } catch (error) {

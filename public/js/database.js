@@ -163,6 +163,7 @@ function render(container) {
               <option value="all">전체</option>
               <option value="유효">유효</option>
               <option value="만료">만료</option>
+              <option value="재등록">재등록</option>
             </select>
           </div>
           <div>
@@ -289,29 +290,29 @@ function render(container) {
         <div id="database-loading" style="text-align:center;color:#888;padding:40px;">데이터를 불러오는 중...</div>
         <div id="database-table-container" style="display:none;">
           <div style="overflow-x:auto;">
-            <table id="database-table" style="width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:800px;">
+            <table id="database-table" style="width:100%;border-collapse:collapse;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);min-width:800px;font-size:0.75rem;">
               <thead>
                 <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
-                  <th class="sortable" data-sort="name" style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                  <th class="sortable" data-sort="name" style="padding:6px 4px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     회원 이름 <span class="sort-icon">↕</span>
                   </th>
-                  <th class="sortable" data-sort="phone" style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                  <th class="sortable" data-sort="phone" style="padding:6px 4px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     연락처 <span class="sort-icon">↕</span>
                   </th>
-                  <th class="sortable" data-sort="tendency" style="padding:12px 8px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                  <th class="sortable" data-sort="tendency" style="padding:6px 4px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     성향 <span class="sort-icon">↕</span>
                   </th>
-                  <th class="sortable" data-sort="status" style="padding:12px 8px;text-align:center;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                  <th class="sortable" data-sort="status" style="padding:6px 4px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     상태 <span class="sort-icon">↕</span>
                   </th>
-                  <th class="sortable" data-sort="recentVisit" style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                  <th class="sortable" data-sort="recentVisit" style="padding:6px 4px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     최근방문일 <span class="sort-icon">↕</span>
                   </th>
-                  <th class="sortable" data-sort="endDate" style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                  <th class="sortable" data-sort="endDate" style="padding:6px 4px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     종료일 <span class="sort-icon">↕</span>
                   </th>
-                  <th style="padding:12px 8px;text-align:left;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;">상품명</th>
-                  <th class="sortable" data-sort="totalPeriod" style="padding:12px 8px;text-align:right;font-weight:600;color:#333;font-size:0.9rem;white-space:nowrap;cursor:pointer;user-select:none;">
+                  <th style="padding:6px 4px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;">상품명</th>
+                  <th class="sortable" data-sort="totalPeriod" style="padding:6px 4px;text-align:right;font-weight:600;color:#333;font-size:0.75rem;white-space:nowrap;cursor:pointer;user-select:none;">
                     전체기간 <span class="sort-icon">↕</span>
                   </th>
                 </tr>
@@ -1595,8 +1596,8 @@ function setupEventListeners(container) {
       const statusCell = document.createElement('td');
       let calculatedStatus = result.memberData?.status || '유효';
       
-      // 재등록인 경우 "재등록"으로 표시
-      if (result.isRenewal) {
+      // 재등록인 경우 "재등록"으로 표시 (isRenewal이 true이거나 status가 이미 "재등록"인 경우)
+      if (result.isRenewal || calculatedStatus === '재등록') {
         calculatedStatus = '재등록';
       } else if (result.memberData && result.memberData.endDate) {
         const endDateStr = String(result.memberData.endDate).trim();
@@ -1734,8 +1735,8 @@ function setupEventListeners(container) {
           let aStatus = a.memberData?.status || '유효';
           let bStatus = b.memberData?.status || '유효';
           
-          // 재등록인 경우 "재등록"으로 표시
-          if (a.isRenewal) {
+          // 재등록인 경우 "재등록"으로 표시 (isRenewal이 true이거나 status가 이미 "재등록"인 경우)
+          if (a.isRenewal || aStatus === '재등록') {
             aStatus = '재등록';
           } else if (a.memberData?.endDate) {
             const aEndDateStr = String(a.memberData.endDate).trim();
@@ -1750,7 +1751,7 @@ function setupEventListeners(container) {
             }
           }
           
-          if (b.isRenewal) {
+          if (b.isRenewal || bStatus === '재등록') {
             bStatus = '재등록';
           } else if (b.memberData?.endDate) {
             const bEndDateStr = String(b.memberData.endDate).trim();
@@ -1854,8 +1855,8 @@ function setupEventListeners(container) {
       const statusCell = document.createElement('td');
       let calculatedStatus = result.memberData?.status || '유효';
       
-      // 재등록인 경우 "재등록"으로 표시
-      if (result.isRenewal) {
+      // 재등록인 경우 "재등록"으로 표시 (isRenewal이 true이거나 status가 이미 "재등록"인 경우)
+      if (result.isRenewal || calculatedStatus === '재등록') {
         calculatedStatus = '재등록';
       } else if (result.memberData && result.memberData.endDate) {
         const endDateStr = String(result.memberData.endDate).trim();
@@ -2827,13 +2828,16 @@ function applyFilters(members, selectedProducts) {
     });
   }
   
-  // 상태 필터링 (종료일 기준으로 계산된 상태 사용)
+  // 상태 필터링 (재등록인 경우 날짜 계산 없이 재등록으로 표시)
   const statusFilter = document.getElementById('database-filter-status')?.value;
   if (statusFilter && statusFilter !== 'all') {
     filtered = filtered.filter(member => {
-      // 종료일 기준으로 상태 계산
+      // 재등록인 경우 날짜 계산 없이 재등록으로 표시
       let calculatedStatus = member.status || '유효';
-      if (member.endDate) {
+      
+      if (calculatedStatus === '재등록') {
+        // 재등록 상태 유지
+      } else if (member.endDate) {
         const endDateStr = String(member.endDate).trim();
         const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
         if (endDateOnly) {
@@ -2894,11 +2898,12 @@ function applySorting(members, column, direction) {
         bVal = tendencyOrder[bTendency] || 3;
         break;
       case 'status':
-        // 종료일 기준으로 상태 계산
+        // 재등록인 경우 날짜 계산 없이 재등록으로 표시
         let aStatus = a.status || '유효';
         let bStatus = b.status || '유효';
         
-        if (a.endDate) {
+        // 재등록인 경우 날짜 계산 없이 재등록으로 표시
+        if (aStatus !== '재등록' && a.endDate) {
           const aEndDateStr = String(a.endDate).trim();
           const aEndDateOnly = aEndDateStr.split(/[\sT]/)[0] || aEndDateStr;
           if (aEndDateOnly) {
@@ -2911,7 +2916,7 @@ function applySorting(members, column, direction) {
           }
         }
         
-        if (b.endDate) {
+        if (bStatus !== '재등록' && b.endDate) {
           const bEndDateStr = String(b.endDate).trim();
           const bEndDateOnly = bEndDateStr.split(/[\sT]/)[0] || bEndDateStr;
           if (bEndDateOnly) {
@@ -2924,8 +2929,10 @@ function applySorting(members, column, direction) {
           }
         }
         
-        aVal = aStatus.toLowerCase();
-        bVal = bStatus.toLowerCase();
+        // 정렬 순서: 재등록 > 유효 > 만료
+        const statusOrder = { '재등록': 1, '유효': 2, '만료': 3 };
+        aVal = statusOrder[aStatus] || 2;
+        bVal = statusOrder[bStatus] || 2;
         break;
       case 'recentVisit':
         aVal = parseDateToTimestamp(a.recentVisit);
@@ -3052,9 +3059,13 @@ function displayMembers(members, selectedProducts, applyFiltersAndSort = true) {
     const row = document.createElement('tr');
     row.style.borderBottom = '1px solid #eee';
     
-    // 상태 계산 (종료일 기준)
+    // 상태 계산 (재등록인 경우 날짜 계산 없이 재등록으로 표시)
     let calculatedStatus = member.status || '유효'; // 기본값
-    if (member.endDate) {
+    
+    // 재등록인 경우 날짜 계산 없이 재등록으로 표시
+    if (calculatedStatus === '재등록') {
+      // 재등록 상태 유지
+    } else if (member.endDate) {
       const endDateStr = String(member.endDate).trim();
       const endDateOnly = endDateStr.split(/[\sT]/)[0] || endDateStr;
       if (endDateOnly) {
@@ -3074,8 +3085,8 @@ function displayMembers(members, selectedProducts, applyFiltersAndSort = true) {
     }
     
     // 상태 색상
-    const statusColor = calculatedStatus === '유효' ? '#1976d2' : '#d32f2f';
-    const statusBg = calculatedStatus === '유효' ? '#e3f2fd' : '#ffebee';
+    const statusColor = calculatedStatus === '재등록' ? '#4caf50' : calculatedStatus === '유효' ? '#1976d2' : '#d32f2f';
+    const statusBg = calculatedStatus === '재등록' ? '#e8f5e9' : calculatedStatus === '유효' ? '#e3f2fd' : '#ffebee';
     
     // 성향 사용 (저장된 값이 있으면 사용, 없으면 계산)
     let tendency = member.tendency;
@@ -3116,22 +3127,22 @@ function displayMembers(members, selectedProducts, applyFiltersAndSort = true) {
     }
     
     row.innerHTML = `
-      <td style="padding:12px 8px;font-size:0.9rem;font-weight:500;">${member.name || '-'}</td>
-      <td style="padding:12px 8px;font-size:0.9rem;">${member.phone || '-'}</td>
-      <td style="padding:12px 8px;text-align:center;">
-        <span style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:0.85rem;font-weight:500;background:${tendencyBg};color:${tendencyColor};">
+      <td style="padding:6px 4px;font-size:0.75rem;font-weight:500;">${member.name || '-'}</td>
+      <td style="padding:6px 4px;font-size:0.75rem;">${member.phone || '-'}</td>
+      <td style="padding:6px 4px;text-align:center;">
+        <span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:0.7rem;font-weight:500;background:${tendencyBg};color:${tendencyColor};">
           ${tendencyText}
         </span>
       </td>
-      <td style="padding:12px 8px;text-align:center;">
-        <span style="display:inline-block;padding:4px 12px;border-radius:4px;font-size:0.85rem;font-weight:500;background:${statusBg};color:${statusColor};">
+      <td style="padding:6px 4px;text-align:center;">
+        <span style="display:inline-block;padding:2px 8px;border-radius:3px;font-size:0.7rem;font-weight:500;background:${statusBg};color:${statusColor};">
           ${calculatedStatus}
         </span>
       </td>
-      <td style="padding:12px 8px;font-size:0.9rem;color:#666;">${recentVisitDisplay}</td>
-      <td style="padding:12px 8px;font-size:0.9rem;color:#666;">${endDateDisplay}</td>
-      <td style="padding:12px 8px;font-size:0.9rem;color:#666;max-width:300px;line-height:1.6;">${productNamesHtml}</td>
-      <td style="padding:12px 8px;text-align:right;font-size:0.9rem;font-weight:500;color:#1976d2;">${totalPeriodStr}</td>
+      <td style="padding:6px 4px;font-size:0.75rem;color:#666;">${recentVisitDisplay}</td>
+      <td style="padding:6px 4px;font-size:0.75rem;color:#666;">${endDateDisplay}</td>
+      <td style="padding:6px 4px;font-size:0.75rem;color:#666;max-width:250px;line-height:1.4;">${productNamesHtml}</td>
+      <td style="padding:6px 4px;text-align:right;font-size:0.75rem;font-weight:500;color:#1976d2;">${totalPeriodStr}</td>
     `;
     
     tableBody.appendChild(row);
