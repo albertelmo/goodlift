@@ -220,7 +220,7 @@ function renderRenewSessions(data, centerOrder) {
             }).join('')
             
             return `
-              <div class="renew-trainer-table" style="flex:0 0 calc(16.666% - 14px);min-width:140px;max-width:180px;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);border-radius:8px;overflow:hidden;">
+              <div class="renew-trainer-table" style="flex:0 0 calc(33.333% - 11px);min-width:200px;max-width:none;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);border-radius:8px;overflow:hidden;">
                 <div style="background:#f5f5f5;border-bottom:2px solid #ddd;padding:8px 6px;">
                   <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
                     <div style="font-weight:600;color:#1976d2;font-size:0.85rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${renewal.trainer}</div>
@@ -250,9 +250,15 @@ function renderRenewSessions(data, centerOrder) {
   
   contentEl.innerHTML = html;
   
-  // 모바일 환경에서 테이블 컬럼 너비 조정
+  // 모바일 환경에서 테이블 컬럼 너비 조정 및 카드 레이아웃 조정
   const isMobile = window.innerWidth <= 600;
   if (isMobile) {
+    // 모바일에서 카드가 한 줄에 2개씩 나오도록 조정
+    document.querySelectorAll('.renew-trainer-table').forEach(card => {
+      card.style.flex = '0 0 calc(50% - 8px)';
+      card.style.minWidth = '140px';
+    });
+    
     document.querySelectorAll('.renew-trainer-table table').forEach(table => {
       // 헤더 셀 조정
       const headers = table.querySelectorAll('thead th');
