@@ -136,7 +136,7 @@ function render(container) {
       </div>
       
       <!-- 개인지출 요약 영역 -->
-      <div id="expense-personal-summary" style="background:#fff3e0;padding:6px 10px;border-radius:4px;margin-bottom:8px;display:flex;gap:20px;flex-wrap:wrap;">
+      <div id="expense-personal-summary" style="background:#fff3e0;padding:6px 10px;border-radius:4px;margin-bottom:8px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;">
         <div>
           <div style="font-size:0.65rem;color:#666;margin-bottom:1px;">개인지출 건수</div>
           <div id="expense-personal-count" style="font-size:0.9rem;font-weight:bold;color:#ff9800;">0건</div>
@@ -144,6 +144,10 @@ function render(container) {
         <div>
           <div style="font-size:0.65rem;color:#666;margin-bottom:1px;">개인지출 금액</div>
           <div id="expense-personal-amount" style="font-size:0.9rem;font-weight:bold;color:#ff9800;">0원</div>
+        </div>
+        <div id="expense-personal-by-trainer" style="display:none;flex:1;min-width:0;">
+          <div style="font-size:0.65rem;color:#666;margin-bottom:4px;">개인별 지출 합계</div>
+          <div id="expense-personal-trainer-list" style="display:flex;flex-wrap:nowrap;gap:12px;font-size:0.75rem;overflow-x:auto;"></div>
         </div>
       </div>
       
@@ -292,6 +296,38 @@ async function loadExpenses() {
     const personalTotalAmount = personalExpenses.reduce((sum, e) => sum + e.amount, 0);
     personalCount.textContent = `${personalExpenses.length}건`;
     personalAmount.textContent = `${personalTotalAmount.toLocaleString()}원`;
+    
+    // 개인별 지출 합계 계산 및 표시
+    const personalByTrainer = document.getElementById('expense-personal-by-trainer');
+    const personalTrainerList = document.getElementById('expense-personal-trainer-list');
+    if (personalExpenses.length > 0 && personalByTrainer && personalTrainerList) {
+      // 트레이너별로 그룹화
+      const trainerMap = {};
+      personalExpenses.forEach(expense => {
+        const trainerName = expense.trainerName || expense.trainer;
+        if (!trainerMap[trainerName]) {
+          trainerMap[trainerName] = 0;
+        }
+        trainerMap[trainerName] += expense.amount;
+      });
+      
+      // 트레이너별 합계 표시
+      personalTrainerList.innerHTML = '';
+      Object.entries(trainerMap)
+        .sort((a, b) => b[1] - a[1]) // 금액 순으로 정렬
+        .forEach(([trainerName, amount]) => {
+          const item = document.createElement('div');
+          item.style.cssText = 'display:flex;align-items:center;gap:4px;padding:4px 8px;background:#fff;border-radius:4px;border:1px solid #ffcc80;white-space:nowrap;flex-shrink:0;';
+          item.innerHTML = `
+            <span style="color:#333;font-weight:500;">${trainerName}:</span>
+            <span style="color:#ff9800;font-weight:bold;">${amount.toLocaleString()}원</span>
+          `;
+          personalTrainerList.appendChild(item);
+        });
+      personalByTrainer.style.display = 'block';
+    } else if (personalByTrainer) {
+      personalByTrainer.style.display = 'none';
+    }
     
     // 식대 테이블 렌더링
     if (!window.expenseMealData || window.expenseMealData.length !== mealExpenses.length) {
@@ -568,14 +604,20 @@ function renderPagination(type, currentPage, totalPages, totalItems) {
 window.changeExpensePage = function(type, page) {
   if (type === 'meal') {
     mealCurrentPage = page;
-    // 전체 데이터를 다시 가져와야 하므로 loadExpenses 호출
-    loadExpenses();
+    // 저장된 데이터로 테이블만 다시 렌더링
+    if (window.expenseMealData) {
+      renderMealTable(window.expenseMealData);
+    }
   } else if (type === 'purchase') {
     purchaseCurrentPage = page;
-    loadExpenses();
+    if (window.expensePurchaseData) {
+      renderPurchaseTable(window.expensePurchaseData);
+    }
   } else if (type === 'personal') {
     personalCurrentPage = page;
-    loadExpenses();
+    if (window.expensePersonalData) {
+      renderPersonalTable(window.expensePersonalData);
+    }
   }
 };
 
