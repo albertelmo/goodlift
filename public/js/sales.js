@@ -48,6 +48,10 @@ function render(root) {
   if (!root) return;
   
   state.yearMonth = getYearMonth();
+  
+  // 사용자 역할 확인
+  const userRole = localStorage.getItem('role');
+  const isSu = userRole === 'su';
 
   root.innerHTML = `
     <div style="padding:20px;">
@@ -89,8 +93,8 @@ function render(root) {
         </div>
       </div>
 
-      <!-- 엑셀 파일 업로드 영역 -->
-      <div style="background:#f5f5f5;padding:16px;border-radius:8px;margin-bottom:20px;border:2px dashed #ddd;">
+      <!-- 엑셀 파일 업로드 영역 (SU만 표시) -->
+      ${isSu ? `<div id="sales-upload-section" style="background:#f5f5f5;padding:16px;border-radius:8px;margin-bottom:20px;border:2px dashed #ddd;">` : `<div id="sales-upload-section" style="display:none;">`}
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
           <div style="font-size:0.95rem;color:#666;font-weight:600;">
             매출 엑셀 파일 업로드 (시트별 연월 자동 인식)
