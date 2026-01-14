@@ -195,8 +195,8 @@ const adminHamburgerItems = [
     { label: '👥 트레이너', id: 'Trainer', content: '<div id="trainer-list-loading" style="text-align:center;padding:20px;color:#888;display:none;">불러오는 중...</div><div id="trainer-list"></div>' }
 ];
 const trainerTabs = [
-    { label: '📅', content: '<div id="session-calendar"></div>' },
-    { label: '👤', content: '<div id="my-member-list"></div>' }
+    { label: '📅', id: '📅', content: '<div id="session-calendar"></div>' },
+    { label: '👤', id: '👤', content: '<div id="my-member-list"></div>' }
 ];
 
 // 센터관리자용 탭 (Center, Trainer 탭 제외)
@@ -239,7 +239,8 @@ function renderTabs(tabs) {
     // 첫 번째 탭의 컨텐츠 표시
     const firstTab = tabs[0];
     tabContent.innerHTML = firstTab.content;
-    renderTabContent(firstTab.id, tabContent);
+    const firstTabId = firstTab.id || firstTab.label;
+    renderTabContent(firstTabId, tabContent);
     
     // 일반 탭 생성
     tabs.forEach((tab, idx) => {
@@ -256,7 +257,8 @@ function renderTabs(tabs) {
             });
             btn.classList.add('active');
             tabContent.innerHTML = tab.content;
-            renderTabContent(tab.id, tabContent);
+            const tabId = tab.id || tab.label;
+            renderTabContent(tabId, tabContent);
         };
         tabBar.appendChild(btn);
     });
