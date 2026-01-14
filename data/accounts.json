@@ -6,6 +6,12 @@
     "role": "admin"
   },
   {
+    "username": "su",
+    "password": "123",
+    "name": "슈퍼관리자",
+    "role": "su"
+  },
+  {
     "username": "shk",
     "password": "123",
     "name": "김성현",

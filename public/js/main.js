@@ -8,6 +8,12 @@ import { adminWeekCalendar } from './adminWeekCalendar.js';
 import { adminStats } from './adminStats.js';
 import { expense } from './expense.js';
 import { database } from './database.js';
+import { sales } from './sales.js';
+
+// 권한 체크 헬퍼 함수 (SU 역할 추가)
+function isAdminOrSu(role) {
+    return role === 'admin' || role === 'su';
+}
 
 // 회원가입 폼 표시 및 자동 로그인 처리
 window.addEventListener('DOMContentLoaded', function() {
@@ -39,11 +45,15 @@ window.addEventListener('DOMContentLoaded', function() {
         if (data.exists) {
             roleSelect.value = 'trainer';
             roleSelect.querySelector('option[value="admin"]').disabled = true;
+            const suOpt = roleSelect.querySelector('option[value="su"]');
+            if (suOpt) suOpt.disabled = true;
             roleSelect.querySelector('option[value="trainer"]').disabled = false;
             roleSelect.querySelector('option[value="center"]').disabled = false;
         } else {
             roleSelect.value = 'admin';
             roleSelect.querySelector('option[value="admin"]').disabled = false;
+            const suOpt = roleSelect.querySelector('option[value="su"]');
+            if (suOpt) suOpt.disabled = false;
             roleSelect.querySelector('option[value="trainer"]').disabled = false;
             roleSelect.querySelector('option[value="center"]').disabled = false;
         }
@@ -184,7 +194,7 @@ const adminTabs = [
     { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
-    { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
+    { label: '💹 매출', id: 'Sales', content: '<div id="sales-root"></div>' },
     { label: '💾 DB', id: 'Database', content: '<div id="database-root"></div>' }
 ];
 
@@ -192,6 +202,7 @@ const adminHamburgerItems = [
     { label: '🎯 상담', id: 'Trial', content: '<div id="trial-root"></div>' },
     { label: '🔄 재등록', id: 'Renew', content: '<div id="renew-root"></div>' },
     { label: '💰 지출', id: 'Expense', content: '<div id="expense-root"></div>' },
+    { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
     { label: '👥 트레이너', id: 'Trainer', content: '<div id="trainer-list-loading" style="text-align:center;padding:20px;color:#888;display:none;">불러오는 중...</div><div id="trainer-list"></div>' }
 ];
 const trainerTabs = [
@@ -204,7 +215,7 @@ const centerTabs = [
     { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
-    { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' }
+    { label: '💹 매출', id: 'Sales', content: '<div id="sales-root"></div>' }
 ];
 
 const centerHamburgerItems = [
@@ -218,11 +229,11 @@ function showMainSection(role, name) {
     // 관리자일 때만 secretBtn 표시 (센터관리자는 제외)
     const secretBtn = document.getElementById('secretBtn');
     if (secretBtn) {
-        secretBtn.style.display = role === 'admin' ? 'inline-block' : 'none';
+        secretBtn.style.display = isAdminOrSu(role) ? 'inline-block' : 'none';
     }
     
     let tabs;
-    if (role === 'admin') {
+    if (isAdminOrSu(role)) {
         tabs = adminTabs;
     } else if (role === 'center') {
         tabs = centerTabs;
@@ -266,7 +277,7 @@ function renderTabs(tabs) {
     // 햄버거 메뉴 버튼 추가
     const role = localStorage.getItem('role');
     let hamburgerItems = null;
-    if (role === 'admin' && adminHamburgerItems && adminHamburgerItems.length > 0) {
+    if (isAdminOrSu(role) && adminHamburgerItems && adminHamburgerItems.length > 0) {
         hamburgerItems = adminHamburgerItems;
     } else if (role === 'center' && centerHamburgerItems && centerHamburgerItems.length > 0) {
         hamburgerItems = centerHamburgerItems;
@@ -398,6 +409,8 @@ function renderTabContent(tabId, tabContent) {
         expense.render(tabContent.querySelector('#expense-root') || tabContent);
     } else if (tabId === 'Database') {
         database.render(tabContent.querySelector('#database-root') || tabContent);
+    } else if (tabId === 'Sales') {
+        sales.render(tabContent.querySelector('#sales-root') || tabContent);
     } else if (tabId === 'Trainer') {
         trainer.loadList();
     } else if (tabId === '내 회원 리스트' || tabId === '👤') {

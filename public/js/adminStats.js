@@ -32,7 +32,7 @@ function render(container) {
   container.innerHTML = `
     <div class="stats-container">
       <div class="stats-header">
-        <h3>세션 통계</h3>
+        <h3 id="stats-title" style="cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">세션 통계</h3>
         <div class="stats-controls">
           <div class="period-selector">
             <button class="period-btn ${currentPeriod === 'day' ? 'active' : ''}" data-period="day">일별</button>
@@ -55,6 +55,14 @@ function render(container) {
 
   // 이벤트 리스너 설정
   setupEventListeners(container);
+  
+  // 제목 클릭 시 새로고침
+  const statsTitle = container.querySelector('#stats-title');
+  if (statsTitle) {
+    statsTitle.addEventListener('click', () => {
+      loadStats();
+    });
+  }
   
   // 초기 데이터 로드
   loadStats();
