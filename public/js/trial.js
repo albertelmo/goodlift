@@ -33,7 +33,7 @@ function render(container) {
   container.innerHTML = `
     <div style="max-width:1200px;margin:0 auto;padding:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">신규 상담 현황</h3>
+        <h3 id="trial-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">신규 상담 현황</h3>
         <div style="display:flex;gap:12px;align-items:center;">
           <button id="trial-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">추가</button>
           <div class="date-navigation">
@@ -62,6 +62,10 @@ function render(container) {
   
   container.querySelector('#trial-add-btn').addEventListener('click', () => {
     showTrialAddModal();
+  });
+  
+  container.querySelector('#trial-title').addEventListener('click', () => {
+    loadTrialData(container);
   });
   
   // 초기 데이터 로드

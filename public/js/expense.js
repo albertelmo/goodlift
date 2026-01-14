@@ -52,7 +52,7 @@ function render(container) {
   container.innerHTML = `
     <div style="padding:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">💳 지출 내역 관리</h3>
+        <h3 id="expense-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">💳 지출 내역 관리</h3>
         <div class="date-navigation">
           <button id="expense-prev-btn" class="nav-btn">◀</button>
           <span id="expense-current-date" class="current-date"></span>
@@ -204,6 +204,14 @@ function setupEventListeners(container) {
   const nextBtn = document.getElementById('expense-next-btn');
   if (nextBtn) {
     nextBtn.onclick = () => navigateExpenseDate(1);
+  }
+  
+  // 제목 클릭 시 새로고침
+  const expenseTitle = document.getElementById('expense-title');
+  if (expenseTitle) {
+    expenseTitle.onclick = () => {
+      loadExpenses();
+    };
   }
 }
 
