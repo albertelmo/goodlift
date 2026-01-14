@@ -181,14 +181,18 @@ window.addEventListener('DOMContentLoaded', function() {
 });
 // 역할별 탭 및 내용 정의
 const adminTabs = [
-    { label: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
-    { label: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
-    { label: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
-    { label: 'Trial', content: '<div id="trial-root"></div>' },
-    { label: 'Renew', content: '<div id="renew-root"></div>' },
-    { label: 'Stat', content: '<div id="admin-stats-root"></div>' },
-    { label: 'Expense', content: '<div id="expense-root"></div>' },
-    { label: 'Database', content: '<div id="database-root"></div>' }
+    { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
+    { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
+    { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
+    { label: '💾 DB', id: 'Database', content: '<div id="database-root"></div>' }
+];
+
+const adminHamburgerItems = [
+    { label: '🎯 상담', id: 'Trial', content: '<div id="trial-root"></div>' },
+    { label: '🔄 재등록', id: 'Renew', content: '<div id="renew-root"></div>' },
+    { label: '💰 지출', id: 'Expense', content: '<div id="expense-root"></div>' },
+    { label: '👥 트레이너', id: 'Trainer', content: '<div id="trainer-list-loading" style="text-align:center;padding:20px;color:#888;display:none;">불러오는 중...</div><div id="trainer-list"></div>' }
 ];
 const trainerTabs = [
     { label: '📅', content: '<div id="session-calendar"></div>' },
@@ -197,11 +201,14 @@ const trainerTabs = [
 
 // 센터관리자용 탭 (Center, Trainer 탭 제외)
 const centerTabs = [
-    { label: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
-    { label: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
-    { label: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
-    { label: 'Trial', content: '<div id="trial-root"></div>' },
-    { label: 'Stat', content: '<div id="admin-stats-root"></div>' }
+    { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
+    { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
+    { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' }
+];
+
+const centerHamburgerItems = [
+    { label: '🎯 상담', id: 'Trial', content: '<div id="trial-root"></div>' }
 ];
 function showMainSection(role, name) {
     document.getElementById('authSection').style.display = 'none';
@@ -228,81 +235,174 @@ function renderTabs(tabs) {
     const tabBar = document.getElementById('tabBar');
     const tabContent = document.getElementById('tabContent');
     tabBar.innerHTML = '';
-    tabContent.innerHTML = tabs[0].content;
+    
+    // 첫 번째 탭의 컨텐츠 표시
+    const firstTab = tabs[0];
+    tabContent.innerHTML = firstTab.content;
+    renderTabContent(firstTab.id, tabContent);
+    
+    // 일반 탭 생성
     tabs.forEach((tab, idx) => {
         const btn = document.createElement('button');
         btn.textContent = tab.label;
         btn.className = idx === 0 ? 'active' : '';
         btn.onclick = function() {
-            Array.from(tabBar.children).forEach(b => b.classList.remove('active'));
+            // 사이드 패널 닫기
+            closeHamburgerMenu();
+            Array.from(tabBar.querySelectorAll('button')).forEach(b => {
+                if (!b.classList.contains('tab-hamburger-btn')) {
+                    b.classList.remove('active');
+                }
+            });
             btn.classList.add('active');
             tabContent.innerHTML = tab.content;
-            if (tab.label === 'Today') {
-                adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
-            }
-            if (tab.label === 'Week') {
-                adminWeekCalendar.render(document.getElementById('admin-week-calendar-root'));
-            }
-            if (tab.label === 'Member') {
-                member.renderAddForm(document.getElementById('member-add'));
-                member.renderList(document.getElementById('member-list'));
-            }
-            if (tab.label === 'Trial') {
-                trial.render(document.getElementById('trial-root'));
-            }
-            if (tab.label === 'Renew') {
-                renew.render(document.getElementById('renew-root'));
-            }
-            if (tab.label === '내 회원 리스트' || tab.label === '👤') {
-                const username = localStorage.getItem('username');
-                trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);
-            }
-            if (tab.label === '📅') {
-                trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
-            }
-            if (tab.label === 'Stat') {
-                adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
-            }
-            if (tab.label === 'Expense') {
-                expense.render(tabContent.querySelector('#expense-root') || tabContent);
-            }
-            if (tab.label === 'Database') {
-                database.render(tabContent.querySelector('#database-root') || tabContent);
-            }
+            renderTabContent(tab.id, tabContent);
         };
         tabBar.appendChild(btn);
     });
-    if (tabs[0].label === 'Today') {
+    
+    // 햄버거 메뉴 버튼 추가
+    const role = localStorage.getItem('role');
+    let hamburgerItems = null;
+    if (role === 'admin' && adminHamburgerItems && adminHamburgerItems.length > 0) {
+        hamburgerItems = adminHamburgerItems;
+    } else if (role === 'center' && centerHamburgerItems && centerHamburgerItems.length > 0) {
+        hamburgerItems = centerHamburgerItems;
+    }
+    
+    if (hamburgerItems) {
+        const hamburgerBtn = document.createElement('button');
+        hamburgerBtn.innerHTML = '☰';
+        hamburgerBtn.className = 'tab-hamburger-btn';
+        hamburgerBtn.onclick = function(e) {
+            e.stopPropagation();
+            toggleHamburgerMenu(hamburgerItems);
+        };
+        tabBar.appendChild(hamburgerBtn);
+        
+        // 사이드 패널 생성
+        createHamburgerSidePanel(hamburgerItems);
+    }
+    
+    // 첫 번째 탭 렌더링
+    renderTabContent(firstTab.id, tabContent);
+}
+
+// 햄버거 메뉴 사이드 패널 생성
+function createHamburgerSidePanel(items) {
+    // 기존 패널이 있으면 제거
+    const existingPanel = document.getElementById('hamburger-side-panel');
+    const existingBg = document.getElementById('hamburger-side-panel-bg');
+    if (existingPanel) existingPanel.remove();
+    if (existingBg) existingBg.remove();
+    
+    // 배경 오버레이
+    const bg = document.createElement('div');
+    bg.id = 'hamburger-side-panel-bg';
+    bg.className = 'hamburger-side-panel-bg';
+    bg.onclick = closeHamburgerMenu;
+    document.body.appendChild(bg);
+    
+    // 사이드 패널
+    const panel = document.createElement('div');
+    panel.id = 'hamburger-side-panel';
+    panel.className = 'hamburger-side-panel';
+    
+    const header = document.createElement('div');
+    header.className = 'hamburger-side-panel-header';
+    header.innerHTML = '<h3>⚙️ 운영</h3><button class="hamburger-close-btn">×</button>';
+    header.querySelector('.hamburger-close-btn').onclick = closeHamburgerMenu;
+    panel.appendChild(header);
+    
+    const menuList = document.createElement('div');
+    menuList.className = 'hamburger-side-panel-menu';
+    
+    items.forEach((item) => {
+        const menuItem = document.createElement('button');
+        menuItem.className = 'hamburger-menu-item';
+        menuItem.textContent = item.label;
+        menuItem.onclick = function() {
+            closeHamburgerMenu();
+            const tabContent = document.getElementById('tabContent');
+            tabContent.innerHTML = item.content;
+            renderTabContent(item.id, tabContent);
+            // 모든 탭 버튼 비활성화
+            Array.from(document.getElementById('tabBar').querySelectorAll('button')).forEach(b => {
+                if (!b.classList.contains('tab-hamburger-btn')) {
+                    b.classList.remove('active');
+                }
+            });
+        };
+        menuList.appendChild(menuItem);
+    });
+    
+    panel.appendChild(menuList);
+    document.body.appendChild(panel);
+}
+
+// 햄버거 메뉴 열기/닫기
+function toggleHamburgerMenu(items) {
+    const panel = document.getElementById('hamburger-side-panel');
+    const bg = document.getElementById('hamburger-side-panel-bg');
+    if (panel && bg) {
+        const isOpen = panel.classList.contains('open');
+        if (isOpen) {
+            closeHamburgerMenu();
+        } else {
+            openHamburgerMenu();
+        }
+    } else if (items) {
+        createHamburgerSidePanel(items);
+        openHamburgerMenu();
+    }
+}
+
+function openHamburgerMenu() {
+    const panel = document.getElementById('hamburger-side-panel');
+    const bg = document.getElementById('hamburger-side-panel-bg');
+    if (panel && bg) {
+        panel.classList.add('open');
+        bg.classList.add('open');
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeHamburgerMenu() {
+    const panel = document.getElementById('hamburger-side-panel');
+    const bg = document.getElementById('hamburger-side-panel-bg');
+    if (panel && bg) {
+        panel.classList.remove('open');
+        bg.classList.remove('open');
+        document.body.style.overflow = '';
+    }
+}
+
+// 탭 컨텐츠 렌더링 함수
+function renderTabContent(tabId, tabContent) {
+    if (tabId === 'Today') {
         adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
-    }
-    if (tabs[0].label === 'Week') {
+    } else if (tabId === 'Week') {
         adminWeekCalendar.render(document.getElementById('admin-week-calendar-root'));
-    }
-    if (tabs[0].label === 'Member') {
+    } else if (tabId === 'Member') {
         member.renderAddForm(document.getElementById('member-add'));
         member.renderList(document.getElementById('member-list'));
-    }
-    if (tabs[0].label === 'Trial') {
+    } else if (tabId === 'Trial') {
         trial.render(document.getElementById('trial-root'));
-    }
-    if (tabs[0].label === 'Renew') {
+    } else if (tabId === 'Renew') {
         renew.render(document.getElementById('renew-root'));
-    }
-    if (tabs[0].label === '내 회원 리스트' || tabs[0].label === '👤') {
+    } else if (tabId === 'Stat') {
+        adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
+    } else if (tabId === 'Expense') {
+        expense.render(tabContent.querySelector('#expense-root') || tabContent);
+    } else if (tabId === 'Database') {
+        database.render(tabContent.querySelector('#database-root') || tabContent);
+    } else if (tabId === 'Trainer') {
+        trainer.loadList();
+    } else if (tabId === '내 회원 리스트' || tabId === '👤') {
         const username = localStorage.getItem('username');
         trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);
-    }
-    if (tabs[0].label === '📅') {
+    } else if (tabId === '📅') {
         trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
-    }
-    if (tabs[0].label === 'Stat') {
-        adminStats.render(tabContent.querySelector('#admin-stats-root') || tabContent);
-    }
-    if (tabs[0].label === 'Expense') {
-        expense.render(tabContent.querySelector('#expense-root') || tabContent);
-    }
-    if (tabs[0].label === 'Database') {
-        database.render(tabContent.querySelector('#database-root') || tabContent);
     }
 }
 

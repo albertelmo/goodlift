@@ -137,9 +137,10 @@ button:hover, button:focus {
     border-radius: 8px 8px 0 0;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     position: relative;
-    overflow: hidden;
+    overflow: visible;
 }
-.tab-bar button {
+.tab-bar button,
+.tab-dropdown-container > button {
     flex: 1;
     padding: 12px 0 10px 0;
     border: none;
@@ -156,8 +157,10 @@ button:hover, button:focus {
     align-items: center;
     justify-content: center;
     height: 100%;
+    width: 100%;
 }
-.tab-bar button.active {
+.tab-bar button.active,
+.tab-dropdown-container > button.active {
     background: white;
     color: #1976d2;
     border-bottom: 2px solid #1976d2;
@@ -165,10 +168,124 @@ button:hover, button:focus {
     z-index: 2;
     font-weight: 700;
 }
-.tab-bar button:hover {
+.tab-bar button:hover,
+.tab-dropdown-container > button:hover {
     background: rgba(255,255,255,0.7);
     color: #1976d2;
     transform: translateY(-1px);
+}
+/* 햄버거 메뉴 버튼 */
+.tab-hamburger-btn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: 60px;
+    max-width: 70px;
+    font-size: 1.5rem;
+    padding: 12px 16px !important;
+}
+
+/* 햄버거 사이드 패널 */
+.hamburger-side-panel-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.hamburger-side-panel-bg.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+.hamburger-side-panel {
+    position: fixed;
+    top: 0;
+    right: -320px;
+    width: 300px;
+    height: 100%;
+    background: white;
+    box-shadow: -2px 0 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    transition: right 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.hamburger-side-panel.open {
+    right: 0;
+}
+
+.hamburger-side-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid #e0e0e0;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.hamburger-side-panel-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    color: #1976d2;
+    font-weight: 700;
+}
+
+.hamburger-close-btn {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.hamburger-close-btn:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #1976d2;
+}
+
+.hamburger-side-panel-menu {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 0;
+}
+
+.hamburger-menu-item {
+    width: 100%;
+    padding: 16px 20px;
+    border: none;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    font-size: 1.08rem;
+    font-weight: 600;
+    color: #666;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.2s, color 0.2s;
+    display: block;
+}
+
+.hamburger-menu-item:hover {
+    background: #f5f5f5;
+    color: #1976d2;
+}
+
+.hamburger-menu-item:last-child {
+    border-bottom: none;
 }
 
 .tab-content {
@@ -559,12 +676,32 @@ li, td, th {
         background: #888;
         border-radius: 2px;
     }
-    .tab-bar button {
-        flex: 0 0 auto;
-        min-width: 70px;
-        font-size: 0.9rem;
-        padding: 12px 12px 10px 12px;
+    .tab-bar button:not(.tab-hamburger-btn) {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: none;
+        font-size: 0.85rem;
+        padding: 10px 4px !important;
         white-space: nowrap;
+        width: auto;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .tab-hamburger-btn {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 55px !important;
+        max-width: 60px !important;
+        font-size: 1.3rem !important;
+        padding: 10px 8px !important;
+        height: 100% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
     }
     .tab-content {
         padding: 18px 6px;
