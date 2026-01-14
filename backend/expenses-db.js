@@ -23,7 +23,7 @@ const createExpensesTable = async () => {
         CREATE TABLE expenses (
           id SERIAL PRIMARY KEY,
           trainer VARCHAR(100) NOT NULL,
-          expense_type VARCHAR(20) NOT NULL CHECK (expense_type IN ('meal', 'purchase')),
+          expense_type VARCHAR(20) NOT NULL CHECK (expense_type IN ('meal', 'purchase', 'personal')),
           amount INTEGER NOT NULL CHECK (amount >= 0),
           datetime TIMESTAMP NOT NULL,
           participant_trainers TEXT[],
@@ -60,13 +60,43 @@ const addExpenseColumnsIfNotExists = async () => {
     if (checkExpenseTypeResult.rows.length === 0) {
       await pool.query(`
         ALTER TABLE expenses 
-        ADD COLUMN expense_type VARCHAR(20) CHECK (expense_type IN ('meal', 'purchase'))
+        ADD COLUMN expense_type VARCHAR(20) CHECK (expense_type IN ('meal', 'purchase', 'personal'))
       `);
       // 기존 데이터는 모두 'meal'로 설정
       await pool.query(`UPDATE expenses SET expense_type = 'meal' WHERE expense_type IS NULL`);
       // NOT NULL 제약조건 추가
       await pool.query(`ALTER TABLE expenses ALTER COLUMN expense_type SET NOT NULL`);
       console.log('[PostgreSQL] expense_type 컬럼이 추가되었습니다.');
+    } else {
+      // 기존 테이블의 CHECK 제약조건 업데이트 (personal 추가)
+      try {
+        // 기존 CHECK 제약조건 찾기
+        const constraintQuery = `
+          SELECT constraint_name 
+          FROM information_schema.table_constraints 
+          WHERE table_schema = 'public' 
+            AND table_name = 'expenses' 
+            AND constraint_type = 'CHECK'
+            AND constraint_name LIKE '%expense_type%'
+        `;
+        const constraintResult = await pool.query(constraintQuery);
+        
+        if (constraintResult.rows.length > 0) {
+          const constraintName = constraintResult.rows[0].constraint_name;
+          // 기존 제약조건 삭제
+          await pool.query(`ALTER TABLE expenses DROP CONSTRAINT IF EXISTS ${constraintName}`);
+          // 새로운 제약조건 추가 (personal 포함)
+          await pool.query(`
+            ALTER TABLE expenses 
+            ADD CONSTRAINT ${constraintName} 
+            CHECK (expense_type IN ('meal', 'purchase', 'personal'))
+          `);
+          console.log('[PostgreSQL] expense_type CHECK 제약조건이 업데이트되었습니다 (personal 추가).');
+        }
+      } catch (error) {
+        // 제약조건 업데이트 실패 시 무시 (이미 올바른 제약조건일 수 있음)
+        console.log('[PostgreSQL] expense_type CHECK 제약조건 업데이트 시도 (이미 올바를 수 있음):', error.message);
+      }
     }
     
     // purchase_item 컬럼 확인 및 추가
@@ -166,7 +196,7 @@ const addExpense = async (expenseData) => {
         expenseData.datetime,
         expenseData.participantTrainers || []
       ];
-    } else {
+    } else if (expenseType === 'purchase') {
       // 구매: purchase_item, center 필수
       query = `
         INSERT INTO expenses (trainer, expense_type, amount, datetime, purchase_item, center)
@@ -180,6 +210,21 @@ const addExpense = async (expenseData) => {
         expenseData.datetime,
         expenseData.purchaseItem,
         expenseData.center
+      ];
+    } else {
+      // 개인지출: purchase_item 필드에 지출내역 저장, center 필수
+      query = `
+        INSERT INTO expenses (trainer, expense_type, amount, datetime, purchase_item, center)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at
+      `;
+      values = [
+        expenseData.trainer,
+        expenseType,
+        expenseData.amount,
+        expenseData.datetime,
+        expenseData.personalItem || null,
+        expenseData.center || null
       ];
     }
     

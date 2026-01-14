@@ -258,6 +258,10 @@
               <input type="radio" name="expense-type" value="purchase" id="expense-type-purchase" style="width:18px;height:18px;cursor:pointer;">
               <span style="font-size:0.95rem;">구매</span>
             </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;flex:none;">
+              <input type="radio" name="expense-type" value="personal" id="expense-type-personal" style="width:18px;height:18px;cursor:pointer;">
+              <span style="font-size:0.95rem;">개인지출</span>
+            </label>
           </div>
         </div>
         <div class="form-row expense-form-row">
@@ -267,6 +271,10 @@
         <div id="expense-purchase-item-row" class="form-row expense-form-row" style="display:none;">
           <label for="expense-purchase-item">구매물품 *</label>
           <input type="text" id="expense-purchase-item" name="purchase-item" placeholder="구매물품명을 입력하세요">
+        </div>
+        <div id="expense-personal-item-row" class="form-row expense-form-row" style="display:none;">
+          <label for="expense-personal-item">지출내역 *</label>
+          <input type="text" id="expense-personal-item" name="personal-item" placeholder="지출내역을 입력하세요">
         </div>
         <div class="form-row expense-form-row">
           <label for="expense-amount">금액 *</label>
@@ -279,6 +287,12 @@
         <div id="expense-center-row" class="form-row expense-form-row" style="display:none;">
           <label for="expense-center">센터 *</label>
           <select id="expense-center" name="center" style="flex:1;min-width:0;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:0.95rem;">
+            <option value="">센터를 선택하세요</option>
+          </select>
+        </div>
+        <div id="expense-personal-center-row" class="form-row expense-form-row" style="display:none;">
+          <label for="expense-personal-center">센터 *</label>
+          <select id="expense-personal-center" name="personal-center" style="flex:1;min-width:0;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:0.95rem;">
             <option value="">센터를 선택하세요</option>
           </select>
         </div>

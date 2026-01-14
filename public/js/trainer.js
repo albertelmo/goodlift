@@ -998,10 +998,14 @@ async function showExpenseAddModal(username) {
     const datetimeInput = document.getElementById('expense-datetime');
     const expenseTypeMeal = document.getElementById('expense-type-meal');
     const expenseTypePurchase = document.getElementById('expense-type-purchase');
+    const expenseTypePersonal = document.getElementById('expense-type-personal');
     const purchaseItemRow = document.getElementById('expense-purchase-item-row');
+    const personalItemRow = document.getElementById('expense-personal-item-row');
     const trainersRow = document.getElementById('expense-trainers-row');
     const centerRow = document.getElementById('expense-center-row');
+    const personalCenterRow = document.getElementById('expense-personal-center-row');
     const centerSelect = document.getElementById('expense-center');
+    const personalCenterSelect = document.getElementById('expense-personal-center');
     
     // 세션 추가 버튼들 숨기기 (모달이 열렸을 때)
     const sessionAddBtn = document.getElementById('tmc-add-btn');
@@ -1036,7 +1040,9 @@ async function showExpenseAddModal(username) {
     // 입력 필드 초기화
     document.getElementById('expense-amount').value = '';
     document.getElementById('expense-purchase-item').value = '';
+    document.getElementById('expense-personal-item').value = '';
     centerSelect.value = '';
+    personalCenterSelect.value = '';
     
     // 금액 입력 필드에 콤마 포맷팅 추가
     const amountInput = document.getElementById('expense-amount');
@@ -1070,25 +1076,47 @@ async function showExpenseAddModal(username) {
     // 지출 유형 변경 이벤트
     expenseTypeMeal.onchange = updateExpenseTypeFields;
     expenseTypePurchase.onchange = updateExpenseTypeFields;
+    expenseTypePersonal.onchange = updateExpenseTypeFields;
     
     // 지출 유형에 따른 필드 표시/숨김
     function updateExpenseTypeFields() {
         const isMeal = expenseTypeMeal.checked;
+        const isPurchase = expenseTypePurchase.checked;
+        const isPersonal = expenseTypePersonal.checked;
         
         if (isMeal) {
-            // 식대: 트레이너 목록 표시, 구매물품/센터 숨김
+            // 식대: 트레이너 목록 표시, 구매물품/센터/본인지출 필드 숨김
             purchaseItemRow.style.display = 'none';
+            personalItemRow.style.display = 'none';
             trainersRow.style.display = 'flex';
             centerRow.style.display = 'none';
+            personalCenterRow.style.display = 'none';
             document.getElementById('expense-purchase-item').removeAttribute('required');
+            document.getElementById('expense-personal-item').removeAttribute('required');
             centerSelect.removeAttribute('required');
-        } else {
-            // 구매: 구매물품/센터 표시, 트레이너 목록 숨김
+            personalCenterSelect.removeAttribute('required');
+        } else if (isPurchase) {
+            // 구매: 구매물품/센터 표시, 트레이너 목록/본인지출 필드 숨김
             purchaseItemRow.style.display = 'flex';
+            personalItemRow.style.display = 'none';
             trainersRow.style.display = 'none';
             centerRow.style.display = 'flex';
+            personalCenterRow.style.display = 'none';
             document.getElementById('expense-purchase-item').setAttribute('required', 'required');
+            document.getElementById('expense-personal-item').removeAttribute('required');
             centerSelect.setAttribute('required', 'required');
+            personalCenterSelect.removeAttribute('required');
+        } else if (isPersonal) {
+            // 개인지출: 지출내역/센터 표시, 다른 필드 숨김
+            purchaseItemRow.style.display = 'none';
+            personalItemRow.style.display = 'flex';
+            trainersRow.style.display = 'none';
+            centerRow.style.display = 'none';
+            personalCenterRow.style.display = 'flex';
+            document.getElementById('expense-purchase-item').removeAttribute('required');
+            document.getElementById('expense-personal-item').setAttribute('required', 'required');
+            centerSelect.removeAttribute('required');
+            personalCenterSelect.setAttribute('required', 'required');
         }
     }
     
@@ -1120,7 +1148,7 @@ async function showExpenseAddModal(username) {
         trainersListDiv.innerHTML = '<div style="color:#d32f2f;">트레이너 목록을 불러오지 못했습니다.</div>';
     }
     
-    // 센터 목록 로드
+    // 센터 목록 로드 (구매용)
     try {
         const res = await fetch('/api/centers');
         const centers = await res.json();
@@ -1137,11 +1165,38 @@ async function showExpenseAddModal(username) {
         centerSelect.innerHTML = '<option value="">센터 목록을 불러오지 못했습니다.</option>';
     }
     
+    // 센터 목록 로드 (본인지출용)
+    try {
+        const res = await fetch('/api/centers');
+        const centers = await res.json();
+        
+        personalCenterSelect.innerHTML = '<option value="">센터를 선택하세요</option>';
+        centers.forEach(center => {
+            const option = document.createElement('option');
+            option.value = center.name;
+            option.textContent = center.name;
+            personalCenterSelect.appendChild(option);
+        });
+    } catch (error) {
+        console.error('센터 목록 로드 오류:', error);
+        personalCenterSelect.innerHTML = '<option value="">센터 목록을 불러오지 못했습니다.</option>';
+    }
+    
     // 폼 제출 이벤트
     form.onsubmit = async (e) => {
         e.preventDefault();
         
-        const expenseType = expenseTypeMeal.checked ? 'meal' : 'purchase';
+        let expenseType;
+        if (expenseTypeMeal.checked) {
+            expenseType = 'meal';
+        } else if (expenseTypePurchase.checked) {
+            expenseType = 'purchase';
+        } else if (expenseTypePersonal.checked) {
+            expenseType = 'personal';
+        } else {
+            resultDiv.textContent = '지출 유형을 선택해주세요.';
+            return;
+        }
         const datetime = datetimeInput.value;
         // 금액에서 콤마 제거 후 숫자로 변환
         const amountValue = document.getElementById('expense-amount').value.replace(/,/g, '');
@@ -1174,7 +1229,7 @@ async function showExpenseAddModal(username) {
             }
             const participantTrainers = Array.from(checkboxes).map(cb => cb.value);
             requestBody.participantTrainers = participantTrainers;
-        } else {
+        } else if (expenseType === 'purchase') {
             // 구매: 구매물품, 센터 필수
             const purchaseItem = document.getElementById('expense-purchase-item').value.trim();
             const center = centerSelect.value;
@@ -1191,6 +1246,23 @@ async function showExpenseAddModal(username) {
             
             requestBody.purchaseItem = purchaseItem;
             requestBody.center = center;
+        } else if (expenseType === 'personal') {
+            // 개인지출: 지출내역, 센터 필수
+            const personalItem = document.getElementById('expense-personal-item').value.trim();
+            const personalCenter = personalCenterSelect.value;
+            
+            if (!personalItem) {
+                resultDiv.textContent = '지출내역을 입력해주세요.';
+                return;
+            }
+            
+            if (!personalCenter) {
+                resultDiv.textContent = '센터를 선택해주세요.';
+                return;
+            }
+            
+            requestBody.personalItem = personalItem;
+            requestBody.center = personalCenter;
         }
         
         // API 호출
@@ -1253,9 +1325,12 @@ function closeExpenseAddModal() {
     // 지출 유형 기본값으로 리셋
     document.getElementById('expense-type-meal').checked = true;
     document.getElementById('expense-type-purchase').checked = false;
+    document.getElementById('expense-type-personal').checked = false;
     document.getElementById('expense-purchase-item-row').style.display = 'none';
+    document.getElementById('expense-personal-item-row').style.display = 'none';
     document.getElementById('expense-trainers-row').style.display = 'flex';
     document.getElementById('expense-center-row').style.display = 'none';
+    document.getElementById('expense-personal-center-row').style.display = 'none';
     
     // 세션 추가 버튼들 다시 표시 (모달이 닫혔을 때)
     const sessionAddBtn = document.getElementById('tmc-add-btn');

@@ -3087,8 +3087,8 @@ app.post('/api/expenses', async (req, res) => {
         
         // 지출 유형 검증
         const type = expenseType || 'meal'; // 기본값: meal
-        if (type !== 'meal' && type !== 'purchase') {
-            return res.status(400).json({ message: '지출 유형은 meal 또는 purchase여야 합니다.' });
+        if (type !== 'meal' && type !== 'purchase' && type !== 'personal') {
+            return res.status(400).json({ message: '지출 유형은 meal, purchase 또는 personal이어야 합니다.' });
         }
         
         // 금액 검증
@@ -3103,10 +3103,19 @@ app.post('/api/expenses', async (req, res) => {
             if (!participantTrainers || !Array.isArray(participantTrainers) || participantTrainers.length === 0) {
                 return res.status(400).json({ message: '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.' });
             }
-        } else {
+        } else if (type === 'purchase') {
             // 구매: 구매물품, 센터 필수
             if (!purchaseItem || !purchaseItem.trim()) {
                 return res.status(400).json({ message: '구매물품을 입력해주세요.' });
+            }
+            if (!center || !center.trim()) {
+                return res.status(400).json({ message: '센터를 선택해주세요.' });
+            }
+        } else if (type === 'personal') {
+            // 개인지출: 지출내역(personalItem), 센터 필수
+            const personalItem = req.body.personalItem;
+            if (!personalItem || !personalItem.trim()) {
+                return res.status(400).json({ message: '지출내역을 입력해주세요.' });
             }
             if (!center || !center.trim()) {
                 return res.status(400).json({ message: '센터를 선택해주세요.' });
@@ -3140,8 +3149,11 @@ app.post('/api/expenses', async (req, res) => {
         
         if (type === 'meal') {
             expenseData.participantTrainers = participantTrainers;
-        } else {
+        } else if (type === 'purchase') {
             expenseData.purchaseItem = purchaseItem.trim();
+            expenseData.center = center.trim();
+        } else if (type === 'personal') {
+            expenseData.personalItem = req.body.personalItem ? req.body.personalItem.trim() : null;
             expenseData.center = center.trim();
         }
         
