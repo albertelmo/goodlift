@@ -19,24 +19,76 @@ function escapeHtml(str) {
 }
 
 function formatNumber(num) {
-  return String(num || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const isNegative = num < 0;
+  const absNum = Math.abs(num || 0);
+  const formatted = String(absNum).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return isNegative ? '-' + formatted : formatted;
 }
 
-// 금액 입력 필드 포맷팅 함수 (천 단위 구분자 추가)
+// 회원권에서 숫자 추출 (예: "10" -> 10, "-10" -> -10)
+// 숫자 앞이나 뒤에 문자가 있는 경우 (예: "10회권", "태닝10회")는 0 반환
+function extractSessionCount(membership) {
+  if (!membership) return 0;
+  const str = String(membership).trim();
+  
+  // 숫자만 있는지 확인 (음수 기호 포함, 앞뒤 공백 제거 후)
+  // 정규식: 음수 기호(선택) + 숫자만 + 끝
+  const isOnlyNumber = /^-?\d+$/.test(str);
+  
+  if (!isOnlyNumber) {
+    return 0; // 숫자만 있지 않으면 제외
+  }
+  
+  return parseInt(str);
+}
+
+// 결제방법별 색상 반환
+function getPaymentMethodColor(paymentMethod) {
+  const colors = {
+    '카드': '#1976d2',      // 파란색
+    '계좌이체': '#4caf50',   // 초록색
+    '현금': '#ff9800',      // 주황색
+    '매니저': '#9c27b0',    // 보라색
+    '환불': '#d32f2f'       // 빨간색
+  };
+  return colors[paymentMethod] || '#495057'; // 기본값: 회색
+}
+
+// 금액 입력 필드 포맷팅 함수 (천 단위 구분자 추가, 마이너스 허용)
 function formatAmountInput(input) {
-  // 숫자만 추출
-  const value = input.value.replace(/[^\d]/g, '');
+  // 마이너스 기호와 숫자만 추출
+  let value = input.value.replace(/[^\d-]/g, '');
+  // 마이너스 기호는 맨 앞에만 허용
+  if (value.includes('-')) {
+    value = '-' + value.replace(/-/g, '');
+  }
   // 천 단위 구분자 추가
-  if (value) {
-    input.value = parseInt(value).toLocaleString('ko-KR');
+  if (value && value !== '-') {
+    const isNegative = value.startsWith('-');
+    const numStr = isNegative ? value.slice(1) : value;
+    if (numStr) {
+      const num = parseInt(numStr);
+      if (!isNaN(num)) {
+        input.value = (isNegative ? '-' : '') + num.toLocaleString('ko-KR');
+      } else {
+        input.value = isNegative ? '-' : '';
+      }
+    } else {
+      input.value = isNegative ? '-' : '';
+    }
   } else {
-    input.value = '';
+    input.value = value;
   }
 }
 
-// 금액 문자열을 숫자로 변환 (쉼표 제거)
+// 금액 문자열을 숫자로 변환 (쉼표 제거, 마이너스 허용)
 function parseAmount(str) {
-  return parseInt(str.replace(/[^\d]/g, '')) || 0;
+  if (!str) return 0;
+  // 마이너스 기호와 숫자만 추출
+  const isNegative = str.includes('-');
+  const numStr = str.replace(/[^\d]/g, '');
+  const num = parseInt(numStr) || 0;
+  return isNegative ? -num : num;
 }
 
 function getYearMonth() {
@@ -56,7 +108,10 @@ function render(root) {
   root.innerHTML = `
     <div style="padding:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
-        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">💹 매출</h3>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">💹 매출</h3>
+          <button id="sales-search-btn" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;">🔍 검색</button>
+        </div>
         <div style="display:flex;align-items:center;gap:10px;position:relative;">
           <button id="sales-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;font-weight:600;">추가</button>
           <button id="sales-month-prev" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:4px 10px;border-radius:6px;cursor:pointer;">◀</button>
@@ -119,10 +174,37 @@ function render(root) {
 
       <div style="background:#fff;border:1px solid #eee;border-radius:8px;padding:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
-          <div style="font-weight:600;color:#333;font-size:0.9rem;">매출 내역</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="font-weight:600;color:#333;font-size:0.9rem;">매출 내역</div>
+            <div id="sales-year-month-display" style="color:#666;font-size:0.85rem;"></div>
+          </div>
           <div style="display:flex;align-items:center;gap:8px;">
             <div id="sales-total" style="color:#666;font-size:0.8rem;"></div>
             <input id="sales-search" placeholder="회원명 검색" style="padding:5px 8px;border:1px solid #ddd;border-radius:6px;min-width:180px;font-size:0.85rem;" />
+          </div>
+        </div>
+        
+        <!-- 매출 요약 영역 -->
+        <div id="sales-summary" style="background:#f8f9fa;padding:12px;border-radius:6px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap;font-size:0.85rem;">
+          <div>
+            <div style="color:#666;margin-bottom:4px;font-size:0.75rem;">매출 수업수</div>
+            <div id="sales-total-sessions" style="font-weight:600;color:#333;">0회</div>
+          </div>
+          <div>
+            <div style="color:#666;margin-bottom:4px;font-size:0.75rem;">신규회원 수업수</div>
+            <div id="sales-new-sessions" style="font-weight:600;color:#1976d2;">0회</div>
+          </div>
+          <div>
+            <div style="color:#666;margin-bottom:4px;font-size:0.75rem;">전체 매출액</div>
+            <div id="sales-total-amount" style="font-weight:600;color:#333;">0원</div>
+          </div>
+          <div>
+            <div style="color:#666;margin-bottom:4px;font-size:0.75rem;">신규회원 매출액</div>
+            <div id="sales-new-amount" style="font-weight:600;color:#1976d2;">0원</div>
+          </div>
+          <div>
+            <div style="color:#666;margin-bottom:4px;font-size:0.75rem;">수업단가</div>
+            <div id="sales-session-price" style="font-weight:600;color:#4caf50;">0원</div>
           </div>
         </div>
         <div id="sales-detail-loading" style="text-align:center;color:#888;padding:30px;font-size:0.85rem;">불러오는 중...</div>
@@ -306,6 +388,12 @@ function render(root) {
   }
 
   loadMonthDetail(root, state.yearMonth);
+  
+  // 검색 버튼 클릭 이벤트
+  const searchBtn = root.querySelector('#sales-search-btn');
+  if (searchBtn) {
+    searchBtn.onclick = () => openSalesSearchModal(root);
+  }
 }
 
 async function loadMonthDetail(root, yearMonth) {
@@ -315,6 +403,16 @@ async function loadMonthDetail(root, yearMonth) {
   const tbody = root.querySelector('#sales-tbody');
   const totalEl = root.querySelector('#sales-total');
   const searchEl = root.querySelector('#sales-search');
+  const yearMonthDisplayEl = root.querySelector('#sales-year-month-display');
+  
+  // 연월 표시 (YY.MM 형식)
+  if (yearMonthDisplayEl && yearMonth) {
+    const [year, month] = yearMonth.split('-');
+    if (year && month) {
+      const shortYear = String(year).slice(-2); // 마지막 2자리
+      yearMonthDisplayEl.textContent = `(${shortYear}.${month})`;
+    }
+  }
 
   loadingEl.style.display = 'block';
   emptyEl.style.display = 'none';
@@ -334,7 +432,48 @@ async function loadMonthDetail(root, yearMonth) {
           )
         : rows;
 
-      totalEl.textContent = `총 ${filtered.length}건 | 합계: ${formatNumber(summary.totalAmount)}원`;
+      // 매니저 결제 금액 계산
+      const managerTotal = filtered
+        .filter(r => r.paymentMethod === '매니저')
+        .reduce((sum, r) => sum + (r.amount || 0), 0);
+      
+      const managerText = managerTotal !== 0 ? ` (매니저:${formatNumber(managerTotal)}원)` : '';
+      totalEl.textContent = `총 ${filtered.length}건 | 합계: ${formatNumber(summary.totalAmount)}원${managerText}`;
+      
+      // 매니저 합계 클릭 이벤트 추가
+      if (managerTotal !== 0) {
+        totalEl.innerHTML = `총 ${filtered.length}건 | 합계: ${formatNumber(summary.totalAmount)}원 <span id="manager-total-click" style="color:#1976d2;cursor:pointer;text-decoration:underline;" title="클릭하여 상세보기">(매니저:${formatNumber(managerTotal)}원)</span>`;
+        const managerClickEl = root.querySelector('#manager-total-click');
+        if (managerClickEl) {
+          managerClickEl.onclick = () => showManagerDetailModal(root, yearMonth, managerTotal);
+        }
+      }
+      
+      // 매출 요약 계산
+      const totalSessions = filtered.reduce((sum, r) => sum + extractSessionCount(r.membership), 0);
+      const newMemberRows = filtered.filter(r => r.isNew === true);
+      const newSessions = newMemberRows.reduce((sum, r) => sum + extractSessionCount(r.membership), 0);
+      const newAmount = newMemberRows.reduce((sum, r) => sum + (r.amount || 0), 0);
+      const sessionPrice = totalSessions > 0 ? Math.round(summary.totalAmount / totalSessions) : 0;
+      
+      // 신규회원 수업수 비율 계산
+      const newSessionsPercent = totalSessions > 0 ? Math.round((newSessions / totalSessions) * 100) : 0;
+      
+      // 신규회원 매출액 비율 계산
+      const newAmountPercent = summary.totalAmount > 0 ? Math.round((newAmount / summary.totalAmount) * 100) : 0;
+      
+      // 요약 영역 업데이트
+      const totalSessionsEl = root.querySelector('#sales-total-sessions');
+      const newSessionsEl = root.querySelector('#sales-new-sessions');
+      const totalAmountEl = root.querySelector('#sales-total-amount');
+      const newAmountEl = root.querySelector('#sales-new-amount');
+      const sessionPriceEl = root.querySelector('#sales-session-price');
+      
+      if (totalSessionsEl) totalSessionsEl.textContent = `${formatNumber(totalSessions)}회`;
+      if (newSessionsEl) newSessionsEl.textContent = `${formatNumber(newSessions)}회 (${newSessionsPercent}%)`;
+      if (totalAmountEl) totalAmountEl.textContent = `${formatNumber(summary.totalAmount)}원`;
+      if (newAmountEl) newAmountEl.textContent = `${formatNumber(newAmount)}원 (${newAmountPercent}%)`;
+      if (sessionPriceEl) sessionPriceEl.textContent = `${formatNumber(sessionPrice)}원`;
       tbody.innerHTML = filtered.map((r, idx) => {
         // 날짜 처리: 타임존 변환 방지
         let dateStr = '';
@@ -356,6 +495,7 @@ async function loadMonthDetail(root, yearMonth) {
         }
         const isNewText = r.isNew ? 'O' : '';
         const rowBg = idx % 2 === 0 ? '#fff' : '#f8f9fa';
+        
         // 데이터를 data 속성에 JSON으로 저장
         const rowData = JSON.stringify({
           id: r.id,
@@ -374,7 +514,7 @@ async function loadMonthDetail(root, yearMonth) {
             <td style="padding:5px 6px;white-space:nowrap;color:#212529;font-weight:500;font-size:0.8rem;">${escapeHtml(r.memberName || '')}</td>
             <td style="padding:5px 6px;text-align:center;white-space:nowrap;color:#28a745;font-weight:600;font-size:0.8rem;">${escapeHtml(isNewText)}</td>
             <td style="padding:5px 6px;color:#495057;font-size:0.8rem;">${escapeHtml(r.membership || '')}</td>
-            <td style="padding:5px 6px;white-space:nowrap;color:#495057;font-size:0.8rem;">${escapeHtml(r.paymentMethod || '')}</td>
+            <td style="padding:5px 6px;white-space:nowrap;color:${getPaymentMethodColor(r.paymentMethod)};font-weight:600;font-size:0.8rem;">${escapeHtml(r.paymentMethod || '')}</td>
             <td style="padding:5px 6px;text-align:right;white-space:nowrap;font-weight:600;color:${r.amount < 0 ? '#dc3545' : '#212529'};font-size:0.8rem;">
               ${r.amount < 0 ? '-' : ''}${formatNumber(Math.abs(r.amount))}원
             </td>
@@ -416,6 +556,427 @@ async function loadMonthDetail(root, yearMonth) {
     detailEl.style.display = 'none';
     console.error('[Sales] 월별 상세 로드 오류:', e);
   }
+}
+
+// 매출 검색 모달 열기
+function openSalesSearchModal(root) {
+  const modal = document.getElementById('sales-search-modal');
+  const modalBg = document.getElementById('sales-search-modal-bg');
+  const form = document.getElementById('sales-search-form');
+  const cancelBtn = document.getElementById('sales-search-cancel-btn');
+  const resultEl = document.getElementById('sales-search-result');
+  
+  if (!modal || !modalBg || !form) {
+    console.error('[Sales] 검색 모달 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 모달 표시
+  modal.style.display = 'block';
+  modalBg.style.display = 'block';
+  
+  // 기본값 설정 (현재 월의 첫날과 마지막날)
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1;
+  const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const lastDayStr = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  
+  const allCheckbox = document.getElementById('sales-search-all');
+  const startDateInput = document.getElementById('sales-search-start-date');
+  const endDateInput = document.getElementById('sales-search-end-date');
+  const memberNameInput = document.getElementById('sales-search-member-name');
+  
+  allCheckbox.checked = false;
+  startDateInput.value = firstDay;
+  endDateInput.value = lastDayStr;
+  memberNameInput.value = '';
+  resultEl.textContent = '';
+  
+  // 전체 체크박스 변경 이벤트
+  allCheckbox.onchange = (e) => {
+    const isAll = e.target.checked;
+    startDateInput.disabled = isAll;
+    endDateInput.disabled = isAll;
+    if (isAll) {
+      startDateInput.style.opacity = '0.5';
+      endDateInput.style.opacity = '0.5';
+    } else {
+      startDateInput.style.opacity = '1';
+      endDateInput.style.opacity = '1';
+    }
+  };
+  
+  // 취소 버튼
+  if (cancelBtn) {
+    cancelBtn.onclick = () => {
+      modal.style.display = 'none';
+      modalBg.style.display = 'none';
+    };
+  }
+  
+  // 배경 클릭 시 닫기
+  modalBg.onclick = (e) => {
+    if (e.target === modalBg) {
+      modal.style.display = 'none';
+      modalBg.style.display = 'none';
+    }
+  };
+  
+  // 폼 제출
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    
+    const isAll = allCheckbox.checked;
+    const startDate = startDateInput.value;
+    const endDate = endDateInput.value;
+    const memberName = memberNameInput.value.trim();
+    
+    // 전체가 아닌 경우 기간 검증
+    if (!isAll) {
+      if (!startDate || !endDate) {
+        resultEl.style.color = '#d32f2f';
+        resultEl.textContent = '시작일과 종료일을 입력해주세요.';
+        return;
+      }
+      
+      if (startDate > endDate) {
+        resultEl.style.color = '#d32f2f';
+        resultEl.textContent = '시작일이 종료일보다 늦을 수 없습니다.';
+        return;
+      }
+    }
+    
+    resultEl.style.color = '#1976d2';
+    resultEl.textContent = '검색 중...';
+    
+    try {
+      // API 호출
+      let url = '/api/sales';
+      const params = [];
+      if (!isAll) {
+        params.push(`startDate=${encodeURIComponent(startDate)}`);
+        params.push(`endDate=${encodeURIComponent(endDate)}`);
+      }
+      if (memberName) {
+        params.push(`memberName=${encodeURIComponent(memberName)}`);
+      }
+      if (params.length > 0) {
+        url += '?' + params.join('&');
+      }
+      
+      const resp = await fetch(url);
+      const data = await resp.json();
+      
+      if (resp.ok) {
+        // 모달 닫기
+        modal.style.display = 'none';
+        modalBg.style.display = 'none';
+        
+        // 검색 결과 표시
+        loadSearchResults(root, data, isAll ? null : startDate, isAll ? null : endDate, memberName, isAll);
+      } else {
+        resultEl.style.color = '#d32f2f';
+        resultEl.textContent = data.message || '검색에 실패했습니다.';
+      }
+    } catch (error) {
+      console.error('[Sales] 검색 오류:', error);
+      resultEl.style.color = '#d32f2f';
+      resultEl.textContent = '검색 중 오류가 발생했습니다.';
+    }
+  };
+}
+
+// 검색 결과 표시
+async function loadSearchResults(root, data, startDate, endDate, memberName, isAll = false) {
+  const loadingEl = root.querySelector('#sales-detail-loading');
+  const emptyEl = root.querySelector('#sales-detail-empty');
+  const detailEl = root.querySelector('#sales-detail');
+  const tbody = root.querySelector('#sales-tbody');
+  const totalEl = root.querySelector('#sales-total');
+  const searchEl = root.querySelector('#sales-search');
+  const yearMonthDisplayEl = root.querySelector('#sales-year-month-display');
+  
+  // 검색 조건 표시
+  if (startDate && endDate) {
+    const dateRange = `${startDate} ~ ${endDate}`;
+    if (memberName) {
+      yearMonthDisplayEl.textContent = `(${dateRange}, ${memberName})`;
+    } else {
+      yearMonthDisplayEl.textContent = `(${dateRange})`;
+    }
+  } else {
+    if (memberName) {
+      yearMonthDisplayEl.textContent = `(전체, ${memberName})`;
+    } else {
+      yearMonthDisplayEl.textContent = `(전체)`;
+    }
+  }
+  
+  loadingEl.style.display = 'none';
+  emptyEl.style.display = 'none';
+  detailEl.style.display = 'block';
+  
+  const rows = (data && data.sales) ? data.sales : [];
+  const summary = data.summary || {};
+  
+  const renderRows = (filterText = '') => {
+    if (!tbody) {
+      console.error('[Sales] tbody 요소를 찾을 수 없습니다.');
+      return;
+    }
+    
+    const q = filterText.trim().toLowerCase();
+    const filtered = q
+      ? rows.filter(r =>
+          String(r.memberName || '').toLowerCase().includes(q)
+        )
+      : rows;
+
+    // 매니저 결제 금액 계산
+    const managerTotal = filtered
+      .filter(r => r.paymentMethod === '매니저')
+      .reduce((sum, r) => sum + (r.amount || 0), 0);
+    
+    const managerText = managerTotal !== 0 ? ` (매니저:${formatNumber(managerTotal)}원)` : '';
+    totalEl.textContent = `총 ${filtered.length}건 | 합계: ${formatNumber(summary.totalAmount)}원${managerText}`;
+    
+    // 매니저 합계 클릭 이벤트 추가
+    if (managerTotal !== 0) {
+      totalEl.innerHTML = `총 ${filtered.length}건 | 합계: ${formatNumber(summary.totalAmount)}원 <span id="manager-total-click" style="color:#1976d2;cursor:pointer;text-decoration:underline;" title="클릭하여 상세보기">(매니저:${formatNumber(managerTotal)}원)</span>`;
+      const managerClickEl = root.querySelector('#manager-total-click');
+      if (managerClickEl) {
+        // yearMonth 계산 (startDate가 있으면 사용, 없으면 현재 날짜 기준)
+        let yearMonth;
+        if (startDate) {
+          yearMonth = `${startDate.split('-')[0]}-${startDate.split('-')[1]}`;
+        } else {
+          const today = new Date();
+          yearMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+        }
+        managerClickEl.onclick = () => showManagerDetailModal(root, yearMonth, managerTotal);
+      }
+    }
+    
+    // 매출 요약 계산
+    const totalSessions = filtered.reduce((sum, r) => sum + extractSessionCount(r.membership), 0);
+    const newMemberRows = filtered.filter(r => r.isNew === true);
+    const newSessions = newMemberRows.reduce((sum, r) => sum + extractSessionCount(r.membership), 0);
+    const newAmount = newMemberRows.reduce((sum, r) => sum + (r.amount || 0), 0);
+    const sessionPrice = totalSessions > 0 ? Math.round(summary.totalAmount / totalSessions) : 0;
+    
+    // 신규회원 수업수 비율 계산
+    const newSessionsPercent = totalSessions > 0 ? Math.round((newSessions / totalSessions) * 100) : 0;
+    
+    // 신규회원 매출액 비율 계산
+    const newAmountPercent = summary.totalAmount > 0 ? Math.round((newAmount / summary.totalAmount) * 100) : 0;
+    
+    // 요약 영역 업데이트
+    const totalSessionsEl = root.querySelector('#sales-total-sessions');
+    const newSessionsEl = root.querySelector('#sales-new-sessions');
+    const totalAmountEl = root.querySelector('#sales-total-amount');
+    const newAmountEl = root.querySelector('#sales-new-amount');
+    const sessionPriceEl = root.querySelector('#sales-session-price');
+    
+    // 회원명으로 검색했을 때만 신규회원 정보 숨김
+    const isMemberNameSearch = !!(memberName && memberName.trim());
+    
+    if (totalSessionsEl) totalSessionsEl.textContent = `${formatNumber(totalSessions)}회`;
+    if (newSessionsEl) {
+      if (isMemberNameSearch) {
+        // 회원명 검색일 때는 숨김
+        newSessionsEl.parentElement.style.display = 'none';
+      } else {
+        newSessionsEl.parentElement.style.display = '';
+        newSessionsEl.textContent = `${formatNumber(newSessions)}회 (${newSessionsPercent}%)`;
+      }
+    }
+    if (totalAmountEl) totalAmountEl.textContent = `${formatNumber(summary.totalAmount)}원`;
+    if (newAmountEl) {
+      if (isMemberNameSearch) {
+        // 회원명 검색일 때는 숨김
+        newAmountEl.parentElement.style.display = 'none';
+      } else {
+        newAmountEl.parentElement.style.display = '';
+        newAmountEl.textContent = `${formatNumber(newAmount)}원 (${newAmountPercent}%)`;
+      }
+    }
+    if (sessionPriceEl) sessionPriceEl.textContent = `${formatNumber(sessionPrice)}원`;
+    
+    if (!tbody) {
+      console.error('[Sales] tbody 요소를 찾을 수 없습니다.');
+      return;
+    }
+    
+    const tableHTML = filtered.map((r, idx) => {
+      // 날짜 처리: 타임존 변환 방지
+      let dateStr = '';
+      if (r.date) {
+        if (typeof r.date === 'string' && r.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          dateStr = r.date;
+        } else {
+          const date = new Date(r.date);
+          if (!isNaN(date.getTime())) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            dateStr = `${year}-${month}-${day}`;
+          }
+        }
+      }
+      const isNewText = r.isNew ? 'O' : '';
+      const rowBg = idx % 2 === 0 ? '#fff' : '#f8f9fa';
+      
+      // 데이터를 data 속성에 JSON으로 저장
+      const rowData = JSON.stringify({
+        id: r.id,
+        date: dateStr,
+        memberName: r.memberName || '',
+        isNew: r.isNew,
+        membership: r.membership || '',
+        paymentMethod: r.paymentMethod || '',
+        amount: r.amount,
+        notes: r.notes || ''
+      });
+      
+      return `
+        <tr class="sales-row" style="border-bottom:1px solid #e9ecef;background:${rowBg};cursor:pointer;" 
+            data-sale='${rowData.replace(/'/g, '&#39;')}'>
+          <td style="padding:5px 6px;white-space:nowrap;color:#495057;font-size:0.8rem;">${escapeHtml(dateStr)}</td>
+          <td style="padding:5px 6px;white-space:nowrap;color:#212529;font-weight:500;font-size:0.8rem;">${escapeHtml(r.memberName || '')}</td>
+          <td style="padding:5px 6px;text-align:center;white-space:nowrap;color:#28a745;font-weight:600;font-size:0.8rem;">${escapeHtml(isNewText)}</td>
+          <td style="padding:5px 6px;color:#495057;font-size:0.8rem;">${escapeHtml(r.membership || '')}</td>
+          <td style="padding:5px 6px;white-space:nowrap;color:${getPaymentMethodColor(r.paymentMethod)};font-weight:600;font-size:0.8rem;">${escapeHtml(r.paymentMethod || '')}</td>
+          <td style="padding:5px 6px;text-align:right;white-space:nowrap;font-weight:600;color:${r.amount < 0 ? '#dc3545' : '#212529'};font-size:0.8rem;">
+            ${r.amount < 0 ? '-' : ''}${formatNumber(Math.abs(r.amount))}원
+          </td>
+          <td style="padding:5px 6px;color:#6c757d;font-size:0.75rem;">${escapeHtml(r.notes || '')}</td>
+        </tr>
+      `;
+    }).join('');
+    
+    if (!tbody) {
+      console.error('[Sales] tbody 요소를 찾을 수 없습니다.');
+      return;
+    }
+    tbody.innerHTML = tableHTML;
+    
+    // 행 클릭 이벤트 설정
+    tbody.querySelectorAll('.sales-row').forEach(row => {
+      row.onclick = (e) => {
+        e.stopPropagation();
+        try {
+          const saleData = JSON.parse(row.getAttribute('data-sale'));
+          openSalesEditModal(root, saleData);
+        } catch (err) {
+          console.error('[Sales] 행 데이터 파싱 오류:', err);
+        }
+      };
+    });
+  };
+  
+  // 초기 렌더링
+  renderRows('');
+  
+  // 검색 입력 이벤트
+  if (searchEl) {
+    searchEl.oninput = (e) => {
+      renderRows(e.target.value);
+    };
+  }
+  
+  // 수정 모달 설정
+  setupEditModal(root);
+}
+
+// 매니저 상세 모달 표시
+async function showManagerDetailModal(root, yearMonth, managerPaymentTotal) {
+  const modal = document.getElementById('manager-detail-modal');
+  const modalBg = document.getElementById('manager-detail-modal-bg');
+  const closeBtn = document.getElementById('manager-detail-close-btn');
+  const paymentAmountEl = document.getElementById('manager-payment-amount');
+  const expenseAmountEl = document.getElementById('manager-expense-amount');
+  const differenceEl = document.getElementById('manager-difference');
+  
+  if (!modal || !modalBg) {
+    console.error('[Sales] 매니저 상세 모달 요소를 찾을 수 없습니다.');
+    return;
+  }
+  
+  // 모달 표시
+  modal.style.display = 'block';
+  modalBg.style.display = 'block';
+  
+  // 매니저 결제 금액 표시
+  paymentAmountEl.textContent = `${formatNumber(managerPaymentTotal)}원`;
+  
+  // 매니저 지출 금액 조회 (이승준 트레이너의 개인지출)
+  try {
+    const [year, month] = yearMonth.split('-');
+    const startDate = `${year}-${month}-01`;
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+    
+    // 트레이너 이름(이승준)을 username으로 변환
+    let trainerUsername = null;
+    try {
+      const trainersResp = await fetch('/api/trainers');
+      const trainersData = await trainersResp.json();
+      const seungjunTrainer = trainersData.find(t => t.name === '이승준');
+      if (seungjunTrainer) {
+        trainerUsername = seungjunTrainer.username;
+      }
+    } catch (err) {
+      console.error('[Sales] 트레이너 목록 조회 실패:', err);
+    }
+    
+    if (!trainerUsername) {
+      expenseAmountEl.textContent = '0원';
+      const difference = managerPaymentTotal - 0;
+      differenceEl.textContent = `${formatNumber(difference)}원`;
+      differenceEl.style.color = difference >= 0 ? '#1976d2' : '#d32f2f';
+      return;
+    }
+    
+    // username으로 조회 (지출 내역은 username으로 저장됨)
+    const resp = await fetch(`/api/expenses?trainer=${encodeURIComponent(trainerUsername)}&startDate=${startDate}&endDate=${endDate}`);
+    const data = await resp.json();
+    
+    let managerExpenseTotal = 0;
+    if (data && data.expenses) {
+      // 개인지출(expense_type='personal')만 합산
+      managerExpenseTotal = data.expenses
+        .filter(e => e.expenseType === 'personal')
+        .reduce((sum, e) => sum + (e.amount || 0), 0);
+    }
+    
+    expenseAmountEl.textContent = `${formatNumber(managerExpenseTotal)}원`;
+    
+    // 차이 계산
+    const difference = managerPaymentTotal - managerExpenseTotal;
+    differenceEl.textContent = `${formatNumber(difference)}원`;
+    differenceEl.style.color = difference >= 0 ? '#1976d2' : '#d32f2f';
+  } catch (error) {
+    console.error('[Sales] 매니저 지출 조회 오류:', error);
+    expenseAmountEl.textContent = '조회 실패';
+  }
+  
+  // 닫기 버튼 이벤트
+  if (closeBtn) {
+    closeBtn.onclick = () => {
+      modal.style.display = 'none';
+      modalBg.style.display = 'none';
+    };
+  }
+  
+  // 배경 클릭 시 닫기
+  modalBg.onclick = (e) => {
+    if (e.target === modalBg) {
+      modal.style.display = 'none';
+      modalBg.style.display = 'none';
+    }
+  };
 }
 
 // 매출 수정 모달 열기

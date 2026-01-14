@@ -3590,7 +3590,11 @@ app.get('/api/sales', async (req, res) => {
     try {
         const filters = {};
         
-        if (req.query.yearMonth) {
+        // startDate와 endDate가 직접 제공되면 우선 사용
+        if (req.query.startDate && req.query.endDate) {
+            filters.startDate = req.query.startDate;
+            filters.endDate = req.query.endDate;
+        } else if (req.query.yearMonth) {
             // YYYY-MM 형식의 yearMonth를 startDate와 endDate로 변환
             const [year, month] = req.query.yearMonth.split('-');
             if (year && month) {
@@ -3602,7 +3606,11 @@ app.get('/api/sales', async (req, res) => {
         }
         
         if (req.query.memberName) {
-            filters.memberName = req.query.memberName;
+            // 공백 제거 후 빈 문자열이 아니면 필터에 추가
+            const memberName = req.query.memberName.trim();
+            if (memberName) {
+                filters.memberName = memberName;
+            }
         }
         
         const sales = await salesDB.getSales(filters);

@@ -238,8 +238,12 @@ const getSales = async (filters = {}) => {
     }
     
     if (filters.memberName) {
-      conditions.push(`member_name ILIKE $${paramIndex++}`);
-      params.push(`%${filters.memberName}%`);
+      // 공백 제거 후 검색
+      const memberName = String(filters.memberName).trim();
+      if (memberName) {
+        conditions.push(`member_name ILIKE $${paramIndex++}`);
+        params.push(`%${memberName}%`);
+      }
     }
     
     if (filters.isNew !== undefined) {

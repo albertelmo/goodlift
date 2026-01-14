@@ -223,6 +223,50 @@
       </form>
     </div>
 
+    <!-- 매출 검색 모달 -->
+    <div id="sales-search-modal-bg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="sales-search-modal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:12px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);width:240px;max-width:calc(100vw - 32px);max-height:90vh;overflow-y:auto;">
+      <h3 style="margin-top:0;margin-bottom:10px;color:#1976d2;font-size:1rem;">매출 검색</h3>
+      <form id="sales-search-form">
+        <div style="margin-bottom:6px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.8rem;color:#666;font-weight:600;cursor:pointer;">
+            <input type="checkbox" id="sales-search-all" style="width:16px;height:16px;cursor:pointer;" />
+            <span>전체</span>
+          </label>
+        </div>
+        <div style="margin-bottom:6px;">
+          <label style="display:block;margin-bottom:1px;font-size:0.8rem;color:#666;font-weight:600;">시작일</label>
+          <input type="date" id="sales-search-start-date" style="width:200px;max-width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;" />
+        </div>
+        <div style="margin-bottom:6px;">
+          <label style="display:block;margin-bottom:1px;font-size:0.8rem;color:#666;font-weight:600;">종료일</label>
+          <input type="date" id="sales-search-end-date" style="width:200px;max-width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;" />
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="display:block;margin-bottom:1px;font-size:0.8rem;color:#666;font-weight:600;">회원명</label>
+          <input type="text" id="sales-search-member-name" placeholder="회원명 입력 (선택)" style="width:200px;max-width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;" />
+        </div>
+        <div id="sales-search-result" style="min-height:16px;margin-bottom:6px;font-size:0.75rem;color:#666;"></div>
+        <div style="display:flex;justify-content:space-between;gap:8px;">
+          <button type="button" id="sales-search-cancel-btn" style="background:#eee;color:#333;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;">취소</button>
+          <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;">검색</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 매니저 상세 모달 -->
+    <div id="manager-detail-modal-bg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div id="manager-detail-modal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,0.2);min-width:280px;max-width:90vw;">
+      <div id="manager-detail-content" style="font-size:0.9rem;color:#333;white-space:nowrap;">
+        매니저:<span id="manager-payment-amount" style="font-weight:600;margin:0 8px;">0원</span>
+        - 매니저지출:<span id="manager-expense-amount" style="font-weight:600;margin:0 8px;">0원</span>
+        = <span id="manager-difference" style="font-weight:700;color:#1976d2;margin-left:4px;">0원</span>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px;">
+        <button id="manager-detail-close-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;">닫기</button>
+      </div>
+    </div>
+
     <!-- 회원 삭제 모달 -->
     <div id="memberDeleteModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
     <div id="memberDeleteModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:400px;max-width:90vw;max-height:80vh;overflow-y:auto;">
