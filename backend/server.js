@@ -20,6 +20,7 @@ const renewalsDB = require('./renewals-db');
 const parsedMemberSnapshotsDB = require('./parsed-member-snapshots-db');
 const parsedSalesSnapshotsDB = require('./parsed-sales-snapshots-db');
 const salesDB = require('./sales-db');
+const metricsDB = require('./metrics-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -287,6 +288,7 @@ renewalsDB.initializeDatabase();
 parsedMemberSnapshotsDB.initializeDatabase();
 parsedSalesSnapshotsDB.initializeDatabase();
 salesDB.initializeDatabase();
+metricsDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -3735,6 +3737,90 @@ app.delete('/api/sales/all', async (req, res) => {
     } catch (error) {
         console.error('[API] 매출 데이터 전체 삭제 오류:', error);
         res.status(500).json({ message: '매출 데이터 삭제에 실패했습니다.' });
+    }
+});
+
+// Metrics (지표) API
+// Metrics 목록 조회
+app.get('/api/metrics', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.center) filters.center = req.query.center;
+        if (req.query.month) filters.month = req.query.month;
+        
+        const metrics = await metricsDB.getMetrics(filters);
+        res.json(metrics);
+    } catch (error) {
+        console.error('[API] Metrics 조회 오류:', error);
+        res.status(500).json({ message: '지표 조회에 실패했습니다.' });
+    }
+});
+
+// Metric 추가
+app.post('/api/metrics', async (req, res) => {
+    try {
+        const { center, month, naver_clicks, naver_leads, karrot_clicks, karrot_leads,
+                pt_new, pt_consultation, pt_renewal, pt_expiring, membership_new, membership_renewal, membership_expiring,
+                total_members, pt_total_members, total_sales, pt_sales, membership_sales } = req.body;
+        
+        if (!center || !month) {
+            return res.status(400).json({ message: '센터와 연월을 입력해주세요.' });
+        }
+        
+        // 같은 센터/월 조합이 이미 있는지 확인
+        const existingMetric = await metricsDB.getMetricByCenterAndMonth(center, month);
+        if (existingMetric) {
+            return res.status(400).json({ message: '이미 해당 센터/월에 대한 지표가 존재합니다. 수정 기능을 사용해주세요.' });
+        }
+        
+        const metric = {
+            center,
+            month,
+            naver_clicks: naver_clicks || 0,
+            naver_leads: naver_leads || 0,
+            karrot_clicks: karrot_clicks || 0,
+            karrot_leads: karrot_leads || 0,
+            pt_new: pt_new || 0,
+            pt_consultation: pt_consultation || 0,
+            pt_renewal: pt_renewal || 0,
+            pt_expiring: pt_expiring || 0,
+            membership_new: membership_new || 0,
+            membership_renewal: membership_renewal || 0,
+            membership_expiring: membership_expiring || 0,
+            total_members: total_members || 0,
+            pt_total_members: pt_total_members || 0,
+            total_sales: total_sales || 0,
+            pt_sales: pt_sales || 0,
+            membership_sales: membership_sales || 0
+        };
+        
+        const result = await metricsDB.addMetric(metric);
+        res.json({ message: '지표가 추가되었습니다.', metric: result });
+    } catch (error) {
+        console.error('[API] Metric 추가 오류:', error);
+        if (error.code === '23505') { // UNIQUE 제약조건 위반
+            res.status(400).json({ message: '이미 해당 센터/월에 대한 지표가 존재합니다.' });
+        } else {
+            res.status(500).json({ message: '지표 추가에 실패했습니다.' });
+        }
+    }
+});
+
+// Metric 수정
+app.patch('/api/metrics/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        const result = await metricsDB.updateMetric(id, updates);
+        res.json({ message: '지표가 수정되었습니다.', metric: result });
+    } catch (error) {
+        console.error('[API] Metric 수정 오류:', error);
+        if (error.message === 'Metric을 찾을 수 없습니다.') {
+            res.status(404).json({ message: error.message });
+        } else {
+            res.status(500).json({ message: '지표 수정에 실패했습니다.' });
+        }
     }
 });
 
