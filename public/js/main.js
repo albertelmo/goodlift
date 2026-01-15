@@ -196,7 +196,7 @@ const adminTabs = [
     { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
-    { label: '💹 매출', id: 'Sales', content: '<div id="sales-root"></div>' },
+    { label: '💵 매출', id: 'Sales', content: '<div id="sales-root"></div>' },
     { label: '📈 전략', id: 'Strategy', content: '<div id="strategy-root"></div>' }
 ];
 

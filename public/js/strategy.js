@@ -3,6 +3,16 @@ export const strategy = {
   render
 };
 
+// HTML 이스케이프 함수
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // 현재 날짜 (한국시간 기준)
 let currentDate = new Date();
 currentDate.setHours(0, 0, 0, 0);
@@ -608,7 +618,7 @@ async function loadMarketingData(contentEl, centerOrder, yearMonth) {
                         <td style="padding:4px 4px;">${item.direction || '-'}</td>
                         <td style="padding:4px 4px;">${item.target || '-'}</td>
                         <td style="padding:4px 4px;text-align:right;">${item.cost === '완료' ? '완료' : `${formatNumber(item.cost || 0)}원`}</td>
-                        <td style="padding:4px 4px;">${item.action_result || '-'}</td>
+                        <td style="padding:4px 4px;white-space:pre-line;">${escapeHtml(item.action_result || '-')}</td>
                         <td style="padding:4px 4px;">${item.target_result || '-'}</td>
                         <td style="padding:4px 4px;font-size:0.7rem;">${getMetricDisplay(center, item.target_result)}</td>
                       </tr>
