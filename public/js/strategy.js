@@ -519,7 +519,10 @@ async function showMetricEditModal(metric) {
         ` : ''}
         
         <div style="border-top:2px solid #ddd;padding-top:16px;margin-top:8px;">
-          <h4 style="margin:0 0 12px 0;color:#1976d2;font-size:1rem;">회원 수 지표</h4>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h4 style="margin:0;color:#1976d2;font-size:1rem;">회원 수 지표</h4>
+            <button type="button" id="metric-edit-load-members-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label style="display:block;font-size:0.85rem;color:#666;margin-bottom:4px;">전체 회원수</label>
@@ -656,6 +659,57 @@ async function showMetricEditModal(metric) {
       });
     }
   }
+  
+  // 회원수 불러오기 버튼 이벤트
+  document.getElementById('metric-edit-load-members-btn').addEventListener('click', async function() {
+    const center = document.getElementById('metric-edit-center').value;
+    
+    if (!center) {
+      alert('센터 정보가 없습니다.');
+      return;
+    }
+    
+    const btn = this;
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '불러오는 중...';
+    
+    try {
+      // 오늘 날짜를 기준으로 통계 API 호출
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
+      // 통계 API 호출 (period, startDate, endDate 필요)
+      const response = await fetch(`/api/stats?period=day&startDate=${todayStr}&endDate=${todayStr}`);
+      if (!response.ok) {
+        throw new Error('회원수 데이터를 불러오는데 실패했습니다.');
+      }
+      
+      const data = await response.json();
+      const validMembersCount = data.centerValidMembers?.[center] || 0;
+      
+      // PT 전문샵인 경우 전체 회원수에, 일반샵인 경우 PT 전체 회원수에 입력
+      if (isPTSpecialty) {
+        const totalMembersInput = document.getElementById('metric-edit-total-members');
+        if (totalMembersInput) {
+          totalMembersInput.value = validMembersCount;
+          // input 이벤트 트리거하여 동기화
+          totalMembersInput.dispatchEvent(new Event('input'));
+        }
+      } else {
+        const ptTotalMembersInput = document.getElementById('metric-edit-pt-total-members');
+        if (ptTotalMembersInput) {
+          ptTotalMembersInput.value = validMembersCount;
+        }
+      }
+    } catch (error) {
+      console.error('회원수 불러오기 오류:', error);
+      alert('회원수 데이터를 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = originalText;
+    }
+  });
   
   // PT 지표 불러오기 버튼 이벤트
   document.getElementById('metric-edit-load-pt-btn').addEventListener('click', async function() {
@@ -851,7 +905,10 @@ async function showMetricAddModal() {
         </div>
         
         <div style="border-top:2px solid #ddd;padding-top:16px;margin-top:8px;">
-          <h4 style="margin:0 0 12px 0;color:#1976d2;font-size:1rem;">회원 수 지표</h4>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <h4 style="margin:0;color:#1976d2;font-size:1rem;">회원 수 지표</h4>
+            <button type="button" id="metric-add-load-members-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
               <label style="display:block;font-size:0.85rem;color:#666;margin-bottom:4px;">전체 회원수</label>
@@ -972,9 +1029,63 @@ async function showMetricAddModal() {
   // 초기 로드 시에도 적용
   togglePTSpecialtyFields();
   
-  // 매출 불러오기 버튼 이벤트 (이벤트 위임 사용)
+  // 회원수 불러오기 버튼 이벤트 (이벤트 위임 사용)
   const metricAddModal = document.querySelector('.metric-add-modal');
   if (metricAddModal) {
+    metricAddModal.addEventListener('click', async function(e) {
+      if (e.target && e.target.id === 'metric-add-load-members-btn') {
+        const center = document.getElementById('metric-add-center').value;
+        
+        if (!center) {
+          alert('센터를 먼저 선택해주세요.');
+          return;
+        }
+        
+        const btn = e.target;
+        const originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '불러오는 중...';
+        
+        try {
+          // 오늘 날짜를 기준으로 통계 API 호출
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          
+          // 통계 API 호출 (period, startDate, endDate 필요)
+          const response = await fetch(`/api/stats?period=day&startDate=${todayStr}&endDate=${todayStr}`);
+          if (!response.ok) {
+            throw new Error('회원수 데이터를 불러오는데 실패했습니다.');
+          }
+          
+          const data = await response.json();
+          const validMembersCount = data.centerValidMembers?.[center] || 0;
+          
+          // PT 전문샵인 경우 전체 회원수에, 일반샵인 경우 PT 전체 회원수에 입력
+          const isPTSpecialty = center.includes('PT');
+          if (isPTSpecialty) {
+            const totalMembersInput = document.getElementById('metric-add-total-members');
+            if (totalMembersInput) {
+              totalMembersInput.value = validMembersCount;
+              // input 이벤트 트리거하여 동기화
+              totalMembersInput.dispatchEvent(new Event('input'));
+            }
+          } else {
+            const ptTotalMembersInput = document.getElementById('metric-add-pt-total-members');
+            if (ptTotalMembersInput) {
+              ptTotalMembersInput.value = validMembersCount;
+            }
+          }
+        } catch (error) {
+          console.error('회원수 불러오기 오류:', error);
+          alert('회원수 데이터를 불러오는 중 오류가 발생했습니다.');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
+      }
+    });
+    
+    // 매출 불러오기 버튼 이벤트 (이벤트 위임 사용)
     metricAddModal.addEventListener('click', async function(e) {
       if (e.target && e.target.id === 'metric-add-load-sales-btn') {
         const center = document.getElementById('metric-add-center').value;
