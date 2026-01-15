@@ -22,6 +22,7 @@ const parsedSalesSnapshotsDB = require('./parsed-sales-snapshots-db');
 const salesDB = require('./sales-db');
 const metricsDB = require('./metrics-db');
 const marketingDB = require('./marketing-db');
+const ledgerDB = require('./ledger-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -291,6 +292,7 @@ parsedSalesSnapshotsDB.initializeDatabase();
 salesDB.initializeDatabase();
 metricsDB.initializeDatabase();
 marketingDB.initializeDatabase();
+ledgerDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -3908,6 +3910,284 @@ app.delete('/api/marketing/:id', async (req, res) => {
     } catch (error) {
         console.error('[API] 마케팅 삭제 오류:', error);
         res.status(500).json({ message: '마케팅 삭제에 실패했습니다.' });
+    }
+});
+
+// 고정지출 조회 API
+app.get('/api/fixed-expenses', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.center) filters.center = req.query.center;
+        if (req.query.month) filters.month = req.query.month;
+        
+        const expenses = await ledgerDB.getFixedExpenses(filters);
+        res.json(expenses);
+    } catch (error) {
+        console.error('[API] 고정지출 조회 오류:', error);
+        res.status(500).json({ message: '고정지출 조회에 실패했습니다.' });
+    }
+});
+
+// 고정지출 추가 API
+app.post('/api/fixed-expenses', async (req, res) => {
+    try {
+        const { center, month, item, amount } = req.body;
+        
+        if (!center || !month || !item) {
+            return res.status(400).json({ message: '센터, 월, 항목은 필수입니다.' });
+        }
+        
+        const expense = {
+            center,
+            month,
+            item,
+            amount: amount || 0
+        };
+        
+        const result = await ledgerDB.addFixedExpense(expense);
+        res.json({ message: '고정지출이 추가되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 고정지출 추가 오류:', error);
+        res.status(500).json({ message: '고정지출 추가에 실패했습니다.' });
+    }
+});
+
+// 고정지출 수정 API
+app.patch('/api/fixed-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        const result = await ledgerDB.updateFixedExpense(id, updates);
+        res.json({ message: '고정지출이 수정되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 고정지출 수정 오류:', error);
+        res.status(500).json({ message: '고정지출 수정에 실패했습니다.' });
+    }
+});
+
+// 고정지출 삭제 API
+app.delete('/api/fixed-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await ledgerDB.deleteFixedExpense(id);
+        res.json({ message: '고정지출이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 고정지출 삭제 오류:', error);
+        res.status(500).json({ message: '고정지출 삭제에 실패했습니다.' });
+    }
+});
+
+// 변동지출 조회 API
+app.get('/api/variable-expenses', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.center) filters.center = req.query.center;
+        if (req.query.month) filters.month = req.query.month;
+        
+        const expenses = await ledgerDB.getVariableExpenses(filters);
+        res.json(expenses);
+    } catch (error) {
+        console.error('[API] 변동지출 조회 오류:', error);
+        res.status(500).json({ message: '변동지출 조회에 실패했습니다.' });
+    }
+});
+
+// 변동지출 추가 API
+app.post('/api/variable-expenses', async (req, res) => {
+    try {
+        const { center, month, date, item, amount, note } = req.body;
+        
+        if (!center || !month || !date || !item) {
+            return res.status(400).json({ message: '센터, 월, 날짜, 항목은 필수입니다.' });
+        }
+        
+        const expense = {
+            center,
+            month,
+            date,
+            item,
+            amount: amount || 0,
+            note: note || null
+        };
+        
+        const result = await ledgerDB.addVariableExpense(expense);
+        res.json({ message: '변동지출이 추가되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 변동지출 추가 오류:', error);
+        res.status(500).json({ message: '변동지출 추가에 실패했습니다.' });
+    }
+});
+
+// 변동지출 수정 API
+app.patch('/api/variable-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        const result = await ledgerDB.updateVariableExpense(id, updates);
+        res.json({ message: '변동지출이 수정되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 변동지출 수정 오류:', error);
+        res.status(500).json({ message: '변동지출 수정에 실패했습니다.' });
+    }
+});
+
+// 변동지출 삭제 API
+app.delete('/api/variable-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await ledgerDB.deleteVariableExpense(id);
+        res.json({ message: '변동지출이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 변동지출 삭제 오류:', error);
+        res.status(500).json({ message: '변동지출 삭제에 실패했습니다.' });
+    }
+});
+
+// 급여 조회 API
+app.get('/api/salaries', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.center) filters.center = req.query.center;
+        if (req.query.month) filters.month = req.query.month;
+        
+        const salaries = await ledgerDB.getSalaries(filters);
+        res.json(salaries);
+    } catch (error) {
+        console.error('[API] 급여 조회 오류:', error);
+        res.status(500).json({ message: '급여 조회에 실패했습니다.' });
+    }
+});
+
+// 급여 추가 API
+app.post('/api/salaries', async (req, res) => {
+    try {
+        const { center, month, item, amount } = req.body;
+        
+        if (!center || !month || !item) {
+            return res.status(400).json({ message: '센터, 월, 항목은 필수입니다.' });
+        }
+        
+        const salary = {
+            center,
+            month,
+            item,
+            amount: amount || 0
+        };
+        
+        const result = await ledgerDB.addSalary(salary);
+        res.json({ message: '급여가 추가되었습니다.', salary: result });
+    } catch (error) {
+        console.error('[API] 급여 추가 오류:', error);
+        res.status(500).json({ message: '급여 추가에 실패했습니다.' });
+    }
+});
+
+// 급여 수정 API
+app.patch('/api/salaries/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        const result = await ledgerDB.updateSalary(id, updates);
+        res.json({ message: '급여가 수정되었습니다.', salary: result });
+    } catch (error) {
+        console.error('[API] 급여 수정 오류:', error);
+        res.status(500).json({ message: '급여 수정에 실패했습니다.' });
+    }
+});
+
+// 급여 삭제 API
+app.delete('/api/salaries/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await ledgerDB.deleteSalary(id);
+        res.json({ message: '급여가 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 급여 삭제 오류:', error);
+        res.status(500).json({ message: '급여 삭제에 실패했습니다.' });
+    }
+});
+
+// 이전월 데이터 복사 API
+app.post('/api/ledger/copy-previous-month', async (req, res) => {
+    try {
+        const { fromMonth, toMonth } = req.body;
+        
+        if (!fromMonth || !toMonth) {
+            return res.status(400).json({ message: 'fromMonth와 toMonth는 필수입니다.' });
+        }
+        
+        // 이전월 데이터 조회
+        const [fixedExpenses, variableExpenses, salaries] = await Promise.all([
+            ledgerDB.getFixedExpenses({ month: fromMonth }),
+            ledgerDB.getVariableExpenses({ month: fromMonth }),
+            ledgerDB.getSalaries({ month: fromMonth })
+        ]);
+        
+        // 이번달 데이터 복사
+        const copyResults = {
+            fixed: 0,
+            variable: 0,
+            salary: 0
+        };
+        
+        // 고정지출 복사
+        for (const expense of fixedExpenses) {
+            try {
+                await ledgerDB.addFixedExpense({
+                    center: expense.center,
+                    month: toMonth,
+                    item: expense.item,
+                    amount: expense.amount
+                });
+                copyResults.fixed++;
+            } catch (err) {
+                // 중복 등 오류는 무시하고 계속 진행
+                console.error(`고정지출 복사 오류 (${expense.id}):`, err);
+            }
+        }
+        
+        // 변동지출 복사
+        for (const expense of variableExpenses) {
+            try {
+                await ledgerDB.addVariableExpense({
+                    center: expense.center,
+                    month: toMonth,
+                    date: expense.date,
+                    item: expense.item,
+                    amount: expense.amount,
+                    note: expense.note
+                });
+                copyResults.variable++;
+            } catch (err) {
+                console.error(`변동지출 복사 오류 (${expense.id}):`, err);
+            }
+        }
+        
+        // 급여 복사
+        for (const salary of salaries) {
+            try {
+                await ledgerDB.addSalary({
+                    center: salary.center,
+                    month: toMonth,
+                    item: salary.item,
+                    amount: salary.amount
+                });
+                copyResults.salary++;
+            } catch (err) {
+                console.error(`급여 복사 오류 (${salary.id}):`, err);
+            }
+        }
+        
+        res.json({
+            message: '이전월 데이터가 복사되었습니다.',
+            results: copyResults
+        });
+    } catch (error) {
+        console.error('[API] 이전월 데이터 복사 오류:', error);
+        res.status(500).json({ message: '이전월 데이터 복사에 실패했습니다.' });
     }
 });
 
