@@ -52,7 +52,7 @@ function render(container) {
   container.innerHTML = `
     <div style="padding:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-        <h3 id="expense-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">💳 지출 내역 관리</h3>
+        <h3 id="expense-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">💳 지출 내역 관리 <span id="expense-total-amount" style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: 계산 중...)</span></h3>
         <div class="date-navigation">
           <button id="expense-prev-btn" class="nav-btn">◀</button>
           <span id="expense-current-date" class="current-date"></span>
@@ -277,6 +277,10 @@ async function loadExpenses() {
       purchaseAmount.textContent = '0원';
       personalCount.textContent = '0건';
       personalAmount.textContent = '0원';
+      const totalAmountEl = document.getElementById('expense-total-amount');
+      if (totalAmountEl) {
+        totalAmountEl.textContent = '(합계: 0원)';
+      }
       return;
     }
     
@@ -304,6 +308,13 @@ async function loadExpenses() {
     const personalTotalAmount = personalExpenses.reduce((sum, e) => sum + e.amount, 0);
     personalCount.textContent = `${personalExpenses.length}건`;
     personalAmount.textContent = `${personalTotalAmount.toLocaleString()}원`;
+    
+    // 세 가지 지출 총합 계산 및 표시
+    const totalAmount = mealTotalAmount + purchaseTotalAmount + personalTotalAmount;
+    const totalAmountEl = document.getElementById('expense-total-amount');
+    if (totalAmountEl) {
+      totalAmountEl.textContent = `(합계: ${totalAmount.toLocaleString()}원)`;
+    }
     
     // 개인별 지출 합계 계산 및 표시
     const personalByTrainer = document.getElementById('expense-personal-by-trainer');
