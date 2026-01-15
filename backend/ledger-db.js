@@ -864,11 +864,305 @@ const deleteSalary = async (id) => {
 };
 
 // 데이터베이스 초기화
+// 정산 테이블 생성
+const createSettlementTable = async () => {
+  try {
+    const checkQuery = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'settlements'
+    `;
+    const checkResult = await pool.query(checkQuery);
+    
+    if (checkResult.rows.length === 0) {
+      const createQuery = `
+        CREATE TABLE settlements (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          month VARCHAR(7) NOT NULL UNIQUE,
+          profit_amount INTEGER NOT NULL,
+          settlement_amount INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      await pool.query(createQuery);
+      await pool.query("SET client_encoding TO 'UTF8'");
+      
+      // 인덱스 생성
+      await pool.query(`
+        CREATE INDEX idx_settlements_month ON settlements(month)
+      `);
+      
+      console.log('[PostgreSQL] 정산 테이블이 생성되었습니다.');
+    } else {
+      console.log('[PostgreSQL] 정산 테이블이 이미 존재합니다.');
+      // 기존 테이블에 컬럼 추가 (마이그레이션)
+      await migrateSettlementTable();
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 정산 테이블 생성 오류:', error);
+    throw error;
+  }
+};
+
+// 정산 테이블 마이그레이션
+const migrateSettlementTable = async () => {
+  try {
+    const checkColumnQuery = `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' 
+      AND table_name = 'settlements'
+    `;
+    const columnResult = await pool.query(checkColumnQuery);
+    
+    const existingColumns = columnResult.rows.map(row => row.column_name);
+    
+    // 필요한 컬럼 목록
+    const requiredColumns = {
+      'id': 'UUID PRIMARY KEY DEFAULT gen_random_uuid()',
+      'month': 'VARCHAR(7) NOT NULL',
+      'profit_amount': 'INTEGER NOT NULL',
+      'settlement_amount': 'INTEGER',
+      'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      'updated_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
+    };
+    
+    // 누락된 컬럼 추가
+    for (const [columnName, columnDef] of Object.entries(requiredColumns)) {
+      if (!existingColumns.includes(columnName)) {
+        try {
+          if (columnName === 'id') {
+            continue;
+          }
+          
+          await pool.query(`
+            ALTER TABLE settlements 
+            ADD COLUMN ${columnName} ${columnDef.includes('NOT NULL') ? columnDef.replace(' NOT NULL', '') : columnDef}
+          `);
+          
+          // NOT NULL 제약조건이 필요한 경우
+          if (columnDef.includes('NOT NULL')) {
+            if (columnName === 'profit_amount') {
+              await pool.query(`
+                UPDATE settlements SET ${columnName} = 0 WHERE ${columnName} IS NULL
+              `);
+            }
+            await pool.query(`
+              ALTER TABLE settlements ALTER COLUMN ${columnName} SET NOT NULL
+            `);
+          }
+          
+          console.log(`[PostgreSQL] settlements 테이블에 ${columnName} 컬럼이 추가되었습니다.`);
+        } catch (err) {
+          console.log(`[PostgreSQL] settlements 테이블 ${columnName} 컬럼 추가 시도 (이미 존재할 수 있음):`, err.message);
+        }
+      }
+    }
+    
+    // UNIQUE 제약조건 추가 (month)
+    try {
+      const uniqueCheckQuery = `
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_schema = 'public'
+        AND table_name = 'settlements'
+        AND constraint_type = 'UNIQUE'
+        AND constraint_name LIKE '%month%'
+      `;
+      const uniqueResult = await pool.query(uniqueCheckQuery);
+      
+      if (uniqueResult.rows.length === 0) {
+        await pool.query(`
+          ALTER TABLE settlements ADD CONSTRAINT settlements_month_unique UNIQUE(month)
+        `);
+        console.log('[PostgreSQL] settlements 테이블에 month UNIQUE 제약조건이 추가되었습니다.');
+      }
+    } catch (err) {
+      console.log('[PostgreSQL] settlements 테이블 month UNIQUE 제약조건 추가 시도 (이미 존재할 수 있음):', err.message);
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 정산 테이블 마이그레이션 오류:', error);
+  }
+};
+
+// 정산 조회
+const getSettlements = async (filters = {}) => {
+  try {
+    let query = `
+      SELECT id, month, profit_amount, settlement_amount, created_at, updated_at
+      FROM settlements
+    `;
+    const params = [];
+    const conditions = [];
+    
+    if (filters.month) {
+      conditions.push(`month = $${params.length + 1}`);
+      params.push(filters.month);
+    }
+    
+    if (conditions.length > 0) {
+      query += ' WHERE ' + conditions.join(' AND ');
+    }
+    
+    query += ' ORDER BY month DESC';
+    
+    const result = await pool.query(query, params);
+    
+    return result.rows.map(row => ({
+      id: row.id,
+      month: row.month,
+      profitAmount: row.profit_amount,
+      settlementAmount: row.settlement_amount,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }));
+  } catch (error) {
+    console.error('[PostgreSQL] 정산 조회 오류:', error);
+    throw error;
+  }
+};
+
+// 정산 추가
+const addSettlement = async (settlementData) => {
+  try {
+    const query = `
+      INSERT INTO settlements (month, profit_amount, settlement_amount)
+      VALUES ($1, $2, $3)
+      RETURNING id, month, profit_amount, settlement_amount, created_at, updated_at
+    `;
+    
+    const values = [
+      settlementData.month,
+      settlementData.profitAmount || 0,
+      settlementData.settlementAmount || null
+    ];
+    
+    const result = await pool.query(query, values);
+    
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      month: row.month,
+      profitAmount: row.profit_amount,
+      settlementAmount: row.settlement_amount,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  } catch (error) {
+    console.error('[PostgreSQL] 정산 추가 오류:', error);
+    throw error;
+  }
+};
+
+// 정산 수정
+const updateSettlement = async (id, updates) => {
+  try {
+    const updateFields = [];
+    const values = [];
+    let paramIndex = 1;
+    
+    if (updates.profitAmount !== undefined) {
+      updateFields.push(`profit_amount = $${paramIndex++}`);
+      values.push(updates.profitAmount);
+    }
+    
+    if (updates.settlementAmount !== undefined) {
+      updateFields.push(`settlement_amount = $${paramIndex++}`);
+      values.push(updates.settlementAmount || null);
+    }
+    
+    if (updateFields.length === 0) {
+      throw new Error('수정할 필드가 없습니다.');
+    }
+    
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(id);
+    
+    const query = `
+      UPDATE settlements
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING id, month, profit_amount, settlement_amount, created_at, updated_at
+    `;
+    
+    const result = await pool.query(query, values);
+    
+    if (result.rows.length === 0) {
+      throw new Error('정산을 찾을 수 없습니다.');
+    }
+    
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      month: row.month,
+      profitAmount: row.profit_amount,
+      settlementAmount: row.settlement_amount,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  } catch (error) {
+    console.error('[PostgreSQL] 정산 수정 오류:', error);
+    throw error;
+  }
+};
+
+// 정산 삭제
+const deleteSettlement = async (id) => {
+  try {
+    const query = `
+      DELETE FROM settlements
+      WHERE id = $1
+      RETURNING id
+    `;
+    
+    const result = await pool.query(query, [id]);
+    
+    if (result.rows.length === 0) {
+      throw new Error('정산을 찾을 수 없습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 정산 삭제 오류:', error);
+    throw error;
+  }
+};
+
+// 정산 ID로 조회
+const getSettlementById = async (id) => {
+  try {
+    const query = `
+      SELECT id, month, profit_amount, settlement_amount, created_at, updated_at
+      FROM settlements
+      WHERE id = $1
+    `;
+    
+    const result = await pool.query(query, [id]);
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      month: row.month,
+      profitAmount: row.profit_amount,
+      settlementAmount: row.settlement_amount,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  } catch (error) {
+    console.error('[PostgreSQL] 정산 ID로 조회 오류:', error);
+    throw error;
+  }
+};
+
 const initializeDatabase = async () => {
   try {
     await createFixedExpenseTable();
     await createVariableExpenseTable();
     await createSalaryTable();
+    await createSettlementTable();
   } catch (error) {
     console.error('[PostgreSQL] 장부 데이터베이스 초기화 오류:', error);
     throw error;
@@ -880,13 +1174,18 @@ module.exports = {
   getFixedExpenses,
   getVariableExpenses,
   getSalaries,
+  getSettlements,
   addFixedExpense,
   addVariableExpense,
   addSalary,
+  addSettlement,
   updateFixedExpense,
   updateVariableExpense,
   updateSalary,
+  updateSettlement,
   deleteFixedExpense,
   deleteVariableExpense,
-  deleteSalary
+  deleteSalary,
+  deleteSettlement,
+  getSettlementById
 };

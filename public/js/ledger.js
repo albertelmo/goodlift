@@ -175,6 +175,17 @@ async function render(container) {
           </div>
         </div>
       </div>
+      
+      <!-- 월별 정산 섹션 -->
+      <div id="ledger-settlement-section" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h4 id="ledger-settlement-title" style="margin:0;color:#1976d2;font-size:0.95rem;font-weight:600;">월별 정산</h4>
+          <button id="ledger-settlement-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
+        </div>
+        <div id="ledger-settlement-list" style="min-height:60px;">
+          <div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터를 불러오는 중...</div>
+        </div>
+      </div>
     </div>
   `;
   
@@ -218,6 +229,11 @@ function setupEventListeners(container) {
     showSalaryAddModal();
   });
   
+  // 정산 추가 버튼
+  document.getElementById('ledger-settlement-add-btn').addEventListener('click', () => {
+    showSettlementAddModal();
+  });
+  
   // 이전월 지출 불러오기 버튼
   document.getElementById('ledger-copy-prev-month-btn').addEventListener('click', async () => {
     if (confirm('이전월의 고정지출, 변동지출, 급여 데이터를 이번달로 복사하시겠습니까?\n기존 이번달 데이터는 유지됩니다.')) {
@@ -248,13 +264,15 @@ async function loadLedgerData() {
     const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
     const endDate = `${year}-${month}-${lastDay}T23:59:59`;
     
-    // 고정지출, 변동지출, 급여, 식대, 구매, 개인지출, 지표(매출) 데이터 가져오기
-    const [fixedResponse, variableResponse, salaryResponse, expensesResponse, metricsResponse] = await Promise.all([
+    // 고정지출, 변동지출, 급여, 식대, 구매, 개인지출, 지표(매출), 정산 데이터 가져오기
+    const [fixedResponse, variableResponse, salaryResponse, expensesResponse, metricsResponse, settlementResponse, allSettlementsResponse] = await Promise.all([
       fetch(`/api/fixed-expenses?month=${yearMonth}`),
       fetch(`/api/variable-expenses?month=${yearMonth}`),
       fetch(`/api/salaries?month=${yearMonth}`),
       fetch(`/api/expenses?startDate=${startDate}&endDate=${endDate}`),
-      fetch(`/api/metrics?month=${yearMonth}`)
+      fetch(`/api/metrics?month=${yearMonth}`),
+      fetch(`/api/settlements?month=${yearMonth}`),
+      fetch(`/api/settlements`) // 모든 정산 데이터 (누적 계산용)
     ]);
     
     const fixedExpenses = fixedResponse.ok ? await fixedResponse.json() : [];
@@ -263,6 +281,8 @@ async function loadLedgerData() {
     const expensesData = expensesResponse.ok ? await expensesResponse.json() : { expenses: [] };
     const expenses = expensesData.expenses || [];
     const metrics = metricsResponse.ok ? await metricsResponse.json() : [];
+    const settlements = settlementResponse.ok ? await settlementResponse.json() : [];
+    const allSettlements = allSettlementsResponse.ok ? await allSettlementsResponse.json() : [];
     
     // 센터별로 그룹화
     const fixedByCenter = {};
@@ -297,6 +317,9 @@ async function loadLedgerData() {
     
     // 월 순이익 계산 및 표시
     renderMonthlyProfit(salesTotal, expenseTotal);
+    
+    // 월별 정산 렌더링
+    renderSettlements(settlements, allSettlements);
     
     // 고정지출 렌더링
     renderFixedExpenses(fixedByCenter, centerOrder);
@@ -419,6 +442,61 @@ function renderMonthlyProfit(salesTotal, expenseTotal) {
   const color = profit >= 0 ? '#4caf50' : '#d32f2f';
   
   profitEl.innerHTML = `<span style="color:${color};">${sign}${profitFormatted}원</span>`;
+}
+
+// 정산 렌더링
+function renderSettlements(settlements, allSettlements = []) {
+  const listEl = document.getElementById('ledger-settlement-list');
+  if (!listEl) return;
+  
+  // 누적 손익액과 누적 정산액 계산
+  const cumulativeProfit = allSettlements.reduce((sum, s) => sum + (parseInt(s.profitAmount) || 0), 0);
+  const cumulativeSettlement = allSettlements.reduce((sum, s) => sum + (s.settlementAmount !== null ? parseInt(s.settlementAmount) || 0 : 0), 0);
+  const difference = cumulativeProfit - cumulativeSettlement;
+  
+  // 제목 업데이트
+  const titleEl = document.getElementById('ledger-settlement-title');
+  if (titleEl) {
+    const differenceFormatted = difference < 0 ? `-${formatNumber(Math.abs(difference))}` : formatNumber(difference);
+    const differenceColor = difference < 0 ? '#d32f2f' : '#1976d2';
+    titleEl.innerHTML = `월별 정산 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(누적 손익액 ${formatNumber(cumulativeProfit)}원 - 누적 정산액 ${formatNumber(cumulativeSettlement)}원 = <span style="color:${differenceColor};">${differenceFormatted}원</span>)</span>`;
+  }
+  
+  if (settlements.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">등록된 정산이 없습니다.</div>';
+    return;
+  }
+  
+  const settlement = settlements[0]; // 월별로 하나만 있음
+  listEl.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+      <thead>
+        <tr style="background:#f5f5f5;border-bottom:1.5px solid #ddd;">
+          <th style="padding:8px;text-align:left;font-weight:600;color:#333;font-size:0.8rem;">월</th>
+          <th style="padding:8px;text-align:right;font-weight:600;color:#333;font-size:0.8rem;">손익금액</th>
+          <th style="padding:8px;text-align:right;font-weight:600;color:#333;font-size:0.8rem;">정산금액</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="ledger-settlement-row" data-settlement-id="${settlement.id}" style="border-bottom:1px solid #eee;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+          <td style="padding:8px;">${settlement.month}</td>
+          <td style="padding:8px;text-align:right;font-weight:600;color:${(settlement.profitAmount || 0) < 0 ? '#d32f2f' : '#1976d2'};">${(settlement.profitAmount || 0) < 0 ? '-' : ''}${formatNumber(Math.abs(settlement.profitAmount || 0))}원</td>
+          <td style="padding:8px;text-align:right;font-weight:600;color:#4caf50;">${settlement.settlementAmount !== null ? formatNumber(settlement.settlementAmount) + '원' : '-'}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+  
+  // 이벤트 리스너 설정 - 행 클릭 시 수정 모달 열기
+  document.querySelectorAll('.ledger-settlement-row').forEach(row => {
+    row.addEventListener('click', async () => {
+      const settlementId = row.getAttribute('data-settlement-id');
+      const settlementData = settlements.find(s => s.id === settlementId);
+      if (settlementData) {
+        showSettlementEditModal(settlementData);
+      }
+    });
+  });
 }
 
 // 고정지출 렌더링
@@ -1522,6 +1600,321 @@ function closeSalaryAddModal() {
 function closeSalaryEditModal() {
   const overlay = document.querySelector('.ledger-salary-edit-modal-overlay');
   const modal = document.querySelector('.ledger-salary-edit-modal');
+  if (overlay) overlay.remove();
+  if (modal) modal.remove();
+}
+
+// 정산 추가 모달
+function showSettlementAddModal() {
+  const yearMonth = getSelectedYearMonth();
+  const modalHTML = `
+    <div class="ledger-settlement-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="ledger-settlement-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">정산 추가</h3>
+        <button id="ledger-settlement-add-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      
+      <form id="ledger-settlement-add-form" style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
+          <input type="month" id="ledger-settlement-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">손익금액 *</label>
+          <input type="text" id="ledger-settlement-add-profit-amount" value="" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;" inputmode="numeric" placeholder="0">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">정산금액</label>
+          <input type="text" id="ledger-settlement-add-settlement-amount" value="" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;" inputmode="numeric">
+        </div>
+        
+        <div id="ledger-settlement-add-result-message" style="min-height:24px;color:#d32f2f;font-size:0.85rem;"></div>
+        
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+          <button type="button" id="ledger-settlement-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
+          <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
+        </div>
+      </form>
+    </div>
+  `;
+  
+  const existingOverlay = document.querySelector('.ledger-settlement-add-modal-overlay');
+  const existingModal = document.querySelector('.ledger-settlement-add-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  document.getElementById('ledger-settlement-add-modal-close').addEventListener('click', closeSettlementAddModal);
+  document.getElementById('ledger-settlement-add-cancel-btn').addEventListener('click', closeSettlementAddModal);
+  document.querySelector('.ledger-settlement-add-modal-overlay').addEventListener('click', closeSettlementAddModal);
+  
+  // 금액 입력 필드 천단위 구분자 추가 (음수 허용)
+  document.getElementById('ledger-settlement-add-profit-amount').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/,/g, '');
+    
+    // 빈 값이거나 "-"만 있는 경우
+    if (value === '' || value === '-') {
+      e.target.value = value;
+      return;
+    }
+    
+    // 숫자와 마이너스만 허용 (마이너스는 맨 앞에만)
+    if (!/^-?\d+$/.test(value)) {
+      // 마이너스가 있으면 맨 앞에만 유지
+      const hasMinus = value.startsWith('-');
+      value = value.replace(/[^\d]/g, '');
+      if (hasMinus) {
+        value = '-' + value;
+      }
+    }
+    
+    if (value && value !== '-') {
+      const numValue = parseInt(value);
+      if (!isNaN(numValue)) {
+        // 음수도 천단위 구분자 적용
+        e.target.value = numValue < 0 ? '-' + formatNumber(Math.abs(numValue)) : formatNumber(numValue);
+      } else {
+        e.target.value = value;
+      }
+    } else {
+      e.target.value = value;
+    }
+  });
+  
+  document.getElementById('ledger-settlement-add-settlement-amount').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/,/g, '');
+    if (value === '') {
+      e.target.value = '';
+      return;
+    }
+    if (!/^-?\d+$/.test(value)) {
+      value = value.replace(/[^\d-]/g, '');
+    }
+    if (value) {
+      e.target.value = formatNumber(parseInt(value) || 0);
+    } else {
+      e.target.value = '';
+    }
+  });
+  
+  // 폼 제출 이벤트
+  document.getElementById('ledger-settlement-add-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const resultMsg = document.getElementById('ledger-settlement-add-result-message');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '저장 중...';
+    resultMsg.textContent = '';
+    
+    try {
+      const month = document.getElementById('ledger-settlement-add-month').value;
+      const profitAmount = document.getElementById('ledger-settlement-add-profit-amount').value.replace(/,/g, '');
+      const settlementAmount = document.getElementById('ledger-settlement-add-settlement-amount').value.replace(/,/g, '');
+      
+      const settlement = {
+        month,
+        profitAmount: profitAmount ? parseInt(profitAmount) : 0,
+        settlementAmount: settlementAmount ? parseInt(settlementAmount) : null
+      };
+      
+      const response = await fetch('/api/settlements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settlement)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '추가에 실패했습니다.');
+      }
+      
+      closeSettlementAddModal();
+      await loadLedgerData();
+    } catch (error) {
+      console.error('정산 추가 오류:', error);
+      resultMsg.textContent = '추가에 실패했습니다: ' + error.message;
+      submitBtn.disabled = false;
+      submitBtn.textContent = '저장';
+    }
+  });
+}
+
+function closeSettlementAddModal() {
+  const overlay = document.querySelector('.ledger-settlement-add-modal-overlay');
+  const modal = document.querySelector('.ledger-settlement-add-modal');
+  if (overlay) overlay.remove();
+  if (modal) modal.remove();
+}
+
+// 정산 수정 모달
+function showSettlementEditModal(settlement) {
+  const modalHTML = `
+    <div class="ledger-settlement-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="ledger-settlement-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">정산 수정</h3>
+        <button id="ledger-settlement-edit-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      
+      <form id="ledger-settlement-edit-form" style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
+          <input type="month" id="ledger-settlement-edit-month" value="${settlement.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;" disabled>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">손익금액 *</label>
+          <input type="text" id="ledger-settlement-edit-profit-amount" value="${formatNumber(settlement.profitAmount || 0)}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;" inputmode="numeric">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">정산금액</label>
+          <input type="text" id="ledger-settlement-edit-settlement-amount" value="${settlement.settlementAmount !== null ? formatNumber(settlement.settlementAmount) : ''}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;" inputmode="numeric">
+        </div>
+        
+        <div id="ledger-settlement-edit-result-message" style="min-height:24px;color:#d32f2f;font-size:0.85rem;"></div>
+        
+        <div style="display:flex;gap:10px;justify-content:space-between;margin-top:8px;">
+          <button type="button" id="ledger-settlement-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">삭제</button>
+          <div style="display:flex;gap:10px;">
+            <button type="button" id="ledger-settlement-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
+            <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  `;
+  
+  const existingOverlay = document.querySelector('.ledger-settlement-edit-modal-overlay');
+  const existingModal = document.querySelector('.ledger-settlement-edit-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  document.getElementById('ledger-settlement-edit-modal-close').addEventListener('click', closeSettlementEditModal);
+  document.getElementById('ledger-settlement-edit-cancel-btn').addEventListener('click', closeSettlementEditModal);
+  document.querySelector('.ledger-settlement-edit-modal-overlay').addEventListener('click', closeSettlementEditModal);
+  
+  // 삭제 버튼 이벤트
+  document.getElementById('ledger-settlement-edit-delete-btn').addEventListener('click', async () => {
+    if (!confirm('정산을 삭제하시겠습니까?')) return;
+    
+    try {
+      const response = await fetch(`/api/settlements/${settlement.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+        throw new Error('삭제에 실패했습니다.');
+      }
+      
+      closeSettlementEditModal();
+      await loadLedgerData();
+    } catch (error) {
+      console.error('정산 삭제 오류:', error);
+      alert('삭제에 실패했습니다.');
+    }
+  });
+  
+  // 금액 입력 필드 천단위 구분자 추가 (음수 허용)
+  document.getElementById('ledger-settlement-edit-profit-amount').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/,/g, '');
+    
+    // 빈 값이거나 "-"만 있는 경우
+    if (value === '' || value === '-') {
+      e.target.value = value;
+      return;
+    }
+    
+    // 숫자와 마이너스만 허용 (마이너스는 맨 앞에만)
+    if (!/^-?\d+$/.test(value)) {
+      // 마이너스가 있으면 맨 앞에만 유지
+      const hasMinus = value.startsWith('-');
+      value = value.replace(/[^\d]/g, '');
+      if (hasMinus) {
+        value = '-' + value;
+      }
+    }
+    
+    if (value && value !== '-') {
+      const numValue = parseInt(value);
+      if (!isNaN(numValue)) {
+        // 음수도 천단위 구분자 적용
+        e.target.value = numValue < 0 ? '-' + formatNumber(Math.abs(numValue)) : formatNumber(numValue);
+      } else {
+        e.target.value = value;
+      }
+    } else {
+      e.target.value = value;
+    }
+  });
+  
+  document.getElementById('ledger-settlement-edit-settlement-amount').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/,/g, '');
+    if (value === '') {
+      e.target.value = '';
+      return;
+    }
+    if (!/^-?\d+$/.test(value)) {
+      value = value.replace(/[^\d-]/g, '');
+    }
+    if (value) {
+      e.target.value = formatNumber(parseInt(value) || 0);
+    } else {
+      e.target.value = '';
+    }
+  });
+  
+  // 폼 제출 이벤트
+  document.getElementById('ledger-settlement-edit-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const resultMsg = document.getElementById('ledger-settlement-edit-result-message');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '저장 중...';
+    resultMsg.textContent = '';
+    
+    try {
+      const profitAmount = document.getElementById('ledger-settlement-edit-profit-amount').value.replace(/,/g, '');
+      const settlementAmount = document.getElementById('ledger-settlement-edit-settlement-amount').value.replace(/,/g, '');
+      
+      const updates = {
+        profitAmount: profitAmount ? parseInt(profitAmount) : 0,
+        settlementAmount: settlementAmount ? parseInt(settlementAmount) : null
+      };
+      
+      const response = await fetch(`/api/settlements/${settlement.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '수정에 실패했습니다.');
+      }
+      
+      closeSettlementEditModal();
+      await loadLedgerData();
+    } catch (error) {
+      console.error('정산 수정 오류:', error);
+      resultMsg.textContent = '수정에 실패했습니다: ' + error.message;
+      submitBtn.disabled = false;
+      submitBtn.textContent = '저장';
+    }
+  });
+}
+
+function closeSettlementEditModal() {
+  const overlay = document.querySelector('.ledger-settlement-edit-modal-overlay');
+  const modal = document.querySelector('.ledger-settlement-edit-modal');
   if (overlay) overlay.remove();
   if (modal) modal.remove();
 }

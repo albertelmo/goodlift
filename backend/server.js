@@ -4110,6 +4110,89 @@ app.delete('/api/salaries/:id', async (req, res) => {
     }
 });
 
+// 정산 조회 API
+app.get('/api/settlements', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.month) filters.month = req.query.month;
+        
+        const settlements = await ledgerDB.getSettlements(filters);
+        res.json(settlements);
+    } catch (error) {
+        console.error('[API] 정산 조회 오류:', error);
+        res.status(500).json({ message: '정산 조회에 실패했습니다.' });
+    }
+});
+
+// 정산 추가 API
+app.post('/api/settlements', async (req, res) => {
+    try {
+        const { month, profitAmount, settlementAmount } = req.body;
+        
+        if (!month || profitAmount === undefined) {
+            return res.status(400).json({ message: '월, 손익금액은 필수입니다.' });
+        }
+        
+        const settlement = {
+            month,
+            profitAmount: profitAmount || 0,
+            settlementAmount: settlementAmount || null
+        };
+        
+        const result = await ledgerDB.addSettlement(settlement);
+        res.json({ message: '정산이 추가되었습니다.', settlement: result });
+    } catch (error) {
+        console.error('[API] 정산 추가 오류:', error);
+        if (error.code === '23505') { // UNIQUE 제약조건 위반
+            res.status(400).json({ message: '이미 해당 월에 대한 정산이 존재합니다.' });
+        } else {
+            res.status(500).json({ message: '정산 추가에 실패했습니다.' });
+        }
+    }
+});
+
+// 정산 수정 API
+app.patch('/api/settlements/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        // camelCase를 snake_case로 변환
+        if (updates.profitAmount !== undefined) {
+            updates.profitAmount = updates.profitAmount;
+        }
+        if (updates.settlementAmount !== undefined) {
+            updates.settlementAmount = updates.settlementAmount;
+        }
+        
+        const result = await ledgerDB.updateSettlement(id, updates);
+        res.json({ message: '정산이 수정되었습니다.', settlement: result });
+    } catch (error) {
+        console.error('[API] 정산 수정 오류:', error);
+        if (error.message === '정산을 찾을 수 없습니다.') {
+            res.status(404).json({ message: error.message });
+        } else {
+            res.status(500).json({ message: '정산 수정에 실패했습니다.' });
+        }
+    }
+});
+
+// 정산 삭제 API
+app.delete('/api/settlements/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await ledgerDB.deleteSettlement(id);
+        res.json({ message: '정산이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 정산 삭제 오류:', error);
+        if (error.message === '정산을 찾을 수 없습니다.') {
+            res.status(404).json({ message: error.message });
+        } else {
+            res.status(500).json({ message: '정산 삭제에 실패했습니다.' });
+        }
+    }
+});
+
 // 이전월 데이터 복사 API
 app.post('/api/ledger/copy-previous-month', async (req, res) => {
     try {
