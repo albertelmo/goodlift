@@ -656,6 +656,7 @@ function showMarketingAddModal(center) {
             <option value="">선택</option>
             <option value="직접입력">직접입력</option>
             <option value="N플레이스">N플레이스</option>
+            <option value="당근">당근</option>
             <option value="블로그">블로그</option>
             <option value="문자">문자</option>
             <option value="물티슈">물티슈</option>
@@ -903,10 +904,11 @@ function showMarketingEditModal(marketing) {
         
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">아이템 *</label>
-          <select id="marketing-edit-item" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'display:none;' : ''}">
+          <select id="marketing-edit-item" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;${!['N플레이스', '당근', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'display:none;' : ''}">
             <option value="">선택</option>
-            <option value="직접입력" ${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'selected' : ''}>직접입력</option>
+            <option value="직접입력" ${!['N플레이스', '당근', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'selected' : ''}>직접입력</option>
             <option value="N플레이스" ${marketing.item === 'N플레이스' ? 'selected' : ''}>N플레이스</option>
+            <option value="당근" ${marketing.item === '당근' ? 'selected' : ''}>당근</option>
             <option value="블로그" ${marketing.item === '블로그' ? 'selected' : ''}>블로그</option>
             <option value="문자" ${marketing.item === '문자' ? 'selected' : ''}>문자</option>
             <option value="물티슈" ${marketing.item === '물티슈' ? 'selected' : ''}>물티슈</option>
@@ -914,7 +916,7 @@ function showMarketingEditModal(marketing) {
             <option value="전단지" ${marketing.item === '전단지' ? 'selected' : ''}>전단지</option>
             <option value="단지게시판" ${marketing.item === '단지게시판' ? 'selected' : ''}>단지게시판</option>
           </select>
-          <input type="text" id="marketing-edit-item-custom" placeholder="직접입력" value="${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? (marketing.item || '').replace(/"/g, '&quot;') : ''}" ${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'required' : ''} style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;display:${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'block' : 'none'};">
+          <input type="text" id="marketing-edit-item-custom" placeholder="직접입력" value="${!['N플레이스', '당근', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? (marketing.item || '').replace(/"/g, '&quot;') : ''}" ${!['N플레이스', '당근', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'required' : ''} style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;display:${!['N플레이스', '당근', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'block' : 'none'};">
         </div>
         
         <div>
