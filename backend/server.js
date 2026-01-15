@@ -3998,14 +3998,14 @@ app.post('/api/variable-expenses', async (req, res) => {
     try {
         const { center, month, date, item, amount, note } = req.body;
         
-        if (!center || !month || !date || !item) {
-            return res.status(400).json({ message: '센터, 월, 날짜, 항목은 필수입니다.' });
+        if (!center || !month || !item) {
+            return res.status(400).json({ message: '센터, 월, 항목은 필수입니다.' });
         }
         
         const expense = {
             center,
             month,
-            date,
+            date: date || null,
             item,
             amount: amount || 0,
             note: note || null

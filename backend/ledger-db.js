@@ -166,7 +166,7 @@ const createVariableExpenseTable = async () => {
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           center VARCHAR(100) NOT NULL,
           month VARCHAR(7) NOT NULL,
-          date DATE NOT NULL,
+          date DATE,
           item VARCHAR(200) NOT NULL,
           amount INTEGER NOT NULL DEFAULT 0,
           note VARCHAR(500),
@@ -213,7 +213,7 @@ const migrateVariableExpenseTable = async () => {
       'id': 'UUID PRIMARY KEY DEFAULT gen_random_uuid()',
       'center': 'VARCHAR(100) NOT NULL',
       'month': 'VARCHAR(7) NOT NULL',
-      'date': 'DATE NOT NULL',
+      'date': 'DATE',
       'item': 'VARCHAR(200) NOT NULL',
       'amount': 'INTEGER NOT NULL DEFAULT 0',
       'note': 'VARCHAR(500)',
@@ -250,9 +250,8 @@ const migrateVariableExpenseTable = async () => {
                 UPDATE variable_expenses SET ${columnName} = '${yearMonth}' WHERE ${columnName} IS NULL
               `);
             } else if (columnName === 'date') {
-              await pool.query(`
-                UPDATE variable_expenses SET ${columnName} = CURRENT_DATE WHERE ${columnName} IS NULL
-              `);
+              // date는 선택 사항이므로 NOT NULL 제약조건을 추가하지 않음
+              continue;
             } else if (columnName === 'item') {
               await pool.query(`
                 UPDATE variable_expenses SET ${columnName} = '' WHERE ${columnName} IS NULL
@@ -275,6 +274,32 @@ const migrateVariableExpenseTable = async () => {
             console.error(`[PostgreSQL] ${columnName} 컬럼 추가 오류:`, err);
           }
         }
+      }
+    }
+    
+    // 기존 date 컬럼의 NOT NULL 제약조건 제거 (date는 선택 사항)
+    if (existingColumns.includes('date')) {
+      try {
+        // date 컬럼이 NOT NULL인지 확인
+        const checkNotNullQuery = `
+          SELECT is_nullable
+          FROM information_schema.columns
+          WHERE table_schema = 'public' 
+          AND table_name = 'variable_expenses'
+          AND column_name = 'date'
+        `;
+        const notNullResult = await pool.query(checkNotNullQuery);
+        
+        if (notNullResult.rows.length > 0 && notNullResult.rows[0].is_nullable === 'NO') {
+          // NOT NULL 제약조건 제거
+          await pool.query(`
+            ALTER TABLE variable_expenses 
+            ALTER COLUMN date DROP NOT NULL
+          `);
+          console.log('[PostgreSQL] 변동지출 테이블의 date 컬럼 NOT NULL 제약조건이 제거되었습니다.');
+        }
+      } catch (err) {
+        console.error('[PostgreSQL] date 컬럼 NOT NULL 제약조건 제거 오류:', err);
       }
     }
     

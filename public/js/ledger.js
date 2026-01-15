@@ -355,19 +355,15 @@ function renderVariableExpenses(expensesByCenter, centerOrder) {
         <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
           <thead>
             <tr style="background:#f9f9f9;border-bottom:1px solid #ddd;">
-              <th style="padding:4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">날짜</th>
               <th style="padding:4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">항목</th>
               <th style="padding:4px;text-align:right;font-weight:600;color:#666;font-size:0.7rem;">금액</th>
-              <th style="padding:4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">비고</th>
             </tr>
           </thead>
           <tbody>
             ${expenses.map(expense => `
               <tr class="ledger-variable-row" data-expense-id="${expense.id}" style="border-bottom:1px solid #eee;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
-                <td style="padding:4px;">${expense.date || '-'}</td>
                 <td style="padding:4px;">${expense.item || '-'}</td>
                 <td style="padding:4px;text-align:right;">${formatNumber(expense.amount || 0)}원</td>
-                <td style="padding:4px;">${expense.note || '-'}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -676,9 +672,9 @@ function showVariableExpenseAddModal() {
           <input type="month" id="ledger-variable-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
         </div>
         
-        <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">날짜 *</label>
-          <input type="date" id="ledger-variable-add-date" value="${today}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        <div style="display:none;">
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">날짜</label>
+          <input type="date" id="ledger-variable-add-date" value="${today}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
         </div>
         
         <div>
@@ -743,7 +739,7 @@ function showVariableExpenseAddModal() {
     const expense = {
       center: document.getElementById('ledger-variable-add-center').value,
       month: document.getElementById('ledger-variable-add-month').value,
-      date: document.getElementById('ledger-variable-add-date').value,
+      date: document.getElementById('ledger-variable-add-date').value || null,
       item: document.getElementById('ledger-variable-add-item').value,
       amount: parseInt(document.getElementById('ledger-variable-add-amount').value.replace(/,/g, '')) || 0,
       note: document.getElementById('ledger-variable-add-note').value || null
@@ -806,9 +802,9 @@ function showVariableExpenseEditModal(expense) {
           <input type="month" id="ledger-variable-edit-month" value="${expense.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
         </div>
         
-        <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">날짜 *</label>
-          <input type="date" id="ledger-variable-edit-date" value="${expense.date || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        <div style="display:none;">
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">날짜</label>
+          <input type="date" id="ledger-variable-edit-date" value="${expense.date || ''}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
         </div>
         
         <div>
@@ -897,14 +893,14 @@ function showVariableExpenseEditModal(expense) {
     const updates = {
       center: document.getElementById('ledger-variable-edit-center').value,
       month: document.getElementById('ledger-variable-edit-month').value,
-      date: document.getElementById('ledger-variable-edit-date').value,
+      date: document.getElementById('ledger-variable-edit-date').value || null,
       item: document.getElementById('ledger-variable-edit-item').value,
       amount: parseInt(document.getElementById('ledger-variable-edit-amount').value.replace(/,/g, '')) || 0,
       note: document.getElementById('ledger-variable-edit-note').value || null
     };
     
-    if (!updates.center || !updates.month || !updates.date || !updates.item) {
-      document.getElementById('ledger-variable-edit-result-message').textContent = '센터, 연월, 날짜, 항목은 필수입니다.';
+    if (!updates.center || !updates.month || !updates.item) {
+      document.getElementById('ledger-variable-edit-result-message').textContent = '센터, 연월, 항목은 필수입니다.';
       return;
     }
     
