@@ -165,17 +165,16 @@ function renderTrialSessions(data, centerOrder) {
           <table style="width:100%;border-collapse:collapse;min-width:800px;">
             <thead>
               <tr style="background:#f5f5f5;">
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">날짜</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">시간</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">트레이너</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">회원명</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">성별</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">연락처</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">유입경로</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">운동목적</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">특이사항</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">결과</th>
-                <th style="padding:10px 8px;text-align:left;font-size:0.85rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">작업</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">날짜</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">시간</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">트레이너</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">회원명</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">성별</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">연락처</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">유입경로</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">운동목적</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">특이사항</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">결과</th>
               </tr>
             </thead>
             <tbody>
@@ -183,22 +182,20 @@ function renderTrialSessions(data, centerOrder) {
                 const date = new Date(trial.date);
                 const dateStr = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
                 const resultValue = trial.result || '미등록';
+                const resultColor = resultValue === '등록' ? '#4caf50' : '#333';
                 
                 return `
-                  <tr style="border-bottom:1px solid #f0f0f0;">
-                    <td style="padding:10px 8px;font-size:0.9rem;">${dateStr}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">${trial.time}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">${trial.trainer || ''}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">${trial.member_name || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">${trial.gender || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">${resultValue}</td>
-                    <td style="padding:10px 8px;font-size:0.9rem;">
-                      <button class="trial-edit-btn" data-trial-id="${trial.id}" data-trial-data='${JSON.stringify(trial)}' style="background:#1976d2;color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;">수정</button>
-                    </td>
+                  <tr class="trial-row" data-trial-data='${JSON.stringify(trial)}' style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+                    <td style="padding:6px 6px;font-size:0.8rem;">${dateStr}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.time}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.trainer || ''}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.member_name || '-'}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.gender || '-'}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
+                    <td style="padding:6px 6px;font-size:0.8rem;color:${resultColor};font-weight:${resultValue === '등록' ? '600' : 'normal'};">${resultValue}</td>
                   </tr>
                 `;
               }).join('')}
@@ -216,9 +213,9 @@ function renderTrialSessions(data, centerOrder) {
 }
 
 function setupTrialEditListeners() {
-  // 수정 버튼 클릭 이벤트
-  document.querySelectorAll('.trial-edit-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+  // 행 클릭 이벤트 (수정 모달 열기)
+  document.querySelectorAll('.trial-row').forEach(row => {
+    row.addEventListener('click', function() {
       const trialData = JSON.parse(this.getAttribute('data-trial-data'));
       showTrialEditModal(trialData);
     });

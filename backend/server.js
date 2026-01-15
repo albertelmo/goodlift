@@ -3996,7 +3996,7 @@ app.get('/api/variable-expenses', async (req, res) => {
 // 변동지출 추가 API
 app.post('/api/variable-expenses', async (req, res) => {
     try {
-        const { center, month, date, item, amount, note } = req.body;
+        const { center, month, date, item, amount, note, taxType } = req.body;
         
         if (!center || !month || !item) {
             return res.status(400).json({ message: '센터, 월, 항목은 필수입니다.' });
@@ -4008,7 +4008,8 @@ app.post('/api/variable-expenses', async (req, res) => {
             date: date || null,
             item,
             amount: amount || 0,
-            note: note || null
+            note: note || null,
+            taxType: taxType || null
         };
         
         const result = await ledgerDB.addVariableExpense(expense);
@@ -4241,7 +4242,8 @@ app.post('/api/ledger/copy-previous-month', async (req, res) => {
                     date: expense.date,
                     item: expense.item,
                     amount: expense.amount,
-                    note: expense.note
+                    note: expense.note,
+                    taxType: expense.tax_type || null
                 });
                 copyResults.variable++;
             } catch (err) {

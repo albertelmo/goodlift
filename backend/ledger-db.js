@@ -170,6 +170,7 @@ const createVariableExpenseTable = async () => {
           item VARCHAR(200) NOT NULL,
           amount INTEGER NOT NULL DEFAULT 0,
           note VARCHAR(500),
+          tax_type VARCHAR(50),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -217,6 +218,7 @@ const migrateVariableExpenseTable = async () => {
       'item': 'VARCHAR(200) NOT NULL',
       'amount': 'INTEGER NOT NULL DEFAULT 0',
       'note': 'VARCHAR(500)',
+      'tax_type': 'VARCHAR(50)',
       'created_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
       'updated_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'
     };
@@ -366,7 +368,7 @@ const getFixedExpenses = async (filters = {}) => {
 const getVariableExpenses = async (filters = {}) => {
   try {
     let query = `
-      SELECT id, center, month, date, item, amount, note, created_at, updated_at
+      SELECT id, center, month, date, item, amount, note, tax_type, created_at, updated_at
       FROM variable_expenses
     `;
     const params = [];
@@ -423,9 +425,9 @@ const addFixedExpense = async (expense) => {
 const addVariableExpense = async (expense) => {
   try {
     const query = `
-      INSERT INTO variable_expenses (center, month, date, item, amount, note)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, center, month, date, item, amount, note, created_at, updated_at
+      INSERT INTO variable_expenses (center, month, date, item, amount, note, tax_type)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, center, month, date, item, amount, note, tax_type, created_at, updated_at
     `;
     const values = [
       expense.center,
@@ -433,7 +435,8 @@ const addVariableExpense = async (expense) => {
       expense.date,
       expense.item,
       expense.amount || 0,
-      expense.note || null
+      expense.note || null,
+      expense.taxType || null
     ];
     const result = await pool.query(query, values);
     return result.rows[0];
@@ -525,6 +528,10 @@ const updateVariableExpense = async (id, updates) => {
       fields.push(`note = $${paramIndex++}`);
       values.push(updates.note);
     }
+    if (updates.taxType !== undefined) {
+      fields.push(`tax_type = $${paramIndex++}`);
+      values.push(updates.taxType || null);
+    }
     
     if (fields.length === 0) {
       throw new Error('수정할 필드가 없습니다.');
@@ -537,7 +544,7 @@ const updateVariableExpense = async (id, updates) => {
       UPDATE variable_expenses 
       SET ${fields.join(', ')}
       WHERE id = $${paramIndex}
-      RETURNING id, center, month, date, item, amount, note, created_at, updated_at
+      RETURNING id, center, month, date, item, amount, note, tax_type, created_at, updated_at
     `;
     
     const result = await pool.query(query, values);

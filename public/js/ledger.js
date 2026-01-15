@@ -3,6 +3,12 @@ export const ledger = {
   render
 };
 
+// 세금 Type 옵션 (센터와 무관하게 동작)
+const TAX_TYPE_OPTIONS = [
+  { value: 'vat', label: '부가세' },
+  { value: 'corporate_tax', label: '법인세' }
+];
+
 // 현재 날짜 (한국시간 기준)
 let currentDate = new Date();
 currentDate.setHours(0, 0, 0, 0);
@@ -127,8 +133,10 @@ async function render(container) {
           <div style="text-align:center;padding:6px;color:#999;">데이터를 불러오는 중...</div>
         </div>
         <div id="ledger-profit" style="margin-top:8px;padding:8px;background:#f0f7ff;border-radius:4px;text-align:center;font-size:0.8rem;font-weight:600;">
-          <span style="color:#666;">월 순이익: </span>
+          <span style="color:#666;">월순익: </span>
           <span id="ledger-profit-amount" style="color:#1976d2;">계산 중...</span>
+          <span style="color:#666;margin-left:20px;">연간순익: </span>
+          <span id="ledger-yearly-profit-amount" style="color:#1976d2;">계산 중...</span>
         </div>
       </div>
       
@@ -318,6 +326,9 @@ async function loadLedgerData() {
     // 월 순이익 계산 및 표시
     renderMonthlyProfit(salesTotal, expenseTotal);
     
+    // 연간순익 계산 및 표시
+    await renderYearlyProfit(yearMonth, centerOrder);
+    
     // 월별 정산 렌더링
     renderSettlements(settlements, allSettlements);
     
@@ -405,10 +416,25 @@ function renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expense
   // 전체 합계 계산
   const grandTotal = fixedTotal + variableTotal + salaryTotal + mealTotal + purchaseTotal + personalTotal;
   
+  // 세금타입별 합계 계산 (변동지출에서만)
+  const vatTotal = variableExpenses
+    .filter(e => e.tax_type === 'vat')
+    .reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  const corporateTaxTotal = variableExpenses
+    .filter(e => e.tax_type === 'corporate_tax')
+    .reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  
   // 제목 업데이트
   const titleEl = document.getElementById('ledger-summary-title');
   if (titleEl) {
-    titleEl.innerHTML = `지출 종류별 합계 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
+    let titleHTML = `지출 종류별 합계 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
+    
+    // 세금타입별 합계가 0원보다 클 때만 표시
+    if (vatTotal > 0 || corporateTaxTotal > 0) {
+      titleHTML += ` <span style="color:#666;font-size:0.75rem;font-weight:normal;margin-left:12px;">부가세: ${formatNumber(vatTotal)}원, 법인세: ${formatNumber(corporateTaxTotal)}원</span>`;
+    }
+    
+    titleEl.innerHTML = titleHTML;
   }
   
   // 합계 리스트 HTML 생성
@@ -442,6 +468,75 @@ function renderMonthlyProfit(salesTotal, expenseTotal) {
   const color = profit >= 0 ? '#4caf50' : '#d32f2f';
   
   profitEl.innerHTML = `<span style="color:${color};">${sign}${profitFormatted}원</span>`;
+}
+
+// 연간순익 렌더링
+async function renderYearlyProfit(currentYearMonth, centerOrder) {
+  const yearlyProfitEl = document.getElementById('ledger-yearly-profit-amount');
+  if (!yearlyProfitEl) return;
+  
+  try {
+    const [currentYear, currentMonth] = currentYearMonth.split('-').map(Number);
+    let yearlySalesTotal = 0;
+    let yearlyExpenseTotal = 0;
+    
+    // 올해 1월부터 현재 월까지 모든 데이터 가져오기
+    const monthlyPromises = [];
+    for (let month = 1; month <= currentMonth; month++) {
+      const yearMonth = `${currentYear}-${String(month).padStart(2, '0')}`;
+      const [year, monthNum] = yearMonth.split('-');
+      const startDate = `${year}-${monthNum}-01T00:00:00`;
+      const lastDay = new Date(parseInt(year), parseInt(monthNum), 0).getDate();
+      const endDate = `${year}-${monthNum}-${lastDay}T23:59:59`;
+      
+      monthlyPromises.push(
+        Promise.all([
+          fetch(`/api/fixed-expenses?month=${yearMonth}`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/variable-expenses?month=${yearMonth}`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/salaries?month=${yearMonth}`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/expenses?startDate=${startDate}&endDate=${endDate}`).then(r => r.ok ? r.json().then(d => d.expenses || []) : []),
+          fetch(`/api/metrics?month=${yearMonth}`).then(r => r.ok ? r.json() : [])
+        ])
+      );
+    }
+    
+    const monthlyData = await Promise.all(monthlyPromises);
+    
+    // 각 월의 매출과 지출 합산
+    monthlyData.forEach(([fixedExpenses, variableExpenses, salaries, expenses, metrics]) => {
+      // 매출 합계
+      const monthSales = metrics.reduce((sum, m) => sum + (parseInt(m.total_sales) || 0), 0);
+      yearlySalesTotal += monthSales;
+      
+      // 지출 합계
+      const fixedTotal = fixedExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+      const variableTotal = variableExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+      const salaryTotal = salaries.reduce((sum, s) => sum + (parseInt(s.amount) || 0), 0);
+      
+      // 식대, 구매, 개인지출 분리
+      const mealExpenses = expenses.filter(e => e.expenseType === 'meal');
+      const purchaseExpenses = expenses.filter(e => e.expenseType === 'purchase');
+      const personalExpenses = expenses.filter(e => e.expenseType === 'personal');
+      
+      const mealTotal = mealExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+      const purchaseTotal = purchaseExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+      const personalTotal = personalExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+      
+      const monthExpenseTotal = fixedTotal + variableTotal + salaryTotal + mealTotal + purchaseTotal + personalTotal;
+      yearlyExpenseTotal += monthExpenseTotal;
+    });
+    
+    // 연간순익 계산
+    const yearlyProfit = yearlySalesTotal - yearlyExpenseTotal;
+    const profitFormatted = formatNumber(Math.abs(yearlyProfit));
+    const sign = yearlyProfit >= 0 ? '+' : '-';
+    const color = yearlyProfit >= 0 ? '#4caf50' : '#d32f2f';
+    
+    yearlyProfitEl.innerHTML = `<span style="color:${color};">${sign}${profitFormatted}원</span>`;
+  } catch (error) {
+    console.error('연간순익 계산 오류:', error);
+    yearlyProfitEl.textContent = '계산 실패';
+  }
 }
 
 // 정산 렌더링
@@ -920,13 +1015,14 @@ function showVariableExpenseAddModal() {
   const today = new Date().toISOString().split('T')[0];
   const modalHTML = `
     <div class="ledger-variable-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
-    <div class="ledger-variable-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div class="ledger-variable-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;max-height:85vh;display:flex;flex-direction:column;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid #eee;flex-shrink:0;">
         <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">변동지출 추가</h3>
         <button id="ledger-variable-add-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
       
-      <form id="ledger-variable-add-form" style="display:flex;flex-direction:column;gap:16px;">
+      <div style="overflow-y:auto;flex:1;padding:20px 24px;">
+        <form id="ledger-variable-add-form" style="display:flex;flex-direction:column;gap:12px;">
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">센터 *</label>
           <select id="ledger-variable-add-center" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;"></select>
@@ -953,17 +1049,27 @@ function showVariableExpenseAddModal() {
         </div>
         
         <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">세금 Type</label>
+          <select id="ledger-variable-add-tax-type" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택 안함</option>
+            ${TAX_TYPE_OPTIONS.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+          </select>
+          <div style="font-size:0.75rem;color:#666;margin-top:4px;">※ 센터와 무관하게 선택 가능</div>
+        </div>
+        
+        <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">비고</label>
           <textarea id="ledger-variable-add-note" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;resize:vertical;"></textarea>
         </div>
         
         <div id="ledger-variable-add-result-message" style="min-height:24px;color:#d32f2f;font-size:0.85rem;"></div>
-        
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
-          <button type="button" id="ledger-variable-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
-          <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
-        </div>
-      </form>
+        </form>
+      </div>
+      
+      <div style="display:flex;gap:10px;justify-content:flex-end;padding:16px 24px;border-top:1px solid #eee;flex-shrink:0;">
+        <button type="button" id="ledger-variable-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
+        <button type="submit" form="ledger-variable-add-form" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
+      </div>
     </div>
   `;
   
@@ -1007,20 +1113,23 @@ function showVariableExpenseAddModal() {
       date: document.getElementById('ledger-variable-add-date').value || null,
       item: document.getElementById('ledger-variable-add-item').value,
       amount: parseInt(document.getElementById('ledger-variable-add-amount').value.replace(/,/g, '')) || 0,
-      note: document.getElementById('ledger-variable-add-note').value || null
+      note: document.getElementById('ledger-variable-add-note').value || null,
+      taxType: document.getElementById('ledger-variable-add-tax-type').value || null
     };
     
-    if (!expense.center || !expense.month || !expense.date || !expense.item) {
-      document.getElementById('ledger-variable-add-result-message').textContent = '센터, 연월, 날짜, 항목은 필수입니다.';
+    if (!expense.center || !expense.month || !expense.item) {
+      document.getElementById('ledger-variable-add-result-message').textContent = '센터, 연월, 항목은 필수입니다.';
       return;
     }
     
     const resultMsg = document.getElementById('ledger-variable-add-result-message');
     resultMsg.textContent = '';
     
-    const submitBtn = this.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = '저장 중...';
+    const submitBtn = document.querySelector('button[form="ledger-variable-add-form"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = '저장 중...';
+    }
     
     try {
       const response = await fetch('/api/variable-expenses', {
@@ -1040,8 +1149,11 @@ function showVariableExpenseAddModal() {
       await loadLedgerData();
     } catch (error) {
       resultMsg.textContent = error.message || '추가에 실패했습니다.';
-      submitBtn.disabled = false;
-      submitBtn.textContent = '저장';
+      const submitBtn = document.querySelector('button[form="ledger-variable-add-form"]');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '저장';
+      }
     }
   });
 }
@@ -1050,13 +1162,14 @@ function showVariableExpenseAddModal() {
 function showVariableExpenseEditModal(expense) {
   const modalHTML = `
     <div class="ledger-variable-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
-    <div class="ledger-variable-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <div class="ledger-variable-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;max-height:85vh;display:flex;flex-direction:column;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:20px 24px;border-bottom:1px solid #eee;flex-shrink:0;">
         <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">변동지출 수정</h3>
         <button id="ledger-variable-edit-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
       
-      <form id="ledger-variable-edit-form" style="display:flex;flex-direction:column;gap:16px;">
+      <div style="overflow-y:auto;flex:1;padding:20px 24px;">
+        <form id="ledger-variable-edit-form" style="display:flex;flex-direction:column;gap:12px;">
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">센터 *</label>
           <select id="ledger-variable-edit-center" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;"></select>
@@ -1083,20 +1196,30 @@ function showVariableExpenseEditModal(expense) {
         </div>
         
         <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">세금 Type</label>
+          <select id="ledger-variable-edit-tax-type" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택 안함</option>
+            ${TAX_TYPE_OPTIONS.map(opt => `<option value="${opt.value}" ${expense.tax_type === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}
+          </select>
+          <div style="font-size:0.75rem;color:#666;margin-top:4px;">※ 센터와 무관하게 선택 가능</div>
+        </div>
+        
+        <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">비고</label>
           <textarea id="ledger-variable-edit-note" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;resize:vertical;">${(expense.note || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
         </div>
         
         <div id="ledger-variable-edit-result-message" style="min-height:24px;color:#d32f2f;font-size:0.85rem;"></div>
-        
-        <div style="display:flex;gap:10px;justify-content:space-between;margin-top:8px;">
-          <button type="button" id="ledger-variable-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">삭제</button>
-          <div style="display:flex;gap:10px;">
-            <button type="button" id="ledger-variable-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
-            <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
-          </div>
+        </form>
+      </div>
+      
+      <div style="display:flex;gap:10px;justify-content:space-between;padding:16px 24px;border-top:1px solid #eee;flex-shrink:0;">
+        <button type="button" id="ledger-variable-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">삭제</button>
+        <div style="display:flex;gap:10px;">
+          <button type="button" id="ledger-variable-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
+          <button type="submit" form="ledger-variable-edit-form" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
         </div>
-      </form>
+      </div>
     </div>
   `;
   
@@ -1161,7 +1284,8 @@ function showVariableExpenseEditModal(expense) {
       date: document.getElementById('ledger-variable-edit-date').value || null,
       item: document.getElementById('ledger-variable-edit-item').value,
       amount: parseInt(document.getElementById('ledger-variable-edit-amount').value.replace(/,/g, '')) || 0,
-      note: document.getElementById('ledger-variable-edit-note').value || null
+      note: document.getElementById('ledger-variable-edit-note').value || null,
+      taxType: document.getElementById('ledger-variable-edit-tax-type').value || null
     };
     
     if (!updates.center || !updates.month || !updates.item) {
@@ -1172,9 +1296,11 @@ function showVariableExpenseEditModal(expense) {
     const resultMsg = document.getElementById('ledger-variable-edit-result-message');
     resultMsg.textContent = '';
     
-    const submitBtn = this.querySelector('button[type="submit"]');
-    submitBtn.disabled = true;
-    submitBtn.textContent = '저장 중...';
+    const submitBtn = document.querySelector('button[form="ledger-variable-edit-form"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = '저장 중...';
+    }
     
     try {
       const response = await fetch(`/api/variable-expenses/${expense.id}`, {
@@ -1194,8 +1320,11 @@ function showVariableExpenseEditModal(expense) {
       await loadLedgerData();
     } catch (error) {
       resultMsg.textContent = error.message || '수정에 실패했습니다.';
-      submitBtn.disabled = false;
-      submitBtn.textContent = '저장';
+      const submitBtn = document.querySelector('button[form="ledger-variable-edit-form"]');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '저장';
+      }
     }
   });
 }
