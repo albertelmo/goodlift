@@ -50,6 +50,11 @@ function formatNumber(num) {
   return num ? num.toLocaleString('ko-KR') : '0';
 }
 
+function formatSalesInManwon(amount) {
+  const manwon = Math.round((amount || 0) / 10000);
+  return formatNumber(manwon);
+}
+
 // 이전월 데이터를 이번달로 복사
 async function copyPreviousMonthData() {
   const currentYearMonth = getSelectedYearMonth();
@@ -115,12 +120,32 @@ async function render(container) {
       
       <div id="ledger-loading" style="text-align:center;padding:40px;color:#888;display:none;">데이터를 불러오는 중...</div>
       
+      <!-- 센터별 전체 매출 리스트 -->
+      <div id="ledger-sales-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:8px;margin-bottom:16px;">
+        <h4 id="ledger-sales-title" style="margin:0 0 8px 0;color:#1976d2;font-size:0.85rem;font-weight:600;">센터별 전체 매출</h4>
+        <div id="ledger-sales-content" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:6px;font-size:0.75rem;">
+          <div style="text-align:center;padding:6px;color:#999;">데이터를 불러오는 중...</div>
+        </div>
+        <div id="ledger-profit" style="margin-top:8px;padding:8px;background:#f0f7ff;border-radius:4px;text-align:center;font-size:0.8rem;font-weight:600;">
+          <span style="color:#666;">월 순이익: </span>
+          <span id="ledger-profit-amount" style="color:#1976d2;">계산 중...</span>
+        </div>
+      </div>
+      
+      <!-- 지출 종류별 합계 리스트 -->
+      <div id="ledger-summary-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:8px;margin-bottom:16px;">
+        <h4 id="ledger-summary-title" style="margin:0 0 8px 0;color:#1976d2;font-size:0.85rem;font-weight:600;">지출 종류별 합계</h4>
+        <div id="ledger-summary-content" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;font-size:0.75rem;">
+          <div style="text-align:center;padding:6px;color:#999;">데이터를 불러오는 중...</div>
+        </div>
+      </div>
+      
       <!-- 고정지출 / 변동지출 / 급여 섹션 -->
       <div style="display:flex;gap:12px;align-items:flex-start;">
         <!-- 고정지출 섹션 -->
         <div style="flex:1;min-width:0;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">고정지출</h4>
+            <h4 id="ledger-fixed-title" style="margin:0;color:#1976d2;font-size:0.9rem;">고정지출</h4>
             <button id="ledger-fixed-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
           </div>
           <div id="ledger-fixed-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;min-height:200px;">
@@ -131,7 +156,7 @@ async function render(container) {
         <!-- 변동지출 섹션 -->
         <div style="flex:1;min-width:0;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">변동지출</h4>
+            <h4 id="ledger-variable-title" style="margin:0;color:#1976d2;font-size:0.9rem;">변동지출</h4>
             <button id="ledger-variable-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
           </div>
           <div id="ledger-variable-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;min-height:200px;">
@@ -142,7 +167,7 @@ async function render(container) {
         <!-- 급여 섹션 -->
         <div style="flex:1;min-width:0;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">급여</h4>
+            <h4 id="ledger-salary-title" style="margin:0;color:#1976d2;font-size:0.9rem;">급여</h4>
             <button id="ledger-salary-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
           </div>
           <div id="ledger-salary-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;min-height:200px;">
@@ -217,16 +242,27 @@ async function loadLedgerData() {
     const centers = centersResponse.ok ? await centersResponse.json() : [];
     const centerOrder = centers.map(c => c.name);
     
-    // 고정지출, 변동지출, 급여 데이터 가져오기
-    const [fixedResponse, variableResponse, salaryResponse] = await Promise.all([
+    // 월별 날짜 범위 계산 (YYYY-MM 형식에서 startDate, endDate 계산)
+    const [year, month] = yearMonth.split('-');
+    const startDate = `${year}-${month}-01T00:00:00`;
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    const endDate = `${year}-${month}-${lastDay}T23:59:59`;
+    
+    // 고정지출, 변동지출, 급여, 식대, 구매, 개인지출, 지표(매출) 데이터 가져오기
+    const [fixedResponse, variableResponse, salaryResponse, expensesResponse, metricsResponse] = await Promise.all([
       fetch(`/api/fixed-expenses?month=${yearMonth}`),
       fetch(`/api/variable-expenses?month=${yearMonth}`),
-      fetch(`/api/salaries?month=${yearMonth}`)
+      fetch(`/api/salaries?month=${yearMonth}`),
+      fetch(`/api/expenses?startDate=${startDate}&endDate=${endDate}`),
+      fetch(`/api/metrics?month=${yearMonth}`)
     ]);
     
     const fixedExpenses = fixedResponse.ok ? await fixedResponse.json() : [];
     const variableExpenses = variableResponse.ok ? await variableResponse.json() : [];
     const salaries = salaryResponse.ok ? await salaryResponse.json() : [];
+    const expensesData = expensesResponse.ok ? await expensesResponse.json() : { expenses: [] };
+    const expenses = expensesData.expenses || [];
+    const metrics = metricsResponse.ok ? await metricsResponse.json() : [];
     
     // 센터별로 그룹화
     const fixedByCenter = {};
@@ -253,6 +289,15 @@ async function loadLedgerData() {
       salaryByCenter[salary.center].push(salary);
     });
     
+    // 센터별 전체 매출 표시
+    const salesTotal = renderCenterSales(metrics, centerOrder);
+    
+    // 지출 종류별 합계 계산 및 표시
+    const expenseTotal = renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expenses);
+    
+    // 월 순이익 계산 및 표시
+    renderMonthlyProfit(salesTotal, expenseTotal);
+    
     // 고정지출 렌더링
     renderFixedExpenses(fixedByCenter, centerOrder);
     
@@ -272,12 +317,135 @@ async function loadLedgerData() {
   }
 }
 
+// 센터별 전체 매출 렌더링
+function renderCenterSales(metrics, centerOrder) {
+  const salesEl = document.getElementById('ledger-sales-content');
+  if (!salesEl) return 0;
+  
+  // 센터별로 그룹화
+  const salesByCenter = {};
+  metrics.forEach(metric => {
+    if (metric.center && metric.total_sales !== undefined) {
+      salesByCenter[metric.center] = metric.total_sales || 0;
+    }
+  });
+  
+  // 센터 순서대로 정렬
+  const sortedCenters = centerOrder.length > 0
+    ? centerOrder.filter(center => salesByCenter.hasOwnProperty(center))
+    : Object.keys(salesByCenter).sort((a, b) => a.localeCompare(b, 'ko'));
+  
+  // 전체 합계 계산
+  const grandTotal = sortedCenters.reduce((sum, center) => sum + (salesByCenter[center] || 0), 0);
+  
+  // 제목 업데이트
+  const titleEl = document.getElementById('ledger-sales-title');
+  if (titleEl) {
+    titleEl.innerHTML = `센터별 전체 매출 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
+  }
+  
+  if (sortedCenters.length === 0) {
+    salesEl.innerHTML = '<div style="text-align:center;padding:6px;color:#999;font-size:0.7rem;">매출 데이터가 없습니다.</div>';
+    return 0;
+  }
+  
+  // 센터별 매출 리스트 HTML 생성
+  salesEl.innerHTML = sortedCenters.map(center => `
+    <div style="display:flex;flex-direction:column;align-items:center;padding:6px 4px;background:#f5f5f5;border-radius:4px;border-left:3px solid #1976d2;">
+      <span style="font-weight:500;color:#333;font-size:0.7rem;margin-bottom:2px;">${center}</span>
+      <span style="font-weight:600;color:#1976d2;font-size:0.75rem;">${formatNumber(salesByCenter[center])}원</span>
+    </div>
+  `).join('');
+  
+  return grandTotal;
+}
+
+// 지출 종류별 합계 렌더링
+function renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expenses) {
+  const summaryEl = document.getElementById('ledger-summary-content');
+  if (!summaryEl) return 0;
+  
+  // 각 지출 종류별 합계 계산
+  const fixedTotal = fixedExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  const variableTotal = variableExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  const salaryTotal = salaries.reduce((sum, s) => sum + (parseInt(s.amount) || 0), 0);
+  
+  // 식대, 구매, 개인지출 분리
+  const mealExpenses = expenses.filter(e => e.expenseType === 'meal');
+  const purchaseExpenses = expenses.filter(e => e.expenseType === 'purchase');
+  const personalExpenses = expenses.filter(e => e.expenseType === 'personal');
+  
+  const mealTotal = mealExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  const purchaseTotal = purchaseExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  const personalTotal = personalExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  
+  // 전체 합계 계산
+  const grandTotal = fixedTotal + variableTotal + salaryTotal + mealTotal + purchaseTotal + personalTotal;
+  
+  // 제목 업데이트
+  const titleEl = document.getElementById('ledger-summary-title');
+  if (titleEl) {
+    titleEl.innerHTML = `지출 종류별 합계 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
+  }
+  
+  // 합계 리스트 HTML 생성
+  const summaryItems = [
+    { label: '고정지출', amount: fixedTotal, color: '#1976d2' },
+    { label: '변동지출', amount: variableTotal, color: '#1976d2' },
+    { label: '급여', amount: salaryTotal, color: '#1976d2' },
+    { label: '식대', amount: mealTotal, color: '#1976d2' },
+    { label: '구매', amount: purchaseTotal, color: '#1976d2' },
+    { label: '개인지출', amount: personalTotal, color: '#1976d2' }
+  ];
+  
+  summaryEl.innerHTML = summaryItems.map(item => `
+    <div style="display:flex;flex-direction:column;align-items:center;padding:6px 4px;background:#f5f5f5;border-radius:4px;border-left:3px solid ${item.color};">
+      <span style="font-weight:500;color:#333;font-size:0.7rem;margin-bottom:2px;">${item.label}</span>
+      <span style="font-weight:600;color:${item.color};font-size:0.75rem;">${formatNumber(item.amount)}원</span>
+    </div>
+  `).join('');
+  
+  return grandTotal;
+}
+
+// 월 순이익 렌더링
+function renderMonthlyProfit(salesTotal, expenseTotal) {
+  const profitEl = document.getElementById('ledger-profit-amount');
+  if (!profitEl) return;
+  
+  const profit = salesTotal - expenseTotal;
+  const profitFormatted = formatNumber(Math.abs(profit));
+  const sign = profit >= 0 ? '+' : '-';
+  const color = profit >= 0 ? '#4caf50' : '#d32f2f';
+  
+  profitEl.innerHTML = `<span style="color:${color};">${sign}${profitFormatted}원</span>`;
+}
+
 // 고정지출 렌더링
 function renderFixedExpenses(expensesByCenter, centerOrder) {
   const listEl = document.getElementById('ledger-fixed-list');
   
+  // 전체 총합 계산
+  let grandTotal = 0;
+  centerOrder.forEach(center => {
+    const expenses = expensesByCenter[center] || [];
+    expenses.forEach(expense => {
+      grandTotal += parseInt(expense.amount) || 0;
+    });
+  });
+  
+  // 제목 업데이트
+  const titleEl = document.getElementById('ledger-fixed-title');
+  if (titleEl) {
+    titleEl.innerHTML = `고정지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
+  }
+  
   if (Object.keys(expensesByCenter).length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">등록된 고정지출이 없습니다.</div>';
+    // 데이터가 없을 때도 제목 업데이트
+    if (titleEl) {
+      titleEl.innerHTML = `고정지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: 0원)</span>`;
+    }
     return;
   }
   
@@ -334,8 +502,27 @@ function renderFixedExpenses(expensesByCenter, centerOrder) {
 function renderVariableExpenses(expensesByCenter, centerOrder) {
   const listEl = document.getElementById('ledger-variable-list');
   
+  // 전체 총합 계산
+  let grandTotal = 0;
+  centerOrder.forEach(center => {
+    const expenses = expensesByCenter[center] || [];
+    expenses.forEach(expense => {
+      grandTotal += parseInt(expense.amount) || 0;
+    });
+  });
+  
+  // 제목 업데이트
+  const titleEl = document.getElementById('ledger-variable-title');
+  if (titleEl) {
+    titleEl.innerHTML = `변동지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
+  }
+  
   if (Object.keys(expensesByCenter).length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">등록된 변동지출이 없습니다.</div>';
+    // 데이터가 없을 때도 제목 업데이트
+    if (titleEl) {
+      titleEl.innerHTML = `변동지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: 0원)</span>`;
+    }
     return;
   }
   
@@ -991,8 +1178,27 @@ function closeVariableExpenseEditModal() {
 function renderSalaries(salariesByCenter, centerOrder) {
   const listEl = document.getElementById('ledger-salary-list');
   
+  // 전체 총합 계산
+  let grandTotal = 0;
+  centerOrder.forEach(center => {
+    const salaries = salariesByCenter[center] || [];
+    salaries.forEach(salary => {
+      grandTotal += parseInt(salary.amount) || 0;
+    });
+  });
+  
+  // 제목 업데이트
+  const titleEl = document.getElementById('ledger-salary-title');
+  if (titleEl) {
+    titleEl.innerHTML = `급여 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
+  }
+  
   if (Object.keys(salariesByCenter).length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">등록된 급여가 없습니다.</div>';
+    // 데이터가 없을 때도 제목 업데이트
+    if (titleEl) {
+      titleEl.innerHTML = `급여 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: 0원)</span>`;
+    }
     return;
   }
   
