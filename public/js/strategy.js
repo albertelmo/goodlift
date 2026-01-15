@@ -365,6 +365,804 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
   
   // 수정 버튼 이벤트 리스너
   setupMetricEditListeners();
+  
+  // 마케팅 데이터 로드 및 표시
+  loadMarketingData(contentEl, centerOrder, yearMonth);
+}
+
+// 마케팅 섹션만 새로고침
+async function refreshMarketingSection() {
+  const contentEl = document.getElementById('strategy-content');
+  if (!contentEl) return;
+  
+  // 기존 마케팅 섹션 제거
+  const existingMarketingSection = contentEl.querySelector('#marketing-section');
+  if (existingMarketingSection) {
+    existingMarketingSection.remove();
+  }
+  
+  // 센터 목록 가져오기
+  let centerOrder = [];
+  try {
+    const centersResponse = await fetch('/api/centers');
+    if (centersResponse.ok) {
+      const centers = await centersResponse.json();
+      centerOrder = centers.map(c => c.name);
+    }
+  } catch (err) {
+    console.error('센터 목록 조회 오류:', err);
+  }
+  
+  const yearMonth = getSelectedYearMonth();
+  await loadMarketingData(contentEl, centerOrder, yearMonth);
+}
+
+// 마케팅 데이터 로드
+async function loadMarketingData(contentEl, centerOrder, yearMonth) {
+  try {
+    // 센터 목록이 없으면 가져오기
+    let allCenters = centerOrder;
+    if (!allCenters || allCenters.length === 0) {
+      try {
+        const centersResponse = await fetch('/api/centers');
+        if (centersResponse.ok) {
+          const centers = await centersResponse.json();
+          allCenters = centers.map(c => c.name);
+        }
+      } catch (err) {
+        console.error('센터 목록 조회 오류:', err);
+      }
+    }
+    
+    // 지난달 계산
+    const [year, month] = yearMonth.split('-');
+    const lastMonthDate = new Date(parseInt(year), parseInt(month) - 1, 1);
+    lastMonthDate.setMonth(lastMonthDate.getMonth() - 1);
+    const lastYear = lastMonthDate.getFullYear();
+    const lastMonth = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
+    const lastYearMonth = `${lastYear}-${lastMonth}`;
+    
+    // 마케팅 데이터와 지표 데이터를 동시에 가져오기
+    const [marketingResponse, currentMetricsResponse, lastMetricsResponse] = await Promise.all([
+      fetch(`/api/marketing?month=${yearMonth}`),
+      fetch(`/api/metrics?month=${yearMonth}`),
+      fetch(`/api/metrics?month=${lastYearMonth}`)
+    ]);
+    
+    if (!marketingResponse.ok) {
+      throw new Error('마케팅 데이터를 불러오는데 실패했습니다.');
+    }
+    
+    const marketingData = await marketingResponse.json();
+    const currentMetrics = await currentMetricsResponse.json();
+    const lastMetrics = await lastMetricsResponse.json();
+    
+    // 지표를 센터별로 그룹화
+    const currentMetricsByCenter = {};
+    currentMetrics.forEach(metric => {
+      currentMetricsByCenter[metric.center] = metric;
+    });
+    
+    const lastMetricsByCenter = {};
+    lastMetrics.forEach(metric => {
+      lastMetricsByCenter[metric.center] = metric;
+    });
+    
+    // 증감 계산 함수
+    const getChange = (current, last) => {
+      const currentVal = current || 0;
+      const lastVal = last || 0;
+      const diff = currentVal - lastVal;
+      if (diff === 0) {
+        return { text: '0', color: '#666' };
+      }
+      if (diff > 0) {
+        return { text: `+${formatNumber(diff)}`, color: '#4caf50' };
+      }
+      return { text: formatNumber(diff), color: '#d32f2f' };
+    };
+    
+    // 지표 표시 함수
+    const getMetricDisplay = (center, targetResult) => {
+      const currentMetric = currentMetricsByCenter[center] || {};
+      const lastMetric = lastMetricsByCenter[center] || {};
+      
+      if (!targetResult) return '-';
+      
+      switch (targetResult) {
+        case '네이버클릭': {
+          const change = getChange(currentMetric.naver_clicks || 0, lastMetric.naver_clicks || 0);
+          return `<span style="color:#999;">${formatNumber(lastMetric.naver_clicks || 0)}</span> ${formatNumber(currentMetric.naver_clicks || 0)} <span style="color:${change.color};">${change.text}</span>`;
+        }
+        case '당근클릭': {
+          const change = getChange(currentMetric.karrot_clicks || 0, lastMetric.karrot_clicks || 0);
+          return `<span style="color:#999;">${formatNumber(lastMetric.karrot_clicks || 0)}</span> ${formatNumber(currentMetric.karrot_clicks || 0)} <span style="color:${change.color};">${change.text}</span>`;
+        }
+        case 'PT신규유입': {
+          const lastNew = lastMetric.pt_new || 0;
+          const lastConsultation = lastMetric.pt_consultation || 0;
+          const newCount = currentMetric.pt_new || 0;
+          const consultation = currentMetric.pt_consultation || 0;
+          const lastPercent = lastConsultation > 0 ? Math.round((lastNew / lastConsultation) * 100) : 0;
+          const percent = consultation > 0 ? Math.round((newCount / consultation) * 100) : 0;
+          return `<span style="color:#999;">${formatNumber(lastNew)} / ${formatNumber(lastConsultation)}${lastConsultation > 0 ? ` <span style="font-size:0.65rem;">(${lastPercent}%)</span>` : ''}</span> ${formatNumber(newCount)} / ${formatNumber(consultation)}${consultation > 0 ? ` <span style="font-size:0.65rem;">(${percent}%)</span>` : ''}`;
+        }
+        case 'PT재등록': {
+          const lastRenewal = lastMetric.pt_renewal || 0;
+          const lastExpiring = lastMetric.pt_expiring || 0;
+          const renewal = currentMetric.pt_renewal || 0;
+          const expiring = currentMetric.pt_expiring || 0;
+          const lastRenewalPercent = lastExpiring > 0 ? Math.round((lastRenewal / lastExpiring) * 100) : 0;
+          const renewalPercent = expiring > 0 ? Math.round((renewal / expiring) * 100) : 0;
+          return `<span style="color:#999;">${formatNumber(lastRenewal)} / ${formatNumber(lastExpiring)}${lastExpiring > 0 ? ` <span style="font-size:0.65rem;">(${lastRenewalPercent}%)</span>` : ''}</span> ${formatNumber(renewal)} / ${formatNumber(expiring)}${expiring > 0 ? ` <span style="font-size:0.65rem;">(${renewalPercent}%)</span>` : ''}`;
+        }
+        case '회원권신규': {
+          const change = getChange(currentMetric.membership_new || 0, lastMetric.membership_new || 0);
+          return `<span style="color:#999;">${formatNumber(lastMetric.membership_new || 0)}</span> ${formatNumber(currentMetric.membership_new || 0)} <span style="color:${change.color};">${change.text}</span>`;
+        }
+        case '회원권재등록': {
+          const lastMemRenewal = lastMetric.membership_renewal || 0;
+          const lastMemExpiring = lastMetric.membership_expiring || 0;
+          const memRenewal = currentMetric.membership_renewal || 0;
+          const memExpiring = currentMetric.membership_expiring || 0;
+          const lastMemPercent = lastMemExpiring > 0 ? Math.round((lastMemRenewal / lastMemExpiring) * 100) : 0;
+          const memPercent = memExpiring > 0 ? Math.round((memRenewal / memExpiring) * 100) : 0;
+          return `<span style="color:#999;">${formatNumber(lastMemRenewal)} / ${formatNumber(lastMemExpiring)}${lastMemExpiring > 0 ? ` <span style="font-size:0.65rem;">(${lastMemPercent}%)</span>` : ''}</span> ${formatNumber(memRenewal)} / ${formatNumber(memExpiring)}${memExpiring > 0 ? ` <span style="font-size:0.65rem;">(${memPercent}%)</span>` : ''}`;
+        }
+        case '전체회원': {
+          const change = getChange(currentMetric.total_members || 0, lastMetric.total_members || 0);
+          return `<span style="color:#999;">${formatNumber(lastMetric.total_members || 0)}</span> ${formatNumber(currentMetric.total_members || 0)} <span style="color:${change.color};">${change.text}</span>`;
+        }
+        default:
+          return '-';
+      }
+    };
+    
+    // 센터별로 그룹화
+    const marketingByCenter = {};
+    marketingData.forEach(item => {
+      if (!marketingByCenter[item.center]) {
+        marketingByCenter[item.center] = [];
+      }
+      marketingByCenter[item.center].push(item);
+    });
+    
+    // 마케팅 섹션 HTML 생성
+    let marketingHTML = '<div id="marketing-section" style="margin-top:24px;border-top:2px solid #ddd;padding-top:20px;">';
+    marketingHTML += '<h3 style="margin:0 0 16px 0;color:#1976d2;font-size:1.1rem;">마케팅</h3>';
+    
+    // 모든 센터 표시 (데이터가 있는 센터 + 데이터가 없는 센터)
+    if (!allCenters || allCenters.length === 0) {
+      // 센터 목록도 없고 마케팅 데이터도 없으면
+      if (marketingData.length === 0) {
+        marketingHTML += '<div style="text-align:center;color:#999;padding:20px;">등록된 마케팅 데이터가 없습니다.</div>';
+      } else {
+        // 마케팅 데이터만 있으면 해당 센터만 표시
+        allCenters = Object.keys(marketingByCenter).sort();
+      }
+    }
+    
+    if (allCenters && allCenters.length > 0) {
+      allCenters.forEach(center => {
+        const items = marketingByCenter[center] || [];
+        marketingHTML += `
+          <div style="margin-bottom:16px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;">
+            <div style="background:#f5f5f5;border-bottom:1px solid #ddd;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;">
+              <h4 style="margin:0;color:#1976d2;font-size:0.85rem;font-weight:600;">${center}</h4>
+              <button class="marketing-add-btn" data-center="${center}" style="background:#4caf50;color:#fff;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">추가</button>
+            </div>
+            <div style="padding:8px;">
+              ${items.length === 0 ? '<div style="text-align:center;color:#999;padding:8px;font-size:0.75rem;">등록된 데이터가 없습니다.</div>' : `
+                <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+                  <thead>
+                    <tr style="background:#f9f9f9;border-bottom:1px solid #ddd;">
+                      <th style="padding:4px 4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">타입</th>
+                      <th style="padding:4px 4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">아이템</th>
+                      <th style="padding:4px 4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">방향</th>
+                      <th style="padding:4px 4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">대상</th>
+                      <th style="padding:4px 4px;text-align:right;font-weight:600;color:#666;font-size:0.7rem;">비용</th>
+                      <th style="padding:4px 4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">Action result</th>
+                      <th style="padding:4px 4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">Target result</th>
+                      <th style="padding:4px 4px;text-align:left;font-weight:600;color:#666;font-size:0.7rem;">지표</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${items.map(item => `
+                      <tr class="marketing-row" data-marketing-id="${item.id}" data-marketing-data='${JSON.stringify(item).replace(/'/g, "&#39;")}' style="border-bottom:1px solid #eee;cursor:pointer;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+                        <td style="padding:4px 4px;">${item.type === 'online' ? 'On' : 'Off'}</td>
+                        <td style="padding:4px 4px;">${item.item || '-'}</td>
+                        <td style="padding:4px 4px;">${item.direction || '-'}</td>
+                        <td style="padding:4px 4px;">${item.target || '-'}</td>
+                        <td style="padding:4px 4px;text-align:right;">${item.cost === '완료' ? '완료' : `${formatNumber(item.cost || 0)}원`}</td>
+                        <td style="padding:4px 4px;">${item.action_result || '-'}</td>
+                        <td style="padding:4px 4px;">${item.target_result || '-'}</td>
+                        <td style="padding:4px 4px;font-size:0.7rem;">${getMetricDisplay(center, item.target_result)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              `}
+            </div>
+          </div>
+        `;
+      });
+    }
+    
+    marketingHTML += '</div>';
+    
+    // 기존 콘텐츠에 마케팅 섹션 추가
+    contentEl.insertAdjacentHTML('beforeend', marketingHTML);
+    
+    // 이벤트 리스너 설정
+    setupMarketingListeners();
+  } catch (error) {
+    console.error('마케팅 데이터 로드 오류:', error);
+  }
+}
+
+// 마케팅 이벤트 리스너 설정
+function setupMarketingListeners() {
+  // 추가 버튼
+  document.querySelectorAll('.marketing-add-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const center = this.getAttribute('data-center');
+      showMarketingAddModal(center);
+    });
+  });
+  
+  // 행 클릭 이벤트 (수정 모달 열기)
+  document.querySelectorAll('.marketing-row').forEach(row => {
+    row.addEventListener('click', function() {
+      const marketingData = JSON.parse(this.getAttribute('data-marketing-data'));
+      showMarketingEditModal(marketingData);
+    });
+  });
+}
+
+// 마케팅 추가 모달
+function showMarketingAddModal(center) {
+  const yearMonth = getSelectedYearMonth();
+  const modalHTML = `
+    <div class="marketing-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="marketing-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;max-height:90vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">마케팅 추가</h3>
+        <button id="marketing-add-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      
+      <form id="marketing-add-form" style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">센터 *</label>
+          <input type="text" id="marketing-add-center" value="${center}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
+          <input type="month" id="marketing-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">타입 *</label>
+          <select id="marketing-add-type" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="online">On</option>
+            <option value="offline">Off</option>
+          </select>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">아이템 *</label>
+          <select id="marketing-add-item" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="직접입력">직접입력</option>
+            <option value="N플레이스">N플레이스</option>
+            <option value="블로그">블로그</option>
+            <option value="문자">문자</option>
+            <option value="물티슈">물티슈</option>
+            <option value="배너">배너</option>
+            <option value="전단지">전단지</option>
+            <option value="단지게시판">단지게시판</option>
+          </select>
+          <input type="text" id="marketing-add-item-custom" placeholder="직접입력" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;display:none;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">방향</label>
+          <input type="text" id="marketing-add-direction" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">대상</label>
+          <select id="marketing-add-target" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="신규">신규</option>
+            <option value="기존">기존</option>
+            <option value="전체">전체</option>
+            <option value="만료">만료</option>
+          </select>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">비용</label>
+          <div style="display:flex;gap:16px;align-items:center;margin-bottom:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="marketing-add-cost-type" value="amount" id="marketing-add-cost-amount" checked style="cursor:pointer;">
+              <span>금액</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="marketing-add-cost-type" value="completed" id="marketing-add-cost-completed" style="cursor:pointer;">
+              <span>완료</span>
+            </label>
+          </div>
+          <input type="text" id="marketing-add-cost" value="0" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;" inputmode="numeric">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">Action result</label>
+          <textarea id="marketing-add-action-result" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">Target result</label>
+          <select id="marketing-add-target-result" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="네이버클릭">네이버클릭</option>
+            <option value="당근클릭">당근클릭</option>
+            <option value="PT신규유입">PT신규유입</option>
+            <option value="PT재등록">PT재등록</option>
+            <option value="회원권신규">회원권신규</option>
+            <option value="회원권재등록">회원권재등록</option>
+            <option value="전체회원">전체회원</option>
+          </select>
+        </div>
+        
+        <div id="marketing-add-result-message" style="min-height:24px;color:#d32f2f;font-size:0.85rem;"></div>
+        
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px;">
+          <button type="button" id="marketing-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
+          <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
+        </div>
+      </form>
+    </div>
+  `;
+  
+  const existingOverlay = document.querySelector('.marketing-add-modal-overlay');
+  const existingModal = document.querySelector('.marketing-add-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  document.getElementById('marketing-add-modal-close').addEventListener('click', closeMarketingAddModal);
+  document.getElementById('marketing-add-cancel-btn').addEventListener('click', closeMarketingAddModal);
+  document.querySelector('.marketing-add-modal-overlay').addEventListener('click', closeMarketingAddModal);
+  
+  // PT전문샵인 경우 회원권 관련 target result 옵션 비활성화
+  const isPTSpecialty = center && center.includes('PT');
+  const targetResultSelect = document.getElementById('marketing-add-target-result');
+  if (isPTSpecialty) {
+    const membershipNewOption = targetResultSelect.querySelector('option[value="회원권신규"]');
+    const membershipRenewalOption = targetResultSelect.querySelector('option[value="회원권재등록"]');
+    if (membershipNewOption) membershipNewOption.disabled = true;
+    if (membershipRenewalOption) membershipRenewalOption.disabled = true;
+  }
+  
+  // 아이템 드롭다운 변경 이벤트
+  document.getElementById('marketing-add-item').addEventListener('change', function() {
+    const customInput = document.getElementById('marketing-add-item-custom');
+    if (this.value === '직접입력') {
+      this.style.display = 'none';
+      customInput.style.display = 'block';
+      customInput.required = true;
+      customInput.setAttribute('required', 'required');
+      customInput.value = '';
+      customInput.focus();
+    } else {
+      this.style.display = 'block';
+      customInput.style.display = 'none';
+      customInput.required = false;
+      customInput.removeAttribute('required');
+      customInput.value = '';
+    }
+  });
+  
+  // 직접입력 텍스트 필드에서 드롭다운으로 돌아가기
+  document.getElementById('marketing-add-item-custom').addEventListener('blur', function() {
+    if (this.value.trim() === '') {
+      const select = document.getElementById('marketing-add-item');
+      select.style.display = 'block';
+      this.style.display = 'none';
+      select.value = '';
+    }
+  });
+  
+  // 비용 라디오 버튼 변경 이벤트
+  document.querySelectorAll('input[name="marketing-add-cost-type"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const costInput = document.getElementById('marketing-add-cost');
+      if (this.value === 'completed') {
+        costInput.style.display = 'none';
+      } else {
+        costInput.style.display = 'block';
+      }
+    });
+  });
+  
+  // 비용 입력 필드 천단위 구분자 추가
+  document.getElementById('marketing-add-cost').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/,/g, '');
+    if (value === '') {
+      e.target.value = '';
+      return;
+    }
+    if (!/^\d+$/.test(value)) {
+      value = value.replace(/\D/g, '');
+    }
+    if (value) {
+      e.target.value = formatNumber(parseInt(value));
+    } else {
+      e.target.value = '';
+    }
+  });
+  
+  // 폼 제출 이벤트
+  document.getElementById('marketing-add-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const month = document.getElementById('marketing-add-month').value;
+    const itemSelect = document.getElementById('marketing-add-item');
+    const itemCustom = document.getElementById('marketing-add-item-custom');
+    const itemValue = itemSelect.value === '직접입력' ? itemCustom.value : itemSelect.value;
+    
+    const marketing = {
+      center: document.getElementById('marketing-add-center').value,
+      month: month,
+      type: document.getElementById('marketing-add-type').value,
+      item: itemValue,
+      direction: document.getElementById('marketing-add-direction').value || null,
+      target: document.getElementById('marketing-add-target').value || null,
+      cost: document.getElementById('marketing-add-cost-amount').checked ? (parseInt(document.getElementById('marketing-add-cost').value.replace(/,/g, '')) || 0) : '완료',
+      action_result: document.getElementById('marketing-add-action-result').value || null,
+      target_result: document.getElementById('marketing-add-target-result').value || null
+    };
+    
+    if (!marketing.center || !marketing.month || !marketing.type || !marketing.item) {
+      document.getElementById('marketing-add-result-message').textContent = '센터, 연월, 타입, 아이템은 필수입니다.';
+      return;
+    }
+    
+    const resultMsg = document.getElementById('marketing-add-result-message');
+    resultMsg.textContent = '';
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '저장 중...';
+    
+    try {
+      const response = await fetch('/api/marketing', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(marketing)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '추가에 실패했습니다.');
+      }
+      
+      closeMarketingAddModal();
+      
+      // 데이터 다시 로드
+      await refreshMarketingSection();
+    } catch (error) {
+      console.error('마케팅 추가 오류:', error);
+      resultMsg.textContent = '추가에 실패했습니다: ' + error.message;
+      submitBtn.disabled = false;
+      submitBtn.textContent = '저장';
+    }
+  });
+}
+
+function closeMarketingAddModal() {
+  const overlay = document.querySelector('.marketing-add-modal-overlay');
+  const modal = document.querySelector('.marketing-add-modal');
+  if (overlay) overlay.remove();
+  if (modal) modal.remove();
+}
+
+// 마케팅 수정 모달
+function showMarketingEditModal(marketing) {
+  const modalHTML = `
+    <div class="marketing-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="marketing-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:500px;max-width:95vw;width:auto;max-height:90vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">마케팅 수정</h3>
+        <button id="marketing-edit-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      
+      <form id="marketing-edit-form" style="display:flex;flex-direction:column;gap:16px;">
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">센터 *</label>
+          <input type="text" id="marketing-edit-center" value="${(marketing.center || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
+          <input type="month" id="marketing-edit-month" value="${marketing.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">타입 *</label>
+          <select id="marketing-edit-type" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="online" ${marketing.type === 'online' ? 'selected' : ''}>On</option>
+            <option value="offline" ${marketing.type === 'offline' ? 'selected' : ''}>Off</option>
+          </select>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">아이템 *</label>
+          <select id="marketing-edit-item" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'display:none;' : ''}">
+            <option value="">선택</option>
+            <option value="직접입력" ${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'selected' : ''}>직접입력</option>
+            <option value="N플레이스" ${marketing.item === 'N플레이스' ? 'selected' : ''}>N플레이스</option>
+            <option value="블로그" ${marketing.item === '블로그' ? 'selected' : ''}>블로그</option>
+            <option value="문자" ${marketing.item === '문자' ? 'selected' : ''}>문자</option>
+            <option value="물티슈" ${marketing.item === '물티슈' ? 'selected' : ''}>물티슈</option>
+            <option value="배너" ${marketing.item === '배너' ? 'selected' : ''}>배너</option>
+            <option value="전단지" ${marketing.item === '전단지' ? 'selected' : ''}>전단지</option>
+            <option value="단지게시판" ${marketing.item === '단지게시판' ? 'selected' : ''}>단지게시판</option>
+          </select>
+          <input type="text" id="marketing-edit-item-custom" placeholder="직접입력" value="${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? (marketing.item || '').replace(/"/g, '&quot;') : ''}" ${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'required' : ''} style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;display:${!['N플레이스', '블로그', '문자', '물티슈', '배너', '전단지', '단지게시판'].includes(marketing.item) ? 'block' : 'none'};">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">방향</label>
+          <input type="text" id="marketing-edit-direction" value="${(marketing.direction || '').replace(/"/g, '&quot;')}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">대상</label>
+          <select id="marketing-edit-target" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="신규" ${marketing.target === '신규' ? 'selected' : ''}>신규</option>
+            <option value="기존" ${marketing.target === '기존' ? 'selected' : ''}>기존</option>
+            <option value="전체" ${marketing.target === '전체' ? 'selected' : ''}>전체</option>
+            <option value="만료" ${marketing.target === '만료' ? 'selected' : ''}>만료</option>
+          </select>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">비용</label>
+          <div style="display:flex;gap:16px;align-items:center;margin-bottom:8px;">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="marketing-edit-cost-type" value="amount" id="marketing-edit-cost-amount" ${marketing.cost !== '완료' ? 'checked' : ''} style="cursor:pointer;">
+              <span>금액</span>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.9rem;">
+              <input type="radio" name="marketing-edit-cost-type" value="completed" id="marketing-edit-cost-completed" ${marketing.cost === '완료' ? 'checked' : ''} style="cursor:pointer;">
+              <span>완료</span>
+            </label>
+          </div>
+          <input type="text" id="marketing-edit-cost" value="${marketing.cost === '완료' ? '0' : (marketing.cost ? formatNumber(parseInt(marketing.cost) || 0) : '0')}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;${marketing.cost === '완료' ? 'display:none;' : ''}" inputmode="numeric">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">Action result</label>
+          <textarea id="marketing-edit-action-result" rows="3" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;resize:vertical;">${(marketing.action_result || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">Target result</label>
+          <select id="marketing-edit-target-result" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="네이버클릭" ${marketing.target_result === '네이버클릭' ? 'selected' : ''}>네이버클릭</option>
+            <option value="당근클릭" ${marketing.target_result === '당근클릭' ? 'selected' : ''}>당근클릭</option>
+            <option value="PT신규유입" ${marketing.target_result === 'PT신규유입' ? 'selected' : ''}>PT신규유입</option>
+            <option value="PT재등록" ${marketing.target_result === 'PT재등록' ? 'selected' : ''}>PT재등록</option>
+            <option value="회원권신규" ${marketing.target_result === '회원권신규' ? 'selected' : ''}>회원권신규</option>
+            <option value="회원권재등록" ${marketing.target_result === '회원권재등록' ? 'selected' : ''}>회원권재등록</option>
+            <option value="전체회원" ${marketing.target_result === '전체회원' ? 'selected' : ''}>전체회원</option>
+          </select>
+        </div>
+        
+        <div id="marketing-edit-result-message" style="min-height:24px;color:#d32f2f;font-size:0.85rem;"></div>
+        
+        <div style="display:flex;gap:10px;justify-content:space-between;margin-top:8px;">
+          <button type="button" id="marketing-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">삭제</button>
+          <div style="display:flex;gap:10px;">
+            <button type="button" id="marketing-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">취소</button>
+            <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:10px 20px;border-radius:6px;cursor:pointer;font-size:0.95rem;">저장</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  `;
+  
+  const existingOverlay = document.querySelector('.marketing-edit-modal-overlay');
+  const existingModal = document.querySelector('.marketing-edit-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  document.getElementById('marketing-edit-modal-close').addEventListener('click', closeMarketingEditModal);
+  document.getElementById('marketing-edit-cancel-btn').addEventListener('click', closeMarketingEditModal);
+  document.querySelector('.marketing-edit-modal-overlay').addEventListener('click', closeMarketingEditModal);
+  
+  // PT전문샵인 경우 회원권 관련 target result 옵션 비활성화
+  const isPTSpecialty = marketing.center && marketing.center.includes('PT');
+  const targetResultSelect = document.getElementById('marketing-edit-target-result');
+  if (isPTSpecialty) {
+    const membershipNewOption = targetResultSelect.querySelector('option[value="회원권신규"]');
+    const membershipRenewalOption = targetResultSelect.querySelector('option[value="회원권재등록"]');
+    if (membershipNewOption) {
+      membershipNewOption.disabled = true;
+      // 현재 선택된 값이 회원권신규인 경우 빈 값으로 변경
+      if (targetResultSelect.value === '회원권신규') {
+        targetResultSelect.value = '';
+      }
+    }
+    if (membershipRenewalOption) {
+      membershipRenewalOption.disabled = true;
+      // 현재 선택된 값이 회원권재등록인 경우 빈 값으로 변경
+      if (targetResultSelect.value === '회원권재등록') {
+        targetResultSelect.value = '';
+      }
+    }
+  }
+  
+  // 삭제 버튼 이벤트
+  document.getElementById('marketing-edit-delete-btn').addEventListener('click', async function() {
+    if (confirm('정말 삭제하시겠습니까?')) {
+      try {
+        const response = await fetch(`/api/marketing/${marketing.id}`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          throw new Error('삭제에 실패했습니다.');
+        }
+        
+        closeMarketingEditModal();
+        await refreshMarketingSection();
+      } catch (error) {
+        console.error('마케팅 삭제 오류:', error);
+        alert('삭제에 실패했습니다.');
+      }
+    }
+  });
+  
+  // 아이템 드롭다운 변경 이벤트
+  document.getElementById('marketing-edit-item').addEventListener('change', function() {
+    const customInput = document.getElementById('marketing-edit-item-custom');
+    if (this.value === '직접입력') {
+      this.style.display = 'none';
+      customInput.style.display = 'block';
+      customInput.required = true;
+      if (!customInput.value) {
+        customInput.value = '';
+      }
+      customInput.focus();
+    } else {
+      this.style.display = 'block';
+      customInput.style.display = 'none';
+      customInput.required = false;
+      customInput.removeAttribute('required');
+    }
+  });
+  
+  // 초기 상태에서 직접입력이 선택되지 않은 경우 required 제거
+  const initialItemSelect = document.getElementById('marketing-edit-item');
+  const initialCustomInput = document.getElementById('marketing-edit-item-custom');
+  if (initialItemSelect.value !== '직접입력') {
+    initialCustomInput.removeAttribute('required');
+  }
+  
+  // 직접입력 텍스트 필드에서 드롭다운으로 돌아가기
+  document.getElementById('marketing-edit-item-custom').addEventListener('blur', function() {
+    if (this.value.trim() === '') {
+      const select = document.getElementById('marketing-edit-item');
+      select.style.display = 'block';
+      this.style.display = 'none';
+      select.value = '';
+    }
+  });
+  
+  // 비용 라디오 버튼 변경 이벤트
+  document.querySelectorAll('input[name="marketing-edit-cost-type"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      const costInput = document.getElementById('marketing-edit-cost');
+      if (this.value === 'completed') {
+        costInput.style.display = 'none';
+      } else {
+        costInput.style.display = 'block';
+      }
+    });
+  });
+  
+  // 비용 입력 필드 천단위 구분자 추가
+  document.getElementById('marketing-edit-cost').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/,/g, '');
+    if (value === '') {
+      e.target.value = '';
+      return;
+    }
+    if (!/^\d+$/.test(value)) {
+      value = value.replace(/\D/g, '');
+    }
+    if (value) {
+      e.target.value = formatNumber(parseInt(value));
+    } else {
+      e.target.value = '';
+    }
+  });
+  
+  // 폼 제출 이벤트
+  document.getElementById('marketing-edit-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const itemSelect = document.getElementById('marketing-edit-item');
+    const itemCustom = document.getElementById('marketing-edit-item-custom');
+    const itemValue = itemSelect.value === '직접입력' ? itemCustom.value : itemSelect.value;
+    
+    const updates = {
+      center: document.getElementById('marketing-edit-center').value,
+      month: document.getElementById('marketing-edit-month').value,
+      type: document.getElementById('marketing-edit-type').value,
+      item: itemValue,
+      direction: document.getElementById('marketing-edit-direction').value || null,
+      target: document.getElementById('marketing-edit-target').value || null,
+      cost: document.getElementById('marketing-edit-cost-amount').checked ? (parseInt(document.getElementById('marketing-edit-cost').value.replace(/,/g, '')) || 0) : '완료',
+      action_result: document.getElementById('marketing-edit-action-result').value || null,
+      target_result: document.getElementById('marketing-edit-target-result').value || null
+    };
+    
+    if (!updates.center || !updates.month || !updates.type || !updates.item) {
+      document.getElementById('marketing-edit-result-message').textContent = '센터, 연월, 타입, 아이템은 필수입니다.';
+      return;
+    }
+    
+    const resultMsg = document.getElementById('marketing-edit-result-message');
+    resultMsg.textContent = '';
+    
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '저장 중...';
+    
+    try {
+      const response = await fetch(`/api/marketing/${marketing.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(updates)
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '수정에 실패했습니다.');
+      }
+      
+      closeMarketingEditModal();
+      
+      // 데이터 다시 로드
+      await refreshMarketingSection();
+    } catch (error) {
+      console.error('마케팅 수정 오류:', error);
+      resultMsg.textContent = '수정에 실패했습니다: ' + error.message;
+      submitBtn.disabled = false;
+      submitBtn.textContent = '저장';
+    }
+  });
+}
+
+function closeMarketingEditModal() {
+  const overlay = document.querySelector('.marketing-edit-modal-overlay');
+  const modal = document.querySelector('.marketing-edit-modal');
+  if (overlay) overlay.remove();
+  if (modal) modal.remove();
 }
 
 function formatNumber(num) {

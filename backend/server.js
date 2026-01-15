@@ -21,6 +21,7 @@ const parsedMemberSnapshotsDB = require('./parsed-member-snapshots-db');
 const parsedSalesSnapshotsDB = require('./parsed-sales-snapshots-db');
 const salesDB = require('./sales-db');
 const metricsDB = require('./metrics-db');
+const marketingDB = require('./marketing-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -289,6 +290,7 @@ parsedMemberSnapshotsDB.initializeDatabase();
 parsedSalesSnapshotsDB.initializeDatabase();
 salesDB.initializeDatabase();
 metricsDB.initializeDatabase();
+marketingDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -3821,6 +3823,91 @@ app.patch('/api/metrics/:id', async (req, res) => {
         } else {
             res.status(500).json({ message: '지표 수정에 실패했습니다.' });
         }
+    }
+});
+
+// 마케팅 조회 API
+app.get('/api/marketing', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.center) {
+            filters.center = req.query.center;
+        }
+        if (req.query.month) {
+            filters.month = req.query.month;
+        }
+        if (req.query.type) {
+            filters.type = req.query.type;
+        }
+        
+        const marketing = await marketingDB.getMarketing(filters);
+        res.json(marketing);
+    } catch (error) {
+        console.error('[API] 마케팅 조회 오류:', error);
+        res.status(500).json({ message: '마케팅 조회에 실패했습니다.' });
+    }
+});
+
+// 마케팅 추가 API
+app.post('/api/marketing', async (req, res) => {
+    try {
+        const { center, month, type, item, direction, target, cost, action_result, target_result } = req.body;
+        
+        if (!center || !month || !type || !item) {
+            return res.status(400).json({ message: '센터, 월, 타입, 아이템은 필수입니다.' });
+        }
+        
+        if (type !== 'online' && type !== 'offline') {
+            return res.status(400).json({ message: '타입은 online 또는 offline이어야 합니다.' });
+        }
+        
+        const marketing = {
+            center,
+            month,
+            type,
+            item,
+            direction: direction || null,
+            target: target || null,
+            cost: cost || 0,
+            action_result: action_result || null,
+            target_result: target_result || null
+        };
+        
+        const result = await marketingDB.addMarketing(marketing);
+        res.json({ message: '마케팅이 추가되었습니다.', marketing: result });
+    } catch (error) {
+        console.error('[API] 마케팅 추가 오류:', error);
+        res.status(500).json({ message: '마케팅 추가에 실패했습니다.' });
+    }
+});
+
+// 마케팅 수정 API
+app.patch('/api/marketing/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updates = req.body;
+        
+        if (updates.type && updates.type !== 'online' && updates.type !== 'offline') {
+            return res.status(400).json({ message: '타입은 online 또는 offline이어야 합니다.' });
+        }
+        
+        const result = await marketingDB.updateMarketing(id, updates);
+        res.json({ message: '마케팅이 수정되었습니다.', marketing: result });
+    } catch (error) {
+        console.error('[API] 마케팅 수정 오류:', error);
+        res.status(500).json({ message: '마케팅 수정에 실패했습니다.' });
+    }
+});
+
+// 마케팅 삭제 API
+app.delete('/api/marketing/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        await marketingDB.deleteMarketing(id);
+        res.json({ message: '마케팅이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 마케팅 삭제 오류:', error);
+        res.status(500).json({ message: '마케팅 삭제에 실패했습니다.' });
     }
 });
 
