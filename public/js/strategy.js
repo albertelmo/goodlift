@@ -543,9 +543,26 @@ async function loadMarketingData(contentEl, centerOrder, yearMonth) {
       });
     });
     
+    // 각 센터별 비용 합계 계산
+    const centerCosts = {};
+    let totalCost = 0;
+    
+    Object.keys(marketingByCenter).forEach(center => {
+      const items = marketingByCenter[center] || [];
+      let centerCost = 0;
+      items.forEach(item => {
+        if (item.cost && item.cost !== '완료') {
+          const costValue = parseInt(item.cost) || 0;
+          centerCost += costValue;
+        }
+      });
+      centerCosts[center] = centerCost;
+      totalCost += centerCost;
+    });
+    
     // 마케팅 섹션 HTML 생성
     let marketingHTML = '<div id="marketing-section" style="margin-top:24px;border-top:2px solid #ddd;padding-top:20px;">';
-    marketingHTML += '<h3 style="margin:0 0 16px 0;color:#1976d2;font-size:1.1rem;">마케팅</h3>';
+    marketingHTML += `<h3 style="margin:0 0 16px 0;color:#1976d2;font-size:1.1rem;">마케팅 <span style="color:#666;font-weight:normal;font-size:0.9rem;">(비용 : ${formatNumber(totalCost)}원)</span></h3>`;
     
     // 모든 센터 표시 (데이터가 있는 센터 + 데이터가 없는 센터)
     if (!allCenters || allCenters.length === 0) {
@@ -561,10 +578,11 @@ async function loadMarketingData(contentEl, centerOrder, yearMonth) {
     if (allCenters && allCenters.length > 0) {
       allCenters.forEach(center => {
         const items = marketingByCenter[center] || [];
+        const centerCost = centerCosts[center] || 0;
         marketingHTML += `
           <div style="margin-bottom:16px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;">
             <div style="background:#f5f5f5;border-bottom:1px solid #ddd;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;">
-              <h4 style="margin:0;color:#1976d2;font-size:0.85rem;font-weight:600;">${center}</h4>
+              <h4 style="margin:0;color:#1976d2;font-size:0.85rem;font-weight:600;">${center} <span style="color:#666;font-weight:normal;">(비용 : ${formatNumber(centerCost)}원)</span></h4>
               <button class="marketing-add-btn" data-center="${center}" style="background:#4caf50;color:#fff;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">추가</button>
             </div>
             <div style="padding:8px;">
