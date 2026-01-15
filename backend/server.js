@@ -3868,7 +3868,7 @@ app.post('/api/marketing', async (req, res) => {
             item,
             direction: direction || null,
             target: target || null,
-            cost: cost || 0,
+            cost: cost ? String(cost) : '0',
             action_result: action_result || null,
             target_result: target_result || null
         };

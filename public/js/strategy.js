@@ -527,6 +527,22 @@ async function loadMarketingData(contentEl, centerOrder, yearMonth) {
       marketingByCenter[item.center].push(item);
     });
     
+    // 각 센터별로 타입별 정렬 (On 먼저, 그 다음 Off), 같은 타입 내에서는 늦게 추가된 것이 밑에
+    Object.keys(marketingByCenter).forEach(center => {
+      marketingByCenter[center].sort((a, b) => {
+        // On 타입이 먼저 오도록 정렬
+        if (a.type === 'online' && b.type === 'offline') return -1;
+        if (a.type === 'offline' && b.type === 'online') return 1;
+        // 같은 타입이면 created_at 기준 오름차순 정렬 (늦게 추가된 것이 밑에)
+        if (a.type === b.type) {
+          const aTime = new Date(a.created_at || 0).getTime();
+          const bTime = new Date(b.created_at || 0).getTime();
+          return aTime - bTime;
+        }
+        return 0;
+      });
+    });
+    
     // 마케팅 섹션 HTML 생성
     let marketingHTML = '<div id="marketing-section" style="margin-top:24px;border-top:2px solid #ddd;padding-top:20px;">';
     marketingHTML += '<h3 style="margin:0 0 16px 0;color:#1976d2;font-size:1.1rem;">마케팅</h3>';
@@ -815,6 +831,10 @@ function showMarketingAddModal(center) {
     const itemCustom = document.getElementById('marketing-add-item-custom');
     const itemValue = itemSelect.value === '직접입력' ? itemCustom.value : itemSelect.value;
     
+    const costAmountChecked = document.getElementById('marketing-add-cost-amount').checked;
+    const costValue = document.getElementById('marketing-add-cost').value.replace(/,/g, '');
+    const cost = costAmountChecked ? (costValue ? String(parseInt(costValue) || 0) : '0') : '완료';
+    
     const marketing = {
       center: document.getElementById('marketing-add-center').value,
       month: month,
@@ -822,7 +842,7 @@ function showMarketingAddModal(center) {
       item: itemValue,
       direction: document.getElementById('marketing-add-direction').value || null,
       target: document.getElementById('marketing-add-target').value || null,
-      cost: document.getElementById('marketing-add-cost-amount').checked ? (parseInt(document.getElementById('marketing-add-cost').value.replace(/,/g, '')) || 0) : '완료',
+      cost: cost,
       action_result: document.getElementById('marketing-add-action-result').value || null,
       target_result: document.getElementById('marketing-add-target-result').value || null
     };
@@ -1109,6 +1129,10 @@ function showMarketingEditModal(marketing) {
     const itemCustom = document.getElementById('marketing-edit-item-custom');
     const itemValue = itemSelect.value === '직접입력' ? itemCustom.value : itemSelect.value;
     
+    const costAmountChecked = document.getElementById('marketing-edit-cost-amount').checked;
+    const costValue = document.getElementById('marketing-edit-cost').value.replace(/,/g, '');
+    const cost = costAmountChecked ? (costValue ? String(parseInt(costValue) || 0) : '0') : '완료';
+    
     const updates = {
       center: document.getElementById('marketing-edit-center').value,
       month: document.getElementById('marketing-edit-month').value,
@@ -1116,7 +1140,7 @@ function showMarketingEditModal(marketing) {
       item: itemValue,
       direction: document.getElementById('marketing-edit-direction').value || null,
       target: document.getElementById('marketing-edit-target').value || null,
-      cost: document.getElementById('marketing-edit-cost-amount').checked ? (parseInt(document.getElementById('marketing-edit-cost').value.replace(/,/g, '')) || 0) : '완료',
+      cost: cost,
       action_result: document.getElementById('marketing-edit-action-result').value || null,
       target_result: document.getElementById('marketing-edit-target-result').value || null
     };
