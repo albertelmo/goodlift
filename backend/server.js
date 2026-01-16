@@ -297,8 +297,8 @@ metricsDB.initializeDatabase();
 marketingDB.initializeDatabase();
 ledgerDB.initializeDatabase();
 appUsersDB.initializeDatabase();
-workoutRecordsDB.initializeDatabase();
-workoutTypesDB.initializeDatabase();
+workoutTypesDB.initializeDatabase(); // workout_types 테이블을 먼저 생성해야 함
+workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
