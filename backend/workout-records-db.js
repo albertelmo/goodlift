@@ -24,13 +24,13 @@ const createWorkoutRecordsTable = async () => {
       console.log('[PostgreSQL] 기존 테이블이 삭제되었습니다.');
     }
     
-    // 새 테이블 생성
+    // 새 테이블 생성 (외래키 제약조건은 나중에 추가)
     const createQuery = `
       CREATE TABLE workout_records (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
         workout_date DATE NOT NULL,
-        workout_type_id UUID REFERENCES workout_types(id) ON DELETE SET NULL,
+        workout_type_id UUID,
         duration_minutes INTEGER,
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -39,6 +39,25 @@ const createWorkoutRecordsTable = async () => {
     `;
     await pool.query(createQuery);
     await pool.query("SET client_encoding TO 'UTF8'");
+    
+    // workout_types 테이블이 존재하는 경우에만 외래키 제약조건 추가
+    const checkWorkoutTypesQuery = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'workout_types'
+    `;
+    const checkWorkoutTypesResult = await pool.query(checkWorkoutTypesQuery);
+    
+    if (checkWorkoutTypesResult.rows.length > 0) {
+      await pool.query(`
+        ALTER TABLE workout_records 
+        ADD CONSTRAINT fk_workout_records_workout_type_id 
+        FOREIGN KEY (workout_type_id) REFERENCES workout_types(id) ON DELETE SET NULL
+      `);
+      console.log('[PostgreSQL] workout_records 테이블에 workout_type_id 외래키 제약조건이 추가되었습니다.');
+    } else {
+      console.warn('[PostgreSQL] workout_types 테이블이 아직 존재하지 않습니다. 외래키 제약조건은 나중에 추가됩니다.');
+    }
     
     // 인덱스 생성
     await createWorkoutRecordsIndexes();
