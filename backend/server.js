@@ -23,6 +23,8 @@ const salesDB = require('./sales-db');
 const metricsDB = require('./metrics-db');
 const marketingDB = require('./marketing-db');
 const ledgerDB = require('./ledger-db');
+const appUsersDB = require('./app-users-db');
+const workoutRecordsDB = require('./workout-records-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -293,6 +295,8 @@ salesDB.initializeDatabase();
 metricsDB.initializeDatabase();
 marketingDB.initializeDatabase();
 ledgerDB.initializeDatabase();
+appUsersDB.initializeDatabase();
+workoutRecordsDB.initializeDatabase();
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
@@ -389,35 +393,60 @@ app.get('/manifest.json', (req, res) => {
 
 app.use(express.static(path.join(__dirname, '../public')));
 
-// 회원가입 API
-app.post('/api/signup', (req, res) => {
-    const { username, password, name, role, center } = req.body;
-    if (!username || !password || !name || !role) {
-        return res.status(400).json({ message: '모든 항목을 입력해주세요.' });
+// 아이디 중복 체크 API
+app.get('/api/check-username', async (req, res) => {
+    const { username } = req.query;
+    
+    if (!username || !username.trim()) {
+        return res.status(400).json({ available: false, message: '아이디를 입력해주세요.' });
     }
-
-    // 허용 역할 검증: admin | su | center | trainer
-    const allowedRoles = ['admin', 'su', 'center', 'trainer'];
-    if (!allowedRoles.includes(role)) {
-        return res.status(400).json({ message: '올바른 역할을 선택해주세요.' });
+    
+    const trimmedUsername = username.trim();
+    
+    try {
+        // 1. 운영자 계정 확인 (accounts.json)
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        if (accounts.find(acc => acc.username === trimmedUsername)) {
+            return res.json({ available: false, message: '이미 사용 중인 아이디입니다.' });
+        }
+        
+        // 2. 앱 유저 계정 확인 (app_users 테이블)
+        try {
+            const existingAppUser = await appUsersDB.getAppUserByUsername(trimmedUsername);
+            if (existingAppUser) {
+                return res.json({ available: false, message: '이미 사용 중인 아이디입니다.' });
+            }
+        } catch (dbError) {
+            console.error('[API] 앱 유저 조회 오류:', dbError);
+            // 데이터베이스 오류가 발생해도 운영자 계정은 확인했으므로 계속 진행
+            // 단, 사용 가능 여부를 확실히 알 수 없으므로 오류 반환
+            return res.status(500).json({ available: false, message: '아이디 확인 중 오류가 발생했습니다.' });
+        }
+        
+        // 사용 가능한 아이디
+        res.json({ available: true, message: '사용 가능한 아이디입니다.' });
+    } catch (error) {
+        console.error('[API] 아이디 중복 체크 오류:', error);
+        console.error('[API] 오류 상세:', error.message, error.stack);
+        res.status(500).json({ available: false, message: '아이디 확인 중 오류가 발생했습니다.' });
     }
+});
 
-    // 센터관리자일 경우 센터 필수 및 존재 검증
-    if (role === 'center') {
-        if (!center || typeof center !== 'string' || !center.trim()) {
-            return res.status(400).json({ message: '센터관리자 등록 시 센터를 선택해주세요.' });
-        }
-        let centers = [];
-        if (fs.existsSync(CENTERS_PATH)) {
-            const rawCenters = fs.readFileSync(CENTERS_PATH, 'utf-8');
-            if (rawCenters) centers = JSON.parse(rawCenters);
-        }
-        const exists = centers.some(c => c.name === center.trim());
-        if (!exists) {
-            return res.status(400).json({ message: '존재하지 않는 센터입니다.' });
-        }
+// 회원가입 API (앱 유저 전용)
+app.post('/api/signup', async (req, res) => {
+    const { username, password, name, phone } = req.body;
+    
+    // 필수 항목 검증
+    if (!username || !password || !name || !phone) {
+        return res.status(400).json({ message: '모든 필수 항목을 입력해주세요.' });
     }
-
+    
+    // 아이디 중복 체크 (운영자 계정과 앱 유저 계정 모두 확인)
+    // 1. 운영자 계정 확인
     let accounts = [];
     if (fs.existsSync(DATA_PATH)) {
         const raw = fs.readFileSync(DATA_PATH, 'utf-8');
@@ -426,36 +455,255 @@ app.post('/api/signup', (req, res) => {
     if (accounts.find(acc => acc.username === username)) {
         return res.status(409).json({ message: '이미 존재하는 아이디입니다.' });
     }
-
-    const newAccount = { username, password, name, role };
-    if (role === 'center') {
-        newAccount.center = center.trim();
+    
+    // 2. 앱 유저 계정 확인
+    try {
+        const existingAppUser = await appUsersDB.getAppUserByUsername(username);
+        if (existingAppUser) {
+            return res.status(409).json({ message: '이미 존재하는 아이디입니다.' });
+        }
+        
+        // 비밀번호 해싱 (bcrypt)
+        const bcrypt = require('bcrypt');
+        const saltRounds = 10;
+        const password_hash = await bcrypt.hash(password, saltRounds);
+        
+        // 앱 유저 추가
+        const newAppUser = {
+            username: username.trim(),
+            password_hash: password_hash,
+            name: name.trim(),
+            phone: phone.trim(),
+            is_active: true
+        };
+        
+        await appUsersDB.addAppUser(newAppUser);
+        
+        res.json({ message: '회원가입이 완료되었습니다.' });
+    } catch (error) {
+        console.error('[API] 앱 유저 회원가입 오류:', error);
+        if (error.message && error.message.includes('UNIQUE')) {
+            return res.status(409).json({ message: '이미 존재하는 아이디입니다.' });
+        }
+        res.status(500).json({ message: '회원가입 처리 중 오류가 발생했습니다.' });
     }
-    accounts.push(newAccount);
-    fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
-    res.json({ message: '회원가입이 완료되었습니다.' });
 });
 
 // 로그인 API
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) {
         return res.status(400).json({ message: '아이디와 비밀번호를 입력해주세요.' });
     }
+    
+    // 1단계: 운영자 계정 확인 (accounts.json)
     let accounts = [];
     if (fs.existsSync(DATA_PATH)) {
         const raw = fs.readFileSync(DATA_PATH, 'utf-8');
         if (raw) accounts = JSON.parse(raw);
     }
-    const user = accounts.find(acc => acc.username === username && acc.password === password);
-    if (!user) {
-        return res.status(401).json({ message: '아이디 또는 비밀번호가 올바르지 않습니다.' });
+    const operator = accounts.find(acc => acc.username === username && acc.password === password);
+    
+    if (operator) {
+        // 운영자 로그인 성공
+        const response = {
+            message: '로그인 성공!',
+            userType: 'operator',
+            role: operator.role,
+            name: operator.name
+        };
+        if (operator.role === 'center' && operator.center) {
+            response.center = operator.center;
+        }
+        return res.json(response);
     }
-    const response = { message: '로그인 성공!', role: user.role, name: user.name };
-    if (user.role === 'center' && user.center) {
-        response.center = user.center;
+    
+    // 2단계: 앱 유저 계정 확인 (app_users 테이블)
+    try {
+        const appUser = await appUsersDB.getAppUserByUsername(username);
+        
+        if (!appUser) {
+            return res.status(401).json({ 
+                message: '아이디 또는 비밀번호가 올바르지 않습니다.' 
+            });
+        }
+        
+        // 계정 비활성화 체크
+        if (!appUser.is_active) {
+            return res.status(403).json({ 
+                message: '비활성화된 계정입니다.' 
+            });
+        }
+        
+        // 비밀번호 검증 (bcrypt)
+        const bcrypt = require('bcrypt');
+        const isValidPassword = await bcrypt.compare(password, appUser.password_hash);
+        
+        if (!isValidPassword) {
+            return res.status(401).json({ 
+                message: '아이디 또는 비밀번호가 올바르지 않습니다.' 
+            });
+        }
+        
+        // 마지막 로그인 시각 업데이트
+        await appUsersDB.updateLastLogin(username);
+        
+        // 앱 유저 로그인 성공
+        res.json({
+            message: '로그인 성공!',
+            userType: 'app_user',
+            id: appUser.id,
+            username: appUser.username,
+            name: appUser.name,
+            phone: appUser.phone,
+            member_name: appUser.member_name
+        });
+    } catch (error) {
+        console.error('[API] 앱 유저 로그인 오류:', error);
+        res.status(500).json({ message: '로그인 처리 중 오류가 발생했습니다.' });
     }
-    res.json(response);
+});
+
+// ========== 운동기록 API ==========
+
+// 운동기록 목록 조회
+app.get('/api/workout-records', async (req, res) => {
+    try {
+        const { app_user_id, start_date, end_date } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const filters = {};
+        if (start_date) filters.startDate = start_date;
+        if (end_date) filters.endDate = end_date;
+        
+        const records = await workoutRecordsDB.getWorkoutRecords(app_user_id, filters);
+        res.json(records);
+    } catch (error) {
+        console.error('[API] 운동기록 조회 오류:', error);
+        res.status(500).json({ message: '운동기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동기록 단일 조회
+app.get('/api/workout-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const record = await workoutRecordsDB.getWorkoutRecordById(id, app_user_id);
+        
+        if (!record) {
+            return res.status(404).json({ message: '운동기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 운동기록 단일 조회 오류:', error);
+        res.status(500).json({ message: '운동기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동기록 추가
+app.post('/api/workout-records', async (req, res) => {
+    try {
+        const { app_user_id, workout_date, workout_type, duration_minutes, calories_burned, notes } = req.body;
+        
+        if (!app_user_id || !workout_date) {
+            return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
+        }
+        
+        const workoutData = {
+            app_user_id,
+            workout_date,
+            workout_type: workout_type || null,
+            duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
+            calories_burned: calories_burned ? parseInt(calories_burned) : null,
+            notes: notes || null
+        };
+        
+        const record = await workoutRecordsDB.addWorkoutRecord(workoutData);
+        res.status(201).json(record);
+    } catch (error) {
+        console.error('[API] 운동기록 추가 오류:', error);
+        res.status(500).json({ message: '운동기록 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동기록 수정
+app.patch('/api/workout-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id, workout_date, workout_type, duration_minutes, calories_burned, notes } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const updates = {};
+        if (workout_date !== undefined) updates.workout_date = workout_date;
+        if (workout_type !== undefined) updates.workout_type = workout_type;
+        if (duration_minutes !== undefined) updates.duration_minutes = duration_minutes ? parseInt(duration_minutes) : null;
+        if (calories_burned !== undefined) updates.calories_burned = calories_burned ? parseInt(calories_burned) : null;
+        if (notes !== undefined) updates.notes = notes;
+        
+        const record = await workoutRecordsDB.updateWorkoutRecord(id, app_user_id, updates);
+        
+        if (!record) {
+            return res.status(404).json({ message: '운동기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 운동기록 수정 오류:', error);
+        res.status(500).json({ message: '운동기록 수정 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동기록 삭제
+app.delete('/api/workout-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const deleted = await workoutRecordsDB.deleteWorkoutRecord(id, app_user_id);
+        
+        if (!deleted) {
+            return res.status(404).json({ message: '운동기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json({ message: '운동기록이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 운동기록 삭제 오류:', error);
+        res.status(500).json({ message: '운동기록 삭제 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동기록 통계 조회
+app.get('/api/workout-records/stats', async (req, res) => {
+    try {
+        const { app_user_id, start_date, end_date } = req.query;
+        
+        if (!app_user_id || !start_date || !end_date) {
+            return res.status(400).json({ message: '앱 유저 ID, 시작 날짜, 종료 날짜가 필요합니다.' });
+        }
+        
+        const stats = await workoutRecordsDB.getWorkoutStats(app_user_id, start_date, end_date);
+        res.json(stats);
+    } catch (error) {
+        console.error('[API] 운동기록 통계 조회 오류:', error);
+        res.status(500).json({ message: '운동기록 통계 조회 중 오류가 발생했습니다.' });
+    }
 });
 
 // 트레이너 리스트 API

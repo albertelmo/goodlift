@@ -11,6 +11,7 @@ import { database } from './database.js';
 import { sales } from './sales.js';
 import { strategy } from './strategy.js';
 import { ledger } from './ledger.js';
+import { showAppUserSection } from './app-user/index.js';
 
 // 권한 체크 헬퍼 함수 (SU 역할 추가)
 function isAdminOrSu(role) {
@@ -19,83 +20,77 @@ function isAdminOrSu(role) {
 
 // 회원가입 폼 표시 및 자동 로그인 처리
 window.addEventListener('DOMContentLoaded', function() {
-    // 자동 로그인: localStorage에 role, name이 있으면 바로 메인화면
-    const savedRole = localStorage.getItem('role');
-    const savedName = localStorage.getItem('name');
-    if (savedRole && savedName) {
-        showMainSection(savedRole, savedName);
-        document.getElementById('logoutBtn').style.display = 'inline-block';
-        document.getElementById('settingsBtn').style.display = 'inline-block';
+    const savedUserType = localStorage.getItem('userType');
+    
+    if (savedUserType === 'operator') {
+        // 기존 운영자 자동 로그인
+        const savedRole = localStorage.getItem('role');
+        const savedName = localStorage.getItem('name');
+        if (savedRole && savedName) {
+            showMainSection(savedRole, savedName);
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            document.getElementById('settingsBtn').style.display = 'inline-block';
+        } else {
+            document.getElementById('logoutBtn').style.display = 'none';
+            document.getElementById('settingsBtn').style.display = 'none';
+        }
+    } else if (savedUserType === 'app_user') {
+        // 앱 유저 자동 로그인
+        const appUserId = localStorage.getItem('appUserId');
+        const appUserName = localStorage.getItem('appUserName');
+        if (appUserId && appUserName) {
+            showAppUserSection({
+                id: appUserId,
+                name: appUserName,
+                username: localStorage.getItem('appUsername'),
+                phone: localStorage.getItem('appUserPhone'),
+                member_name: localStorage.getItem('appUserMemberName')
+            });
+            document.getElementById('logoutBtn').style.display = 'inline-block';
+            document.getElementById('settingsBtn').style.display = 'inline-block';
+        } else {
+            document.getElementById('logoutBtn').style.display = 'none';
+            document.getElementById('settingsBtn').style.display = 'none';
+        }
     } else {
+        // 로그인하지 않은 상태
         document.getElementById('logoutBtn').style.display = 'none';
         document.getElementById('settingsBtn').style.display = 'none';
-        // 로그인하지 않은 상태에서는 secretBtn 숨김
-        const secretBtn = document.getElementById('secretBtn');
-        if (secretBtn) {
-            secretBtn.style.display = 'none';
-        }
     }
-    document.getElementById('showSignupBtn').onclick = async function() {
+    
+    // 로그인하지 않은 상태에서는 secretBtn 숨김
+    const secretBtn = document.getElementById('secretBtn');
+    if (secretBtn) {
+        secretBtn.style.display = 'none';
+    }
+    document.getElementById('showSignupBtn').onclick = function() {
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('signupSection').style.display = 'block';
-        // 관리자 계정 존재 여부 확인
-        const roleSelect = document.getElementById('signup-role');
-        const centerRow = document.getElementById('signup-center-row');
-        const centerSelect = document.getElementById('signup-center');
-        const res = await fetch('/api/admin-exists');
-        const data = await res.json();
-        if (data.exists) {
-            roleSelect.value = 'trainer';
-            roleSelect.querySelector('option[value="admin"]').disabled = true;
-            const suOpt = roleSelect.querySelector('option[value="su"]');
-            if (suOpt) suOpt.disabled = true;
-            roleSelect.querySelector('option[value="trainer"]').disabled = false;
-            roleSelect.querySelector('option[value="center"]').disabled = false;
-        } else {
-            roleSelect.value = 'admin';
-            roleSelect.querySelector('option[value="admin"]').disabled = false;
-            const suOpt = roleSelect.querySelector('option[value="su"]');
-            if (suOpt) suOpt.disabled = false;
-            roleSelect.querySelector('option[value="trainer"]').disabled = false;
-            roleSelect.querySelector('option[value="center"]').disabled = false;
+        // 아이디 중복 체크 결과 초기화
+        const usernameCheckResult = document.getElementById('username-check-result');
+        if (usernameCheckResult) {
+            usernameCheckResult.textContent = '';
+            usernameCheckResult.className = 'username-check-result';
         }
-
-        // 센터 목록 로드 함수
-        async function loadCentersIntoSelect() {
-            try {
-                const resp = await fetch('/api/centers');
-                const centers = await resp.json();
-                centerSelect.innerHTML = '<option value="">센터 선택</option>';
-                centers.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.name;
-                    opt.textContent = c.name;
-                    centerSelect.appendChild(opt);
-                });
-            } catch (e) {
-                // 실패 시 기본 옵션 유지
-            }
-        }
-
-        // 역할 변경 시 센터 선택 표시/숨김
-        const toggleCenterRow = async () => {
-            if (roleSelect.value === 'center') {
-                centerRow.style.display = 'block';
-                await loadCentersIntoSelect();
-            } else {
-                centerRow.style.display = 'none';
-                centerSelect.value = '';
-            }
-        };
-        roleSelect.onchange = toggleCenterRow;
-        // 초기 상태 반영
-        toggleCenterRow();
+        isUsernameAvailable = false;
     };
     document.getElementById('backToLoginBtn').onclick = function() {
         document.getElementById('signupSection').style.display = 'none';
         document.getElementById('loginSection').style.display = 'block';
-        document.getElementById('signupForm').reset();
+        // div로 변경되어 reset() 메서드가 없으므로 수동 초기화
+        document.getElementById('signup-username').value = '';
+        document.getElementById('signup-password').value = '';
+        document.getElementById('signup-password2').value = '';
+        document.getElementById('signup-name').value = '';
+        document.getElementById('signup-phone').value = '';
         document.getElementById('signup-result').innerText = '';
+        // 아이디 중복 체크 결과 초기화
+        const usernameCheckResult = document.getElementById('username-check-result');
+        if (usernameCheckResult) {
+            usernameCheckResult.textContent = '';
+            usernameCheckResult.className = 'username-check-result';
+        }
+        isUsernameAvailable = false;
     };
     document.getElementById('mainLogo').onclick = function() { location.reload(); };
     // 로그인 폼 처리
@@ -111,44 +106,158 @@ window.addEventListener('DOMContentLoaded', function() {
             body: JSON.stringify(data)
         });
         const result = await res.json();
-        if (res.ok && result.role) {
-            localStorage.setItem('role', result.role);
-            localStorage.setItem('name', result.name);
-            localStorage.setItem('username', data.username);
-            if (result.center) {
-                localStorage.setItem('center', result.center);
+        
+        if (res.ok) {
+            // userType에 따라 분기
+            if (result.userType === 'operator') {
+                // 기존 운영자 화면
+                localStorage.setItem('role', result.role);
+                localStorage.setItem('name', result.name);
+                localStorage.setItem('username', data.username);
+                localStorage.setItem('userType', 'operator');
+                if (result.center) {
+                    localStorage.setItem('center', result.center);
+                }
+                showMainSection(result.role, result.name);
+            } else if (result.userType === 'app_user') {
+                // 앱 유저 화면
+                localStorage.setItem('userType', 'app_user');
+                localStorage.setItem('appUserId', result.id);
+                localStorage.setItem('appUsername', result.username);
+                localStorage.setItem('appUserName', result.name);
+                localStorage.setItem('appUserPhone', result.phone || '');
+                if (result.member_name) {
+                    localStorage.setItem('appUserMemberName', result.member_name);
+                }
+                showAppUserSection(result);
             }
-            showMainSection(result.role, result.name);
+            
             document.getElementById('logoutBtn').style.display = 'inline-block';
             document.getElementById('settingsBtn').style.display = 'inline-block';
         } else {
             document.getElementById('login-result').innerText = result.message;
         }
     });
-    // 회원가입 폼 처리
-    document.getElementById('signupForm').addEventListener('submit', async function(e) {
+    // 아이디 중복 체크 (debounce 적용)
+    let usernameCheckTimeout = null;
+    const usernameInput = document.getElementById('signup-username');
+    const usernameCheckResult = document.getElementById('username-check-result');
+    let isUsernameAvailable = false;
+    
+    if (usernameInput && usernameCheckResult) {
+        usernameInput.addEventListener('input', function() {
+            const username = this.value.trim();
+            
+            // 이전 타이머 취소
+            if (usernameCheckTimeout) {
+                clearTimeout(usernameCheckTimeout);
+            }
+            
+            // 빈 값이면 결과 숨김
+            if (!username) {
+                usernameCheckResult.textContent = '';
+                usernameCheckResult.className = 'username-check-result';
+                isUsernameAvailable = false;
+                return;
+            }
+            
+            // 최소 길이 체크
+            if (username.length < 3) {
+                usernameCheckResult.textContent = '아이디는 최소 3자 이상이어야 합니다.';
+                usernameCheckResult.className = 'username-check-result error';
+                isUsernameAvailable = false;
+                return;
+            }
+            
+            // 로딩 표시
+            usernameCheckResult.textContent = '확인 중...';
+            usernameCheckResult.className = 'username-check-result checking';
+            
+            // 500ms 후 중복 체크 (debounce)
+            usernameCheckTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
+                    
+                    if (!res.ok) {
+                        // HTTP 오류 응답 처리
+                        const errorData = await res.json().catch(() => ({ message: '서버 오류가 발생했습니다.' }));
+                        usernameCheckResult.textContent = errorData.message || '확인 중 오류가 발생했습니다.';
+                        usernameCheckResult.className = 'username-check-result error';
+                        isUsernameAvailable = false;
+                        return;
+                    }
+                    
+                    const result = await res.json();
+                    
+                    if (result && typeof result.available !== 'undefined') {
+                        if (result.available) {
+                            usernameCheckResult.textContent = result.message || '사용 가능한 아이디입니다.';
+                            usernameCheckResult.className = 'username-check-result success';
+                            isUsernameAvailable = true;
+                        } else {
+                            usernameCheckResult.textContent = result.message || '이미 사용 중인 아이디입니다.';
+                            usernameCheckResult.className = 'username-check-result error';
+                            isUsernameAvailable = false;
+                        }
+                    } else {
+                        // 응답 형식이 올바르지 않은 경우
+                        usernameCheckResult.textContent = '응답 형식 오류가 발생했습니다.';
+                        usernameCheckResult.className = 'username-check-result error';
+                        isUsernameAvailable = false;
+                    }
+                } catch (error) {
+                    console.error('아이디 중복 체크 오류:', error);
+                    usernameCheckResult.textContent = '네트워크 오류가 발생했습니다. 다시 시도해주세요.';
+                    usernameCheckResult.className = 'username-check-result error';
+                    isUsernameAvailable = false;
+                }
+            }, 500);
+        });
+    }
+    
+    // 회원가입 폼 처리 (앱 유저 전용) - form 태그를 div로 변경하여 브라우저가 폼으로 인식하지 않도록 함
+    document.getElementById('signup-submit-btn').addEventListener('click', async function(e) {
         e.preventDefault();
-        const password = document.getElementById('signup-password').value;
-        const password2 = document.getElementById('signup-password2').value;
+        e.stopPropagation();
+        
+        const pwd1 = document.getElementById('signup-password');
+        const pwd2 = document.getElementById('signup-password2');
+        const password = pwd1.value;
+        const password2 = pwd2.value;
+        
         if (password !== password2) {
             document.getElementById('signup-result').innerText = '비밀번호가 일치하지 않습니다.';
             return;
         }
-        const role = document.getElementById('signup-role').value;
-        const centerValue = document.getElementById('signup-center') ? document.getElementById('signup-center').value : '';
-        if (role === 'center' && !centerValue) {
-            document.getElementById('signup-result').innerText = '센터관리자 등록 시 센터를 선택해주세요.';
+        
+        const username = document.getElementById('signup-username').value.trim();
+        
+        // 아이디 중복 체크
+        if (!isUsernameAvailable) {
+            document.getElementById('signup-result').innerText = '사용 가능한 아이디를 입력해주세요.';
             return;
         }
+        
         const data = {
-            username: document.getElementById('signup-username').value,
-            password,
-            name: document.getElementById('signup-name').value,
-            role
+            username: username,
+            password: password,
+            name: document.getElementById('signup-name').value.trim(),
+            phone: document.getElementById('signup-phone').value.trim()
         };
-        if (role === 'center') {
-            data.center = centerValue;
+        
+        // 유효성 검사
+        if (!data.username || !data.password || !data.name || !data.phone) {
+            document.getElementById('signup-result').innerText = '모든 필수 항목을 입력해주세요.';
+            return;
         }
+        
+        // 전화번호 형식 간단 검증 (선택사항)
+        const phoneRegex = /^[0-9-]+$/;
+        if (!phoneRegex.test(data.phone)) {
+            document.getElementById('signup-result').innerText = '전화번호 형식이 올바르지 않습니다.';
+            return;
+        }
+        
         const res = await fetch('/api/signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -156,16 +265,30 @@ window.addEventListener('DOMContentLoaded', function() {
         });
         const result = await res.json();
         document.getElementById('signup-result').innerText = result.message;
-        // 회원가입 성공 시 로그인 폼으로 자동 전환
+        
+        // 회원가입 성공 시 즉시 폼 숨김 및 초기화
         if (res.ok) {
-            setTimeout(() => {
-                document.getElementById('signupSection').style.display = 'none';
-                document.getElementById('loginSection').style.display = 'block';
-                document.getElementById('signupForm').reset();
-                document.getElementById('signup-result').innerText = '';
-                document.getElementById('loginForm').reset(); // 로그인 폼도 초기화
-                document.getElementById('login-result').innerText = '';
-            }, 1200);
+            // 비밀번호 필드 즉시 초기화
+            pwd1.value = '';
+            pwd2.value = '';
+            
+            // 회원가입 섹션을 즉시 숨김
+            document.getElementById('signupSection').style.display = 'none';
+            document.getElementById('loginSection').style.display = 'block';
+            
+            // 모든 입력 필드 초기화
+            document.getElementById('signup-username').value = '';
+            document.getElementById('signup-name').value = '';
+            document.getElementById('signup-phone').value = '';
+            document.getElementById('signup-result').innerText = '';
+            // 아이디 중복 체크 결과 초기화
+            if (usernameCheckResult) {
+                usernameCheckResult.textContent = '';
+                usernameCheckResult.className = 'username-check-result';
+            }
+            isUsernameAvailable = false;
+            document.getElementById('loginForm').reset();
+            document.getElementById('login-result').innerText = '';
         }
     });
     // 로그아웃 처리
@@ -176,13 +299,25 @@ window.addEventListener('DOMContentLoaded', function() {
             return; // 취소하면 로그아웃하지 않음
         }
         
-        document.getElementById('mainSection').style.display = 'none';
-        document.getElementById('authSection').style.display = 'block';
-        document.getElementById('loginForm').reset();
-        document.getElementById('login-result').innerText = '';
+        // 모든 localStorage 항목 삭제
         localStorage.removeItem('role');
         localStorage.removeItem('name');
         localStorage.removeItem('username');
+        localStorage.removeItem('userType');
+        localStorage.removeItem('center');
+        localStorage.removeItem('appUserId');
+        localStorage.removeItem('appUsername');
+        localStorage.removeItem('appUserName');
+        localStorage.removeItem('appUserPhone');
+        localStorage.removeItem('appUserMemberName');
+        
+        // 화면 전환
+        document.getElementById('mainSection').style.display = 'none';
+        document.getElementById('authSection').style.display = 'block';
+        document.getElementById('loginSection').style.display = 'block';
+        document.getElementById('signupSection').style.display = 'none';
+        document.getElementById('loginForm').reset();
+        document.getElementById('login-result').innerText = '';
         document.getElementById('logoutBtn').style.display = 'none';
         document.getElementById('settingsBtn').style.display = 'none';
     };
@@ -246,6 +381,8 @@ function showMainSection(role, name) {
     }
     renderTabs(tabs);
 }
+
+// showAppUserSection은 app-user/index.js로 이동됨
 function renderTabs(tabs) {
     const tabBar = document.getElementById('tabBar');
     const tabContent = document.getElementById('tabContent');
