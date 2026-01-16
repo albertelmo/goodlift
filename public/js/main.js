@@ -18,6 +18,119 @@ function isAdminOrSu(role) {
     return role === 'admin' || role === 'su';
 }
 
+// 유저앱 화면으로 전환 (트레이너용)
+async function switchToAppUserView() {
+    // 현재 operator 정보 저장
+    const originalRole = localStorage.getItem('role');
+    const originalName = localStorage.getItem('name');
+    const originalCenter = localStorage.getItem('center');
+    const originalUserType = localStorage.getItem('userType');
+    const originalUsername = localStorage.getItem('username');
+    
+    // 원본 정보 저장 (복귀용)
+    localStorage.setItem('originalRole', originalRole);
+    localStorage.setItem('originalName', originalName);
+    localStorage.setItem('originalCenter', originalCenter || '');
+    localStorage.setItem('originalUserType', originalUserType);
+    localStorage.setItem('originalUsername', originalUsername || '');
+    localStorage.setItem('viewMode', 'app_user');
+    
+    try {
+        // 실제 app_user 조회 또는 생성
+        const response = await fetch('/api/trainer-app-user', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: originalUsername,
+                name: originalName
+            })
+        });
+        
+        if (response.ok) {
+            const appUserData = await response.json();
+            // 실제 app_user 데이터 사용
+            showAppUserSection({
+                id: appUserData.id,
+                username: appUserData.username,
+                name: appUserData.name,
+                phone: appUserData.phone || '',
+                member_name: appUserData.member_name || null
+            });
+        } else {
+            // API 실패 시 임시 데이터 사용 (하지만 이제는 발생하지 않아야 함)
+            console.error('트레이너 app_user 조회 실패:', await response.text());
+            const fakeAppUserData = {
+                id: 'trainer-' + Date.now(), // 임시 ID
+                username: originalUsername || 'trainer',
+                name: originalName || '트레이너',
+                phone: '',
+                member_name: null
+            };
+            showAppUserSection(fakeAppUserData);
+        }
+    } catch (error) {
+        console.error('트레이너 app_user 조회 오류:', error);
+        // 에러 발생 시 임시 데이터 사용
+        const fakeAppUserData = {
+            id: 'trainer-' + Date.now(), // 임시 ID
+            username: originalUsername || 'trainer',
+            name: originalName || '트레이너',
+            phone: '',
+            member_name: null
+        };
+        showAppUserSection(fakeAppUserData);
+    }
+}
+
+// 트레이너 화면으로 복귀
+function switchBackToTrainerView() {
+    // 저장된 원본 정보 복원
+    const originalRole = localStorage.getItem('originalRole');
+    const originalName = localStorage.getItem('originalName');
+    const originalCenter = localStorage.getItem('originalCenter');
+    const originalUserType = localStorage.getItem('originalUserType');
+    const originalUsername = localStorage.getItem('originalUsername');
+    
+    if (originalRole && originalName) {
+        // 앱 유저 섹션 숨기기
+        const appUserSection = document.getElementById('app-user-section');
+        if (appUserSection) {
+            appUserSection.style.display = 'none';
+        }
+        
+        // body 클래스에서 app-user-active 제거
+        document.body.classList.remove('app-user-active');
+        
+        // viewMode 제거
+        localStorage.removeItem('viewMode');
+        localStorage.removeItem('originalRole');
+        localStorage.removeItem('originalName');
+        localStorage.removeItem('originalCenter');
+        localStorage.removeItem('originalUserType');
+        localStorage.removeItem('originalUsername');
+        
+        // 원래 화면 복원
+        showMainSection(originalRole, originalName);
+        
+        // center 복원
+        if (originalCenter) {
+            localStorage.setItem('center', originalCenter);
+        }
+        if (originalUserType) {
+            localStorage.setItem('userType', originalUserType);
+        }
+        if (originalUsername) {
+            localStorage.setItem('username', originalUsername);
+        }
+    }
+}
+
+// 전역 함수로 export (다른 모듈에서 사용 가능하도록)
+window.switchToAppUserView = switchToAppUserView;
+window.switchBackToTrainerView = switchBackToTrainerView;
+
 // 회원가입 폼 표시 및 자동 로그인 처리
 window.addEventListener('DOMContentLoaded', function() {
     const savedUserType = localStorage.getItem('userType');
@@ -26,10 +139,17 @@ window.addEventListener('DOMContentLoaded', function() {
         // 기존 운영자 자동 로그인
         const savedRole = localStorage.getItem('role');
         const savedName = localStorage.getItem('name');
+        const viewMode = localStorage.getItem('viewMode');
+        
         if (savedRole && savedName) {
-            showMainSection(savedRole, savedName);
-            document.getElementById('logoutBtn').style.display = 'inline-block';
-            document.getElementById('settingsBtn').style.display = 'inline-block';
+            // viewMode가 app_user면 유저앱 화면으로
+            if (viewMode === 'app_user') {
+                switchToAppUserView();
+            } else {
+                showMainSection(savedRole, savedName);
+                document.getElementById('logoutBtn').style.display = 'inline-block';
+                document.getElementById('settingsBtn').style.display = 'inline-block';
+            }
         } else {
             document.getElementById('logoutBtn').style.display = 'none';
             document.getElementById('settingsBtn').style.display = 'none';
@@ -291,6 +411,14 @@ window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('login-result').innerText = '';
         }
     });
+    // 유저앱 전환 버튼 이벤트
+    const switchToAppUserBtn = document.getElementById('switchToAppUserBtn');
+    if (switchToAppUserBtn) {
+        switchToAppUserBtn.addEventListener('click', function() {
+            switchToAppUserView();
+        });
+    }
+    
     // 로그아웃 처리
     document.getElementById('logoutBtn').innerText = '🚪';
     document.getElementById('logoutBtn').onclick = function() {
@@ -310,6 +438,12 @@ window.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('appUserName');
         localStorage.removeItem('appUserPhone');
         localStorage.removeItem('appUserMemberName');
+        localStorage.removeItem('viewMode');
+        localStorage.removeItem('originalRole');
+        localStorage.removeItem('originalName');
+        localStorage.removeItem('originalCenter');
+        localStorage.removeItem('originalUserType');
+        localStorage.removeItem('originalUsername');
         
         // 화면 전환
         document.getElementById('mainSection').style.display = 'none';
@@ -363,12 +497,26 @@ const centerHamburgerItems = [
 function showMainSection(role, name) {
     document.getElementById('authSection').style.display = 'none';
     document.getElementById('mainSection').style.display = 'block';
+    
+    // 상단바 다시 표시
+    const oldHeader = document.getElementById('old-header');
+    if (oldHeader) {
+        oldHeader.style.display = 'flex';
+    }
+    
     document.getElementById('logoutBtn').style.display = 'inline-block';
+    document.getElementById('settingsBtn').style.display = 'inline-block';
     
     // 관리자일 때만 secretBtn 표시 (센터관리자는 제외)
     const secretBtn = document.getElementById('secretBtn');
     if (secretBtn) {
         secretBtn.style.display = isAdminOrSu(role) ? 'inline-block' : 'none';
+    }
+    
+    // 트레이너일 때만 유저앱 전환 버튼 표시
+    const switchToAppUserBtn = document.getElementById('switchToAppUserBtn');
+    if (switchToAppUserBtn) {
+        switchToAppUserBtn.style.display = (role === 'trainer') ? 'inline-block' : 'none';
     }
     
     let tabs;

@@ -298,6 +298,68 @@ ledgerDB.initializeDatabase();
 appUsersDB.initializeDatabase();
 workoutRecordsDB.initializeDatabase();
 
+// 트레이너를 app_users 테이블에 자동 등록
+async function syncTrainersToAppUsers() {
+    try {
+        if (!fs.existsSync(DATA_PATH)) {
+            console.log('[GoodLift] accounts.json 파일이 없어 트레이너 동기화를 건너뜁니다.');
+            return;
+        }
+        
+        const accounts = JSON.parse(fs.readFileSync(DATA_PATH, 'utf-8'));
+        const trainers = accounts.filter(acc => acc.role === 'trainer');
+        
+        if (trainers.length === 0) {
+            console.log('[GoodLift] 등록된 트레이너가 없습니다.');
+            return;
+        }
+        
+        const bcrypt = require('bcrypt');
+        const saltRounds = 10;
+        
+        let syncedCount = 0;
+        let skippedCount = 0;
+        
+        for (const trainer of trainers) {
+            try {
+                // 이미 존재하는지 확인
+                const existingUser = await appUsersDB.getAppUserByUsername(trainer.username);
+                
+                if (existingUser) {
+                    // 이미 존재하면 스킵
+                    skippedCount++;
+                    continue;
+                }
+                
+                // 비밀번호 해싱 (accounts.json의 비밀번호 사용)
+                const password_hash = await bcrypt.hash(trainer.password || '123', saltRounds);
+                
+                // app_user 추가
+                await appUsersDB.addAppUser({
+                    username: trainer.username,
+                    password_hash: password_hash,
+                    name: trainer.name,
+                    phone: '', // 전화번호는 빈 문자열로 설정 (나중에 수정 가능)
+                    member_name: null,
+                    is_active: true
+                });
+                
+                syncedCount++;
+                console.log(`[GoodLift] 트레이너 "${trainer.name}" (${trainer.username})가 app_users에 등록되었습니다.`);
+            } catch (error) {
+                console.error(`[GoodLift] 트레이너 "${trainer.name}" (${trainer.username}) 등록 오류:`, error.message);
+            }
+        }
+        
+        console.log(`[GoodLift] 트레이너 동기화 완료: ${syncedCount}명 등록, ${skippedCount}명 스킵`);
+    } catch (error) {
+        console.error('[GoodLift] 트레이너 동기화 오류:', error);
+    }
+}
+
+// 서버 시작 시 트레이너 동기화 실행
+syncTrainersToAppUsers();
+
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
     try {
@@ -566,6 +628,58 @@ app.post('/api/login', async (req, res) => {
 
 // ========== 운동기록 API ==========
 
+// 트레이너의 app_user 조회 또는 생성
+app.post('/api/trainer-app-user', async (req, res) => {
+    try {
+        const { username, name } = req.body;
+        
+        if (!username) {
+            return res.status(400).json({ message: '사용자명이 필요합니다.' });
+        }
+        
+        // 이미 존재하는 app_user 조회
+        let appUser = await appUsersDB.getAppUserByUsername(username);
+        
+        if (!appUser) {
+            // 존재하지 않으면 생성 (서버 초기화 시 등록되어야 하지만, 혹시 모를 경우를 대비)
+            const bcrypt = require('bcrypt');
+            const saltRounds = 10;
+            const password_hash = await bcrypt.hash('123', saltRounds); // 기본 비밀번호
+            
+            const newUser = await appUsersDB.addAppUser({
+                username: username,
+                password_hash: password_hash,
+                name: name || username,
+                phone: '',
+                member_name: null,
+                is_active: true
+            });
+            
+            appUser = {
+                id: newUser.id,
+                username: newUser.username,
+                name: newUser.name,
+                phone: newUser.phone || '',
+                member_name: newUser.member_name || null
+            };
+        } else {
+            // password_hash 제외하고 반환
+            appUser = {
+                id: appUser.id,
+                username: appUser.username,
+                name: appUser.name,
+                phone: appUser.phone || '',
+                member_name: appUser.member_name || null
+            };
+        }
+        
+        res.json(appUser);
+    } catch (error) {
+        console.error('[API] 트레이너 app_user 조회/생성 오류:', error);
+        res.status(500).json({ message: '트레이너 app_user 조회/생성 중 오류가 발생했습니다.' });
+    }
+});
+
 // 운동기록 목록 조회
 app.get('/api/workout-records', async (req, res) => {
     try {
@@ -573,6 +687,11 @@ app.get('/api/workout-records', async (req, res) => {
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 빈 배열 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json([]);
         }
         
         const filters = {};
@@ -597,6 +716,11 @@ app.get('/api/workout-records/:id', async (req, res) => {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
         }
         
+        // 트레이너 전환 모드인 경우 빈 응답 반환 (이제는 실제 UUID를 사용하므로 이 체크는 불필요하지만 안전을 위해 유지)
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(404).json({ message: '운동기록을 찾을 수 없습니다.' });
+        }
+        
         const record = await workoutRecordsDB.getWorkoutRecordById(id, app_user_id);
         
         if (!record) {
@@ -617,6 +741,11 @@ app.post('/api/workout-records', async (req, res) => {
         
         if (!app_user_id || !workout_date) {
             return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 에러 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 운동기록을 추가할 수 없습니다.' });
         }
         
         const workoutData = {
@@ -644,6 +773,11 @@ app.patch('/api/workout-records/:id', async (req, res) => {
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 에러 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 운동기록을 수정할 수 없습니다.' });
         }
         
         const updates = {};
@@ -674,6 +808,11 @@ app.delete('/api/workout-records/:id', async (req, res) => {
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 에러 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 운동기록을 삭제할 수 없습니다.' });
         }
         
         const deleted = await workoutRecordsDB.deleteWorkoutRecord(id, app_user_id);

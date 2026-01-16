@@ -79,6 +79,10 @@ function render() {
                     <span>마이페이지</span>
                 </a>
                 <div class="app-drawer-divider"></div>
+                <a href="#" class="app-drawer-item" id="app-drawer-switch-back" style="display:none;">
+                    <span class="app-drawer-icon">🔄</span>
+                    <span>트레이너 화면으로</span>
+                </a>
                 <a href="#" class="app-drawer-item" id="app-drawer-settings">
                     <span class="app-drawer-icon">⚙️</span>
                     <span>설정</span>
@@ -160,6 +164,25 @@ function setupEventListeners() {
         });
     });
 
+    // 트레이너 화면으로 복귀 버튼 (viewMode가 app_user일 때만 표시)
+    const viewMode = localStorage.getItem('viewMode');
+    const switchBackBtn = document.getElementById('app-drawer-switch-back');
+    if (switchBackBtn) {
+        if (viewMode === 'app_user') {
+            switchBackBtn.style.display = 'flex';
+            switchBackBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                closeHamburgerMenu();
+                // 트레이너 화면으로 복귀
+                if (window.switchBackToTrainerView) {
+                    window.switchBackToTrainerView();
+                }
+            });
+        } else {
+            switchBackBtn.style.display = 'none';
+        }
+    }
+    
     // 햄버거 메뉴의 설정/로그아웃
     const drawerSettings = document.getElementById('app-drawer-settings');
     const drawerLogout = document.getElementById('app-drawer-logout');

@@ -74,6 +74,11 @@ export async function del(endpoint) {
  * 운동기록 목록 조회
  */
 export async function getWorkoutRecords(appUserId, filters = {}) {
+    // 트레이너 전환 모드인 경우 빈 배열 반환
+    if (appUserId && appUserId.startsWith('trainer-')) {
+        return [];
+    }
+    
     const params = new URLSearchParams({ app_user_id: appUserId });
     if (filters.startDate) params.append('start_date', filters.startDate);
     if (filters.endDate) params.append('end_date', filters.endDate);

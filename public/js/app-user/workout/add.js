@@ -94,7 +94,8 @@ export function showAddModal(appUserId, selectedDate = null, onSuccess) {
             if (onSuccess) onSuccess();
         } catch (error) {
             console.error('운동기록 추가 오류:', error);
-            alert('운동기록 추가 중 오류가 발생했습니다.');
+            const errorMessage = error.message || '운동기록 추가 중 오류가 발생했습니다.';
+            alert(errorMessage);
         }
     });
 }
