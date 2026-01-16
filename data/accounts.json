@@ -65,5 +65,17 @@
     "name": "관리자(스탠다드PT 위례점)",
     "role": "center",
     "center": "스탠다드PT 위례점"
+  },
+  {
+    "username": "jyk",
+    "password": "123",
+    "name": "김재영",
+    "role": "trainer"
+  },
+  {
+    "username": "ice",
+    "password": "123",
+    "name": "아이스",
+    "role": "trainer"
   }
 ]

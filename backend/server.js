@@ -3125,18 +3125,12 @@ app.post('/api/expenses', async (req, res) => {
                 return res.status(400).json({ message: '센터를 선택해주세요.' });
             }
         } else if (type === 'personal') {
-            // 개인지출: 지출내역(personalItem), 센터 필수
-            const personalItem = req.body.personalItem;
-            if (!personalItem || !personalItem.trim()) {
-                return res.status(400).json({ message: '지출내역을 입력해주세요.' });
-            }
-            if (!center || !center.trim()) {
-                return res.status(400).json({ message: '센터를 선택해주세요.' });
-            }
+            // 개인지출: 지출내역(personalItem)은 선택, 센터는 선택
+            // 필수 필드 검증 제거 (개인지출은 선택 필드)
         }
         
         // datetime 처리: datetime-local 입력값을 한국시간 TIMESTAMP로 변환
-        // 입력 형식: "2025-01-15T12:30" (로컬 시간)
+        // 입력 형식: "2025-01-15T12:30" 또는 "2025-01-15T12:30:00" (로컬 시간)
         // 저장 형식: "2025-01-15 12:30:00+09:00" (한국시간)
         let datetimeValue;
         try {
@@ -3144,12 +3138,17 @@ app.post('/api/expenses', async (req, res) => {
             if (datetime.includes('T')) {
                 // 한국시간으로 해석 (UTC+9)
                 const [datePart, timePart] = datetime.split('T');
-                datetimeValue = `${datePart} ${timePart}:00+09:00`;
+                // timePart에서 초가 없으면 추가, 있으면 그대로 사용
+                const timeWithSeconds = timePart.includes(':') && timePart.split(':').length === 3 
+                    ? timePart 
+                    : timePart + ':00';
+                datetimeValue = `${datePart} ${timeWithSeconds}+09:00`;
             } else {
                 // 이미 TIMESTAMP 형식인 경우
                 datetimeValue = datetime;
             }
         } catch (error) {
+            console.error('[API] datetime 처리 오류:', error, datetime);
             return res.status(400).json({ message: '올바른 날짜 형식을 입력해주세요.' });
         }
         
@@ -3163,11 +3162,11 @@ app.post('/api/expenses', async (req, res) => {
         if (type === 'meal') {
             expenseData.participantTrainers = participantTrainers;
         } else if (type === 'purchase') {
-            expenseData.purchaseItem = purchaseItem.trim();
-            expenseData.center = center.trim();
+            expenseData.purchaseItem = purchaseItem ? purchaseItem.trim() : null;
+            expenseData.center = center ? center.trim() : null;
         } else if (type === 'personal') {
             expenseData.personalItem = req.body.personalItem ? req.body.personalItem.trim() : null;
-            expenseData.center = center.trim();
+            expenseData.center = center ? center.trim() : null;
         }
         
         const expense = await expensesDB.addExpense(expenseData);
@@ -3247,6 +3246,49 @@ app.get('/api/expenses', async (req, res) => {
     } catch (error) {
         console.error('[API] 지출 내역 조회 오류:', error);
         res.status(500).json({ message: '지출 내역 조회에 실패했습니다.' });
+    }
+});
+
+// 지출 내역 수정 API
+app.patch('/api/expenses/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id);
+        
+        if (isNaN(id)) {
+            return res.status(400).json({ message: '올바른 지출 내역 ID를 입력해주세요.' });
+        }
+        
+        // datetime 처리: datetime-local 입력값을 한국시간 TIMESTAMP로 변환
+        // 입력 형식: "2025-01-15T12:30" 또는 "2025-01-15T12:30:00" (로컬 시간)
+        // 저장 형식: "2025-01-15 12:30:00+09:00" (한국시간)
+        const updates = { ...req.body };
+        if (updates.datetime) {
+            try {
+                // datetime-local 형식인 경우
+                if (updates.datetime.includes('T')) {
+                    // 한국시간으로 해석 (UTC+9)
+                    const [datePart, timePart] = updates.datetime.split('T');
+                    // 시간 부분에서 초 제거 (이미 있을 수 있음)
+                    const timeOnly = timePart.split(':').slice(0, 2).join(':');
+                    updates.datetime = `${datePart} ${timeOnly}:00+09:00`;
+                } else if (!updates.datetime.includes('+')) {
+                    // TIMESTAMP 형식이지만 타임존 정보가 없는 경우
+                    updates.datetime = updates.datetime + '+09:00';
+                }
+            } catch (error) {
+                return res.status(400).json({ message: '올바른 날짜 형식을 입력해주세요.' });
+            }
+        }
+        
+        const result = await expensesDB.updateExpense(id, updates);
+        res.json({ message: '지출 내역이 수정되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 지출 내역 수정 오류:', error);
+        if (error.message === '지출 내역을 찾을 수 없습니다.') {
+            res.status(404).json({ message: '지출 내역을 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '지출 내역 수정에 실패했습니다.' });
+        }
     }
 });
 

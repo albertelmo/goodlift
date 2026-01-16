@@ -1221,10 +1221,10 @@ async function showExpenseAddModal(username) {
         };
         
         if (expenseType === 'meal') {
-            // 식대: 함께 지출한 트레이너 필수
+            // 식대: 함께한 트레이너 필수
             const checkboxes = form.querySelectorAll('input[name="participantTrainers"]:checked');
             if (checkboxes.length === 0) {
-                resultDiv.textContent = '함께 지출한 트레이너를 최소 1명 이상 선택해주세요.';
+                resultDiv.textContent = '함께한 트레이너를 최소 1명 이상 선택해주세요.';
                 return;
             }
             const participantTrainers = Array.from(checkboxes).map(cb => cb.value);

@@ -326,6 +326,77 @@ const getExpenses = async (filters = {}) => {
   }
 };
 
+// 지출 내역 수정
+const updateExpense = async (id, updates) => {
+  try {
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+    
+    if (updates.trainer !== undefined) {
+      fields.push(`trainer = $${paramIndex++}`);
+      values.push(updates.trainer);
+    }
+    if (updates.amount !== undefined) {
+      fields.push(`amount = $${paramIndex++}`);
+      values.push(updates.amount);
+    }
+    if (updates.datetime !== undefined) {
+      fields.push(`datetime = $${paramIndex++}`);
+      values.push(updates.datetime);
+    }
+    if (updates.participantTrainers !== undefined) {
+      fields.push(`participant_trainers = $${paramIndex++}`);
+      values.push(updates.participantTrainers || []);
+    }
+    if (updates.purchaseItem !== undefined) {
+      fields.push(`purchase_item = $${paramIndex++}`);
+      values.push(updates.purchaseItem || null);
+    }
+    if (updates.center !== undefined) {
+      fields.push(`center = $${paramIndex++}`);
+      values.push(updates.center || null);
+    }
+    
+    if (fields.length === 0) {
+      throw new Error('수정할 필드가 없습니다.');
+    }
+    
+    fields.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(id);
+    
+    const query = `
+      UPDATE expenses 
+      SET ${fields.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING id, trainer, expense_type, amount, datetime, participant_trainers, purchase_item, center, created_at, updated_at
+    `;
+    
+    const result = await pool.query(query, values);
+    
+    if (result.rows.length === 0) {
+      throw new Error('지출 내역을 찾을 수 없습니다.');
+    }
+    
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      trainer: row.trainer,
+      expenseType: row.expense_type,
+      amount: row.amount,
+      datetime: row.datetime,
+      participantTrainers: row.participant_trainers || [],
+      purchaseItem: row.purchase_item || null,
+      center: row.center || null,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+  } catch (error) {
+    console.error('[PostgreSQL] 지출 내역 수정 오류:', error);
+    throw error;
+  }
+};
+
 // 지출 내역 삭제 (관리자용)
 const deleteExpense = async (id) => {
   try {
@@ -391,6 +462,7 @@ module.exports = {
   initializeDatabase,
   addExpense,
   getExpenses,
+  updateExpense,
   deleteExpense,
   getExpenseById
 };
