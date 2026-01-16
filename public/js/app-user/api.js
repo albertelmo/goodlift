@@ -125,3 +125,10 @@ export async function getWorkoutStats(appUserId, startDate, endDate) {
     });
     return get(`/workout-records/stats?${params.toString()}`);
 }
+
+/**
+ * 운동종류 목록 조회
+ */
+export async function getWorkoutTypes() {
+    return get('/workout-types');
+}

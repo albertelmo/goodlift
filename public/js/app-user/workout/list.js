@@ -102,19 +102,30 @@ function render(records) {
  * 운동기록 아이템 렌더링
  */
 function renderWorkoutItem(record) {
-    const workoutType = record.workout_type || '미지정';
-    const duration = record.duration_minutes ? `${record.duration_minutes}분` : '-';
-    const calories = record.calories_burned ? `${formatNumber(record.calories_burned)}kcal` : '-';
+    const workoutTypeName = record.workout_type_name || '미지정';
+    const workoutTypeType = record.workout_type_type || null;
+    const duration = record.duration_minutes ? `${record.duration_minutes}분` : null;
     const notes = record.notes ? escapeHtml(record.notes) : '';
+    const sets = record.sets || [];
+    
+    let infoHtml = '';
+    
+    if (workoutTypeType === '시간' && duration) {
+        infoHtml = `<span class="app-workout-item-duration">⏱ ${duration}</span>`;
+    } else if (workoutTypeType === '세트' && sets.length > 0) {
+        const setsInfo = sets.map(set => {
+            const weight = set.weight ? `${set.weight}kg` : '-';
+            const reps = set.reps ? `${set.reps}회` : '-';
+            return `${set.set_number}세트: ${weight} × ${reps}`;
+        }).join(', ');
+        infoHtml = `<span class="app-workout-item-sets">${setsInfo}</span>`;
+    }
     
     return `
         <div class="app-workout-item" data-record-id="${record.id}">
             <div class="app-workout-item-main">
-                <div class="app-workout-item-type">${escapeHtml(workoutType)}</div>
-                <div class="app-workout-item-info">
-                    <span class="app-workout-item-duration">⏱ ${duration}</span>
-                    <span class="app-workout-item-calories">🔥 ${calories}</span>
-                </div>
+                <div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>
+                ${infoHtml ? `<div class="app-workout-item-info">${infoHtml}</div>` : ''}
             </div>
             ${notes ? `<div class="app-workout-item-notes">${notes}</div>` : ''}
         </div>

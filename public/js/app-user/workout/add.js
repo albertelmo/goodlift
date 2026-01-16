@@ -1,17 +1,25 @@
 // 운동기록 추가 모달
 
 import { formatDate, getToday, escapeHtml } from '../utils.js';
-import { addWorkoutRecord } from '../api.js';
+import { addWorkoutRecord, getWorkoutTypes } from '../api.js';
 
 /**
  * 추가 모달 표시
  */
-export function showAddModal(appUserId, selectedDate = null, onSuccess) {
+export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
     // 선택된 날짜가 있으면 사용, 없으면 오늘 날짜
     const defaultDate = selectedDate || getToday();
+    
+    // 운동종류 목록 가져오기
+    let workoutTypes = [];
+    try {
+        workoutTypes = await getWorkoutTypes();
+    } catch (error) {
+        console.error('운동종류 조회 오류:', error);
+    }
     
     modal.innerHTML = `
         <div class="app-modal-header">
@@ -27,21 +35,19 @@ export function showAddModal(appUserId, selectedDate = null, onSuccess) {
                 <label for="workout-add-type">운동 종류</label>
                 <select id="workout-add-type">
                     <option value="">선택하세요</option>
-                    <option value="유산소">유산소</option>
-                    <option value="근력운동">근력운동</option>
-                    <option value="스트레칭">스트레칭</option>
-                    <option value="요가">요가</option>
-                    <option value="필라테스">필라테스</option>
-                    <option value="기타">기타</option>
+                    ${workoutTypes.map(type => `
+                        <option value="${type.id}" data-type="${type.type || '세트'}">${escapeHtml(type.name)}</option>
+                    `).join('')}
                 </select>
             </div>
-            <div class="app-form-group">
+            <div class="app-form-group" id="workout-add-duration-group" style="display: none;">
                 <label for="workout-add-duration">운동 시간 (분)</label>
                 <input type="number" id="workout-add-duration" min="0" placeholder="예: 30">
             </div>
-            <div class="app-form-group">
-                <label for="workout-add-calories">소모 칼로리 (kcal)</label>
-                <input type="number" id="workout-add-calories" min="0" placeholder="예: 300">
+            <div class="app-form-group" id="workout-add-sets-group" style="display: none;">
+                <label>세트</label>
+                <div id="workout-add-sets-container"></div>
+                <button type="button" class="app-btn-secondary" id="workout-add-set-btn" style="margin-top: 8px; width: 100%;">세트 추가</button>
             </div>
             <div class="app-form-group">
                 <label for="workout-add-notes">메모</label>
@@ -60,6 +66,92 @@ export function showAddModal(appUserId, selectedDate = null, onSuccess) {
     const closeBtn = modal.querySelector('.app-modal-close');
     const cancelBtn = modal.querySelector('#workout-add-cancel');
     const form = modal.querySelector('#workout-add-form');
+    const typeSelect = modal.querySelector('#workout-add-type');
+    const durationGroup = modal.querySelector('#workout-add-duration-group');
+    const setsGroup = modal.querySelector('#workout-add-sets-group');
+    const setsContainer = modal.querySelector('#workout-add-sets-container');
+    const addSetBtn = modal.querySelector('#workout-add-set-btn');
+    
+    let sets = [];
+    
+    // 운동종류 선택 시 타입에 따라 UI 변경
+    typeSelect.addEventListener('change', () => {
+        const selectedOption = typeSelect.options[typeSelect.selectedIndex];
+        const workoutType = selectedOption ? selectedOption.getAttribute('data-type') : null;
+        
+        if (workoutType === '시간') {
+            durationGroup.style.display = 'block';
+            setsGroup.style.display = 'none';
+            sets = [];
+        } else if (workoutType === '세트') {
+            durationGroup.style.display = 'none';
+            setsGroup.style.display = 'block';
+            if (sets.length === 0) {
+                addSet();
+            }
+        } else {
+            durationGroup.style.display = 'none';
+            setsGroup.style.display = 'none';
+            sets = [];
+        }
+    });
+    
+    // 세트 추가 버튼
+    addSetBtn.addEventListener('click', () => {
+        addSet();
+    });
+    
+    // 세트 추가 함수
+    function addSet() {
+        const setNumber = sets.length + 1;
+        sets.push({ set_number: setNumber, weight: null, reps: null });
+        renderSets();
+    }
+    
+    // 세트 삭제 함수
+    function removeSet(index) {
+        sets.splice(index, 1);
+        // 세트 번호 재정렬
+        sets.forEach((set, i) => {
+            set.set_number = i + 1;
+        });
+        renderSets();
+    }
+    
+    // 세트 렌더링 함수
+    function renderSets() {
+        setsContainer.innerHTML = sets.map((set, index) => `
+            <div class="workout-set-item" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+                <span style="min-width: 40px; font-weight: 600;">${set.set_number}세트</span>
+                <input type="number" class="workout-set-weight" data-index="${index}" step="0.1" min="0" placeholder="무게(kg)" value="${set.weight || ''}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <input type="number" class="workout-set-reps" data-index="${index}" min="0" placeholder="횟수" value="${set.reps || ''}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                <button type="button" class="workout-set-remove" data-index="${index}" style="background: #d32f2f; color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">삭제</button>
+            </div>
+        `).join('');
+        
+        // 세트 입력값 변경 이벤트
+        setsContainer.querySelectorAll('.workout-set-weight').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const index = parseInt(e.target.getAttribute('data-index'));
+                sets[index].weight = e.target.value ? parseFloat(e.target.value) : null;
+            });
+        });
+        
+        setsContainer.querySelectorAll('.workout-set-reps').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const index = parseInt(e.target.getAttribute('data-index'));
+                sets[index].reps = e.target.value ? parseInt(e.target.value) : null;
+            });
+        });
+        
+        // 세트 삭제 버튼
+        setsContainer.querySelectorAll('.workout-set-remove').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const index = parseInt(e.target.getAttribute('data-index'));
+                removeSet(index);
+            });
+        });
+    }
     
     const closeModal = () => {
         document.body.removeChild(modalBg);
@@ -75,20 +167,24 @@ export function showAddModal(appUserId, selectedDate = null, onSuccess) {
         e.preventDefault();
         
         const workoutDate = document.getElementById('workout-add-date').value;
-        const workoutType = document.getElementById('workout-add-type').value;
+        const workoutTypeId = document.getElementById('workout-add-type').value;
         const durationMinutes = document.getElementById('workout-add-duration').value;
-        const caloriesBurned = document.getElementById('workout-add-calories').value;
         const notes = document.getElementById('workout-add-notes').value;
         
+        const selectedOption = typeSelect.options[typeSelect.selectedIndex];
+        const workoutType = selectedOption ? selectedOption.getAttribute('data-type') : null;
+        
+        const workoutData = {
+            app_user_id: appUserId,
+            workout_date: workoutDate,
+            workout_type_id: workoutTypeId || null,
+            duration_minutes: workoutType === '시간' && durationMinutes ? parseInt(durationMinutes) : null,
+            sets: workoutType === '세트' ? sets.filter(s => s.weight !== null || s.reps !== null) : [],
+            notes: notes.trim() || null
+        };
+        
         try {
-            await addWorkoutRecord({
-                app_user_id: appUserId,
-                workout_date: workoutDate,
-                workout_type: workoutType || null,
-                duration_minutes: durationMinutes ? parseInt(durationMinutes) : null,
-                calories_burned: caloriesBurned ? parseInt(caloriesBurned) : null,
-                notes: notes.trim() || null
-            });
+            await addWorkoutRecord(workoutData);
             
             closeModal();
             if (onSuccess) onSuccess();

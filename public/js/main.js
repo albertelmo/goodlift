@@ -11,6 +11,7 @@ import { database } from './database.js';
 import { sales } from './sales.js';
 import { strategy } from './strategy.js';
 import { ledger } from './ledger.js';
+import { userApp } from './userApp.js';
 import { showAppUserSection } from './app-user/index.js';
 
 // 권한 체크 헬퍼 함수 (SU 역할 추가)
@@ -476,6 +477,7 @@ const adminHamburgerItems = [
     { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
     { label: '💾 DB', id: 'Database', content: '<div id="database-root"></div>' },
     { label: '👥 트레이너', id: 'Trainer', content: '<div id="trainer-list-loading" style="text-align:center;padding:20px;color:#888;display:none;">불러오는 중...</div><div id="trainer-list"></div>' },
+    { label: '📱 유저앱', id: 'UserApp', content: '<div id="user-app-root"></div>' },
     { label: '📖 장부', id: 'Ledger', content: '<div id="ledger-root"></div>', suOnly: true }
 ];
 const trainerTabs = [
@@ -711,6 +713,8 @@ function renderTabContent(tabId, tabContent) {
         trainer.loadList();
     } else if (tabId === 'Ledger') {
         ledger.render(tabContent.querySelector('#ledger-root') || tabContent);
+    } else if (tabId === 'UserApp') {
+        userApp.render(tabContent.querySelector('#user-app-root') || tabContent);
     } else if (tabId === '내 회원 리스트' || tabId === '👤') {
         const username = localStorage.getItem('username');
         trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);

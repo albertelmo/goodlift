@@ -25,6 +25,7 @@ const marketingDB = require('./marketing-db');
 const ledgerDB = require('./ledger-db');
 const appUsersDB = require('./app-users-db');
 const workoutRecordsDB = require('./workout-records-db');
+const workoutTypesDB = require('./workout-types-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -297,6 +298,7 @@ marketingDB.initializeDatabase();
 ledgerDB.initializeDatabase();
 appUsersDB.initializeDatabase();
 workoutRecordsDB.initializeDatabase();
+workoutTypesDB.initializeDatabase();
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -737,7 +739,7 @@ app.get('/api/workout-records/:id', async (req, res) => {
 // 운동기록 추가
 app.post('/api/workout-records', async (req, res) => {
     try {
-        const { app_user_id, workout_date, workout_type, duration_minutes, calories_burned, notes } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes } = req.body;
         
         if (!app_user_id || !workout_date) {
             return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
@@ -751,9 +753,9 @@ app.post('/api/workout-records', async (req, res) => {
         const workoutData = {
             app_user_id,
             workout_date,
-            workout_type: workout_type || null,
+            workout_type_id: workout_type_id || null,
             duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
-            calories_burned: calories_burned ? parseInt(calories_burned) : null,
+            sets: sets || [],
             notes: notes || null
         };
         
@@ -769,7 +771,7 @@ app.post('/api/workout-records', async (req, res) => {
 app.patch('/api/workout-records/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { app_user_id, workout_date, workout_type, duration_minutes, calories_burned, notes } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes } = req.body;
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
@@ -782,9 +784,9 @@ app.patch('/api/workout-records/:id', async (req, res) => {
         
         const updates = {};
         if (workout_date !== undefined) updates.workout_date = workout_date;
-        if (workout_type !== undefined) updates.workout_type = workout_type;
+        if (workout_type_id !== undefined) updates.workout_type_id = workout_type_id || null;
         if (duration_minutes !== undefined) updates.duration_minutes = duration_minutes ? parseInt(duration_minutes) : null;
-        if (calories_burned !== undefined) updates.calories_burned = calories_burned ? parseInt(calories_burned) : null;
+        if (sets !== undefined) updates.sets = sets;
         if (notes !== undefined) updates.notes = notes;
         
         const record = await workoutRecordsDB.updateWorkoutRecord(id, app_user_id, updates);
@@ -842,6 +844,220 @@ app.get('/api/workout-records/stats', async (req, res) => {
     } catch (error) {
         console.error('[API] 운동기록 통계 조회 오류:', error);
         res.status(500).json({ message: '운동기록 통계 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// ========== 운동종류 API ==========
+
+// 분류 목록 조회
+app.get('/api/workout-categories/:categoryNumber', async (req, res) => {
+    try {
+        const { categoryNumber } = req.params;
+        const num = parseInt(categoryNumber);
+        
+        if (num < 1 || num > 4) {
+            return res.status(400).json({ message: '분류 번호는 1~4 사이여야 합니다.' });
+        }
+        
+        const categories = await workoutTypesDB.getCategories(num);
+        res.json(categories);
+    } catch (error) {
+        console.error('[API] 분류 조회 오류:', error);
+        res.status(500).json({ message: '분류 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 분류 추가
+app.post('/api/workout-categories/:categoryNumber', async (req, res) => {
+    try {
+        const { categoryNumber } = req.params;
+        const { name } = req.body;
+        const num = parseInt(categoryNumber);
+        
+        if (num < 1 || num > 4) {
+            return res.status(400).json({ message: '분류 번호는 1~4 사이여야 합니다.' });
+        }
+        
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: '분류 이름이 필요합니다.' });
+        }
+        
+        const category = await workoutTypesDB.addCategory(num, name.trim());
+        res.status(201).json(category);
+    } catch (error) {
+        console.error('[API] 분류 추가 오류:', error);
+        if (error.code === '23505') { // UNIQUE constraint violation
+            res.status(400).json({ message: '이미 존재하는 분류 이름입니다.' });
+        } else {
+            res.status(500).json({ message: '분류 추가 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 분류 수정
+app.patch('/api/workout-categories/:categoryNumber/:id', async (req, res) => {
+    try {
+        const { categoryNumber, id } = req.params;
+        const { name } = req.body;
+        const num = parseInt(categoryNumber);
+        
+        if (num < 1 || num > 4) {
+            return res.status(400).json({ message: '분류 번호는 1~4 사이여야 합니다.' });
+        }
+        
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: '분류 이름이 필요합니다.' });
+        }
+        
+        const category = await workoutTypesDB.updateCategory(num, id, name.trim());
+        res.json(category);
+    } catch (error) {
+        console.error('[API] 분류 수정 오류:', error);
+        if (error.code === '23505') { // UNIQUE constraint violation
+            res.status(400).json({ message: '이미 존재하는 분류 이름입니다.' });
+        } else if (error.message === '분류를 찾을 수 없습니다.') {
+            res.status(404).json({ message: '분류를 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '분류 수정 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 분류 삭제
+app.delete('/api/workout-categories/:categoryNumber/:id', async (req, res) => {
+    try {
+        const { categoryNumber, id } = req.params;
+        const num = parseInt(categoryNumber);
+        
+        if (num < 1 || num > 4) {
+            return res.status(400).json({ message: '분류 번호는 1~4 사이여야 합니다.' });
+        }
+        
+        const category = await workoutTypesDB.deleteCategory(num, id);
+        res.json({ message: '분류가 삭제되었습니다.', category });
+    } catch (error) {
+        console.error('[API] 분류 삭제 오류:', error);
+        if (error.message === '분류를 찾을 수 없습니다.') {
+            res.status(404).json({ message: '분류를 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '분류 삭제 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 운동종류 목록 조회
+app.get('/api/workout-types', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.category_1_id) filters.category_1_id = req.query.category_1_id;
+        if (req.query.category_2_id) filters.category_2_id = req.query.category_2_id;
+        if (req.query.category_3_id) filters.category_3_id = req.query.category_3_id;
+        if (req.query.category_4_id) filters.category_4_id = req.query.category_4_id;
+        if (req.query.name) filters.name = req.query.name;
+        
+        const workoutTypes = await workoutTypesDB.getWorkoutTypes(filters);
+        res.json(workoutTypes);
+    } catch (error) {
+        console.error('[API] 운동종류 조회 오류:', error);
+        res.status(500).json({ message: '운동종류 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동종류 단일 조회
+app.get('/api/workout-types/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const workoutType = await workoutTypesDB.getWorkoutTypeById(id);
+        
+        if (!workoutType) {
+            return res.status(404).json({ message: '운동종류를 찾을 수 없습니다.' });
+        }
+        
+        res.json(workoutType);
+    } catch (error) {
+        console.error('[API] 운동종류 단일 조회 오류:', error);
+        res.status(500).json({ message: '운동종류 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동종류 추가
+app.post('/api/workout-types', async (req, res) => {
+    try {
+        const { name, type, category_1_id, category_2_id, category_3_id, category_4_id } = req.body;
+        
+        if (!name || !name.trim()) {
+            return res.status(400).json({ message: '운동 이름이 필요합니다.' });
+        }
+        
+        if (type && !['세트', '시간'].includes(type)) {
+            return res.status(400).json({ message: '타입은 "세트" 또는 "시간"이어야 합니다.' });
+        }
+        
+        const workoutType = await workoutTypesDB.addWorkoutType({
+            name: name.trim(),
+            type: type || '세트',
+            category_1_id: category_1_id || null,
+            category_2_id: category_2_id || null,
+            category_3_id: category_3_id || null,
+            category_4_id: category_4_id || null
+        });
+        
+        res.status(201).json(workoutType);
+    } catch (error) {
+        console.error('[API] 운동종류 추가 오류:', error);
+        if (error.code === '23505') { // UNIQUE constraint violation
+            res.status(400).json({ message: '이미 존재하는 운동 이름입니다.' });
+        } else {
+            res.status(500).json({ message: '운동종류 추가 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 운동종류 수정
+app.patch('/api/workout-types/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, type, category_1_id, category_2_id, category_3_id, category_4_id } = req.body;
+        
+        if (type && !['세트', '시간'].includes(type)) {
+            return res.status(400).json({ message: '타입은 "세트" 또는 "시간"이어야 합니다.' });
+        }
+        
+        const updates = {};
+        if (name !== undefined) updates.name = name.trim();
+        if (type !== undefined) updates.type = type;
+        if (category_1_id !== undefined) updates.category_1_id = category_1_id || null;
+        if (category_2_id !== undefined) updates.category_2_id = category_2_id || null;
+        if (category_3_id !== undefined) updates.category_3_id = category_3_id || null;
+        if (category_4_id !== undefined) updates.category_4_id = category_4_id || null;
+        
+        const workoutType = await workoutTypesDB.updateWorkoutType(id, updates);
+        res.json(workoutType);
+    } catch (error) {
+        console.error('[API] 운동종류 수정 오류:', error);
+        if (error.code === '23505') { // UNIQUE constraint violation
+            res.status(400).json({ message: '이미 존재하는 운동 이름입니다.' });
+        } else if (error.message === '운동종류를 찾을 수 없습니다.') {
+            res.status(404).json({ message: '운동종류를 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '운동종류 수정 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 운동종류 삭제
+app.delete('/api/workout-types/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const workoutType = await workoutTypesDB.deleteWorkoutType(id);
+        res.json({ message: '운동종류가 삭제되었습니다.', workoutType });
+    } catch (error) {
+        console.error('[API] 운동종류 삭제 오류:', error);
+        if (error.message === '운동종류를 찾을 수 없습니다.') {
+            res.status(404).json({ message: '운동종류를 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '운동종류 삭제 중 오류가 발생했습니다.' });
+        }
     }
 });
 
