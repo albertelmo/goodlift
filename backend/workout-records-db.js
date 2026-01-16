@@ -9,7 +9,7 @@ const pool = new Pool({
 // 운동기록 테이블 생성
 const createWorkoutRecordsTable = async () => {
   try {
-    // 기존 테이블이 있으면 삭제 (CASCADE로 관련 테이블도 함께 삭제)
+    // 테이블 존재 여부 확인
     const checkQuery = `
       SELECT table_name 
       FROM information_schema.tables 
@@ -17,55 +17,55 @@ const createWorkoutRecordsTable = async () => {
     `;
     const checkResult = await pool.query(checkQuery);
     
-    if (checkResult.rows.length > 0) {
-      console.log('[PostgreSQL] 기존 workout_records 테이블을 삭제합니다...');
-      await pool.query('DROP TABLE IF EXISTS workout_record_sets CASCADE');
-      await pool.query('DROP TABLE IF EXISTS workout_records CASCADE');
-      console.log('[PostgreSQL] 기존 테이블이 삭제되었습니다.');
-    }
-    
-    // 새 테이블 생성 (외래키 제약조건은 나중에 추가)
-    const createQuery = `
-      CREATE TABLE workout_records (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-        workout_date DATE NOT NULL,
-        workout_type_id UUID,
-        duration_minutes INTEGER,
-        notes TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `;
-    await pool.query(createQuery);
-    await pool.query("SET client_encoding TO 'UTF8'");
-    
-    // workout_types 테이블이 존재하는 경우에만 외래키 제약조건 추가
-    const checkWorkoutTypesQuery = `
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public' AND table_name = 'workout_types'
-    `;
-    const checkWorkoutTypesResult = await pool.query(checkWorkoutTypesQuery);
-    
-    if (checkWorkoutTypesResult.rows.length > 0) {
-      await pool.query(`
-        ALTER TABLE workout_records 
-        ADD CONSTRAINT fk_workout_records_workout_type_id 
-        FOREIGN KEY (workout_type_id) REFERENCES workout_types(id) ON DELETE SET NULL
-      `);
-      console.log('[PostgreSQL] workout_records 테이블에 workout_type_id 외래키 제약조건이 추가되었습니다.');
+    // 테이블이 없을 때만 생성
+    if (checkResult.rows.length === 0) {
+      // 새 테이블 생성 (외래키 제약조건은 나중에 추가)
+      const createQuery = `
+        CREATE TABLE workout_records (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+          workout_date DATE NOT NULL,
+          workout_type_id UUID,
+          duration_minutes INTEGER,
+          notes TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      await pool.query(createQuery);
+      await pool.query("SET client_encoding TO 'UTF8'");
+      
+      // workout_types 테이블이 존재하는 경우에만 외래키 제약조건 추가
+      const checkWorkoutTypesQuery = `
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'workout_types'
+      `;
+      const checkWorkoutTypesResult = await pool.query(checkWorkoutTypesQuery);
+      
+      if (checkWorkoutTypesResult.rows.length > 0) {
+        await pool.query(`
+          ALTER TABLE workout_records 
+          ADD CONSTRAINT fk_workout_records_workout_type_id 
+          FOREIGN KEY (workout_type_id) REFERENCES workout_types(id) ON DELETE SET NULL
+        `);
+        console.log('[PostgreSQL] workout_records 테이블에 workout_type_id 외래키 제약조건이 추가되었습니다.');
+      } else {
+        console.warn('[PostgreSQL] workout_types 테이블이 아직 존재하지 않습니다. 외래키 제약조건은 나중에 추가됩니다.');
+      }
+      
+      // 인덱스 생성
+      await createWorkoutRecordsIndexes();
+      
+      // 세트 테이블 생성
+      await createWorkoutRecordSetsTable();
+      
+      console.log('[PostgreSQL] workout_records 테이블이 생성되었습니다.');
     } else {
-      console.warn('[PostgreSQL] workout_types 테이블이 아직 존재하지 않습니다. 외래키 제약조건은 나중에 추가됩니다.');
+      console.log('[PostgreSQL] workout_records 테이블이 이미 존재합니다.');
+      // 기존 테이블 마이그레이션
+      await migrateWorkoutRecordsTable();
     }
-    
-    // 인덱스 생성
-    await createWorkoutRecordsIndexes();
-    
-    // 세트 테이블 생성
-    await createWorkoutRecordSetsTable();
-    
-    console.log('[PostgreSQL] workout_records 테이블이 생성되었습니다.');
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 테이블 생성 오류:', error);
     throw error;
@@ -75,30 +75,180 @@ const createWorkoutRecordsTable = async () => {
 // 세트 테이블 생성
 const createWorkoutRecordSetsTable = async () => {
   try {
-    const createQuery = `
-      CREATE TABLE workout_record_sets (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        workout_record_id UUID NOT NULL REFERENCES workout_records(id) ON DELETE CASCADE,
-        set_number INTEGER NOT NULL,
-        weight DECIMAL(10,2),
-        reps INTEGER,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(workout_record_id, set_number)
-      )
+    const checkQuery = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'workout_record_sets'
     `;
-    await pool.query(createQuery);
-    await pool.query("SET client_encoding TO 'UTF8'");
+    const checkResult = await pool.query(checkQuery);
     
-    // 인덱스 생성
-    await pool.query(`
-      CREATE INDEX IF NOT EXISTS idx_workout_record_sets_workout_record_id 
-      ON workout_record_sets(workout_record_id)
-    `);
-    
-    console.log('[PostgreSQL] workout_record_sets 테이블이 생성되었습니다.');
+    if (checkResult.rows.length === 0) {
+      const createQuery = `
+        CREATE TABLE workout_record_sets (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          workout_record_id UUID NOT NULL REFERENCES workout_records(id) ON DELETE CASCADE,
+          set_number INTEGER NOT NULL,
+          weight DECIMAL(10,2),
+          reps INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(workout_record_id, set_number)
+        )
+      `;
+      await pool.query(createQuery);
+      await pool.query("SET client_encoding TO 'UTF8'");
+      
+      // 인덱스 생성
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_workout_record_sets_workout_record_id 
+        ON workout_record_sets(workout_record_id)
+      `);
+      
+      console.log('[PostgreSQL] workout_record_sets 테이블이 생성되었습니다.');
+    } else {
+      console.log('[PostgreSQL] workout_record_sets 테이블이 이미 존재합니다.');
+    }
   } catch (error) {
     console.error('[PostgreSQL] workout_record_sets 테이블 생성 오류:', error);
+    throw error;
+  }
+};
+
+// 기존 테이블 마이그레이션
+const migrateWorkoutRecordsTable = async () => {
+  try {
+    // 1. workout_record_sets 테이블 생성 (없으면)
+    await createWorkoutRecordSetsTable();
+    
+    // 2. 기존 컬럼 확인
+    const columnsQuery = `
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'workout_records'
+      ORDER BY ordinal_position
+    `;
+    const columnsResult = await pool.query(columnsQuery);
+    const existingColumns = columnsResult.rows.map(row => row.column_name);
+    
+    // 3. workout_type_id 컬럼 추가 (없으면)
+    if (!existingColumns.includes('workout_type_id')) {
+      await pool.query(`
+        ALTER TABLE workout_records 
+        ADD COLUMN workout_type_id UUID
+      `);
+      console.log('[PostgreSQL] workout_type_id 컬럼이 추가되었습니다.');
+      
+      // 기존 workout_type 문자열을 workout_types 테이블과 매칭하여 UUID로 변환
+      const existingRecords = await pool.query(`
+        SELECT id, workout_type 
+        FROM workout_records 
+        WHERE workout_type IS NOT NULL AND workout_type != '' AND workout_type_id IS NULL
+      `);
+      
+      if (existingRecords.rows.length > 0) {
+        let matchedCount = 0;
+        let unmatchedCount = 0;
+        
+        for (const record of existingRecords.rows) {
+          // workout_types 테이블에서 name으로 검색
+          const workoutTypeResult = await pool.query(`
+            SELECT id FROM workout_types WHERE name = $1
+          `, [record.workout_type]);
+          
+          if (workoutTypeResult.rows.length > 0) {
+            // 매칭되는 경우 UUID로 업데이트
+            await pool.query(`
+              UPDATE workout_records 
+              SET workout_type_id = $1 
+              WHERE id = $2
+            `, [workoutTypeResult.rows[0].id, record.id]);
+            matchedCount++;
+          } else {
+            // 매칭되지 않는 경우 경고 로그
+            console.warn(`[PostgreSQL] workout_type "${record.workout_type}"에 해당하는 workout_types를 찾을 수 없습니다. (record_id: ${record.id})`);
+            unmatchedCount++;
+          }
+        }
+        
+        console.log(`[PostgreSQL] workout_type 마이그레이션 완료: 매칭 ${matchedCount}개, 미매칭 ${unmatchedCount}개`);
+      }
+      
+      // workout_types 테이블이 존재하는 경우 외래키 제약조건 추가
+      const checkWorkoutTypesQuery = `
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'workout_types'
+      `;
+      const checkWorkoutTypesResult = await pool.query(checkWorkoutTypesQuery);
+      
+      if (checkWorkoutTypesResult.rows.length > 0) {
+        // 기존 외래키 제약조건 확인
+        const fkCheckQuery = `
+          SELECT constraint_name 
+          FROM information_schema.table_constraints 
+          WHERE table_schema = 'public' 
+            AND table_name = 'workout_records' 
+            AND constraint_name = 'fk_workout_records_workout_type_id'
+        `;
+        const fkCheckResult = await pool.query(fkCheckQuery);
+        
+        if (fkCheckResult.rows.length === 0) {
+          await pool.query(`
+            ALTER TABLE workout_records 
+            ADD CONSTRAINT fk_workout_records_workout_type_id 
+            FOREIGN KEY (workout_type_id) REFERENCES workout_types(id) ON DELETE SET NULL
+          `);
+          console.log('[PostgreSQL] workout_type_id 외래키 제약조건이 추가되었습니다.');
+        }
+      }
+    }
+    
+    // 4. calories_burned 컬럼 제거 (있으면)
+    if (existingColumns.includes('calories_burned')) {
+      await pool.query(`
+        ALTER TABLE workout_records 
+        DROP COLUMN IF EXISTS calories_burned
+      `);
+      console.log('[PostgreSQL] calories_burned 컬럼이 제거되었습니다.');
+    }
+    
+    // 5. workout_type 컬럼 제거 (workout_type_id로 완전히 대체된 후)
+    if (existingColumns.includes('workout_type')) {
+      // 모든 데이터가 마이그레이션되었는지 확인
+      const unmigratedCount = await pool.query(`
+        SELECT COUNT(*) as count 
+        FROM workout_records 
+        WHERE workout_type IS NOT NULL AND workout_type != '' AND workout_type_id IS NULL
+      `);
+      
+      if (unmigratedCount.rows[0].count === '0') {
+        await pool.query(`
+          ALTER TABLE workout_records 
+          DROP COLUMN IF EXISTS workout_type
+        `);
+        console.log('[PostgreSQL] workout_type 컬럼이 제거되었습니다.');
+      } else {
+        console.warn(`[PostgreSQL] workout_type 컬럼 제거 보류: ${unmigratedCount.rows[0].count}개의 미마이그레이션 레코드가 있습니다.`);
+      }
+    }
+    
+    // 6. 인덱스 업데이트
+    const checkTypeIdIndexQuery = `
+      SELECT indexname 
+      FROM pg_indexes 
+      WHERE schemaname = 'public' AND tablename = 'workout_records' AND indexname = 'idx_workout_records_type_id'
+    `;
+    const checkTypeIdIndexResult = await pool.query(checkTypeIdIndexQuery);
+    
+    if (checkTypeIdIndexResult.rows.length === 0) {
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_workout_records_type_id 
+        ON workout_records(workout_type_id)
+      `);
+      console.log('[PostgreSQL] idx_workout_records_type_id 인덱스가 생성되었습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] workout_records 테이블 마이그레이션 오류:', error);
     throw error;
   }
 };
