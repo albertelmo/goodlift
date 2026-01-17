@@ -552,7 +552,7 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
         DELETE FROM workout_record_sets WHERE workout_record_id = $1
       `, [id]);
       
-      // 새 세트 추가
+      // 새 세트 추가 (완료 상태 보존)
       if (Array.isArray(updates.sets) && updates.sets.length > 0) {
         for (const set of updates.sets) {
           await client.query(`
@@ -560,13 +560,15 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
               workout_record_id,
               set_number,
               weight,
-              reps
-            ) VALUES ($1, $2, $3, $4)
+              reps,
+              is_completed
+            ) VALUES ($1, $2, $3, $4, $5)
           `, [
             id,
             set.set_number,
             set.weight || null,
-            set.reps || null
+            set.reps || null,
+            set.is_completed !== undefined ? set.is_completed : false
           ]);
         }
       }

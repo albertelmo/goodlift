@@ -140,23 +140,46 @@ function renderWorkoutItem(record) {
     const notes = record.notes ? escapeHtml(record.notes) : '';
     const sets = record.sets || [];
     
+    // 모든 세트/시간이 완료되었는지 확인
+    let allCompleted = false;
+    if (workoutTypeType === '시간') {
+        allCompleted = record.is_completed || false;
+    } else if (workoutTypeType === '세트' && sets.length > 0) {
+        // 모든 세트가 완료되었는지 확인
+        allCompleted = sets.every(set => set.is_completed === true) && sets.length > 0;
+    }
+    
+    const cardClass = allCompleted ? 'app-workout-item app-workout-item-all-completed' : 'app-workout-item';
+    
     let infoHtml = '';
     
     if (workoutTypeType === '시간' && duration) {
-        infoHtml = `<span class="app-workout-item-duration">⏱ ${duration}</span>`;
+        const isCompleted = record.is_completed || false;
+        const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
+        infoHtml = `<span class="app-workout-item-duration ${completedClass}">⏱ ${duration}</span>`;
     } else if (workoutTypeType === '세트' && sets.length > 0) {
         const setsInfo = sets.map(set => {
             const weight = set.weight ? `${Math.round(set.weight)}kg` : '-';
             const reps = set.reps ? `${set.reps}회` : '-';
-            return `${set.set_number}세트: ${weight} × ${reps}`;
+            const isCompleted = set.is_completed || false;
+            const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
+            return `<span class="${completedClass}">${set.set_number}세트: ${weight} × ${reps}</span>`;
         }).join('<br>');
         infoHtml = `<span class="app-workout-item-sets">${setsInfo}</span>`;
     }
     
     return `
-        <div class="app-workout-item" data-record-id="${record.id}">
+        <div class="${cardClass}" data-record-id="${record.id}">
             <div class="app-workout-item-main">
-                <div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>
+                <div class="app-workout-item-type-container">
+                    <div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>
+                    <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
                 ${infoHtml ? `<div class="app-workout-item-info">${infoHtml}</div>` : ''}
             </div>
             ${notes ? `<div class="app-workout-item-notes">${notes}</div>` : ''}
@@ -218,10 +241,6 @@ function showCompletedCheckModal(record) {
                 </div>
                 <div class="app-modal-content" id="completed-check-modal-content">
                     ${contentHtml}
-                    ${notes ? `<div class="app-completed-modal-notes">${notes}</div>` : ''}
-                </div>
-                <div class="app-modal-actions">
-                    <button class="app-modal-btn app-modal-btn-secondary" id="completed-check-edit-btn">수정</button>
                 </div>
             </div>
         </div>
@@ -239,7 +258,6 @@ function showCompletedCheckModal(record) {
     const modalBg = document.getElementById('completed-check-modal-bg');
     const modal = document.getElementById('completed-check-modal');
     const closeBtn = document.getElementById('completed-check-modal-close');
-    const editBtn = document.getElementById('completed-check-edit-btn');
     const checkboxes = modal.querySelectorAll('.app-completed-modal-checkbox');
     
     // 체크박스 클릭 이벤트
@@ -260,6 +278,20 @@ function showCompletedCheckModal(record) {
                         set.is_completed = isChecked;
                     }
                 }
+                
+                // 카드 목록 업데이트
+                const recordIndex = currentRecords.findIndex(r => r.id === record.id);
+                if (recordIndex !== -1) {
+                    // currentRecords 업데이트
+                    currentRecords[recordIndex] = { ...record };
+                    // 현재 필터 날짜로 다시 렌더링
+                    render(currentRecords);
+                }
+                
+                // 캘린더 업데이트
+                if (window.updateCalendarWorkoutRecords) {
+                    await window.updateCalendarWorkoutRecords();
+                }
             } catch (error) {
                 console.error('완료 상태 업데이트 오류:', error);
                 checkbox.checked = !isChecked; // 롤백
@@ -267,35 +299,6 @@ function showCompletedCheckModal(record) {
             }
         });
     });
-    
-    // 수정 버튼 클릭 이벤트
-    if (editBtn) {
-        editBtn.addEventListener('click', async (e) => {
-            e.stopPropagation(); // 이벤트 전파 방지
-            
-            // 완료 체크 모달 닫기 (애니메이션 완료 후 제거)
-            modalBg.classList.remove('app-modal-show');
-            modal.classList.remove('app-modal-show');
-            
-            // 모달이 완전히 닫힌 후 수정 모달 열기
-            setTimeout(async () => {
-                modalBg.remove();
-                try {
-                    const editModule = await import('./edit.js');
-                    // 최신 record 데이터 다시 가져오기
-                    const { getWorkoutRecordById } = await import('../api.js');
-                    const latestRecord = await getWorkoutRecordById(record.id, currentAppUserId);
-                    const recordToEdit = latestRecord || record;
-                    await editModule.showEditModal(recordToEdit, currentAppUserId, () => {
-                        loadRecords();
-                    });
-                } catch (error) {
-                    console.error('수정 모달 열기 오류:', error);
-                    alert('수정 모달을 열 수 없습니다.');
-                }
-            }, 200); // 애니메이션 시간에 맞춰 지연
-        });
-    }
     
     // 닫기 버튼 클릭 이벤트
     closeBtn.addEventListener('click', () => {
@@ -325,6 +328,27 @@ function setupClickListeners() {
         const recordId = item.getAttribute('data-record-id');
         const record = currentRecords.find(r => r.id === recordId);
         if (!record) return;
+        
+        // 수정 버튼 클릭 시 수정 모달 열기
+        const editBtn = item.querySelector('.app-workout-item-edit-btn');
+        if (editBtn) {
+            editBtn.addEventListener('click', async (e) => {
+                e.stopPropagation(); // 카드 클릭 이벤트 방지
+                try {
+                    const editModule = await import('./edit.js');
+                    // 최신 record 데이터 다시 가져오기
+                    const { getWorkoutRecordById } = await import('../api.js');
+                    const latestRecord = await getWorkoutRecordById(record.id, currentAppUserId);
+                    const recordToEdit = latestRecord || record;
+                    await editModule.showEditModal(recordToEdit, currentAppUserId, () => {
+                        loadRecords();
+                    });
+                } catch (error) {
+                    console.error('수정 모달 열기 오류:', error);
+                    alert('수정 모달을 열 수 없습니다.');
+                }
+            });
+        }
         
         // 카드 클릭 시 완료 체크 모달 열기
         item.addEventListener('click', () => {

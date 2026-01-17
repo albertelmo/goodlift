@@ -90,11 +90,13 @@ export async function showEditModal(record, appUserId, onSuccess) {
     const setsContainer = modal.querySelector('#workout-edit-sets-container');
     const addSetBtn = modal.querySelector('#workout-edit-set-btn');
     
-    // 기존 세트 데이터 로드 (무게는 정수로 변환)
+    // 기존 세트 데이터 로드 (무게는 정수로 변환, 완료 상태 보존)
     let sets = (record.sets || []).map(set => ({
+        id: set.id, // 기존 세트 ID 보존
         set_number: set.set_number,
         weight: set.weight ? Math.round(set.weight) : null,
-        reps: set.reps
+        reps: set.reps,
+        is_completed: set.is_completed || false // 완료 상태 보존
     }));
     
     if (sets.length === 0 && workoutTypeType === '세트') {
@@ -139,7 +141,13 @@ export async function showEditModal(record, appUserId, onSuccess) {
         const lastSet = sets.length > 0 ? sets[sets.length - 1] : null;
         const newWeight = lastSet ? lastSet.weight : null;
         const newReps = lastSet ? lastSet.reps : null;
-        sets.push({ set_number: setNumber, weight: newWeight, reps: newReps });
+        sets.push({ 
+            id: null, // 새 세트는 ID 없음
+            set_number: setNumber, 
+            weight: newWeight, 
+            reps: newReps,
+            is_completed: false // 새 세트는 미완료
+        });
         renderSets();
     }
     
@@ -256,12 +264,23 @@ export async function showEditModal(record, appUserId, onSuccess) {
         const selectedOption = typeSelect.options[typeSelect.selectedIndex];
         const workoutType = selectedOption ? selectedOption.getAttribute('data-type') : null;
         
+        // 수정 시 완료 상태 보존을 위해 기존 세트의 is_completed 정보 포함
+        const updatedSets = workoutType === '세트' 
+            ? sets.filter(s => s.weight !== null || s.reps !== null).map(set => ({
+                id: set.id, // 기존 세트 ID 보존
+                set_number: set.set_number,
+                weight: set.weight,
+                reps: set.reps,
+                is_completed: set.is_completed !== undefined ? set.is_completed : false
+            }))
+            : [];
+        
         const updates = {
             app_user_id: appUserId,
             workout_date: workoutDate,
             workout_type_id: workoutTypeId || null,
             duration_minutes: workoutType === '시간' && durationMinutes ? parseInt(durationMinutes) : null,
-            sets: workoutType === '세트' ? sets.filter(s => s.weight !== null || s.reps !== null) : [],
+            sets: updatedSets,
             notes: notes.trim() || null
         };
         

@@ -134,9 +134,12 @@ export function render(container) {
             prevDate.setHours(0, 0, 0, 0);
             const prevDateStr = formatDate(prevDate);
             const hasWorkout = workoutRecordsByDate[prevDateStr] && workoutRecordsByDate[prevDateStr].length > 0;
+            const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[prevDateStr]) : false;
             
             let dayClass = 'app-calendar-day app-calendar-day-empty';
-            if (hasWorkout) dayClass += ' app-calendar-day-has-workout';
+            if (hasWorkout) {
+                dayClass += allCompleted ? ' app-calendar-day-has-workout' : ' app-calendar-day-has-workout-incomplete';
+            }
             
             html += `
                 <div class="${dayClass}" data-date="${prevDateStr}" data-year="${prevYear}" data-month="${prevMonth}">
@@ -158,13 +161,16 @@ export function render(container) {
         const isSaturday = dayOfWeek === 6;
         const dateStr = formatDate(date);
         const hasWorkout = workoutRecordsByDate[dateStr] && workoutRecordsByDate[dateStr].length > 0;
+        const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[dateStr]) : false;
         
         let dayClass = 'app-calendar-day';
         if (isToday) dayClass += ' app-calendar-day-today';
         if (isSelected) dayClass += ' app-calendar-day-selected';
         if (isSunday) dayClass += ' app-calendar-day-sunday';
         if (isSaturday) dayClass += ' app-calendar-day-saturday';
-        if (hasWorkout) dayClass += ' app-calendar-day-has-workout';
+        if (hasWorkout) {
+            dayClass += allCompleted ? ' app-calendar-day-has-workout' : ' app-calendar-day-has-workout-incomplete';
+        }
         
         html += `
             <div class="${dayClass}" data-date="${dateStr}">
@@ -191,9 +197,12 @@ export function render(container) {
             nextDate.setHours(0, 0, 0, 0);
             const nextDateStr = formatDate(nextDate);
             const hasWorkout = workoutRecordsByDate[nextDateStr] && workoutRecordsByDate[nextDateStr].length > 0;
+            const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[nextDateStr]) : false;
             
             let dayClass = 'app-calendar-day app-calendar-day-empty';
-            if (hasWorkout) dayClass += ' app-calendar-day-has-workout';
+            if (hasWorkout) {
+                dayClass += allCompleted ? ' app-calendar-day-has-workout' : ' app-calendar-day-has-workout-incomplete';
+            }
             
             html += `
                 <div class="${dayClass}" data-date="${nextDateStr}" data-year="${nextYear}" data-month="${nextMonth}">
@@ -213,6 +222,29 @@ export function render(container) {
     
     // 이벤트 리스너
     setupEventListeners();
+}
+
+/**
+ * 모든 운동이 완료되었는지 확인
+ */
+function checkAllWorkoutsCompleted(records) {
+    if (!records || records.length === 0) return false;
+    
+    return records.every(record => {
+        const workoutTypeType = record.workout_type_type || null;
+        
+        // 시간 운동의 경우
+        if (workoutTypeType === '시간') {
+            return record.is_completed === true;
+        }
+        // 세트 운동의 경우
+        else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
+            return record.sets.every(set => set.is_completed === true);
+        }
+        
+        // 운동종류가 없거나 세트가 없는 경우 false
+        return false;
+    });
 }
 
 /**

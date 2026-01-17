@@ -714,7 +714,8 @@ body.app-user-active {
 }
 
 /* 운동기록이 있는 날짜 표시 (작은 줄) - 항상 전체 셀 기준으로 같은 위치에 표시 */
-.app-calendar-day-has-workout {
+.app-calendar-day-has-workout,
+.app-calendar-day-has-workout-incomplete {
     position: relative;
 }
 
@@ -727,6 +728,21 @@ body.app-user-active {
     width: 16px;
     height: 2px;
     background: var(--app-primary);
+    border-radius: 1px;
+    z-index: 3;
+    pointer-events: none;
+}
+
+/* 완료되지 않은 운동기록이 있는 날짜 - 회색 밑줄 */
+.app-calendar-day-has-workout-incomplete::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 2px;
+    background: #999999;
     border-radius: 1px;
     z-index: 3;
     pointer-events: none;
@@ -823,21 +839,84 @@ body.app-user-active {
     background: var(--app-border);
 }
 
+.app-workout-item-all-completed {
+    background: rgba(102, 126, 234, 0.08);
+    border: 1px solid rgba(102, 126, 234, 0.15);
+}
+
+.app-workout-item-all-completed:active {
+    background: rgba(102, 126, 234, 0.12);
+}
+
 .app-workout-item-main {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
     margin-bottom: 8px;
+}
+
+.app-workout-item-type-container {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    height: 24px;
 }
 
 .app-workout-item-type {
     font-size: 15px;
     font-weight: 600;
     color: var(--app-text);
+    line-height: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.app-workout-item-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: var(--app-text-muted);
+    cursor: pointer;
+    border-radius: var(--app-radius-sm);
+    transition: background var(--app-transition), color var(--app-transition);
+    flex-shrink: 0;
+    vertical-align: middle;
+}
+
+.app-workout-item-edit-btn svg {
+    display: block;
+    width: 14px;
+    height: 14px;
+    margin: 0;
+    padding: 0;
+}
+
+.app-workout-item-edit-btn:hover {
+    background: var(--app-border);
+    color: var(--app-text);
+}
+
+.app-workout-item-edit-btn:active {
+    background: var(--app-border);
+    transform: scale(0.95);
 }
 
 .app-workout-item-info {
-    display: flex;
-    gap: 12px;
     font-size: 13px;
     color: var(--app-text-muted);
+    flex: 1;
+    text-align: right;
 }
 
 .app-workout-item-duration-container {
@@ -848,6 +927,17 @@ body.app-user-active {
 
 .app-workout-item-sets {
     text-align: right;
+}
+
+.app-workout-item-completed {
+    opacity: 0.4;
+    color: var(--app-text-muted);
+}
+
+.app-workout-item-incomplete {
+    opacity: 1;
+    font-weight: 500;
+    color: var(--app-text);
 }
 
 .app-workout-item-set-row {
@@ -873,16 +963,81 @@ body.app-user-active {
 }
 
 /* 완료 체크 모달 스타일 */
+/* 완료 체크 모달 특화 스타일 */
+#completed-check-modal-bg {
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+#completed-check-modal {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+}
+
+#completed-check-modal-header {
+    background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-primary-dark) 100%);
+    color: white;
+    border-bottom: none;
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+}
+
+#completed-check-modal-header h3 {
+    color: white;
+    margin: 0;
+    padding: 0;
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
+    height: 32px;
+}
+
+#completed-check-modal-header .app-modal-close-btn {
+    color: white;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+#completed-check-modal-header .app-modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+#completed-check-modal-content {
+    background: #ffffff;
+    padding: 20px;
+}
+
 .app-completed-modal-content-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--app-border);
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    background: #f8f9fa;
+    border-radius: var(--app-radius-sm);
+    border: 2px solid transparent;
+    transition: all var(--app-transition);
+}
+
+.app-completed-modal-content-item:hover {
+    background: #e9ecef;
+    border-color: var(--app-border);
 }
 
 .app-completed-modal-content-item:last-child {
-    border-bottom: none;
+    margin-bottom: 0;
 }
 
 .app-completed-modal-label {
@@ -899,28 +1054,36 @@ body.app-user-active {
 
 .app-completed-modal-checkbox-container span {
     font-size: 14px;
-    color: var(--app-text-muted);
+    font-weight: 500;
+    color: var(--app-text);
 }
 
 .app-completed-modal-checkbox {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     cursor: pointer;
     accent-color: var(--app-primary);
+    transform: scale(1.1);
+    transition: transform var(--app-transition);
+}
+
+.app-completed-modal-checkbox:checked {
+    transform: scale(1.15);
 }
 
 .app-completed-modal-sets {
-    margin-bottom: 8px;
+    margin-bottom: 0;
 }
 
 .app-completed-modal-notes {
-    margin-top: 12px;
-    padding: 12px;
-    background: var(--app-bg);
+    margin-top: 16px;
+    padding: 14px 16px;
+    background: #f8f9fa;
     border-radius: var(--app-radius-sm);
+    border-left: 3px solid var(--app-primary);
     font-size: 13px;
-    color: var(--app-text-muted);
-    line-height: 1.5;
+    color: var(--app-text);
+    line-height: 1.6;
     white-space: pre-wrap;
     word-break: break-word;
 }
