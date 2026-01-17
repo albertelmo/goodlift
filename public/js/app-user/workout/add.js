@@ -68,6 +68,12 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
     
     document.body.appendChild(modalBg);
     
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
     // 이벤트 리스너
     const closeBtn = modal.querySelector('.app-modal-close');
     const cancelBtn = modal.querySelector('#workout-add-cancel');
@@ -187,7 +193,14 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
     }
     
     const closeModal = () => {
-        document.body.removeChild(modalBg);
+        // 모달 닫기 애니메이션
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200); // 애니메이션 시간에 맞춰 지연
     };
     
     closeBtn.addEventListener('click', closeModal);
