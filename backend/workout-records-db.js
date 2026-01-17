@@ -114,11 +114,56 @@ const createWorkoutRecordSetsTable = async () => {
   }
 };
 
+// 완료 상태 컬럼 추가 (마이그레이션)
+const addCompletedColumns = async () => {
+  try {
+    // workout_records 테이블에 is_completed 컬럼 추가 (시간 운동용)
+    const checkWorkoutRecordsCompleted = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'workout_records' 
+      AND column_name = 'is_completed'
+    `);
+    
+    if (checkWorkoutRecordsCompleted.rows.length === 0) {
+      await pool.query(`
+        ALTER TABLE workout_records 
+        ADD COLUMN is_completed BOOLEAN DEFAULT false
+      `);
+      console.log('[PostgreSQL] workout_records 테이블에 is_completed 컬럼이 추가되었습니다.');
+    }
+    
+    // workout_record_sets 테이블에 is_completed 컬럼 추가 (세트별 완료용)
+    const checkSetsCompleted = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+      AND table_name = 'workout_record_sets' 
+      AND column_name = 'is_completed'
+    `);
+    
+    if (checkSetsCompleted.rows.length === 0) {
+      await pool.query(`
+        ALTER TABLE workout_record_sets 
+        ADD COLUMN is_completed BOOLEAN DEFAULT false
+      `);
+      console.log('[PostgreSQL] workout_record_sets 테이블에 is_completed 컬럼이 추가되었습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 완료 상태 컬럼 추가 오류:', error);
+    throw error;
+  }
+};
+
 // 기존 테이블 마이그레이션
 const migrateWorkoutRecordsTable = async () => {
   try {
     // 1. workout_record_sets 테이블 생성 (없으면)
     await createWorkoutRecordSetsTable();
+    
+    // 2. 완료 상태 컬럼 추가
+    await addCompletedColumns();
     
     // 2. 기존 컬럼 확인
     const columnsQuery = `
@@ -281,6 +326,7 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
         wt.type as workout_type_type,
         wr.duration_minutes,
         wr.notes,
+        wr.is_completed,
         wr.created_at,
         wr.updated_at
       FROM workout_records wr
@@ -304,10 +350,23 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
     
     const result = await pool.query(query, params);
     
-    // 각 운동기록에 세트 정보 추가
+    // 각 운동기록에 세트 정보 추가 및 날짜 정규화
     for (const record of result.rows) {
+      // workout_date를 YYYY-MM-DD 형식의 문자열로 변환 (타임존 이슈 방지)
+      if (record.workout_date) {
+        if (record.workout_date instanceof Date) {
+          const year = record.workout_date.getFullYear();
+          const month = String(record.workout_date.getMonth() + 1).padStart(2, '0');
+          const day = String(record.workout_date.getDate()).padStart(2, '0');
+          record.workout_date = `${year}-${month}-${day}`;
+        } else if (typeof record.workout_date === 'string') {
+          // ISO 형식 문자열인 경우 날짜 부분만 추출
+          record.workout_date = record.workout_date.split('T')[0];
+        }
+      }
+      
       const sets = await pool.query(`
-        SELECT id, set_number, weight, reps, created_at, updated_at
+        SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
         FROM workout_record_sets
         WHERE workout_record_id = $1
         ORDER BY set_number ASC
@@ -335,6 +394,7 @@ const getWorkoutRecordById = async (id, appUserId) => {
         wt.type as workout_type_type,
         wr.duration_minutes,
         wr.notes,
+        wr.is_completed,
         wr.created_at,
         wr.updated_at
       FROM workout_records wr
@@ -351,7 +411,7 @@ const getWorkoutRecordById = async (id, appUserId) => {
     
     // 세트 정보 조회
     const sets = await pool.query(`
-      SELECT id, set_number, weight, reps, created_at, updated_at
+      SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
       FROM workout_record_sets
       WHERE workout_record_id = $1
       ORDER BY set_number ASC
@@ -413,9 +473,9 @@ const addWorkoutRecord = async (workoutData) => {
     
     await client.query('COMMIT');
     
-    // 세트 정보 포함하여 반환
+      // 세트 정보 포함하여 반환
     const setsResult = await pool.query(`
-      SELECT id, set_number, weight, reps, created_at, updated_at
+      SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
       FROM workout_record_sets
       WHERE workout_record_id = $1
       ORDER BY set_number ASC
@@ -541,6 +601,51 @@ const deleteWorkoutRecord = async (id, appUserId) => {
   }
 };
 
+// 운동기록 완료 상태 업데이트 (시간 운동용)
+const updateWorkoutRecordCompleted = async (id, appUserId, isCompleted) => {
+  try {
+    const query = `
+      UPDATE workout_records
+      SET is_completed = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND app_user_id = $3
+      RETURNING *
+    `;
+    const result = await pool.query(query, [isCompleted, id, appUserId]);
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('[PostgreSQL] 운동기록 완료 상태 업데이트 오류:', error);
+    throw error;
+  }
+};
+
+// 세트 완료 상태 업데이트
+const updateWorkoutSetCompleted = async (setId, workoutRecordId, appUserId, isCompleted) => {
+  try {
+    // workout_record_id가 해당 app_user_id에 속하는지 확인
+    const checkQuery = `
+      SELECT id FROM workout_records 
+      WHERE id = $1 AND app_user_id = $2
+    `;
+    const checkResult = await pool.query(checkQuery, [workoutRecordId, appUserId]);
+    
+    if (checkResult.rows.length === 0) {
+      throw new Error('운동기록을 찾을 수 없습니다.');
+    }
+    
+    const query = `
+      UPDATE workout_record_sets
+      SET is_completed = $1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2 AND workout_record_id = $3
+      RETURNING *
+    `;
+    const result = await pool.query(query, [isCompleted, setId, workoutRecordId]);
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('[PostgreSQL] 세트 완료 상태 업데이트 오류:', error);
+    throw error;
+  }
+};
+
 // 통계 조회 (기간별 합계)
 const getWorkoutStats = async (appUserId, startDate, endDate) => {
   try {
@@ -574,5 +679,7 @@ module.exports = {
   addWorkoutRecord,
   updateWorkoutRecord,
   deleteWorkoutRecord,
-  getWorkoutStats
+  getWorkoutStats,
+  updateWorkoutRecordCompleted,
+  updateWorkoutSetCompleted
 };

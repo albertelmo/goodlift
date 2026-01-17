@@ -802,6 +802,60 @@ app.patch('/api/workout-records/:id', async (req, res) => {
     }
 });
 
+// 운동기록 완료 상태 업데이트 (시간 운동용)
+app.patch('/api/workout-records/:id/completed', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id, is_completed } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        if (typeof is_completed !== 'boolean') {
+            return res.status(400).json({ message: 'is_completed는 boolean 값이어야 합니다.' });
+        }
+        
+        const record = await workoutRecordsDB.updateWorkoutRecordCompleted(id, app_user_id, is_completed);
+        
+        if (!record) {
+            return res.status(404).json({ message: '운동기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 운동기록 완료 상태 업데이트 오류:', error);
+        res.status(500).json({ message: '완료 상태 업데이트 중 오류가 발생했습니다.' });
+    }
+});
+
+// 세트 완료 상태 업데이트
+app.patch('/api/workout-records/:id/sets/:setId/completed', async (req, res) => {
+    try {
+        const { id, setId } = req.params;
+        const { app_user_id, is_completed } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        if (typeof is_completed !== 'boolean') {
+            return res.status(400).json({ message: 'is_completed는 boolean 값이어야 합니다.' });
+        }
+        
+        const set = await workoutRecordsDB.updateWorkoutSetCompleted(setId, id, app_user_id, is_completed);
+        
+        if (!set) {
+            return res.status(404).json({ message: '세트를 찾을 수 없습니다.' });
+        }
+        
+        res.json(set);
+    } catch (error) {
+        console.error('[API] 세트 완료 상태 업데이트 오류:', error);
+        res.status(500).json({ message: '세트 완료 상태 업데이트 중 오류가 발생했습니다.' });
+    }
+});
+
 // 운동기록 삭제
 app.delete('/api/workout-records/:id', async (req, res) => {
     try {

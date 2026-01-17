@@ -815,19 +815,15 @@ body.app-user-active {
     background: var(--app-bg);
     border-radius: var(--app-radius-sm);
     padding: 12px;
-    cursor: pointer;
-    transition: background var(--app-transition), transform var(--app-transition);
+    position: relative;
+    transition: background var(--app-transition);
 }
 
 .app-workout-item:active {
     background: var(--app-border);
-    transform: scale(0.98);
 }
 
 .app-workout-item-main {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     margin-bottom: 8px;
 }
 
@@ -843,6 +839,166 @@ body.app-user-active {
     font-size: 13px;
     color: var(--app-text-muted);
 }
+
+.app-workout-item-duration-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.app-workout-item-sets {
+    text-align: right;
+}
+
+.app-workout-item-set-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.app-workout-item-set-row:last-child {
+    margin-bottom: 0;
+}
+
+.app-workout-item-set-info {
+    text-align: right;
+}
+
+.app-workout-item-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: var(--app-primary);
+}
+
+/* 완료 체크 모달 스타일 */
+.app-completed-modal-content-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--app-border);
+}
+
+.app-completed-modal-content-item:last-child {
+    border-bottom: none;
+}
+
+.app-completed-modal-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--app-text);
+}
+
+.app-completed-modal-checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.app-completed-modal-checkbox-container span {
+    font-size: 14px;
+    color: var(--app-text-muted);
+}
+
+.app-completed-modal-checkbox {
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    accent-color: var(--app-primary);
+}
+
+.app-completed-modal-sets {
+    margin-bottom: 8px;
+}
+
+.app-completed-modal-notes {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--app-bg);
+    border-radius: var(--app-radius-sm);
+    font-size: 13px;
+    color: var(--app-text-muted);
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.app-modal-header h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--app-text);
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.app-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--app-text-muted);
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--app-radius-sm);
+    transition: background var(--app-transition);
+    padding: 0;
+}
+
+.app-modal-close-btn:hover {
+    background: var(--app-bg);
+}
+
+.app-modal-content {
+    padding: 16px;
+}
+
+.app-modal-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--app-border);
+}
+
+.app-modal-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: var(--app-radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--app-transition), transform var(--app-transition);
+}
+
+.app-modal-btn-primary {
+    background: var(--app-primary);
+    color: white;
+}
+
+.app-modal-btn-primary:hover {
+    background: var(--app-primary-dark);
+}
+
+.app-modal-btn-secondary {
+    background: var(--app-bg);
+    color: var(--app-text);
+    border: 1px solid var(--app-border);
+}
+
+.app-modal-btn-secondary:hover {
+    background: var(--app-border);
+}
+
+.app-modal-btn:active {
+    transform: scale(0.98);
+}
+
 
 .app-workout-item-notes {
     font-size: 13px;
@@ -876,6 +1032,23 @@ body.app-user-active {
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: var(--app-shadow-lg);
+    transform: scale(0.95);
+    transition: transform var(--app-transition), opacity var(--app-transition);
+    opacity: 0;
+}
+
+.app-modal.app-modal-show {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.app-modal-bg {
+    opacity: 0;
+    transition: opacity var(--app-transition);
+}
+
+.app-modal-bg.app-modal-show {
+    opacity: 1;
 }
 
 .app-modal-header {

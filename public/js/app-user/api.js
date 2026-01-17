@@ -127,6 +127,26 @@ export async function getWorkoutStats(appUserId, startDate, endDate) {
 }
 
 /**
+ * 운동기록 완료 상태 업데이트 (시간 운동용)
+ */
+export async function updateWorkoutRecordCompleted(id, appUserId, isCompleted) {
+    return patch(`/workout-records/${id}/completed`, {
+        app_user_id: appUserId,
+        is_completed: isCompleted
+    });
+}
+
+/**
+ * 세트 완료 상태 업데이트
+ */
+export async function updateWorkoutSetCompleted(recordId, setId, appUserId, isCompleted) {
+    return patch(`/workout-records/${recordId}/sets/${setId}/completed`, {
+        app_user_id: appUserId,
+        is_completed: isCompleted
+    });
+}
+
+/**
  * 운동종류 목록 조회
  */
 export async function getWorkoutTypes() {

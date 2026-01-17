@@ -21,11 +21,14 @@ export async function showEditModal(record, appUserId, onSuccess) {
     const currentWorkoutType = workoutTypes.find(t => t.id === record.workout_type_id);
     const workoutTypeType = currentWorkoutType ? (currentWorkoutType.type || '세트') : null;
     
-    // 날짜를 "YY.M.D" 형식으로 변환
-    const dateObj = new Date(record.workout_date);
-    const year = dateObj.getFullYear().toString().slice(-2);
-    const month = dateObj.getMonth() + 1;
-    const day = dateObj.getDate();
+    // 날짜를 YYYY-MM-DD 형식으로 확실히 변환 (타임존 이슈 방지)
+    const workoutDateStr = formatDate(record.workout_date);
+    
+    // 날짜를 "YY.M.D" 형식으로 변환 (표시용)
+    const dateParts = workoutDateStr.split('-');
+    const year = dateParts[0].slice(-2);
+    const month = parseInt(dateParts[1]);
+    const day = parseInt(dateParts[2]);
     const dateDisplay = `${year}.${month}.${day}`;
     
     modal.innerHTML = `
@@ -34,7 +37,7 @@ export async function showEditModal(record, appUserId, onSuccess) {
             <button class="app-modal-close" aria-label="닫기">×</button>
         </div>
         <form class="app-modal-form" id="workout-edit-form">
-            <input type="hidden" id="workout-edit-date" value="${record.workout_date}">
+            <input type="hidden" id="workout-edit-date" value="${workoutDateStr}">
             <div class="app-form-group">
                 <label for="workout-edit-type">💪 운동 종류</label>
                 <select id="workout-edit-type">
@@ -46,7 +49,7 @@ export async function showEditModal(record, appUserId, onSuccess) {
             </div>
             <div class="app-form-group" id="workout-edit-duration-group" style="display: ${workoutTypeType === '시간' ? 'block' : 'none'};">
                 <label for="workout-edit-duration">⏱ 시간 (분)</label>
-                <input type="number" id="workout-edit-duration" min="0" value="${record.duration_minutes || ''}" placeholder="30">
+                <input type="number" id="workout-edit-duration" min="0" value="${record.duration_minutes || ''}" placeholder="30" inputmode="numeric">
             </div>
             <div class="app-form-group" id="workout-edit-sets-group" style="display: ${workoutTypeType === '세트' ? 'block' : 'none'};">
                 <label>⚖️ 세트</label>
@@ -70,6 +73,12 @@ export async function showEditModal(record, appUserId, onSuccess) {
     
     document.body.appendChild(modalBg);
     
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
     // 이벤트 리스너
     const closeBtn = modal.querySelector('.app-modal-close');
     const cancelBtn = modal.querySelector('#workout-edit-cancel');
@@ -81,10 +90,10 @@ export async function showEditModal(record, appUserId, onSuccess) {
     const setsContainer = modal.querySelector('#workout-edit-sets-container');
     const addSetBtn = modal.querySelector('#workout-edit-set-btn');
     
-    // 기존 세트 데이터 로드
+    // 기존 세트 데이터 로드 (무게는 정수로 변환)
     let sets = (record.sets || []).map(set => ({
         set_number: set.set_number,
-        weight: set.weight,
+        weight: set.weight ? Math.round(set.weight) : null,
         reps: set.reps
     }));
     
@@ -126,7 +135,11 @@ export async function showEditModal(record, appUserId, onSuccess) {
     // 세트 추가 함수
     function addSet() {
         const setNumber = sets.length + 1;
-        sets.push({ set_number: setNumber, weight: null, reps: null });
+        // 이전 세트의 무게와 횟수를 가져오기
+        const lastSet = sets.length > 0 ? sets[sets.length - 1] : null;
+        const newWeight = lastSet ? lastSet.weight : null;
+        const newReps = lastSet ? lastSet.reps : null;
+        sets.push({ set_number: setNumber, weight: newWeight, reps: newReps });
         renderSets();
     }
     
@@ -151,11 +164,11 @@ export async function showEditModal(record, appUserId, onSuccess) {
                 <div class="workout-set-inputs">
                     <div class="workout-set-input-group">
                         <label>무게 (kg)</label>
-                        <input type="number" class="workout-set-weight" data-index="${index}" step="0.1" min="0" placeholder="0" value="${set.weight || ''}">
+                        <input type="number" class="workout-set-weight" data-index="${index}" step="1" min="0" placeholder="0" value="${set.weight ? Math.round(set.weight) : ''}" inputmode="numeric">
                     </div>
                     <div class="workout-set-input-group">
                         <label>횟수</label>
-                        <input type="number" class="workout-set-reps" data-index="${index}" min="0" placeholder="0" value="${set.reps || ''}">
+                        <input type="number" class="workout-set-reps" data-index="${index}" min="0" placeholder="0" value="${set.reps || ''}" inputmode="numeric">
                     </div>
                 </div>
             </div>
@@ -165,7 +178,20 @@ export async function showEditModal(record, appUserId, onSuccess) {
         setsContainer.querySelectorAll('.workout-set-weight').forEach(input => {
             input.addEventListener('input', (e) => {
                 const index = parseInt(e.target.getAttribute('data-index'));
-                sets[index].weight = e.target.value ? parseFloat(e.target.value) : null;
+                sets[index].weight = e.target.value ? parseInt(e.target.value) : null;
+            });
+            
+            // Enter 키 입력 시 해당 세트의 횟수 입력 필드로 포커스 이동
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const index = parseInt(e.target.getAttribute('data-index'));
+                    const repsInput = setsContainer.querySelector(`.workout-set-reps[data-index="${index}"]`);
+                    if (repsInput) {
+                        repsInput.focus();
+                        repsInput.select();
+                    }
+                }
             });
         });
         
@@ -186,7 +212,14 @@ export async function showEditModal(record, appUserId, onSuccess) {
     }
     
     const closeModal = () => {
-        document.body.removeChild(modalBg);
+        // 모달 닫기 애니메이션
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200); // 애니메이션 시간에 맞춰 지연
     };
     
     closeBtn.addEventListener('click', closeModal);

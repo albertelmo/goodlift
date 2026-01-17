@@ -85,8 +85,14 @@ function render() {
     
     // 캘린더용 운동기록 로드 (먼저 실행하여 캘린더에 데이터 전달)
     loadWorkoutRecordsForCalendar().then(() => {
-        // 운동 목록 초기화
+        // 운동 목록 초기화 (선택된 날짜로 필터링)
         initList(currentAppUserId);
+        const selectedDateStr = getSelectedDate();
+        if (selectedDateStr) {
+            import('./list.js').then(module => {
+                module.filterByDate(selectedDateStr);
+            });
+        }
     });
     
     // 추가 버튼 이벤트
@@ -150,9 +156,15 @@ async function loadWorkoutRecordsForCalendar() {
         const calendarContainer = document.getElementById('workout-calendar-container');
         if (calendarContainer) {
             const { init: initCalendar, updateWorkoutRecords, render: renderCalendar } = await import('./calendar.js');
-            initCalendar(calendarContainer, (selectedDate) => {
-                // 날짜 선택 시 목록 필터링 (향후 구현)
-                console.log('선택된 날짜:', selectedDate);
+            initCalendar(calendarContainer, async (selectedDate) => {
+                // 날짜 선택 시 목록 필터링
+                if (selectedDate) {
+                    const { formatDate } = await import('../utils.js');
+                    const selectedDateStr = formatDate(selectedDate);
+                    import('./list.js').then(module => {
+                        module.filterByDate(selectedDateStr);
+                    });
+                }
                 // 월이 변경되면 상단 연월 표시 업데이트
                 updateMonthDisplay();
             }, records);

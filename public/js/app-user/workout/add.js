@@ -46,7 +46,7 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
             </div>
             <div class="app-form-group" id="workout-add-duration-group" style="display: none;">
                 <label for="workout-add-duration">⏱ 시간 (분)</label>
-                <input type="number" id="workout-add-duration" min="0" placeholder="30">
+                <input type="number" id="workout-add-duration" min="0" placeholder="30" inputmode="numeric">
             </div>
             <div class="app-form-group" id="workout-add-sets-group" style="display: none;">
                 <label>⚖️ 세트</label>
@@ -110,7 +110,11 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
     // 세트 추가 함수
     function addSet() {
         const setNumber = sets.length + 1;
-        sets.push({ set_number: setNumber, weight: null, reps: null });
+        // 이전 세트의 무게와 횟수를 가져오기
+        const lastSet = sets.length > 0 ? sets[sets.length - 1] : null;
+        const newWeight = lastSet ? lastSet.weight : null;
+        const newReps = lastSet ? lastSet.reps : null;
+        sets.push({ set_number: setNumber, weight: newWeight, reps: newReps });
         renderSets();
     }
     
@@ -135,11 +139,11 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
                 <div class="workout-set-inputs">
                     <div class="workout-set-input-group">
                         <label>무게 (kg)</label>
-                        <input type="number" class="workout-set-weight" data-index="${index}" step="0.1" min="0" placeholder="0" value="${set.weight || ''}">
+                        <input type="number" class="workout-set-weight" data-index="${index}" step="1" min="0" placeholder="0" value="${set.weight ? Math.round(set.weight) : ''}" inputmode="numeric">
                     </div>
                     <div class="workout-set-input-group">
                         <label>횟수</label>
-                        <input type="number" class="workout-set-reps" data-index="${index}" min="0" placeholder="0" value="${set.reps || ''}">
+                        <input type="number" class="workout-set-reps" data-index="${index}" min="0" placeholder="0" value="${set.reps || ''}" inputmode="numeric">
                     </div>
                 </div>
             </div>
@@ -149,7 +153,20 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
         setsContainer.querySelectorAll('.workout-set-weight').forEach(input => {
             input.addEventListener('input', (e) => {
                 const index = parseInt(e.target.getAttribute('data-index'));
-                sets[index].weight = e.target.value ? parseFloat(e.target.value) : null;
+                sets[index].weight = e.target.value ? parseInt(e.target.value) : null;
+            });
+            
+            // Enter 키 입력 시 해당 세트의 횟수 입력 필드로 포커스 이동
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const index = parseInt(e.target.getAttribute('data-index'));
+                    const repsInput = setsContainer.querySelector(`.workout-set-reps[data-index="${index}"]`);
+                    if (repsInput) {
+                        repsInput.focus();
+                        repsInput.select();
+                    }
+                }
             });
         });
         
