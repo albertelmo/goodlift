@@ -4,9 +4,109 @@ import { formatDate, getToday, escapeHtml } from '../utils.js';
 import { addWorkoutRecord, getWorkoutTypes } from '../api.js';
 
 /**
- * 추가 모달 표시
+ * 운동 선택 모달 표시 (1단계)
  */
-export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
+export async function showWorkoutSelectModal(appUserId, selectedDate = null, onSuccess) {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    
+    // 선택된 날짜가 있으면 사용, 없으면 오늘 날짜
+    const defaultDate = selectedDate || getToday();
+    
+    // 날짜를 "YY.M.D" 형식으로 변환
+    const dateObj = new Date(defaultDate);
+    const year = dateObj.getFullYear().toString().slice(-2);
+    const month = dateObj.getMonth() + 1;
+    const day = dateObj.getDate();
+    const dateDisplay = `${year}.${month}.${day}`;
+    
+    // 운동종류 목록 가져오기
+    let workoutTypes = [];
+    try {
+        workoutTypes = await getWorkoutTypes();
+    } catch (error) {
+        console.error('운동종류 조회 오류:', error);
+    }
+    
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>운동 선택 (${dateDisplay})</h2>
+            <button class="app-modal-close" aria-label="닫기">×</button>
+        </div>
+        <form class="app-modal-form" id="workout-select-form">
+            <div class="app-form-group">
+                <label for="workout-select-type">💪 운동 종류</label>
+                <select id="workout-select-type">
+                    <option value="">선택하세요</option>
+                    ${workoutTypes.map(type => `
+                        <option value="${type.id}" data-type="${type.type || '세트'}">${escapeHtml(type.name)}</option>
+                    `).join('')}
+                </select>
+            </div>
+            <div class="app-modal-actions">
+                <button type="button" class="app-btn-secondary" id="workout-select-cancel">취소</button>
+                <button type="submit" class="app-btn-primary" id="workout-select-next">다음</button>
+            </div>
+        </form>
+    `;
+    
+    document.body.appendChild(modalBg);
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 이벤트 리스너
+    const closeBtn = modal.querySelector('.app-modal-close');
+    const cancelBtn = modal.querySelector('#workout-select-cancel');
+    const form = modal.querySelector('#workout-select-form');
+    const typeSelect = modal.querySelector('#workout-select-type');
+    
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+    
+    // 폼 제출 시 추가 모달 열기
+    form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const selectedOption = typeSelect.options[typeSelect.selectedIndex];
+        if (!selectedOption || !selectedOption.value) {
+            alert('운동 종류를 선택해주세요.');
+            return;
+        }
+        
+        const workoutId = selectedOption.value;
+        const workoutType = selectedOption.getAttribute('data-type');
+        
+        // 선택 모달 닫기
+        closeModal();
+        
+        // 추가 모달 열기 (선택한 운동 종류 전달)
+        setTimeout(() => {
+            showAddModal(appUserId, selectedDate, workoutId, workoutType, onSuccess);
+        }, 200);
+    });
+}
+
+/**
+ * 추가 모달 표시 (2단계)
+ */
+export async function showAddModal(appUserId, selectedDate = null, preselectedWorkoutTypeId = null, preselectedWorkoutType = null, onSuccess) {
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
@@ -37,10 +137,10 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
             <input type="hidden" id="workout-add-date" value="${defaultDate}">
             <div class="app-form-group">
                 <label for="workout-add-type">💪 운동 종류</label>
-                <select id="workout-add-type">
+                <select id="workout-add-type" ${preselectedWorkoutTypeId ? 'disabled' : ''}>
                     <option value="">선택하세요</option>
                     ${workoutTypes.map(type => `
-                        <option value="${type.id}" data-type="${type.type || '세트'}">${escapeHtml(type.name)}</option>
+                        <option value="${type.id}" data-type="${type.type || '세트'}" ${preselectedWorkoutTypeId === type.id ? 'selected' : ''}>${escapeHtml(type.name)}</option>
                     `).join('')}
                 </select>
             </div>
@@ -54,10 +154,6 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
                 <button type="button" class="workout-add-set-btn" id="workout-add-set-btn">
                     <span>+</span> 세트 추가
                 </button>
-            </div>
-            <div class="app-form-group">
-                <label for="workout-add-notes">📝 메모</label>
-                <textarea id="workout-add-notes" rows="2" placeholder="운동 내용, 느낀 점 등을 기록하세요"></textarea>
             </div>
             <div class="app-modal-actions">
                 <button type="button" class="app-btn-secondary" id="workout-add-cancel">취소</button>
@@ -85,6 +181,21 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
     const addSetBtn = modal.querySelector('#workout-add-set-btn');
     
     let sets = [];
+    
+    // 이미 선택된 운동 종류가 있으면 해당 UI 표시
+    if (preselectedWorkoutTypeId && preselectedWorkoutType) {
+        if (preselectedWorkoutType === '시간') {
+            durationGroup.style.display = 'block';
+            setsGroup.style.display = 'none';
+            sets = [];
+        } else if (preselectedWorkoutType === '세트') {
+            durationGroup.style.display = 'none';
+            setsGroup.style.display = 'block';
+            if (sets.length === 0) {
+                addSet();
+            }
+        }
+    }
     
     // 운동종류 선택 시 타입에 따라 UI 변경
     typeSelect.addEventListener('change', () => {
@@ -122,6 +233,24 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
         const newReps = lastSet ? lastSet.reps : null;
         sets.push({ set_number: setNumber, weight: newWeight, reps: newReps });
         renderSets();
+        
+        // 세트 추가 후 스크롤을 맨 아래로 이동
+        setTimeout(() => {
+            // 모달 내부의 폼이나 스크롤 가능한 컨테이너 찾기
+            const scrollContainer = modal.querySelector('.app-modal-form') || modal;
+            if (scrollContainer && scrollContainer.scrollHeight > scrollContainer.clientHeight) {
+                scrollContainer.scrollTop = scrollContainer.scrollHeight;
+            }
+            // 또는 모달 자체를 스크롤
+            if (modal.scrollHeight > modal.clientHeight) {
+                modal.scrollTop = modal.scrollHeight;
+            }
+            // 마지막 세트 카드로 스크롤
+            const lastSetCard = setsContainer.lastElementChild;
+            if (lastSetCard) {
+                lastSetCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+        }, 50);
     }
     
     // 세트 삭제 함수
@@ -215,7 +344,6 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
         const workoutDate = document.getElementById('workout-add-date').value;
         const workoutTypeId = document.getElementById('workout-add-type').value;
         const durationMinutes = document.getElementById('workout-add-duration').value;
-        const notes = document.getElementById('workout-add-notes').value;
         
         const selectedOption = typeSelect.options[typeSelect.selectedIndex];
         const workoutType = selectedOption ? selectedOption.getAttribute('data-type') : null;
@@ -226,7 +354,7 @@ export async function showAddModal(appUserId, selectedDate = null, onSuccess) {
             workout_type_id: workoutTypeId || null,
             duration_minutes: workoutType === '시간' && durationMinutes ? parseInt(durationMinutes) : null,
             sets: workoutType === '세트' ? sets.filter(s => s.weight !== null || s.reps !== null) : [],
-            notes: notes.trim() || null
+            notes: null
         };
         
         try {

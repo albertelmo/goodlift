@@ -1,7 +1,7 @@
 // 운동기록 메인 화면
 
 import { init as initList } from './list.js';
-import { showAddModal } from './add.js';
+import { showWorkoutSelectModal } from './add.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
 
 let currentAppUserId = null;
@@ -100,7 +100,7 @@ function render() {
     if (addBtn) {
         addBtn.addEventListener('click', () => {
             const selectedDateStr = getSelectedDate();
-            showAddModal(currentAppUserId, selectedDateStr, () => {
+            showWorkoutSelectModal(currentAppUserId, selectedDateStr, () => {
                 // 추가 성공 후 목록 새로고침
                 import('./list.js').then(module => {
                     module.refresh();

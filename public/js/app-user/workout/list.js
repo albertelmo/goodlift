@@ -156,14 +156,16 @@ function renderWorkoutItem(record) {
     if (workoutTypeType === '시간' && duration) {
         const isCompleted = record.is_completed || false;
         const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
-        infoHtml = `<span class="app-workout-item-duration ${completedClass}">⏱ ${duration}</span>`;
+        const checkmark = isCompleted ? '<span class="app-workout-checkmark">✓</span> ' : '';
+        infoHtml = `<span class="app-workout-item-duration ${completedClass}">${checkmark}⏱ ${duration}</span>`;
     } else if (workoutTypeType === '세트' && sets.length > 0) {
         const setsInfo = sets.map(set => {
             const weight = set.weight ? `${Math.round(set.weight)}kg` : '-';
             const reps = set.reps ? `${set.reps}회` : '-';
             const isCompleted = set.is_completed || false;
             const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
-            return `<span class="${completedClass}">${set.set_number}세트: ${weight} × ${reps}</span>`;
+            const checkmark = isCompleted ? '<span class="app-workout-checkmark">✓</span> ' : '';
+            return `<span class="${completedClass}">${checkmark}${set.set_number}세트: ${weight} × ${reps}</span>`;
         }).join('<br>');
         infoHtml = `<span class="app-workout-item-sets">${setsInfo}</span>`;
     }
