@@ -445,70 +445,88 @@ async function renderCalUI(container, forceDate) {
             <div class="tmc-modal-bg" id="tmc-modal-bg" style="display:none;"></div>
             <div class="tmc-modal" id="tmc-modal" style="display:none;">
                 <div class="tmc-modal-content">
-                    <h3>세션 추가</h3>
-                    <form id="tmc-session-add-form" style="display:flex;flex-direction:column;gap:12px;align-items:center;">
-                      <label style="width:100%;text-align:left;">트레이너
-                        <select name="trainer" id="tmc-trainer-select" required style="width:180px;"></select>
-                      </label>
-                      <label style="width:100%;text-align:left;">회원
-                        <select name="member" id="tmc-member-select" required style="width:180px;"></select>
-                      </label>
-                      <label style="width:100%;text-align:left;">날짜
-                        <input type="date" name="date" id="tmc-date-input" required style="width:180px;">
-                      </label>
-                      <label style="width:100%;text-align:left;">시간
-                        <select name="time" id="tmc-time-input" required style="width:180px;"></select>
-                      </label>
-                      <label style="width:100%;text-align:left;display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" name="repeat" id="tmc-repeat-checkbox" style="width:auto;">
-                        <span>반복하기</span>
-                      </label>
-                      <label style="width:100%;text-align:left;opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;" id="tmc-repeat-count-label">
-                        반복횟수
-                        <select name="repeatCount" id="tmc-repeat-count-input" style="width:180px;">
-                          <option value="5">5회</option>
-                          <option value="10">10회</option>
-                          <option value="15">15회</option>
-                          <option value="20">20회</option>
-                        </select>
-                      </label>
-                      <button type="submit" style="width:180px;">등록</button>
-                      <div id="tmc-session-add-result" style="min-height:20px;font-size:0.97rem;"></div>
+                    <div class="tmc-modal-header">
+                        <h3>세션 추가</h3>
+                        <button class="tmc-modal-close-btn" id="tmc-modal-close-x" aria-label="닫기">×</button>
+                    </div>
+                    <form id="tmc-session-add-form" class="tmc-modal-form">
+                        <div class="tmc-form-group">
+                            <label for="tmc-trainer-select">트레이너</label>
+                            <select name="trainer" id="tmc-trainer-select" required></select>
+                        </div>
+                        <div class="tmc-form-group">
+                            <label for="tmc-member-select">회원</label>
+                            <select name="member" id="tmc-member-select" required></select>
+                        </div>
+                        <div class="tmc-form-group">
+                            <label for="tmc-date-input">날짜</label>
+                            <input type="date" name="date" id="tmc-date-input" required>
+                        </div>
+                        <div class="tmc-form-group">
+                            <label for="tmc-time-input">시간</label>
+                            <select name="time" id="tmc-time-input" required></select>
+                        </div>
+                        <div class="tmc-checkbox-group">
+                            <input type="checkbox" name="repeat" id="tmc-repeat-checkbox">
+                            <label for="tmc-repeat-checkbox">반복하기</label>
+                        </div>
+                        <div class="tmc-form-group" id="tmc-repeat-count-label" style="opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;margin:0;">
+                            <label for="tmc-repeat-count-input">반복횟수</label>
+                            <select name="repeatCount" id="tmc-repeat-count-input">
+                                <option value="5">5회</option>
+                                <option value="10">10회</option>
+                                <option value="15">15회</option>
+                                <option value="20">20회</option>
+                            </select>
+                        </div>
+                        <div id="tmc-session-add-result" class="tmc-modal-result"></div>
                     </form>
+                    <div class="tmc-modal-actions">
+                        <button type="submit" form="tmc-session-add-form" class="tmc-modal-submit-btn">등록</button>
+                    </div>
                 </div>
             </div>
             <div class="tmc-modal" id="tmc-30min-modal" style="display:none;">
                 <div class="tmc-modal-content">
-                    <h3>30분 세션 추가</h3>
-                    <form id="tmc-30min-session-add-form" style="display:flex;flex-direction:column;gap:12px;align-items:center;">
-                      <label style="width:100%;text-align:left;">트레이너
-                        <select name="trainer" id="tmc-30min-trainer-select" required style="width:180px;"></select>
-                      </label>
-                      <label style="width:100%;text-align:left;">회원
-                        <select name="member" id="tmc-30min-member-select" required style="width:180px;"></select>
-                      </label>
-                      <label style="width:100%;text-align:left;">날짜
-                        <input type="date" name="date" id="tmc-30min-date-input" required style="width:180px;">
-                      </label>
-                      <label style="width:100%;text-align:left;">시간
-                        <select name="time" id="tmc-30min-time-input" required style="width:180px;"></select>
-                      </label>
-                      <label style="width:100%;text-align:left;display:flex;align-items:center;gap:8px;">
-                        <input type="checkbox" name="repeat" id="tmc-30min-repeat-checkbox" style="width:auto;">
-                        <span>반복하기</span>
-                      </label>
-                      <label style="width:100%;text-align:left;opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;" id="tmc-30min-repeat-count-label">
-                        반복횟수
-                        <select name="repeatCount" id="tmc-30min-repeat-count-input" style="width:180px;">
-                          <option value="5">5회</option>
-                          <option value="10">10회</option>
-                          <option value="15">15회</option>
-                          <option value="20">20회</option>
-                        </select>
-                      </label>
-                      <button type="submit" style="width:180px;">등록</button>
-                      <div id="tmc-30min-session-add-result" style="min-height:20px;font-size:0.97rem;"></div>
+                    <div class="tmc-modal-header">
+                        <h3>30분 세션 추가</h3>
+                        <button class="tmc-modal-close-btn" id="tmc-30min-modal-close-x" aria-label="닫기">×</button>
+                    </div>
+                    <form id="tmc-30min-session-add-form" class="tmc-modal-form">
+                        <div class="tmc-form-group">
+                            <label for="tmc-30min-trainer-select">트레이너</label>
+                            <select name="trainer" id="tmc-30min-trainer-select" required></select>
+                        </div>
+                        <div class="tmc-form-group">
+                            <label for="tmc-30min-member-select">회원</label>
+                            <select name="member" id="tmc-30min-member-select" required></select>
+                        </div>
+                        <div class="tmc-form-group">
+                            <label for="tmc-30min-date-input">날짜</label>
+                            <input type="date" name="date" id="tmc-30min-date-input" required>
+                        </div>
+                        <div class="tmc-form-group">
+                            <label for="tmc-30min-time-input">시간</label>
+                            <select name="time" id="tmc-30min-time-input" required></select>
+                        </div>
+                        <div class="tmc-checkbox-group">
+                            <input type="checkbox" name="repeat" id="tmc-30min-repeat-checkbox">
+                            <label for="tmc-30min-repeat-checkbox">반복하기</label>
+                        </div>
+                        <div class="tmc-form-group" id="tmc-30min-repeat-count-label" style="opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;margin:0;">
+                            <label for="tmc-30min-repeat-count-input">반복횟수</label>
+                            <select name="repeatCount" id="tmc-30min-repeat-count-input">
+                                <option value="5">5회</option>
+                                <option value="10">10회</option>
+                                <option value="15">15회</option>
+                                <option value="20">20회</option>
+                            </select>
+                        </div>
+                        <div id="tmc-30min-session-add-result" class="tmc-modal-result"></div>
                     </form>
+                    <div class="tmc-modal-actions">
+                        <button type="submit" form="tmc-30min-session-add-form" class="tmc-modal-submit-btn">등록</button>
+                    </div>
                 </div>
             </div>
         </div>`;
@@ -720,11 +738,28 @@ async function renderCalUI(container, forceDate) {
             document.getElementById('tmc-30min-modal').style.display = 'block';
         };
 
-        document.getElementById('tmc-modal-bg').onclick = function() {
+        // 모달 닫기 함수
+        function closeSessionModal() {
             document.getElementById('tmc-modal-bg').style.display = 'none';
             document.getElementById('tmc-modal').style.display = 'none';
             document.getElementById('tmc-30min-modal').style.display = 'none';
+        }
+        
+        document.getElementById('tmc-modal-bg').onclick = function(e) {
+            if (e.target === this) {
+                closeSessionModal();
+            }
         };
+        
+        // 모달 닫기 버튼 이벤트
+        const modalCloseX = document.getElementById('tmc-modal-close-x');
+        const modal30minCloseX = document.getElementById('tmc-30min-modal-close-x');
+        if (modalCloseX) {
+            modalCloseX.onclick = closeSessionModal;
+        }
+        if (modal30minCloseX) {
+            modal30minCloseX.onclick = closeSessionModal;
+        }
         
         // 반복 체크박스 이벤트
         document.getElementById('tmc-repeat-checkbox').onchange = function() {
@@ -756,7 +791,7 @@ async function renderCalUI(container, forceDate) {
           // 세션은 항상 현재 로그인한 트레이너로 등록
           data.trainer = username;
           const resultDiv = document.getElementById('tmc-session-add-result');
-          resultDiv.style.color = '#1976d2';
+          resultDiv.className = 'tmc-modal-result';
           resultDiv.innerText = '처리 중...';
           try {
             const res = await fetch('/api/sessions', {
@@ -766,7 +801,7 @@ async function renderCalUI(container, forceDate) {
             });
             const result = await res.json();
             if (res.ok) {
-              resultDiv.style.color = '#1976d2';
+              resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
               
               // 반복 세션 추가 시 상세 정보 표시
@@ -780,12 +815,15 @@ async function renderCalUI(container, forceDate) {
               document.getElementById('tmc-repeat-count-label').style.opacity = '0';
               document.getElementById('tmc-repeat-count-label').style.height = '0';
               renderCalUI(container, dd); // 세션 추가 후 갱신
+              setTimeout(() => {
+                closeSessionModal();
+              }, 1500);
             } else {
-              resultDiv.style.color = '#d32f2f';
+              resultDiv.className = 'tmc-modal-result error';
               resultDiv.innerText = result.message;
             }
           } catch {
-            resultDiv.style.color = '#d32f2f';
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.innerText = '세션 추가에 실패했습니다.';
           }
         };
@@ -799,7 +837,7 @@ async function renderCalUI(container, forceDate) {
           data.trainer = username;
           data['30min'] = true; // 30분 세션 표시
           const resultDiv = document.getElementById('tmc-30min-session-add-result');
-          resultDiv.style.color = '#1976d2';
+          resultDiv.className = 'tmc-modal-result';
           resultDiv.innerText = '처리 중...';
           try {
             const res = await fetch('/api/sessions', {
@@ -809,7 +847,7 @@ async function renderCalUI(container, forceDate) {
             });
             const result = await res.json();
             if (res.ok) {
-              resultDiv.style.color = '#1976d2';
+              resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
               
               // 반복 세션 추가 시 상세 정보 표시
@@ -823,12 +861,15 @@ async function renderCalUI(container, forceDate) {
               document.getElementById('tmc-30min-repeat-count-label').style.opacity = '0';
               document.getElementById('tmc-30min-repeat-count-label').style.height = '0';
               renderCalUI(container, dd); // 세션 추가 후 갱신
+              setTimeout(() => {
+                closeSessionModal();
+              }, 1500);
             } else {
-              resultDiv.style.color = '#d32f2f';
+              resultDiv.className = 'tmc-modal-result error';
               resultDiv.innerText = result.message;
             }
           } catch {
-            resultDiv.style.color = '#d32f2f';
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.innerText = '30분 세션 추가에 실패했습니다.';
           }
         };
@@ -1088,7 +1129,7 @@ async function showExpenseAddModal(username) {
             // 식대: 트레이너 목록 표시, 구매물품/센터/본인지출 필드 숨김
             purchaseItemRow.style.display = 'none';
             personalItemRow.style.display = 'none';
-            trainersRow.style.display = 'flex';
+            trainersRow.style.display = 'block';
             centerRow.style.display = 'none';
             personalCenterRow.style.display = 'none';
             document.getElementById('expense-purchase-item').removeAttribute('required');
@@ -1097,10 +1138,10 @@ async function showExpenseAddModal(username) {
             personalCenterSelect.removeAttribute('required');
         } else if (isPurchase) {
             // 구매: 구매물품/센터 표시, 트레이너 목록/본인지출 필드 숨김
-            purchaseItemRow.style.display = 'flex';
+            purchaseItemRow.style.display = 'block';
             personalItemRow.style.display = 'none';
             trainersRow.style.display = 'none';
-            centerRow.style.display = 'flex';
+            centerRow.style.display = 'block';
             personalCenterRow.style.display = 'none';
             document.getElementById('expense-purchase-item').setAttribute('required', 'required');
             document.getElementById('expense-personal-item').removeAttribute('required');
@@ -1109,10 +1150,10 @@ async function showExpenseAddModal(username) {
         } else if (isPersonal) {
             // 개인지출: 지출내역/센터 표시, 다른 필드 숨김
             purchaseItemRow.style.display = 'none';
-            personalItemRow.style.display = 'flex';
+            personalItemRow.style.display = 'block';
             trainersRow.style.display = 'none';
             centerRow.style.display = 'none';
-            personalCenterRow.style.display = 'flex';
+            personalCenterRow.style.display = 'block';
             document.getElementById('expense-purchase-item').removeAttribute('required');
             document.getElementById('expense-personal-item').setAttribute('required', 'required');
             centerSelect.removeAttribute('required');
@@ -1126,27 +1167,26 @@ async function showExpenseAddModal(username) {
         const trainers = await res.json();
         
         if (trainers.length === 0) {
-            trainersListDiv.innerHTML = '<div style="color:#888;text-align:center;">트레이너가 없습니다.</div>';
+            trainersListDiv.innerHTML = '<div class="tmc-no-trainers">트레이너가 없습니다.</div>';
         } else {
             let html = '';
             trainers.forEach(trainer => {
                 const isCurrentUser = trainer.username === username;
                 // 이름에서 "(아이디)" 형식 제거하여 이름만 표시
                 const nameOnly = trainer.name ? trainer.name.replace(/\s*\([^)]*\)\s*$/, '').trim() : trainer.username;
-                html += `<label style="display:flex;align-items:center;padding:2px 0;cursor:pointer;">
+                html += `<label class="tmc-trainer-checkbox">
                     <input type="checkbox" name="participantTrainers" value="${trainer.username}" 
-                           ${isCurrentUser ? 'checked disabled' : ''} 
-                           style="margin-right:6px;width:18px;height:18px;cursor:pointer;flex-shrink:0;">
-                    <span style="font-size:0.9rem;">${nameOnly}</span>
-                    ${isCurrentUser ? '<span style="margin-left:6px;color:#1976d2;font-size:0.8rem;">(본인)</span>' : ''}
+                           ${isCurrentUser ? 'checked disabled' : ''}>
+                    <span>${nameOnly}</span>
+                    ${isCurrentUser ? '<span class="tmc-current-user">(본인)</span>' : ''}
                 </label>`;
             });
             trainersListDiv.innerHTML = html;
         }
-    } catch (error) {
-        console.error('트레이너 목록 로드 오류:', error);
-        trainersListDiv.innerHTML = '<div style="color:#d32f2f;">트레이너 목록을 불러오지 못했습니다.</div>';
-    }
+        } catch (error) {
+            console.error('트레이너 목록 로드 오류:', error);
+            trainersListDiv.innerHTML = '<div class="tmc-modal-result error">트레이너 목록을 불러오지 못했습니다.</div>';
+        }
     
     // 센터 목록 로드 (구매용)
     try {
@@ -1194,6 +1234,7 @@ async function showExpenseAddModal(username) {
         } else if (expenseTypePersonal.checked) {
             expenseType = 'personal';
         } else {
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.textContent = '지출 유형을 선택해주세요.';
             return;
         }
@@ -1204,11 +1245,13 @@ async function showExpenseAddModal(username) {
         
         // 유효성 검사
         if (!datetime) {
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.textContent = '시각을 입력해주세요.';
             return;
         }
         
         if (isNaN(amount) || amount < 0) {
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.textContent = '올바른 금액을 입력해주세요.';
             return;
         }
@@ -1224,6 +1267,7 @@ async function showExpenseAddModal(username) {
             // 식대: 함께한 트레이너 필수
             const checkboxes = form.querySelectorAll('input[name="participantTrainers"]:checked');
             if (checkboxes.length === 0) {
+                resultDiv.className = 'tmc-modal-result error';
                 resultDiv.textContent = '함께한 트레이너를 최소 1명 이상 선택해주세요.';
                 return;
             }
@@ -1235,11 +1279,13 @@ async function showExpenseAddModal(username) {
             const center = centerSelect.value;
             
             if (!purchaseItem) {
+                resultDiv.className = 'tmc-modal-result error';
                 resultDiv.textContent = '구매물품을 입력해주세요.';
                 return;
             }
             
             if (!center) {
+                resultDiv.className = 'tmc-modal-result error';
                 resultDiv.textContent = '센터를 선택해주세요.';
                 return;
             }
@@ -1252,11 +1298,13 @@ async function showExpenseAddModal(username) {
             const personalCenter = personalCenterSelect.value;
             
             if (!personalItem) {
+                resultDiv.className = 'tmc-modal-result error';
                 resultDiv.textContent = '지출내역을 입력해주세요.';
                 return;
             }
             
             if (!personalCenter) {
+                resultDiv.className = 'tmc-modal-result error';
                 resultDiv.textContent = '센터를 선택해주세요.';
                 return;
             }
@@ -1276,37 +1324,33 @@ async function showExpenseAddModal(username) {
             const result = await res.json();
             
             if (res.ok) {
+                resultDiv.className = 'tmc-modal-result success';
                 resultDiv.textContent = '지출 내역이 등록되었습니다.';
-                resultDiv.style.color = '#1976d2';
                 
                 // 1.5초 후 모달 닫기
                 setTimeout(() => {
                     closeExpenseAddModal();
                 }, 1500);
             } else {
+                resultDiv.className = 'tmc-modal-result error';
                 resultDiv.textContent = result.message || '지출 내역 등록에 실패했습니다.';
-                resultDiv.style.color = '#d32f2f';
             }
         } catch (error) {
             console.error('지출 내역 등록 오류:', error);
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.textContent = '지출 내역 등록 중 오류가 발생했습니다.';
-            resultDiv.style.color = '#d32f2f';
         }
     };
     
-    // 취소 버튼 이벤트
-    document.getElementById('closeExpenseAddBtn').onclick = closeExpenseAddModal;
+    // 닫기 버튼 (X) 이벤트
+    const closeXBtn = document.getElementById('expenseAddModalCloseX');
+    if (closeXBtn) closeXBtn.onclick = closeExpenseAddModal;
     
     // 모달 배경 클릭 시 닫기
     modalBg.onclick = (e) => {
         if (e.target === modalBg) {
             closeExpenseAddModal();
         }
-    };
-    
-    // 모달 내부 클릭 시 이벤트 전파 방지 (모달이 닫히지 않도록)
-    modal.onclick = (e) => {
-        e.stopPropagation();
     };
 }
 
@@ -1328,7 +1372,7 @@ function closeExpenseAddModal() {
     document.getElementById('expense-type-personal').checked = false;
     document.getElementById('expense-purchase-item-row').style.display = 'none';
     document.getElementById('expense-personal-item-row').style.display = 'none';
-    document.getElementById('expense-trainers-row').style.display = 'flex';
+    document.getElementById('expense-trainers-row').style.display = 'block';
     document.getElementById('expense-center-row').style.display = 'none';
     document.getElementById('expense-personal-center-row').style.display = 'none';
     
@@ -1351,34 +1395,11 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   
   let modalBg = document.createElement('div');
   modalBg.className = 'tmc-modal-bg';
-  modalBg.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.95);
-    z-index: 9999;
-    display: block;
-  `;
+  // 인라인 스타일은 최소화하고 CSS 클래스 사용
   
   let modal = document.createElement('div');
   modal.className = 'tmc-modal';
-  modal.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-    z-index: 10000;
-    display: block;
-    max-width: 90vw;
-    max-height: 90vh;
-    overflow: auto;
-  `;
+  // 인라인 스타일은 최소화하고 CSS 클래스 사용
   
   // 버튼 disabled 속성 설정
   const attendDisabled = hasNoRemaining ? 'disabled' : '';
@@ -1386,15 +1407,19 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   
   modal.innerHTML = `
     <div class="tmc-modal-content" id="attend-modal-content">
-      <h3>세션 관리</h3>
-      ${hasNoRemaining ? '<div style="color:#d32f2f;font-size:0.9rem;margin-bottom:12px;text-align:center;">⚠️ 잔여세션이 부족하여 출석/변경이 불가능합니다.</div>' : ''}
-      <div class="tmc-modal-btn-row" id="attend-btn-row">
-        <button id="attend-btn" ${attendDisabled}>출석</button>
-        <button id="change-btn" ${changeDisabled}>변경</button>
-        <button id="delete-btn">취소</button>
+      <div class="tmc-modal-header">
+        <h3>세션 관리</h3>
+        <button class="tmc-modal-close-btn" id="attend-modal-close-x" aria-label="닫기">×</button>
       </div>
-      <div id="attend-modal-body"></div>
-      <button id="attend-modal-close" style="margin-top:18px;">닫기</button>
+      ${hasNoRemaining ? '<div class="tmc-warning-message">⚠️ 잔여세션이 부족하여 출석/변경이 불가능합니다.</div>' : ''}
+      <div class="tmc-modal-form">
+        <div class="tmc-modal-btn-row" id="attend-btn-row">
+          <button id="attend-btn" ${attendDisabled}>출석</button>
+          <button id="change-btn" ${changeDisabled}>변경</button>
+          <button id="delete-btn">취소</button>
+        </div>
+        <div id="attend-modal-body"></div>
+      </div>
     </div>
   `;
   document.body.appendChild(modalBg);
@@ -1410,7 +1435,8 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   document.addEventListener('keydown', escHandler);
   
   // 닫기 버튼
-  document.getElementById('attend-modal-close').onclick = close;
+  const closeXBtn = document.getElementById('attend-modal-close-x');
+  if (closeXBtn) closeXBtn.onclick = close;
   // 출석 버튼
   document.getElementById('attend-btn').onclick = function() {
     if (hasNoRemaining) return;
@@ -1449,22 +1475,24 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
       
       let vipDisplay = '';
       if (trainerHasVip && memberHasVip) {
-        vipDisplay = `<span style="display:inline-block;background:#1976d2;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.8em;font-weight:bold;margin-right:8px;">VIP ${member.vip_session}회</span>`;
+        vipDisplay = `<span class="tmc-vip-badge">VIP ${member.vip_session}회</span>`;
       }
       
       document.getElementById('attend-modal-body').innerHTML = `
-        <div style="margin-bottom:8px;display:flex;align-items:center;gap:12px;justify-content:space-between;">
+        <div class="tmc-session-info-row">
           <div>${vipDisplay}</div>
-          <span style="color:#388e3c;font-size:1.08em;">잔여세션 ${remain}회</span>
+          <span class="tmc-remain-sessions">잔여세션 ${remain}회</span>
         </div>
-        <div style="margin-bottom:8px;text-align:center;">
-          <span style="font-weight:600;color:#1976d2;">${session.member} 회원님! 수고하셨습니다!</span>
+        <div class="tmc-session-member-greeting">
+          <span>${session.member} 회원님! 수고하셨습니다!</span>
         </div>
-        <div style="text-align:center;margin-bottom:8px;">
-          <canvas id="attend-sign-canvas" width="240" height="140" style="border:1.5px solid #e3eaf5;border-radius:8px;background:#fff;"></canvas>
+        <div class="tmc-canvas-container">
+          <canvas id="attend-sign-canvas" width="240" height="140"></canvas>
         </div>
-        <button id="attend-sign-ok" style="margin:8px 0 0 0;display:block;margin-left:auto;margin-right:auto;">확인</button>
-        <div id="attend-result" style="min-height:20px;margin-top:8px;font-size:0.97rem;"></div>
+        <div class="tmc-modal-actions">
+          <button id="attend-sign-ok" class="tmc-modal-submit-btn">확인</button>
+        </div>
+        <div id="attend-result" class="tmc-modal-result"></div>
       `;
       
       // 사인 캔버스 (마우스+터치)
@@ -1514,20 +1542,21 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
       
       document.getElementById('attend-sign-ok').onclick = async function() {
         const resultDiv = document.getElementById('attend-result');
-        resultDiv.style.color = '#1976d2';
+        resultDiv.className = 'tmc-modal-result';
         resultDiv.innerText = '처리 중...';
         try {
           const res = await fetch(`/api/sessions/${sessionId}/attend`, { method: 'PATCH' });
           const result = await res.json();
           if (res.ok) {
+            resultDiv.className = 'tmc-modal-result success';
             resultDiv.innerText = result.message;
             setTimeout(() => { close(); renderCalUI(container); }, 700);
           } else {
-            resultDiv.style.color = '#d32f2f';
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.innerText = result.message;
           }
         } catch {
-          resultDiv.style.color = '#d32f2f';
+          resultDiv.className = 'tmc-modal-result error';
           resultDiv.innerText = '출석 처리에 실패했습니다.';
         }
       };
@@ -1536,16 +1565,20 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   // 변경 화면
   function renderChangeBody(sessionId) {
     document.getElementById('attend-modal-body').innerHTML = `
-      <form id="change-session-form" style="display:flex;flex-direction:column;gap:12px;align-items:center;">
-        <label style="width:100%;text-align:left;">날짜
-          <input type="date" name="date" id="change-date-input" required style="width:180px;">
-        </label>
-        <label style="width:100%;text-align:left;">시간
-          <select name="time" id="change-time-input" required style="width:180px;"></select>
-        </label>
-        <button type="submit" style="width:180px;">변경</button>
-        <div id="change-session-result" style="min-height:20px;font-size:0.97rem;"></div>
+      <form id="change-session-form">
+        <div class="tmc-form-group">
+          <label for="change-date-input">날짜</label>
+          <input type="date" name="date" id="change-date-input" required>
+        </div>
+        <div class="tmc-form-group">
+          <label for="change-time-input">시간</label>
+          <select name="time" id="change-time-input" required></select>
+        </div>
+        <div id="change-session-result" class="tmc-modal-result"></div>
       </form>
+      <div class="tmc-modal-actions">
+        <button type="submit" form="change-session-form" class="tmc-modal-submit-btn">변경</button>
+      </div>
     `;
     // 기존 세션 정보 불러오기
     fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}`)
@@ -1708,7 +1741,7 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
           const form = e.target;
           const data = Object.fromEntries(new FormData(form));
           const resultDiv = document.getElementById('change-session-result');
-          resultDiv.style.color = '#1976d2';
+          resultDiv.className = 'tmc-modal-result';
           resultDiv.innerText = '처리 중...';
           try {
             const res = await fetch(`/api/sessions/${sessionId}`, {
@@ -1718,14 +1751,15 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
             });
             const result = await res.json();
             if (res.ok) {
+              resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
               setTimeout(() => { close(); renderCalUI(container); }, 700);
             } else {
-              resultDiv.style.color = '#d32f2f';
+              resultDiv.className = 'tmc-modal-result error';
               resultDiv.innerText = result.message;
             }
           } catch {
-            resultDiv.style.color = '#d32f2f';
+            resultDiv.className = 'tmc-modal-result error';
             resultDiv.innerText = '세션 변경에 실패했습니다.';
           }
         };
@@ -1734,26 +1768,30 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   // 삭제 화면
   function renderDeleteBody(sessionId) {
     document.getElementById('attend-modal-body').innerHTML = `
-      <div style="margin-bottom:12px;">정말 이 세션을 삭제하시겠습니까?</div>
-      <button id="delete-session-ok" style="background:#d32f2f;color:#fff;">삭제</button>
-      <div id="delete-session-result" style="min-height:20px;margin-top:8px;font-size:0.97rem;"></div>
+      <div class="tmc-delete-confirm-message">정말 이 세션을 삭제하시겠습니까?</div>
+      <div id="delete-session-result" class="tmc-modal-result"></div>
     `;
+    const modalActions = document.createElement('div');
+    modalActions.className = 'tmc-modal-actions';
+    modalActions.innerHTML = '<button id="delete-session-ok" class="tmc-modal-submit-btn tmc-btn-danger">삭제</button>';
+    document.getElementById('attend-modal-body').appendChild(modalActions);
     document.getElementById('delete-session-ok').onclick = async function() {
       const resultDiv = document.getElementById('delete-session-result');
-      resultDiv.style.color = '#1976d2';
+      resultDiv.className = 'tmc-modal-result';
       resultDiv.innerText = '처리 중...';
       try {
         const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
         const result = await res.json();
         if (res.ok) {
+          resultDiv.className = 'tmc-modal-result success';
           resultDiv.innerText = result.message;
           setTimeout(() => { close(); renderCalUI(container); }, 700);
         } else {
-          resultDiv.style.color = '#d32f2f';
+          resultDiv.className = 'tmc-modal-result error';
           resultDiv.innerText = result.message;
         }
       } catch {
-        resultDiv.style.color = '#d32f2f';
+        resultDiv.className = 'tmc-modal-result error';
         resultDiv.innerText = '세션 삭제에 실패했습니다.';
       }
     };

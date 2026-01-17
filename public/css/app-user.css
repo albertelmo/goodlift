@@ -935,11 +935,20 @@ body.app-user-active {
     padding: 10px 12px;
     border: 1px solid var(--app-border);
     border-radius: var(--app-radius-sm);
-    font-size: 15px;
+    font-size: 16px; /* 16px 이상으로 설정하여 모바일에서 자동 확대 방지 */
     font-family: inherit;
     color: var(--app-text);
     background: var(--app-surface);
     box-sizing: border-box;
+}
+
+/* 날짜 입력 필드 스타일 통일 */
+.app-form-group input[type="date"] {
+    width: 100%;
+    max-width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
 }
 
 .app-form-group input:focus,
@@ -1001,4 +1010,188 @@ body.app-user-active {
 .app-btn-danger:active {
     background: #dc2626;
     transform: scale(0.98);
+}
+
+/* 운동기록 모달 컴팩트 스타일 */
+.app-modal {
+    max-width: 360px;
+    padding: 0;
+}
+
+.app-modal-header {
+    padding: 12px 16px;
+}
+
+.app-modal-header h2 {
+    font-size: 18px;
+}
+
+.app-modal-form {
+    padding: 12px 16px;
+    max-height: calc(90vh - 60px);
+    overflow-y: auto;
+}
+
+.app-form-group {
+    margin-bottom: 12px;
+}
+
+.app-form-group label {
+    font-size: 13px;
+    margin-bottom: 6px;
+    color: var(--app-text-muted);
+}
+
+.app-form-group input,
+.app-form-group select,
+.app-form-group textarea {
+    padding: 8px 10px;
+    font-size: 16px; /* 16px 이상으로 설정하여 모바일에서 자동 확대 방지 */
+}
+
+/* 날짜 입력 필드 스타일 통일 */
+.app-form-group input[type="date"] {
+    width: 100%;
+    max-width: 100%;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.app-form-group textarea {
+    min-height: 60px;
+    resize: vertical;
+}
+
+.app-modal-actions {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--app-border);
+}
+
+.app-btn-primary,
+.app-btn-secondary {
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+/* 세트 입력 스타일 */
+.workout-sets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.workout-set-card {
+    background: var(--app-bg);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-sm);
+    padding: 10px;
+    transition: all var(--app-transition);
+}
+
+.workout-set-card:hover {
+    border-color: var(--app-primary);
+    box-shadow: 0 2px 4px rgba(102, 126, 234, 0.1);
+}
+
+.workout-set-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.workout-set-number {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--app-primary);
+}
+
+.workout-set-remove {
+    background: none;
+    border: none;
+    color: var(--app-text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all var(--app-transition);
+    line-height: 1;
+}
+
+.workout-set-remove:hover {
+    background: var(--app-danger);
+    color: white;
+    transform: scale(1.1);
+}
+
+.workout-set-inputs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.workout-set-input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.workout-set-input-group label {
+    font-size: 11px;
+    color: var(--app-text-muted);
+    margin: 0;
+}
+
+.workout-set-input-group input {
+    padding: 6px 8px;
+    border: 1px solid var(--app-border);
+    border-radius: 6px;
+    font-size: 16px; /* 16px 이상으로 설정하여 모바일에서 자동 확대 방지 */
+    background: var(--app-surface);
+    transition: all var(--app-transition);
+}
+
+.workout-set-input-group input:focus {
+    outline: none;
+    border-color: var(--app-primary);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.workout-add-set-btn {
+    width: 100%;
+    padding: 8px;
+    background: var(--app-bg);
+    border: 1px dashed var(--app-border);
+    border-radius: var(--app-radius-sm);
+    color: var(--app-text);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    transition: all var(--app-transition);
+    margin-top: 4px;
+}
+
+.workout-add-set-btn:hover {
+    background: var(--app-primary);
+    color: white;
+    border-color: var(--app-primary);
+}
+
+.workout-add-set-btn span {
+    font-size: 16px;
+    font-weight: 300;
 }

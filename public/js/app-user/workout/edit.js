@@ -21,18 +21,22 @@ export async function showEditModal(record, appUserId, onSuccess) {
     const currentWorkoutType = workoutTypes.find(t => t.id === record.workout_type_id);
     const workoutTypeType = currentWorkoutType ? (currentWorkoutType.type || '세트') : null;
     
+    // 날짜를 "YY.M.D" 형식으로 변환
+    const dateObj = new Date(record.workout_date);
+    const year = dateObj.getFullYear().toString().slice(-2);
+    const month = dateObj.getMonth() + 1;
+    const day = dateObj.getDate();
+    const dateDisplay = `${year}.${month}.${day}`;
+    
     modal.innerHTML = `
         <div class="app-modal-header">
-            <h2>운동기록 수정</h2>
+            <h2>운동기록 수정 (${dateDisplay})</h2>
             <button class="app-modal-close" aria-label="닫기">×</button>
         </div>
         <form class="app-modal-form" id="workout-edit-form">
+            <input type="hidden" id="workout-edit-date" value="${record.workout_date}">
             <div class="app-form-group">
-                <label for="workout-edit-date">운동 날짜</label>
-                <input type="date" id="workout-edit-date" required value="${record.workout_date}">
-            </div>
-            <div class="app-form-group">
-                <label for="workout-edit-type">운동 종류</label>
+                <label for="workout-edit-type">💪 운동 종류</label>
                 <select id="workout-edit-type">
                     <option value="">선택하세요</option>
                     ${workoutTypes.map(type => `
@@ -41,17 +45,19 @@ export async function showEditModal(record, appUserId, onSuccess) {
                 </select>
             </div>
             <div class="app-form-group" id="workout-edit-duration-group" style="display: ${workoutTypeType === '시간' ? 'block' : 'none'};">
-                <label for="workout-edit-duration">운동 시간 (분)</label>
-                <input type="number" id="workout-edit-duration" min="0" value="${record.duration_minutes || ''}" placeholder="예: 30">
+                <label for="workout-edit-duration">⏱ 시간 (분)</label>
+                <input type="number" id="workout-edit-duration" min="0" value="${record.duration_minutes || ''}" placeholder="30">
             </div>
             <div class="app-form-group" id="workout-edit-sets-group" style="display: ${workoutTypeType === '세트' ? 'block' : 'none'};">
-                <label>세트</label>
-                <div id="workout-edit-sets-container"></div>
-                <button type="button" class="app-btn-secondary" id="workout-edit-set-btn" style="margin-top: 8px; width: 100%;">세트 추가</button>
+                <label>⚖️ 세트</label>
+                <div id="workout-edit-sets-container" class="workout-sets-container"></div>
+                <button type="button" class="workout-add-set-btn" id="workout-edit-set-btn">
+                    <span>+</span> 세트 추가
+                </button>
             </div>
             <div class="app-form-group">
-                <label for="workout-edit-notes">메모</label>
-                <textarea id="workout-edit-notes" rows="3" placeholder="운동 내용, 느낀 점 등을 기록하세요">${escapeHtml(record.notes || '')}</textarea>
+                <label for="workout-edit-notes">📝 메모</label>
+                <textarea id="workout-edit-notes" rows="2" placeholder="운동 내용, 느낀 점 등을 기록하세요">${escapeHtml(record.notes || '')}</textarea>
             </div>
             <div class="app-modal-actions">
                 <button type="button" class="app-btn-danger" id="workout-edit-delete">삭제</button>
@@ -137,11 +143,21 @@ export async function showEditModal(record, appUserId, onSuccess) {
     // 세트 렌더링 함수
     function renderSets() {
         setsContainer.innerHTML = sets.map((set, index) => `
-            <div class="workout-set-item" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
-                <span style="min-width: 40px; font-weight: 600;">${set.set_number}세트</span>
-                <input type="number" class="workout-set-weight" data-index="${index}" step="0.1" min="0" placeholder="무게(kg)" value="${set.weight || ''}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <input type="number" class="workout-set-reps" data-index="${index}" min="0" placeholder="횟수" value="${set.reps || ''}" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <button type="button" class="workout-set-remove" data-index="${index}" style="background: #d32f2f; color: #fff; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer;">삭제</button>
+            <div class="workout-set-card">
+                <div class="workout-set-header">
+                    <span class="workout-set-number">${set.set_number}세트</span>
+                    <button type="button" class="workout-set-remove" data-index="${index}" aria-label="삭제">×</button>
+                </div>
+                <div class="workout-set-inputs">
+                    <div class="workout-set-input-group">
+                        <label>무게 (kg)</label>
+                        <input type="number" class="workout-set-weight" data-index="${index}" step="0.1" min="0" placeholder="0" value="${set.weight || ''}">
+                    </div>
+                    <div class="workout-set-input-group">
+                        <label>횟수</label>
+                        <input type="number" class="workout-set-reps" data-index="${index}" min="0" placeholder="0" value="${set.reps || ''}">
+                    </div>
+                </div>
             </div>
         `).join('');
         
