@@ -284,7 +284,7 @@ function renderWorkoutItem(record) {
             const checked = isCompleted ? 'checked' : '';
             return `
                 <div class="app-workout-item-set-row">
-                    <span class="${completedClass}">${set.set_number}세트: ${weight} × ${reps}</span>
+                    <span class="${completedClass}">${set.set_number} 세트: ${weight} × ${reps}</span>
                     <input type="checkbox" class="app-workout-item-checkbox" 
                            data-record-id="${record.id}" 
                            data-set-id="${set.id}" 
@@ -348,7 +348,7 @@ function showCompletedCheckModal(record) {
             const checked = set.is_completed ? 'checked' : '';
             contentHtml += `
                 <div class="app-completed-modal-content-item">
-                    <span class="app-completed-modal-label">${set.set_number}세트</span>
+                    <span class="app-completed-modal-label">${set.set_number} 세트</span>
                     <div class="app-completed-modal-checkbox-container">
                         <span>${weight} × ${reps}</span>
                         <input type="checkbox" class="app-completed-modal-checkbox" 

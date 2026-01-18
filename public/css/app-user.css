@@ -2212,6 +2212,41 @@ body.app-user-active {
     border-radius: 12px;
 }
 
+.workout-input-history-btn {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--app-primary);
+    background: rgba(102, 126, 234, 0.1);
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    transition: all var(--app-transition);
+}
+
+.workout-input-history-btn:hover {
+    background: rgba(102, 126, 234, 0.2);
+    color: var(--app-primary-dark);
+}
+
+.workout-input-history-btn:active {
+    transform: scale(0.95);
+}
+
+.workout-history-nav-btn {
+    transition: all var(--app-transition);
+    border-radius: 50%;
+}
+
+.workout-history-nav-btn:hover:not([style*="pointer-events: none"]) {
+    background: rgba(102, 126, 234, 0.1);
+    transform: scale(1.1);
+}
+
+.workout-history-nav-btn:active:not([style*="pointer-events: none"]) {
+    transform: scale(0.95);
+}
+
 .workout-input-body {
     display: flex;
     flex-direction: column;
@@ -2233,6 +2268,24 @@ body.app-user-active {
     border: 1px solid var(--app-border);
     border-radius: var(--app-radius-sm);
     padding: 6px;
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.workout-input-set-item-new {
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    animation: setItemHighlight 2s ease-out;
+}
+
+@keyframes setItemHighlight {
+    0% {
+        background: rgba(102, 126, 234, 0.2);
+        border-color: rgba(102, 126, 234, 0.5);
+    }
+    100% {
+        background: rgba(102, 126, 234, 0.1);
+        border-color: rgba(102, 126, 234, 0.3);
+    }
 }
 
 .workout-input-set-header {
@@ -2269,6 +2322,23 @@ body.app-user-active {
     background: var(--app-danger);
     color: white;
     transform: scale(1.1);
+}
+
+.workout-input-set-remove:active {
+    background: var(--app-danger);
+    color: white;
+    transform: scale(0.95);
+}
+
+.workout-input-set-remove:focus {
+    outline: none;
+    background: var(--app-danger);
+    color: white;
+}
+
+.workout-input-set-remove:focus:not(:hover) {
+    background: none;
+    color: var(--app-text-muted);
 }
 
 .workout-input-set-inputs {

@@ -1,7 +1,7 @@
 // 운동기록 추가 모달
 
 import { formatDate, getToday, escapeHtml } from '../utils.js';
-import { addWorkoutRecord, getWorkoutTypes, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
+import { addWorkoutRecord, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
 
 /**
  * 운동 선택 모달 표시 (1단계)
@@ -177,7 +177,7 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
                     ${createWorkoutListHTML(allWorkoutTypes, selectedWorkoutIds)}
                 </div>
             </div>
-            <div class="app-modal-actions">
+            <div class="app-modal-actions" style="justify-content: flex-end;">
                 <button type="button" class="app-btn-secondary" id="workout-select-cancel">취소</button>
                 <button type="submit" class="app-btn-primary" id="workout-select-add" disabled>0개의 운동추가</button>
             </div>
@@ -364,9 +364,6 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
     
     closeBtn.addEventListener('click', closeModal);
     cancelBtn.addEventListener('click', closeModal);
-    modalBg.addEventListener('click', (e) => {
-        if (e.target === modalBg) closeModal();
-    });
     
     // 선택된 운동 개수에 따라 버튼 업데이트
     const updateAddButton = () => {
@@ -423,6 +420,10 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
+    // 모달 높이를 고정으로 설정
+    modal.style.height = '800px';
+    modal.style.maxHeight = '800px';
+    
     // 선택된 날짜가 있으면 사용, 없으면 오늘 날짜
     const defaultDate = selectedDate || getToday();
     
@@ -453,7 +454,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 <div class="workout-input-card" data-workout-index="${index}">
                     <div class="workout-input-header">
                         <h4 class="workout-input-name">${escapeHtml(workout.name)}</h4>
-                        <span class="workout-input-type-badge">시간</span>
+                        <button type="button" class="workout-input-history-btn" data-workout-id="${workout.id}" data-workout-name="${escapeHtml(workout.name)}">최근 기록</button>
                     </div>
                     <div class="workout-input-body">
                         <div class="app-form-group" style="margin-bottom: 0;">
@@ -468,7 +469,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 ? workout.sets.map((set, setIndex) => `
                     <div class="workout-input-set-item" data-set-index="${setIndex}">
                         <div class="workout-input-set-header">
-                            <span class="workout-input-set-number">${set.set_number}세트</span>
+                            <span class="workout-input-set-number">${set.set_number} 세트</span>
                             <button type="button" class="workout-input-set-remove" data-workout-index="${index}" data-set-index="${setIndex}" aria-label="삭제">×</button>
                         </div>
                         <div class="workout-input-set-inputs">
@@ -489,7 +490,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 <div class="workout-input-card" data-workout-index="${index}">
                     <div class="workout-input-header">
                         <h4 class="workout-input-name">${escapeHtml(workout.name)}</h4>
-                        <span class="workout-input-type-badge">세트</span>
+                        <button type="button" class="workout-input-history-btn" data-workout-id="${workout.id}" data-workout-name="${escapeHtml(workout.name)}">최근 기록</button>
                     </div>
                     <div class="workout-input-body">
                         <div class="workout-input-sets-container" id="workout-input-sets-${index}">
@@ -506,7 +507,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
     
     modal.innerHTML = `
         <div class="app-modal-header">
-            <h2>운동기록 입력 (${dateDisplay})</h2>
+            <h2>운동 추가 (${dateDisplay})</h2>
             <button class="app-modal-close" aria-label="닫기">×</button>
         </div>
         <form class="app-modal-form" id="workout-input-form">
@@ -515,7 +516,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 ${selectedWorkouts.map((workout, index) => createWorkoutInputHTML(workout, index)).join('')}
             </div>
         </form>
-        <div class="app-modal-actions">
+        <div class="app-modal-actions" style="justify-content: flex-end;">
             <button type="button" class="app-btn-secondary" id="workout-input-cancel">취소</button>
             <button type="submit" form="workout-input-form" class="app-btn-primary">등록</button>
         </div>
@@ -538,7 +539,9 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
     
     // 세트 추가 버튼 이벤트
     modal.querySelectorAll('.workout-input-add-set-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             const workoutIndex = parseInt(btn.getAttribute('data-workout-index'));
             const workout = selectedWorkouts[workoutIndex];
             if (!workout || workout.type !== '세트') return;
@@ -549,35 +552,39 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             const newReps = lastSet ? lastSet.reps : null;
             
             workout.sets.push({ set_number: setNumber, weight: newWeight, reps: newReps });
-            renderWorkoutSets(workoutIndex, selectedWorkouts);
+            const newSetIndex = workout.sets.length - 1;
+            renderWorkoutSets(workoutIndex, selectedWorkouts, newSetIndex);
             
-            // 세트 추가 후 스크롤을 맨 아래로 이동
+            // 세트 추가 후 스크롤을 맨 아래로 이동하고 새로 추가된 세트의 첫 번째 입력 필드에 포커스
             setTimeout(() => {
                 const setsContainer = modal.querySelector(`#workout-input-sets-${workoutIndex}`);
                 if (setsContainer) {
+                    // 세트 컨테이너만 스크롤 (모달 폼 전체는 스크롤하지 않음)
                     setsContainer.scrollTop = setsContainer.scrollHeight;
                 }
-                // 모달 폼도 스크롤 가능한 경우 맨 아래로 이동
-                const modalForm = modal.querySelector('.app-modal-form');
-                if (modalForm && modalForm.scrollHeight > modalForm.clientHeight) {
-                    modalForm.scrollTop = modalForm.scrollHeight;
+                // 새로 추가된 세트의 무게 입력 필드에 포커스
+                const newWeightInput = modal.querySelector(`.workout-input-set-weight[data-workout-index="${workoutIndex}"][data-set-index="${newSetIndex}"]`);
+                if (newWeightInput) {
+                    newWeightInput.focus();
                 }
             }, 50);
         });
     });
     
     // 세트 렌더링 함수
-    function renderWorkoutSets(workoutIndex, workouts) {
+    function renderWorkoutSets(workoutIndex, workouts, newSetIndex = -1) {
         const workout = workouts[workoutIndex];
         if (!workout || workout.type !== '세트') return;
         
         const setsContainer = modal.querySelector(`#workout-input-sets-${workoutIndex}`);
         if (!setsContainer) return;
         
-        setsContainer.innerHTML = workout.sets.map((set, setIndex) => `
-            <div class="workout-input-set-item" data-set-index="${setIndex}">
+        setsContainer.innerHTML = workout.sets.map((set, setIndex) => {
+            const isNew = setIndex === newSetIndex;
+            return `
+            <div class="workout-input-set-item ${isNew ? 'workout-input-set-item-new' : ''}" data-set-index="${setIndex}">
                 <div class="workout-input-set-header">
-                    <span class="workout-input-set-number">${set.set_number}세트</span>
+                    <span class="workout-input-set-number">${set.set_number} 세트</span>
                     <button type="button" class="workout-input-set-remove" data-workout-index="${workoutIndex}" data-set-index="${setIndex}" aria-label="삭제">×</button>
                 </div>
                 <div class="workout-input-set-inputs">
@@ -591,10 +598,32 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                     </div>
                 </div>
             </div>
-        `).join('');
+            `;
+        }).join('');
+        
+        // 새로 추가된 세트 하이라이트 제거 (3초 후 또는 입력 시작 시)
+        if (newSetIndex >= 0) {
+            const newSetItem = setsContainer.querySelector(`.workout-input-set-item-new[data-set-index="${newSetIndex}"]`);
+            if (newSetItem) {
+                // 3초 후 자동으로 클래스 제거
+                setTimeout(() => {
+                    newSetItem.classList.remove('workout-input-set-item-new');
+                }, 3000);
+            }
+        }
         
         // 세트 입력 이벤트
         setsContainer.querySelectorAll('.workout-input-set-weight').forEach(input => {
+            // 포커스 시 값 선택
+            input.addEventListener('focus', (e) => {
+                e.target.select();
+                // 입력 시작 시 하이라이트 제거
+                const setItem = e.target.closest('.workout-input-set-item');
+                if (setItem) {
+                    setItem.classList.remove('workout-input-set-item-new');
+                }
+            });
+            // 입력 이벤트
             input.addEventListener('input', (e) => {
                 const wIndex = parseInt(e.target.getAttribute('data-workout-index'));
                 const sIndex = parseInt(e.target.getAttribute('data-set-index'));
@@ -604,6 +633,16 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         });
         
         setsContainer.querySelectorAll('.workout-input-set-reps').forEach(input => {
+            // 포커스 시 값 선택
+            input.addEventListener('focus', (e) => {
+                e.target.select();
+                // 입력 시작 시 하이라이트 제거
+                const setItem = e.target.closest('.workout-input-set-item');
+                if (setItem) {
+                    setItem.classList.remove('workout-input-set-item-new');
+                }
+            });
+            // 입력 이벤트
             input.addEventListener('input', (e) => {
                 const wIndex = parseInt(e.target.getAttribute('data-workout-index'));
                 const sIndex = parseInt(e.target.getAttribute('data-set-index'));
@@ -614,14 +653,27 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         
         // 세트 삭제 버튼
         setsContainer.querySelectorAll('.workout-input-set-remove').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const wIndex = parseInt(btn.getAttribute('data-workout-index'));
                 const sIndex = parseInt(btn.getAttribute('data-set-index'));
+                
+                // 즉시 삭제 실행
                 selectedWorkouts[wIndex].sets.splice(sIndex, 1);
                 selectedWorkouts[wIndex].sets.forEach((set, i) => {
                     set.set_number = i + 1;
                 });
-                renderWorkoutSets(wIndex, selectedWorkouts);
+                
+                // 즉시 렌더링 (hover 상태 해제를 위해)
+                renderWorkoutSets(wIndex, selectedWorkouts, -1);
+                
+                // 포커스 제거
+                setTimeout(() => {
+                    if (document.activeElement) {
+                        document.activeElement.blur();
+                    }
+                }, 0);
             });
         });
     }
@@ -659,8 +711,42 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
     
     closeBtn.addEventListener('click', closeModal);
     cancelBtn.addEventListener('click', closeModal);
-    modalBg.addEventListener('click', (e) => {
-        if (e.target === modalBg) closeModal();
+    
+    // 최근 기록 버튼 클릭 이벤트
+    modal.querySelectorAll('.workout-input-history-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const workoutId = btn.getAttribute('data-workout-id');
+            const workoutName = btn.getAttribute('data-workout-name');
+            const workoutIndex = parseInt(btn.closest('.workout-input-card').getAttribute('data-workout-index'));
+            
+            // 불러오기 콜백 함수
+            const onLoadRecord = (record) => {
+                if (record) {
+                    const workout = selectedWorkouts[workoutIndex];
+                    if (workout) {
+                        if (workout.type === '시간' && record.duration_minutes) {
+                            workout.durationMinutes = record.duration_minutes;
+                            const durationInput = modal.querySelector(`#workout-input-duration-${workoutIndex}`);
+                            if (durationInput) {
+                                durationInput.value = record.duration_minutes;
+                            }
+                        } else if (workout.type === '세트' && record.sets && record.sets.length > 0) {
+                            // 세트 정보를 불러오기 (체크 상태는 제외)
+                            workout.sets = record.sets.map((set, idx) => ({
+                                set_number: idx + 1,
+                                weight: set.weight,
+                                reps: set.reps
+                            }));
+                            renderWorkoutSets(workoutIndex, selectedWorkouts);
+                        }
+                    }
+                }
+            };
+            
+            await showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoadRecord);
+        });
     });
     
     // 폼 제출
@@ -925,7 +1011,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
         setsContainer.innerHTML = sets.map((set, index) => `
             <div class="workout-set-card">
                 <div class="workout-set-header">
-                    <span class="workout-set-number">${set.set_number}세트</span>
+                    <span class="workout-set-number">${set.set_number} 세트</span>
                     <button type="button" class="workout-set-remove" data-index="${index}" aria-label="삭제">×</button>
                 </div>
                 <div class="workout-set-inputs">
@@ -1050,6 +1136,245 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             const errorMessage = error.message || '운동기록 추가 중 오류가 발생했습니다.';
             alert(errorMessage);
         }
+    });
+}
+
+/**
+ * 운동 이력 모달 표시
+ */
+async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoadRecord = null) {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    
+    // 모달 높이를 고정으로 설정
+    modal.style.height = '600px';
+    modal.style.maxHeight = '600px';
+    
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>${escapeHtml(workoutName)} 최근 기록</h2>
+            <button class="app-modal-close" aria-label="닫기">×</button>
+        </div>
+        <div class="app-modal-form" style="height: 533px; display: flex; flex-direction: column; overflow: hidden;">
+            <div id="workout-history-navigation" style="display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--app-border); flex-shrink: 0;">
+                <button type="button" class="workout-history-nav-btn" id="workout-history-prev" aria-label="이전 날짜" style="background: none; border: none; color: var(--app-primary); font-size: 20px; cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center; opacity: 0.5; pointer-events: none;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                </button>
+                <div id="workout-history-date" style="font-size: 14px; font-weight: 600; color: var(--app-text); flex: 1; text-align: center;">
+                    로딩 중...
+                </div>
+                <button type="button" class="workout-history-nav-btn" id="workout-history-next" aria-label="다음 날짜" style="background: none; border: none; color: var(--app-primary); font-size: 20px; cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center; opacity: 0.5; pointer-events: none;">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </div>
+            <div id="workout-history-content" style="padding: 16px; overflow-y: auto; flex: 1; min-height: 0;">
+                <div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">
+                    로딩 중...
+                </div>
+            </div>
+        </div>
+        <div class="app-modal-actions" style="justify-content: flex-end;">
+            <button type="button" class="app-btn-secondary" id="workout-history-close">닫기</button>
+            <button type="button" class="app-btn-primary" id="workout-history-load" disabled style="opacity: 0.5; cursor: not-allowed;">불러오기</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modalBg);
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 이력 데이터 로드 및 상태 관리
+    let sortedDates = [];
+    let recordsByDate = {};
+    let currentDateIndex = 0;
+    
+    const renderCurrentDate = () => {
+        const dateEl = modal.querySelector('#workout-history-date');
+        const contentEl = modal.querySelector('#workout-history-content');
+        const prevBtn = modal.querySelector('#workout-history-prev');
+        const nextBtn = modal.querySelector('#workout-history-next');
+        const loadBtn = modal.querySelector('#workout-history-load');
+        
+        if (sortedDates.length === 0) {
+            dateEl.textContent = '';
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">
+                    아직 기록이 없습니다.
+                </div>
+            `;
+            prevBtn.style.opacity = '0.5';
+            prevBtn.style.pointerEvents = 'none';
+            nextBtn.style.opacity = '0.5';
+            nextBtn.style.pointerEvents = 'none';
+            return;
+        }
+        
+        const currentDateStr = sortedDates[currentDateIndex];
+        const dateDisplay = formatDate(currentDateStr);
+        const dateRecords = recordsByDate[currentDateStr] || [];
+        
+        dateEl.textContent = dateDisplay;
+        
+        // 이전/다음 버튼 상태 업데이트
+        // prevBtn (왼쪽): 더 오래된 날짜로 이동 (currentDateIndex++)
+        prevBtn.style.opacity = currentDateIndex < sortedDates.length - 1 ? '1' : '0.5';
+        prevBtn.style.pointerEvents = currentDateIndex < sortedDates.length - 1 ? 'auto' : 'none';
+        // nextBtn (오른쪽): 더 최근 날짜로 이동 (currentDateIndex--)
+        nextBtn.style.opacity = currentDateIndex > 0 ? '1' : '0.5';
+        nextBtn.style.pointerEvents = currentDateIndex > 0 ? 'auto' : 'none';
+        
+        // 불러오기 버튼 상태 업데이트 (기록이 있는 경우에만 활성화)
+        if (loadBtn) {
+            const hasRecords = dateRecords.length > 0;
+            loadBtn.disabled = !hasRecords;
+            loadBtn.style.opacity = hasRecords ? '1' : '0.5';
+            loadBtn.style.cursor = hasRecords ? 'pointer' : 'not-allowed';
+        }
+        
+        // 현재 날짜의 기록 렌더링
+        let historyHTML = '';
+        dateRecords.forEach(record => {
+            const workoutTypeType = record.workout_type_type || '세트';
+            let recordHTML = '';
+            
+            if (workoutTypeType === '시간' && record.duration_minutes) {
+                recordHTML = `
+                    <div class="workout-history-item" style="padding: 12px 16px; background: var(--app-bg); border-left: 3px solid var(--app-primary); margin-bottom: 8px; border-radius: var(--app-radius-sm);">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span style="font-size: 14px; color: var(--app-text);">⏱ ${record.duration_minutes}분</span>
+                            ${record.is_completed ? '<span style="font-size: 12px; color: var(--app-success);">✓ 완료</span>' : ''}
+                        </div>
+                    </div>
+                `;
+            } else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
+                const setsHTML = record.sets.map(set => {
+                    const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
+                    const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
+                    const isCompleted = set.is_completed ? '✓' : '';
+                    return `<div style="font-size: 13px; color: var(--app-text); padding: 4px 0;">${isCompleted} ${set.set_number} 세트: ${weight} × ${reps}</div>`;
+                }).join('');
+                
+                recordHTML = `
+                    <div class="workout-history-item" style="padding: 12px 16px; background: var(--app-bg); border-left: 3px solid var(--app-primary); margin-bottom: 8px; border-radius: var(--app-radius-sm);">
+                        ${setsHTML}
+                    </div>
+                `;
+            }
+            
+            historyHTML += recordHTML;
+        });
+        
+        if (historyHTML === '') {
+            contentEl.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">
+                    이 날짜에는 기록이 없습니다.
+                </div>
+            `;
+        } else {
+            contentEl.innerHTML = historyHTML;
+        }
+    };
+    
+    try {
+        const allRecords = await getWorkoutRecords(appUserId);
+        // workoutId와 workout_type_id는 모두 UUID 문자열이므로 문자열로 비교
+        const workoutRecords = allRecords.filter(record => {
+            const recordWorkoutTypeId = String(record.workout_type_id || '');
+            const workoutIdStr = String(workoutId || '');
+            return recordWorkoutTypeId === workoutIdStr;
+        });
+        
+        if (workoutRecords.length > 0) {
+            // 날짜별로 그룹화
+            workoutRecords.forEach(record => {
+                const dateStr = record.workout_date;
+                if (!recordsByDate[dateStr]) {
+                    recordsByDate[dateStr] = [];
+                }
+                recordsByDate[dateStr].push(record);
+            });
+            
+            // 날짜별로 정렬 (최신순)
+            sortedDates = Object.keys(recordsByDate).sort((a, b) => {
+                return new Date(b) - new Date(a);
+            });
+            
+            currentDateIndex = 0; // 가장 최근 날짜부터 시작
+        }
+        
+        renderCurrentDate();
+        
+        // 네비게이션 버튼 이벤트
+        const prevBtn = modal.querySelector('#workout-history-prev');
+        const nextBtn = modal.querySelector('#workout-history-next');
+        
+        prevBtn.addEventListener('click', () => {
+            if (currentDateIndex < sortedDates.length - 1) {
+                currentDateIndex++;
+                renderCurrentDate();
+            }
+        });
+        
+        nextBtn.addEventListener('click', () => {
+            if (currentDateIndex > 0) {
+                currentDateIndex--;
+                renderCurrentDate();
+            }
+        });
+    } catch (error) {
+        console.error('운동 이력 조회 오류:', error);
+        const contentEl = modal.querySelector('#workout-history-content');
+        const dateEl = modal.querySelector('#workout-history-date');
+        dateEl.textContent = '';
+        contentEl.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: var(--app-danger);">
+                이력을 불러오는 중 오류가 발생했습니다.
+            </div>
+        `;
+    }
+    
+    // 모달 닫기
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+    
+    const closeBtn = modal.querySelector('.app-modal-close');
+    const closeBtn2 = modal.querySelector('#workout-history-close');
+    const loadBtn = modal.querySelector('#workout-history-load');
+    
+    closeBtn.addEventListener('click', closeModal);
+    closeBtn2.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+    
+    // 불러오기 버튼 클릭 이벤트
+    loadBtn.addEventListener('click', () => {
+        if (sortedDates.length > 0 && currentDateIndex >= 0 && currentDateIndex < sortedDates.length) {
+            const currentDateStr = sortedDates[currentDateIndex];
+            const dateRecords = recordsByDate[currentDateStr] || [];
+            
+            // 해당 날짜의 첫 번째 기록을 불러오기 (같은 날짜에 여러 기록이 있을 수 있음)
+            if (dateRecords.length > 0 && onLoadRecord) {
+                const record = dateRecords[0]; // 첫 번째 기록 사용
+                onLoadRecord(record);
+            }
+        }
+        closeModal();
     });
 }
 
