@@ -1654,6 +1654,11 @@ app.get('/api/members', async (req, res) => {
         const filters = {};
         if (req.query.trainer) filters.trainer = req.query.trainer;
         if (req.query.status) filters.status = req.query.status;
+        if (req.query.name) {
+            // 특정 회원 이름으로 조회 (성능 최적화)
+            const member = await membersDB.getMemberByName(req.query.name);
+            return res.json(member ? [member] : []);
+        }
         
         const members = await membersDB.getMembers(filters);
         res.json(members);
@@ -3902,6 +3907,21 @@ app.get('/api/trainers', (req, res) => {
                 message: '계정 파일을 찾을 수 없습니다.',
                 trainers: [] 
             });
+        }
+        
+        // 특정 트레이너 username으로 조회 (성능 최적화)
+        if (req.query.username) {
+            const accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf-8'));
+            const trainer = accounts.find(acc => acc.role === 'trainer' && acc.username === req.query.username);
+            
+            if (trainer) {
+                return res.json([{
+                    username: trainer.username,
+                    name: trainer.name || trainer.username
+                }]);
+            } else {
+                return res.json([]);
+            }
         }
         
         const accounts = JSON.parse(fs.readFileSync(accountsPath, 'utf-8'));

@@ -216,3 +216,12 @@ export async function updateUserSettings(appUserId, updates) {
         ...updates
     });
 }
+
+// ========== 앱 유저 정보 API ==========
+
+/**
+ * 앱 유저 정보 수정
+ */
+export async function updateAppUser(id, updates) {
+    return patch(`/app-users/${id}`, updates);
+}

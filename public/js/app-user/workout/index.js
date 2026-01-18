@@ -160,6 +160,22 @@ function render() {
             });
         });
     }
+    
+    // 오늘의 운동 카드에서 온 경우 자동으로 운동 추가 모달 열기
+    const autoOpenWorkoutAdd = localStorage.getItem('autoOpenWorkoutAdd');
+    if (autoOpenWorkoutAdd === 'true') {
+        localStorage.removeItem('autoOpenWorkoutAdd');
+        // 약간의 지연을 두어 화면 렌더링 완료 후 모달 열기
+        setTimeout(() => {
+            const selectedDateStr = getSelectedDate();
+            showWorkoutSelectModal(currentAppUserId, selectedDateStr, () => {
+                // 추가 성공 후 목록 새로고침
+                import('./list.js').then(module => {
+                    module.refresh();
+                });
+            });
+        }, 100);
+    }
 }
 
 /**

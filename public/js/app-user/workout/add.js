@@ -125,7 +125,7 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
                     <div class="workout-filter-label">${categoryLabels[i] || `분류${i}`}</div>
                     <div class="workout-filter-buttons">`;
                 categories.forEach(cat => {
-                    html += `<button type="button" class="workout-filter-btn" data-category="${i}" data-id="${cat.id}">${escapeHtml(cat.name)}</button>`;
+                    html += `<button type="button" class="workout-filter-btn" data-category="${i}" data-id="${cat.id}" tabindex="-1">${escapeHtml(cat.name)}</button>`;
                 });
                 html += `</div></div>`;
             }
@@ -158,16 +158,16 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
     modal.innerHTML = `
         <div class="app-modal-header">
             <h2>운동 선택 (${dateDisplay})</h2>
-            <button class="app-modal-close" aria-label="닫기">×</button>
+            <button class="app-modal-close" aria-label="닫기" tabindex="-1">×</button>
         </div>
         <form class="app-modal-form" id="workout-select-form">
             <div class="app-form-group workout-search-group">
-                <button type="button" class="workout-favorite-filter-btn" id="workout-favorite-filter-btn" title="즐겨찾기만 보기">
+                <button type="button" class="workout-favorite-filter-btn" id="workout-favorite-filter-btn" title="즐겨찾기만 보기" tabindex="-1">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                     </svg>
                 </button>
-                <input type="text" id="workout-search" placeholder="운동 검색" autocomplete="off">
+                <input type="text" id="workout-search" placeholder="운동 검색" autocomplete="off" tabindex="-1">
             </div>
             <div class="workout-filter-container">
                 ${createCategoryFilterButtons()}
@@ -186,17 +186,58 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
     
     document.body.appendChild(modalBg);
     
-    // 모달 열기 애니메이션
-    setTimeout(() => {
-        modalBg.classList.add('app-modal-show');
-        modal.classList.add('app-modal-show');
-    }, 10);
-    
-    // 이벤트 리스너
+    // 이벤트 리스너 (모달 열기 애니메이션 전에 설정)
     const closeBtn = modal.querySelector('.app-modal-close');
     const cancelBtn = modal.querySelector('#workout-select-cancel');
     const form = modal.querySelector('#workout-select-form');
     const searchInput = modal.querySelector('#workout-search');
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+        
+        // 포커스 완전히 차단: 모든 포커스 가능한 요소에 포커스 이벤트 리스너 추가
+        const preventFocus = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.target && e.target.blur) {
+                e.target.blur();
+            }
+        };
+        
+        // 모달 내 모든 포커스 가능한 요소에 포커스 방지
+        const allFocusableElements = modal.querySelectorAll('button, input, select, textarea, [tabindex]');
+        allFocusableElements.forEach(el => {
+            // focus 이벤트 차단
+            el.addEventListener('focus', preventFocus, { capture: true });
+            // focusin 이벤트도 차단 (버블링 단계)
+            el.addEventListener('focusin', preventFocus, { capture: true });
+        });
+        
+        // 동적으로 추가되는 요소에도 적용하기 위해 모달에 이벤트 위임
+        modal.addEventListener('focusin', (e) => {
+            if (modal.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.target && e.target.blur) {
+                    e.target.blur();
+                }
+            }
+        }, { capture: true });
+        
+        // 초기 포커스 제거
+        const removeFocus = () => {
+            const activeEl = document.activeElement;
+            if (activeEl && modal.contains(activeEl) && activeEl.blur) {
+                activeEl.blur();
+            }
+        };
+        
+        removeFocus();
+        setTimeout(removeFocus, 50);
+        setTimeout(removeFocus, 100);
+    }, 10);
     const workoutList = modal.querySelector('#workout-list');
     const addBtn = modal.querySelector('#workout-select-add');
     const favoriteFilterBtn = modal.querySelector('#workout-favorite-filter-btn');
@@ -1155,31 +1196,31 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
             <h2>${escapeHtml(workoutName)} 최근 기록</h2>
             <button class="app-modal-close" aria-label="닫기">×</button>
         </div>
-        <div class="app-modal-form" style="height: 533px; display: flex; flex-direction: column; overflow: hidden;">
-            <div id="workout-history-navigation" style="display: flex; align-items: center; justify-content: space-between; padding: 16px; border-bottom: 1px solid var(--app-border); flex-shrink: 0;">
-                <button type="button" class="workout-history-nav-btn" id="workout-history-prev" aria-label="이전 날짜" style="background: none; border: none; color: var(--app-primary); font-size: 20px; cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center; opacity: 0.5; pointer-events: none;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div class="app-modal-form workout-history-form">
+            <div id="workout-history-navigation" class="workout-history-navigation">
+                <button type="button" class="workout-history-nav-btn" id="workout-history-prev" aria-label="이전 날짜">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
                 </button>
-                <div id="workout-history-date" style="font-size: 14px; font-weight: 600; color: var(--app-text); flex: 1; text-align: center;">
+                <div id="workout-history-date" class="workout-history-date">
                     로딩 중...
                 </div>
-                <button type="button" class="workout-history-nav-btn" id="workout-history-next" aria-label="다음 날짜" style="background: none; border: none; color: var(--app-primary); font-size: 20px; cursor: pointer; padding: 8px; display: flex; align-items: center; justify-content: center; opacity: 0.5; pointer-events: none;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <button type="button" class="workout-history-nav-btn" id="workout-history-next" aria-label="다음 날짜">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
                 </button>
             </div>
-            <div id="workout-history-content" style="padding: 16px; overflow-y: auto; flex: 1; min-height: 0;">
-                <div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">
+            <div id="workout-history-content" class="workout-history-content">
+                <div class="workout-history-loading">
                     로딩 중...
                 </div>
             </div>
         </div>
-        <div class="app-modal-actions" style="justify-content: flex-end;">
+        <div class="app-modal-actions workout-history-actions">
             <button type="button" class="app-btn-secondary" id="workout-history-close">닫기</button>
-            <button type="button" class="app-btn-primary" id="workout-history-load" disabled style="opacity: 0.5; cursor: not-allowed;">불러오기</button>
+            <button type="button" class="app-btn-primary" id="workout-history-load" disabled>불러오기</button>
         </div>
     `;
     
@@ -1206,13 +1247,20 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
         if (sortedDates.length === 0) {
             dateEl.textContent = '';
             contentEl.innerHTML = `
-                <div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">
-                    아직 기록이 없습니다.
+                <div class="workout-history-empty">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3; margin-bottom: 12px;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <p>아직 기록이 없습니다</p>
                 </div>
             `;
-            prevBtn.style.opacity = '0.5';
+            prevBtn.style.opacity = '0.3';
             prevBtn.style.pointerEvents = 'none';
-            nextBtn.style.opacity = '0.5';
+            nextBtn.style.opacity = '0.3';
             nextBtn.style.pointerEvents = 'none';
             return;
         }
@@ -1225,11 +1273,15 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
         
         // 이전/다음 버튼 상태 업데이트
         // prevBtn (왼쪽): 더 오래된 날짜로 이동 (currentDateIndex++)
-        prevBtn.style.opacity = currentDateIndex < sortedDates.length - 1 ? '1' : '0.5';
-        prevBtn.style.pointerEvents = currentDateIndex < sortedDates.length - 1 ? 'auto' : 'none';
+        const canGoPrev = currentDateIndex < sortedDates.length - 1;
+        prevBtn.style.opacity = canGoPrev ? '1' : '0.3';
+        prevBtn.style.pointerEvents = canGoPrev ? 'auto' : 'none';
+        prevBtn.classList.toggle('disabled', !canGoPrev);
         // nextBtn (오른쪽): 더 최근 날짜로 이동 (currentDateIndex--)
-        nextBtn.style.opacity = currentDateIndex > 0 ? '1' : '0.5';
-        nextBtn.style.pointerEvents = currentDateIndex > 0 ? 'auto' : 'none';
+        const canGoNext = currentDateIndex > 0;
+        nextBtn.style.opacity = canGoNext ? '1' : '0.3';
+        nextBtn.style.pointerEvents = canGoNext ? 'auto' : 'none';
+        nextBtn.classList.toggle('disabled', !canGoNext);
         
         // 불러오기 버튼 상태 업데이트 (기록이 있는 경우에만 활성화)
         if (loadBtn) {
@@ -1247,10 +1299,13 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
             
             if (workoutTypeType === '시간' && record.duration_minutes) {
                 recordHTML = `
-                    <div class="workout-history-item" style="padding: 12px 16px; background: var(--app-bg); border-left: 3px solid var(--app-primary); margin-bottom: 8px; border-radius: var(--app-radius-sm);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 14px; color: var(--app-text);">⏱ ${record.duration_minutes}분</span>
-                            ${record.is_completed ? '<span style="font-size: 12px; color: var(--app-success);">✓ 완료</span>' : ''}
+                    <div class="workout-history-item">
+                        <div class="workout-history-item-header">
+                            <div class="workout-history-item-icon">⏱</div>
+                            <div class="workout-history-item-content">
+                                <span class="workout-history-item-value">${record.duration_minutes}분</span>
+                            </div>
+                            ${record.is_completed ? '<span class="workout-history-item-badge">완료</span>' : ''}
                         </div>
                     </div>
                 `;
@@ -1258,13 +1313,21 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
                 const setsHTML = record.sets.map(set => {
                     const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
                     const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
-                    const isCompleted = set.is_completed ? '✓' : '';
-                    return `<div style="font-size: 13px; color: var(--app-text); padding: 4px 0;">${isCompleted} ${set.set_number} 세트: ${weight} × ${reps}</div>`;
+                    const isCompleted = set.is_completed;
+                    return `
+                        <div class="workout-history-set-item ${isCompleted ? 'completed' : ''}">
+                            <span class="workout-history-set-number">${set.set_number} 세트</span>
+                            <span class="workout-history-set-value">${weight} × ${reps}</span>
+                            ${isCompleted ? '<span class="workout-history-set-check">✓</span>' : ''}
+                        </div>
+                    `;
                 }).join('');
                 
                 recordHTML = `
-                    <div class="workout-history-item" style="padding: 12px 16px; background: var(--app-bg); border-left: 3px solid var(--app-primary); margin-bottom: 8px; border-radius: var(--app-radius-sm);">
-                        ${setsHTML}
+                    <div class="workout-history-item">
+                        <div class="workout-history-sets">
+                            ${setsHTML}
+                        </div>
                     </div>
                 `;
             }
@@ -1274,8 +1337,13 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
         
         if (historyHTML === '') {
             contentEl.innerHTML = `
-                <div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">
-                    이 날짜에는 기록이 없습니다.
+                <div class="workout-history-empty">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3; margin-bottom: 12px;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <p>이 날짜에는 기록이 없습니다</p>
                 </div>
             `;
         } else {
@@ -1335,8 +1403,13 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
         const dateEl = modal.querySelector('#workout-history-date');
         dateEl.textContent = '';
         contentEl.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; color: var(--app-danger);">
-                이력을 불러오는 중 오류가 발생했습니다.
+            <div class="workout-history-empty error">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.3; margin-bottom: 12px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <p>이력을 불러오는 중 오류가 발생했습니다</p>
             </div>
         `;
     }

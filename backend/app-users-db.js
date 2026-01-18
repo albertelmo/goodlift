@@ -264,11 +264,11 @@ const updateAppUser = async (id, updates) => {
     const values = [];
     let paramIndex = 1;
 
-    if (updates.name) {
+    if (updates.name !== undefined) {
       fields.push(`name = $${paramIndex++}`);
       values.push(updates.name);
     }
-    if (updates.phone) {
+    if (updates.phone !== undefined) {
       fields.push(`phone = $${paramIndex++}`);
       values.push(updates.phone);
     }

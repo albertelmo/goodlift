@@ -77,7 +77,7 @@ function render() {
                 </a>
                 <a href="#" class="app-drawer-item" data-screen="profile">
                     <span class="app-drawer-icon">👤</span>
-                    <span>마이페이지</span>
+                    <span>내정보</span>
                 </a>
                 <div class="app-drawer-divider"></div>
                 <a href="#" class="app-drawer-item" id="app-drawer-switch-back" style="display:none;">
