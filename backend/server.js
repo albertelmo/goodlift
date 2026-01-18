@@ -26,6 +26,8 @@ const ledgerDB = require('./ledger-db');
 const appUsersDB = require('./app-users-db');
 const workoutRecordsDB = require('./workout-records-db');
 const workoutTypesDB = require('./workout-types-db');
+const favoriteWorkoutsDB = require('./app-user-favorite-workouts-db');
+const userSettingsDB = require('./app-user-settings-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -299,6 +301,8 @@ ledgerDB.initializeDatabase();
 appUsersDB.initializeDatabase();
 workoutTypesDB.initializeDatabase(); // workout_types 테이블을 먼저 생성해야 함
 workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
+favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_users와 workout_types를 참조하므로 마지막에 생성
+userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -612,6 +616,17 @@ app.post('/api/login', async (req, res) => {
         // 마지막 로그인 시각 업데이트
         await appUsersDB.updateLastLogin(username);
         
+        // 트레이너 여부 확인 (accounts.json에서 확인)
+        let isTrainer = false;
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) {
+                const accounts = JSON.parse(raw);
+                const account = accounts.find(acc => acc.username === appUser.username && acc.role === 'trainer');
+                isTrainer = !!account;
+            }
+        }
+        
         // 앱 유저 로그인 성공
         res.json({
             message: '로그인 성공!',
@@ -620,11 +635,154 @@ app.post('/api/login', async (req, res) => {
             username: appUser.username,
             name: appUser.name,
             phone: appUser.phone,
-            member_name: appUser.member_name
+            member_name: appUser.member_name,
+            isTrainer: isTrainer
         });
     } catch (error) {
         console.error('[API] 앱 유저 로그인 오류:', error);
         res.status(500).json({ message: '로그인 처리 중 오류가 발생했습니다.' });
+    }
+});
+
+// ========== 앱 유저 관리 API ==========
+
+// 앱 유저 목록 조회
+app.get('/api/app-users', async (req, res) => {
+    try {
+        const filters = {};
+        if (req.query.member_name) filters.member_name = req.query.member_name;
+        if (req.query.is_active !== undefined) filters.is_active = req.query.is_active === 'true';
+        if (req.query.username) filters.username = req.query.username;
+        
+        const appUsers = await appUsersDB.getAppUsers(filters);
+        
+        // accounts.json에서 트레이너 username 목록 가져오기
+        const trainerUsernames = new Set();
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) {
+                const accounts = JSON.parse(raw);
+                accounts.forEach(account => {
+                    if (account.role === 'trainer' && account.username) {
+                        trainerUsernames.add(account.username);
+                    }
+                });
+            }
+        }
+        
+        // 트레이너 제외 (트레이너 username에 해당하는 app_user 제외)
+        const filteredAppUsers = appUsers.filter(appUser => {
+            return !trainerUsernames.has(appUser.username);
+        });
+        
+        res.json(filteredAppUsers);
+    } catch (error) {
+        console.error('[API] 앱 유저 목록 조회 오류:', error);
+        res.status(500).json({ message: '앱 유저 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 앱 유저 단일 조회
+app.get('/api/app-users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const appUser = await appUsersDB.getAppUserById(id);
+        
+        if (!appUser) {
+            return res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
+        }
+        
+        res.json(appUser);
+    } catch (error) {
+        console.error('[API] 앱 유저 조회 오류:', error);
+        res.status(500).json({ message: '앱 유저 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 앱 유저 추가 (관리자용)
+app.post('/api/app-users', async (req, res) => {
+    try {
+        const { username, password, name, phone, member_name, is_active } = req.body;
+        
+        if (!username || !password || !name || !phone) {
+            return res.status(400).json({ message: '아이디, 비밀번호, 이름, 전화번호는 필수입니다.' });
+        }
+        
+        // 아이디 중복 체크
+        const existingAppUser = await appUsersDB.getAppUserByUsername(username);
+        if (existingAppUser) {
+            return res.status(409).json({ message: '이미 존재하는 아이디입니다.' });
+        }
+        
+        // 비밀번호 해싱
+        const bcrypt = require('bcrypt');
+        const saltRounds = 10;
+        const password_hash = await bcrypt.hash(password, saltRounds);
+        
+        const newAppUser = await appUsersDB.addAppUser({
+            username: username.trim(),
+            password_hash: password_hash,
+            name: name.trim(),
+            phone: phone.trim(),
+            member_name: member_name || null,
+            is_active: is_active !== undefined ? is_active : true
+        });
+        
+        res.status(201).json(newAppUser);
+    } catch (error) {
+        console.error('[API] 앱 유저 추가 오류:', error);
+        if (error.code === '23505') { // UNIQUE constraint violation
+            res.status(409).json({ message: '이미 존재하는 아이디입니다.' });
+        } else {
+            res.status(500).json({ message: '앱 유저 추가 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 앱 유저 수정
+app.patch('/api/app-users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, phone, member_name, is_active, password } = req.body;
+        
+        const updates = {};
+        if (name !== undefined) updates.name = name.trim();
+        if (phone !== undefined) updates.phone = phone.trim();
+        if (member_name !== undefined) updates.member_name = member_name || null;
+        if (is_active !== undefined) updates.is_active = is_active;
+        
+        // 비밀번호 변경
+        if (password) {
+            const bcrypt = require('bcrypt');
+            const saltRounds = 10;
+            updates.password_hash = await bcrypt.hash(password, saltRounds);
+        }
+        
+        const appUser = await appUsersDB.updateAppUser(id, updates);
+        res.json(appUser);
+    } catch (error) {
+        console.error('[API] 앱 유저 수정 오류:', error);
+        if (error.message === '앱 유저를 찾을 수 없습니다.') {
+            res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '앱 유저 수정 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 앱 유저 삭제
+app.delete('/api/app-users/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const deleted = await appUsersDB.deleteAppUser(id);
+        res.json({ message: '앱 유저가 삭제되었습니다.', user: deleted });
+    } catch (error) {
+        console.error('[API] 앱 유저 삭제 오류:', error);
+        if (error.message === '앱 유저를 찾을 수 없습니다.') {
+            res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
+        } else {
+            res.status(500).json({ message: '앱 유저 삭제 중 오류가 발생했습니다.' });
+        }
     }
 });
 
@@ -675,6 +833,18 @@ app.post('/api/trainer-app-user', async (req, res) => {
             };
         }
         
+        // 트레이너 여부 확인 (accounts.json에서 확인)
+        let isTrainer = false;
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) {
+                const accounts = JSON.parse(raw);
+                const account = accounts.find(acc => acc.username === username && acc.role === 'trainer');
+                isTrainer = !!account;
+            }
+        }
+        
+        appUser.isTrainer = isTrainer;
         res.json(appUser);
     } catch (error) {
         console.error('[API] 트레이너 app_user 조회/생성 오류:', error);
@@ -1096,6 +1266,124 @@ app.patch('/api/workout-types/:id', async (req, res) => {
         } else {
             res.status(500).json({ message: '운동종류 수정 중 오류가 발생했습니다.' });
         }
+    }
+});
+
+// ========== 즐겨찾기 운동 API ==========
+
+// 즐겨찾기 운동 목록 조회
+app.get('/api/favorite-workouts', async (req, res) => {
+    try {
+        const { app_user_id } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const favorites = await favoriteWorkoutsDB.getFavoriteWorkouts(app_user_id);
+        res.json(favorites);
+    } catch (error) {
+        console.error('[API] 즐겨찾기 운동 목록 조회 오류:', error);
+        res.status(500).json({ message: '즐겨찾기 운동 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 즐겨찾기 운동 여부 확인
+app.get('/api/favorite-workouts/check', async (req, res) => {
+    try {
+        const { app_user_id, workout_type_id } = req.query;
+        
+        if (!app_user_id || !workout_type_id) {
+            return res.status(400).json({ message: '앱 유저 ID와 운동 종류 ID가 필요합니다.' });
+        }
+        
+        const isFavorite = await favoriteWorkoutsDB.isFavoriteWorkout(app_user_id, workout_type_id);
+        res.json({ isFavorite });
+    } catch (error) {
+        console.error('[API] 즐겨찾기 여부 확인 오류:', error);
+        res.status(500).json({ message: '즐겨찾기 여부 확인 중 오류가 발생했습니다.' });
+    }
+});
+
+// 즐겨찾기 운동 추가
+app.post('/api/favorite-workouts', async (req, res) => {
+    try {
+        const { app_user_id, workout_type_id } = req.body;
+        
+        if (!app_user_id || !workout_type_id) {
+            return res.status(400).json({ message: '앱 유저 ID와 운동 종류 ID가 필요합니다.' });
+        }
+        
+        const favorite = await favoriteWorkoutsDB.addFavoriteWorkout(app_user_id, workout_type_id);
+        res.status(201).json(favorite);
+    } catch (error) {
+        console.error('[API] 즐겨찾기 운동 추가 오류:', error);
+        if (error.message === '이미 즐겨찾기에 추가된 운동입니다.') {
+            res.status(400).json({ message: error.message });
+        } else {
+            res.status(500).json({ message: '즐겨찾기 운동 추가 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// 즐겨찾기 운동 삭제
+app.delete('/api/favorite-workouts', async (req, res) => {
+    try {
+        const { app_user_id, workout_type_id } = req.query;
+        
+        if (!app_user_id || !workout_type_id) {
+            return res.status(400).json({ message: '앱 유저 ID와 운동 종류 ID가 필요합니다.' });
+        }
+        
+        await favoriteWorkoutsDB.removeFavoriteWorkout(app_user_id, workout_type_id);
+        res.json({ message: '즐겨찾기가 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 즐겨찾기 운동 삭제 오류:', error);
+        if (error.message === '즐겨찾기를 찾을 수 없습니다.') {
+            res.status(404).json({ message: error.message });
+        } else {
+            res.status(500).json({ message: '즐겨찾기 운동 삭제 중 오류가 발생했습니다.' });
+        }
+    }
+});
+
+// ========== 사용자 설정 API ==========
+
+// 사용자 설정 조회
+app.get('/api/user-settings', async (req, res) => {
+    try {
+        const { app_user_id } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const settings = await userSettingsDB.getUserSettings(app_user_id);
+        res.json(settings);
+    } catch (error) {
+        console.error('[API] 사용자 설정 조회 오류:', error);
+        res.status(500).json({ message: '사용자 설정 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 사용자 설정 업데이트
+app.patch('/api/user-settings', async (req, res) => {
+    try {
+        const { app_user_id, ...updates } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        if (!updates || Object.keys(updates).length === 0) {
+            return res.status(400).json({ message: '수정할 설정이 없습니다.' });
+        }
+        
+        const result = await userSettingsDB.updateUserSettings(app_user_id, updates);
+        res.json({ message: '사용자 설정이 업데이트되었습니다.', settings: result });
+    } catch (error) {
+        console.error('[API] 사용자 설정 업데이트 오류:', error);
+        res.status(500).json({ message: '사용자 설정 업데이트 중 오류가 발생했습니다.' });
     }
 });
 

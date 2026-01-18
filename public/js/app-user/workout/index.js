@@ -33,10 +33,14 @@ function render() {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth() + 1;
     
+    // 연결된 회원 정보 확인 (트레이너가 회원을 선택한 경우)
+    const connectedMemberName = localStorage.getItem('connectedMemberName');
+    const memberDisplay = connectedMemberName ? ` (${connectedMemberName}님의 운동기록)` : '';
+    
     container.innerHTML = `
         <div class="app-workout-screen">
             <div class="app-workout-top-bar">
-                <div class="app-workout-month-display">${year}년 ${month}월</div>
+                <div class="app-workout-month-display">${year}년 ${month}월${memberDisplay}</div>
                 <button class="app-workout-today-btn" id="workout-today-btn" title="오늘로 이동">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -118,9 +122,13 @@ function updateMonthDisplay() {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth() + 1;
     
+    // 연결된 회원 정보 확인 (트레이너가 회원을 선택한 경우)
+    const connectedMemberName = localStorage.getItem('connectedMemberName');
+    const memberDisplay = connectedMemberName ? ` (${connectedMemberName}님의 운동기록)` : '';
+    
     const monthDisplay = document.querySelector('.app-workout-month-display');
     if (monthDisplay) {
-        monthDisplay.textContent = `${year}년 ${month}월`;
+        monthDisplay.textContent = `${year}년 ${month}월${memberDisplay}`;
     }
 }
 

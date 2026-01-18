@@ -465,8 +465,8 @@ const addWorkoutRecord = async (workoutData) => {
         `, [
           workoutRecord.id,
           set.set_number,
-          set.weight || null,
-          set.reps || null
+          set.weight !== null && set.weight !== undefined ? set.weight : null,
+          set.reps !== null && set.reps !== undefined ? set.reps : null
         ]);
       }
     }
@@ -566,8 +566,8 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
           `, [
             id,
             set.set_number,
-            set.weight || null,
-            set.reps || null,
+            set.weight !== null && set.weight !== undefined ? set.weight : null,
+            set.reps !== null && set.reps !== undefined ? set.reps : null,
             set.is_completed !== undefined ? set.is_completed : false
           ]);
         }

@@ -160,8 +160,8 @@ function renderWorkoutItem(record) {
         infoHtml = `<span class="app-workout-item-duration ${completedClass}">${checkmark}⏱ ${duration}</span>`;
     } else if (workoutTypeType === '세트' && sets.length > 0) {
         const setsInfo = sets.map(set => {
-            const weight = set.weight ? `${Math.round(set.weight)}kg` : '-';
-            const reps = set.reps ? `${set.reps}회` : '-';
+            const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
+            const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
             const isCompleted = set.is_completed || false;
             const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
             const checkmark = isCompleted ? '<span class="app-workout-checkmark">✓</span> ' : '';
@@ -217,8 +217,8 @@ function showCompletedCheckModal(record) {
     } else if (workoutTypeType === '세트' && sets.length > 0) {
         contentHtml = '<div class="app-completed-modal-sets">';
         sets.forEach(set => {
-            const weight = set.weight ? `${Math.round(set.weight)}kg` : '-';
-            const reps = set.reps ? `${set.reps}회` : '-';
+            const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
+            const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
             const checked = set.is_completed ? 'checked' : '';
             contentHtml += `
                 <div class="app-completed-modal-content-item">

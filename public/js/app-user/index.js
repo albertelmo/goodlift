@@ -38,6 +38,12 @@ export function showAppUserSection(appUserData) {
         secretBtn.style.display = 'none';
     }
     
+    // 트레이너 전환 버튼 숨김 (앱 유저는 트레이너 전환 불가)
+    const switchToAppUserBtn = document.getElementById('switchToAppUserBtn');
+    if (switchToAppUserBtn) {
+        switchToAppUserBtn.style.display = 'none';
+    }
+    
     // 로그아웃/설정 버튼 숨김 (앱 유저는 자체 헤더 사용)
     const logoutBtn = document.getElementById('logoutBtn');
     const settingsBtn = document.getElementById('settingsBtn');
@@ -71,12 +77,29 @@ export function navigateToScreen(screen) {
                 header.style.display = 'none';
             }
             import('./workout/index.js').then(module => {
-                module.init(currentUser.id);
+                // 트레이너가 회원을 선택한 경우 연결된 회원의 app_user_id 사용
+                const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                const appUserId = connectedMemberAppUserId || currentUser.id;
+                module.init(appUserId);
             });
             break;
         case 'diet':
-            // 향후 구현
-            console.log('식단기록 화면 (준비 중)');
+            // 헤더 표시
+            const dietHeader = document.querySelector('.app-header');
+            if (dietHeader) {
+                dietHeader.style.display = 'block';
+            }
+            // 개발 중 메시지 표시
+            const dietContainer = document.getElementById('app-user-content');
+            if (dietContainer) {
+                dietContainer.innerHTML = `
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;padding:40px;text-align:center;">
+                        <div style="font-size:64px;margin-bottom:16px;">🍎</div>
+                        <h2 style="font-size:24px;font-weight:600;color:var(--app-text);margin:0 0 8px 0;">식단기록</h2>
+                        <p style="font-size:16px;color:var(--app-text-muted);margin:0;">개발 중</p>
+                    </div>
+                `;
+            }
             break;
         case 'profile':
             // 향후 구현

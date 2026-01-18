@@ -7,11 +7,18 @@ const API_BASE = '/api';
  */
 async function request(endpoint, options = {}) {
     const url = `${API_BASE}${endpoint}`;
+    
+    // DELETE 요청일 때는 Content-Type 헤더를 설정하지 않음 (body가 없으므로)
+    const headers = {};
+    if (options.method !== 'DELETE') {
+        headers['Content-Type'] = 'application/json';
+    }
+    
+    // options.headers가 있으면 병합 (DELETE 메서드에서도 사용자가 명시적으로 헤더를 보낼 수 있음)
+    Object.assign(headers, options.headers);
+    
     const config = {
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        },
+        headers,
         ...options
     };
 
@@ -151,4 +158,61 @@ export async function updateWorkoutSetCompleted(recordId, setId, appUserId, isCo
  */
 export async function getWorkoutTypes() {
     return get('/workout-types');
+}
+
+// ========== 즐겨찾기 운동 API ==========
+
+/**
+ * 즐겨찾기 운동 목록 조회
+ */
+export async function getFavoriteWorkouts(appUserId) {
+    return get(`/favorite-workouts?app_user_id=${appUserId}`);
+}
+
+/**
+ * 즐겨찾기 운동 추가
+ */
+export async function addFavoriteWorkout(appUserId, workoutTypeId) {
+    return post('/favorite-workouts', {
+        app_user_id: appUserId,
+        workout_type_id: workoutTypeId
+    });
+}
+
+/**
+ * 즐겨찾기 운동 삭제
+ */
+export async function removeFavoriteWorkout(appUserId, workoutTypeId) {
+    // URLSearchParams를 사용하여 안전하게 URL 인코딩
+    const params = new URLSearchParams({
+        app_user_id: appUserId,
+        workout_type_id: workoutTypeId
+    });
+    return del(`/favorite-workouts?${params.toString()}`);
+}
+
+/**
+ * 즐겨찾기 운동 여부 확인
+ */
+export async function isFavoriteWorkout(appUserId, workoutTypeId) {
+    return get(`/favorite-workouts/check?app_user_id=${appUserId}&workout_type_id=${workoutTypeId}`);
+}
+
+// ========== 사용자 설정 API ==========
+
+/**
+ * 사용자 설정 조회
+ */
+export async function getUserSettings(appUserId) {
+    return get(`/user-settings?app_user_id=${appUserId}`);
+}
+
+/**
+ * 사용자 설정 업데이트
+ */
+export async function updateUserSettings(appUserId, updates) {
+    return patch('/user-settings', {
+        app_user_id: appUserId,
+        ...updates
+    });
 }

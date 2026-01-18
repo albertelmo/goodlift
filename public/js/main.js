@@ -57,7 +57,8 @@ async function switchToAppUserView() {
                 username: appUserData.username,
                 name: appUserData.name,
                 phone: appUserData.phone || '',
-                member_name: appUserData.member_name || null
+                member_name: appUserData.member_name || null,
+                isTrainer: appUserData.isTrainer || false
             });
         } else {
             // API 실패 시 임시 데이터 사용 (하지만 이제는 발생하지 않아야 함)
@@ -242,6 +243,22 @@ window.addEventListener('DOMContentLoaded', function() {
                 showMainSection(result.role, result.name);
             } else if (result.userType === 'app_user') {
                 // 앱 유저 화면
+                // 기존 operator 관련 localStorage 항목 제거
+                localStorage.removeItem('role');
+                localStorage.removeItem('name');
+                localStorage.removeItem('username');
+                localStorage.removeItem('center');
+                
+                // 트레이너 전환 관련 localStorage 항목 제거
+                localStorage.removeItem('viewMode');
+                localStorage.removeItem('originalRole');
+                localStorage.removeItem('originalName');
+                localStorage.removeItem('originalCenter');
+                localStorage.removeItem('originalUserType');
+                localStorage.removeItem('originalUsername');
+                localStorage.removeItem('connectedMemberName');
+                localStorage.removeItem('connectedMemberAppUserId');
+                
                 localStorage.setItem('userType', 'app_user');
                 localStorage.setItem('appUserId', result.id);
                 localStorage.setItem('appUsername', result.username);
