@@ -5,6 +5,8 @@ import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetComple
 
 let currentAppUserId = null;
 let currentRecords = [];
+let sessionsByDate = {}; // 날짜별 세션 데이터
+let trainerNameMap = {}; // 트레이너 username -> name 매핑
 
 /**
  * 운동기록 목록 초기화
@@ -12,6 +14,43 @@ let currentRecords = [];
 export function init(appUserId) {
     currentAppUserId = appUserId;
     loadRecords();
+}
+
+/**
+ * 세션 데이터 업데이트
+ */
+export async function updateSessions(sessions = []) {
+    sessionsByDate = {};
+    sessions.forEach(session => {
+        const dateStr = session.date; // 이미 YYYY-MM-DD 형식
+        if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            if (!sessionsByDate[dateStr]) {
+                sessionsByDate[dateStr] = [];
+            }
+            sessionsByDate[dateStr].push(session);
+        }
+    });
+    
+    // 트레이너 이름 매핑 로드
+    await loadTrainerNameMap();
+}
+
+/**
+ * 트레이너 이름 매핑 로드
+ */
+async function loadTrainerNameMap() {
+    try {
+        const response = await fetch('/api/trainers');
+        if (response.ok) {
+            const trainers = await response.json();
+            trainerNameMap = {};
+            trainers.forEach(trainer => {
+                trainerNameMap[trainer.username] = trainer.name;
+            });
+        }
+    } catch (error) {
+        console.error('트레이너 이름 매핑 로드 오류:', error);
+    }
 }
 
 let currentFilterDate = null;
@@ -77,12 +116,6 @@ function render(records) {
         });
     }
     
-    if (filteredRecords.length === 0) {
-        const message = currentFilterDate ? '선택한 날짜에 등록된 운동기록이 없습니다.' : '등록된 운동기록이 없습니다.';
-        showEmpty(container, message);
-        return;
-    }
-    
     records = filteredRecords;
     
     // 날짜별 그룹화
@@ -95,14 +128,51 @@ function render(records) {
         groupedByDate[date].push(record);
     });
     
+    // 세션이 있지만 운동기록이 없는 날짜도 포함
+    if (currentFilterDate) {
+        const hasSessionOnDate = sessionsByDate[currentFilterDate] && sessionsByDate[currentFilterDate].length > 0;
+        const hasRecordsOnDate = groupedByDate[currentFilterDate] && groupedByDate[currentFilterDate].length > 0;
+        
+        if (hasSessionOnDate && !hasRecordsOnDate) {
+            // 세션은 있지만 운동기록이 없는 경우 날짜 그룹에 빈 배열 추가
+            groupedByDate[currentFilterDate] = [];
+        }
+    }
+    
+    // 운동기록과 세션이 모두 없는 경우에만 빈 메시지 표시
+    if (Object.keys(groupedByDate).length === 0) {
+        // 선택된 날짜가 있고, 그 날짜에 세션도 없는 경우
+        if (currentFilterDate) {
+            const hasSessionOnDate = sessionsByDate[currentFilterDate] && sessionsByDate[currentFilterDate].length > 0;
+            if (!hasSessionOnDate) {
+                const message = '선택한 날짜에 등록된 운동기록이 없습니다.';
+                showEmpty(container, message);
+                return;
+            }
+        } else {
+            const message = '등록된 운동기록이 없습니다.';
+            showEmpty(container, message);
+            return;
+        }
+    }
+    
     // 날짜별로 정렬 (최신순)
     const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
     
     let html = '<div class="app-workout-list">';
     
     sortedDates.forEach(date => {
-        const dateRecords = groupedByDate[date];
+        let dateRecords = groupedByDate[date];
+        // 각 날짜 내에서 created_at 기준 오름차순 정렬 (최근 추가된 것이 아래로)
+        dateRecords = dateRecords.sort((a, b) => {
+            const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+            const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+            return dateA - dateB; // 오름차순
+        });
         const dateObj = new Date(date);
+        
+        // 해당 날짜의 세션 정보
+        const dateSessions = sessionsByDate[date] || [];
         
         html += `
             <div class="app-workout-date-section">
@@ -110,6 +180,45 @@ function render(records) {
                     <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
                     <span class="app-workout-date-count">${dateRecords.length}건</span>
                 </div>
+        `;
+        
+        // 세션 정보 카드 (세션이 있는 경우만) - 방법 2
+        if (dateSessions.length > 0) {
+            // 세션별로 시간과 트레이너 정보 수집
+            const sessionInfoList = dateSessions
+                .sort((a, b) => a.time.localeCompare(b.time))
+                .map(session => {
+                    const trainerName = trainerNameMap[session.trainer] || session.trainer;
+                    return {
+                        time: session.time,
+                        trainer: trainerName
+                    };
+                });
+            
+            // 트레이너가 동일한 경우와 다른 경우를 구분하여 표시
+            const uniqueTrainers = [...new Set(sessionInfoList.map(s => s.trainer))];
+            const sameTrainer = uniqueTrainers.length === 1;
+            
+            html += `
+                <div class="app-workout-session-card">
+                    <div class="app-workout-session-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                    <div class="app-workout-session-info">
+                        <div class="app-workout-session-time">${escapeHtml(sessionInfoList.map(s => s.time).join(', '))}</div>
+                        ${sameTrainer ? `<div class="app-workout-session-trainer">${escapeHtml(sessionInfoList[0].trainer)}</div>` : ''}
+                        ${dateSessions.length > 1 ? `<div class="app-workout-session-count">${dateSessions.length}회</div>` : ''}
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += `
                 <div class="app-workout-items">
         `;
         
@@ -156,18 +265,35 @@ function renderWorkoutItem(record) {
     if (workoutTypeType === '시간' && duration) {
         const isCompleted = record.is_completed || false;
         const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
-        const checkmark = isCompleted ? '<span class="app-workout-checkmark">✓</span> ' : '';
-        infoHtml = `<span class="app-workout-item-duration ${completedClass}">${checkmark}⏱ ${duration}</span>`;
+        const checked = isCompleted ? 'checked' : '';
+        infoHtml = `
+            <div class="app-workout-item-duration-container">
+                <span class="app-workout-item-duration ${completedClass}">⏱ ${duration}</span>
+                <input type="checkbox" class="app-workout-item-checkbox" 
+                       data-record-id="${record.id}" 
+                       data-type="record" 
+                       ${checked}>
+            </div>
+        `;
     } else if (workoutTypeType === '세트' && sets.length > 0) {
         const setsInfo = sets.map(set => {
             const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
             const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
             const isCompleted = set.is_completed || false;
             const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
-            const checkmark = isCompleted ? '<span class="app-workout-checkmark">✓</span> ' : '';
-            return `<span class="${completedClass}">${checkmark}${set.set_number}세트: ${weight} × ${reps}</span>`;
-        }).join('<br>');
-        infoHtml = `<span class="app-workout-item-sets">${setsInfo}</span>`;
+            const checked = isCompleted ? 'checked' : '';
+            return `
+                <div class="app-workout-item-set-row">
+                    <span class="${completedClass}">${set.set_number}세트: ${weight} × ${reps}</span>
+                    <input type="checkbox" class="app-workout-item-checkbox" 
+                           data-record-id="${record.id}" 
+                           data-set-id="${set.id}" 
+                           data-type="set" 
+                           ${checked}>
+                </div>
+            `;
+        }).join('');
+        infoHtml = `<div class="app-workout-item-sets">${setsInfo}</div>`;
     }
     
     return `
@@ -352,9 +478,58 @@ function setupClickListeners() {
             });
         }
         
-        // 카드 클릭 시 완료 체크 모달 열기
-        item.addEventListener('click', () => {
-            showCompletedCheckModal(record);
+        // 체크박스 클릭 이벤트 - 즉시 완료 상태 업데이트
+        const checkboxes = item.querySelectorAll('.app-workout-item-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation(); // 카드 클릭 이벤트 방지
+            });
+            
+            checkbox.addEventListener('change', async (e) => {
+                const isChecked = checkbox.checked;
+                const type = checkbox.getAttribute('data-type');
+                const recordId = checkbox.getAttribute('data-record-id');
+                
+                try {
+                    if (type === 'record') {
+                        // 운동기록 완료 상태 업데이트
+                        const { updateWorkoutRecordCompleted } = await import('../api.js');
+                        await updateWorkoutRecordCompleted(recordId, currentAppUserId, isChecked);
+                    } else if (type === 'set') {
+                        // 세트 완료 상태 업데이트
+                        const setId = checkbox.getAttribute('data-set-id');
+                        const { updateWorkoutSetCompleted } = await import('../api.js');
+                        await updateWorkoutSetCompleted(recordId, setId, currentAppUserId, isChecked);
+                    }
+                    
+                    // 현재 레코드 데이터 업데이트
+                    const updatedRecord = currentRecords.find(r => r.id === recordId);
+                    if (updatedRecord) {
+                        if (type === 'record') {
+                            updatedRecord.is_completed = isChecked;
+                        } else if (type === 'set') {
+                            const setId = checkbox.getAttribute('data-set-id');
+                            const set = updatedRecord.sets?.find(s => s.id === setId);
+                            if (set) {
+                                set.is_completed = isChecked;
+                            }
+                        }
+                    }
+                    
+                    // 카드 다시 렌더링
+                    render(currentRecords);
+                    
+                    // 캘린더 업데이트
+                    if (window.updateCalendarWorkoutRecords) {
+                        window.updateCalendarWorkoutRecords();
+                    }
+                } catch (error) {
+                    console.error('완료 상태 업데이트 오류:', error);
+                    // 실패 시 체크박스 상태 원복
+                    checkbox.checked = !isChecked;
+                    alert('완료 상태 업데이트에 실패했습니다.');
+                }
+            });
         });
     });
 }

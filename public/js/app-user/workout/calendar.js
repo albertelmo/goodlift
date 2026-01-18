@@ -6,6 +6,7 @@ let selectedDate = null;
 let currentMonth = new Date();
 let onDateSelectCallback = null;
 let workoutRecordsByDate = {}; // 날짜별 운동기록 데이터
+let sessionsByDate = {}; // 날짜별 세션 데이터
 
 /**
  * 캘린더 초기화
@@ -50,6 +51,22 @@ export function init(container, onDateSelect, workoutRecords = []) {
     console.log('[Calendar] 운동기록 날짜 키들:', Object.keys(workoutRecordsByDate));
     
     render(container);
+}
+
+/**
+ * 세션 데이터 업데이트
+ */
+export function updateSessions(sessions = []) {
+    sessionsByDate = {};
+    sessions.forEach(session => {
+        const dateStr = session.date; // 이미 YYYY-MM-DD 형식
+        if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            if (!sessionsByDate[dateStr]) {
+                sessionsByDate[dateStr] = [];
+            }
+            sessionsByDate[dateStr].push(session);
+        }
+    });
 }
 
 /**
@@ -135,10 +152,14 @@ export function render(container) {
             const prevDateStr = formatDate(prevDate);
             const hasWorkout = workoutRecordsByDate[prevDateStr] && workoutRecordsByDate[prevDateStr].length > 0;
             const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[prevDateStr]) : false;
+            const hasSession = sessionsByDate[prevDateStr] && sessionsByDate[prevDateStr].length > 0;
             
             let dayClass = 'app-calendar-day app-calendar-day-empty';
             if (hasWorkout) {
                 dayClass += allCompleted ? ' app-calendar-day-has-workout' : ' app-calendar-day-has-workout-incomplete';
+            }
+            if (hasSession) {
+                dayClass += ' app-calendar-day-has-session';
             }
             
             html += `
@@ -162,6 +183,7 @@ export function render(container) {
         const dateStr = formatDate(date);
         const hasWorkout = workoutRecordsByDate[dateStr] && workoutRecordsByDate[dateStr].length > 0;
         const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[dateStr]) : false;
+        const hasSession = sessionsByDate[dateStr] && sessionsByDate[dateStr].length > 0;
         
         let dayClass = 'app-calendar-day';
         if (isToday) dayClass += ' app-calendar-day-today';
@@ -170,6 +192,9 @@ export function render(container) {
         if (isSaturday) dayClass += ' app-calendar-day-saturday';
         if (hasWorkout) {
             dayClass += allCompleted ? ' app-calendar-day-has-workout' : ' app-calendar-day-has-workout-incomplete';
+        }
+        if (hasSession) {
+            dayClass += ' app-calendar-day-has-session';
         }
         
         html += `
@@ -198,10 +223,14 @@ export function render(container) {
             const nextDateStr = formatDate(nextDate);
             const hasWorkout = workoutRecordsByDate[nextDateStr] && workoutRecordsByDate[nextDateStr].length > 0;
             const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[nextDateStr]) : false;
+            const hasSession = sessionsByDate[nextDateStr] && sessionsByDate[nextDateStr].length > 0;
             
             let dayClass = 'app-calendar-day app-calendar-day-empty';
             if (hasWorkout) {
                 dayClass += allCompleted ? ' app-calendar-day-has-workout' : ' app-calendar-day-has-workout-incomplete';
+            }
+            if (hasSession) {
+                dayClass += ' app-calendar-day-has-session';
             }
             
             html += `

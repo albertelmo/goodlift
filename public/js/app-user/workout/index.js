@@ -72,6 +72,7 @@ function render() {
     if (todayBtn) {
         todayBtn.addEventListener('click', async () => {
             const { getCurrentMonth, setSelectedDate, setCurrentMonth } = await import('./calendar.js');
+            const { formatDate } = await import('../utils.js');
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             
@@ -84,18 +85,65 @@ function render() {
             
             // 상단 연월 표시 업데이트
             updateMonthDisplay();
+            
+            // 오늘 날짜의 운동기록 목록 필터링
+            const todayStr = formatDate(today);
+            import('./list.js').then(module => {
+                module.filterByDate(todayStr);
+            });
         });
     }
     
     // 캘린더용 운동기록 로드 (먼저 실행하여 캘린더에 데이터 전달)
-    loadWorkoutRecordsForCalendar().then(() => {
+    loadWorkoutRecordsForCalendar().then(async () => {
+        // 세션 데이터를 list.js에 전달
+        const connectedMemberName = localStorage.getItem('connectedMemberName');
+        let memberName = connectedMemberName;
+        if (!memberName) {
+            try {
+                const appUserResponse = await fetch(`/api/app-users/${currentAppUserId}`);
+                if (appUserResponse.ok) {
+                    const appUser = await appUserResponse.json();
+                    memberName = appUser.member_name;
+                }
+            } catch (error) {
+                console.error('앱 유저 정보 조회 오류:', error);
+            }
+        }
+        
+        let sessions = [];
+        if (memberName) {
+            try {
+                const { getToday } = await import('../utils.js');
+                const today = getToday();
+                const todayDate = new Date(today);
+                const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+                const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
+                
+                const params = new URLSearchParams({
+                    startDate: startDate.toISOString().split('T')[0],
+                    endDate: endDate.toISOString().split('T')[0],
+                    member: memberName
+                });
+                
+                const sessionsResponse = await fetch(`/api/sessions?${params.toString()}`);
+                if (sessionsResponse.ok) {
+                    sessions = await sessionsResponse.json();
+                }
+            } catch (error) {
+                console.error('세션 데이터 조회 오류:', error);
+            }
+        }
+        
+        // 세션 데이터를 list.js에 전달 (트레이너 이름 매핑도 로드됨)
+        const listModule = await import('./list.js');
+        await listModule.updateSessions(sessions);
+        
         // 운동 목록 초기화 (선택된 날짜로 필터링)
         initList(currentAppUserId);
         const selectedDateStr = getSelectedDate();
         if (selectedDateStr) {
-            import('./list.js').then(module => {
-                module.filterByDate(selectedDateStr);
-            });
+            listModule.filterByDate(selectedDateStr);
         }
     });
     
@@ -160,10 +208,47 @@ async function loadWorkoutRecordsForCalendar() {
         const { getWorkoutRecords } = await import('../api.js');
         const records = await getWorkoutRecords(currentAppUserId);
         
+        // 앱 유저 정보 가져오기 (member_name 확인용)
+        let memberName = null;
+        try {
+            const appUserResponse = await fetch(`/api/app-users/${currentAppUserId}`);
+            if (appUserResponse.ok) {
+                const appUser = await appUserResponse.json();
+                memberName = appUser.member_name;
+            }
+        } catch (error) {
+            console.error('앱 유저 정보 조회 오류:', error);
+        }
+        
+        // 세션 데이터 가져오기 (member_name이 있는 경우만)
+        let sessions = [];
+        if (memberName) {
+            try {
+                const { getToday } = await import('../utils.js');
+                const today = getToday();
+                const todayDate = new Date(today);
+                const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+                const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
+                
+                const params = new URLSearchParams({
+                    startDate: startDate.toISOString().split('T')[0],
+                    endDate: endDate.toISOString().split('T')[0],
+                    member: memberName
+                });
+                
+                const sessionsResponse = await fetch(`/api/sessions?${params.toString()}`);
+                if (sessionsResponse.ok) {
+                    sessions = await sessionsResponse.json();
+                }
+            } catch (error) {
+                console.error('세션 데이터 조회 오류:', error);
+            }
+        }
+        
         // 캘린더 초기화
         const calendarContainer = document.getElementById('workout-calendar-container');
         if (calendarContainer) {
-            const { init: initCalendar, updateWorkoutRecords, render: renderCalendar } = await import('./calendar.js');
+            const { init: initCalendar, updateWorkoutRecords, updateSessions, render: renderCalendar } = await import('./calendar.js');
             initCalendar(calendarContainer, async (selectedDate) => {
                 // 날짜 선택 시 목록 필터링
                 if (selectedDate) {
@@ -176,6 +261,10 @@ async function loadWorkoutRecordsForCalendar() {
                 // 월이 변경되면 상단 연월 표시 업데이트
                 updateMonthDisplay();
             }, records);
+            
+            // 세션 데이터 업데이트
+            updateSessions(sessions);
+            renderCalendar(calendarContainer);
             
             // 운동기록 업데이트 함수를 전역에 저장 (목록 새로고침 시 사용)
             window.updateCalendarWorkoutRecords = async () => {

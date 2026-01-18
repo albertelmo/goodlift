@@ -10,7 +10,8 @@ const screens = {
     home: { label: '홈', icon: '🏠', id: 'home' },
     workout: { label: '운동', icon: '💪', id: 'workout' },
     diet: { label: '식단', icon: '🍎', id: 'diet' },
-    profile: { label: '내정보', icon: '👤', id: 'profile' }
+    profile: { label: '내정보', icon: '👤', id: 'profile' },
+    settings: { label: '설정', icon: '⚙️', id: 'settings' }
 };
 
 /**
@@ -190,7 +191,7 @@ function setupEventListeners() {
         drawerSettings.addEventListener('click', (e) => {
             e.preventDefault();
             closeHamburgerMenu();
-            console.log('설정 화면으로 이동');
+            navigateToScreen('settings');
         });
     }
     if (drawerLogout) {

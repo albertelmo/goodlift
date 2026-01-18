@@ -101,9 +101,41 @@ export function navigateToScreen(screen) {
                 `;
             }
             break;
+        case 'settings':
+            // 헤더 표시
+            const settingsHeader = document.querySelector('.app-header');
+            if (settingsHeader) {
+                settingsHeader.style.display = 'block';
+            }
+            // 개발 중 메시지 표시
+            const settingsContainer = document.getElementById('app-user-content');
+            if (settingsContainer) {
+                settingsContainer.innerHTML = `
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;padding:40px;text-align:center;">
+                        <div style="font-size:64px;margin-bottom:16px;">⚙️</div>
+                        <h2 style="font-size:24px;font-weight:600;color:var(--app-text);margin:0 0 8px 0;">설정</h2>
+                        <p style="font-size:16px;color:var(--app-text-muted);margin:0;">개발 중</p>
+                    </div>
+                `;
+            }
+            break;
         case 'profile':
-            // 향후 구현
-            console.log('마이페이지 화면 (준비 중)');
+            // 헤더 표시
+            const profileHeader = document.querySelector('.app-header');
+            if (profileHeader) {
+                profileHeader.style.display = 'block';
+            }
+            // 개발 중 메시지 표시
+            const profileContainer = document.getElementById('app-user-content');
+            if (profileContainer) {
+                profileContainer.innerHTML = `
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;padding:40px;text-align:center;">
+                        <div style="font-size:64px;margin-bottom:16px;">👤</div>
+                        <h2 style="font-size:24px;font-weight:600;color:var(--app-text);margin:0 0 8px 0;">마이페이지</h2>
+                        <p style="font-size:16px;color:var(--app-text-muted);margin:0;">개발 중</p>
+                    </div>
+                `;
+            }
             break;
         default:
             console.warn('알 수 없는 화면:', screen);

@@ -62,13 +62,13 @@ export async function showEditModal(record, appUserId, onSuccess) {
                 <label for="workout-edit-notes">📝 메모</label>
                 <textarea id="workout-edit-notes" rows="2" placeholder="운동 내용, 느낀 점 등을 기록하세요">${escapeHtml(record.notes || '')}</textarea>
             </div>
-            <div class="app-modal-actions">
-                <button type="button" class="app-btn-danger" id="workout-edit-delete">삭제</button>
-                <div style="flex: 1;"></div>
-                <button type="button" class="app-btn-secondary" id="workout-edit-cancel">취소</button>
-                <button type="submit" class="app-btn-primary">수정</button>
-            </div>
         </form>
+        <div class="app-modal-actions">
+            <button type="button" class="app-btn-danger" id="workout-edit-delete">삭제</button>
+            <div style="flex: 1;"></div>
+            <button type="button" class="app-btn-secondary" id="workout-edit-cancel">취소</button>
+            <button type="submit" form="workout-edit-form" class="app-btn-primary">수정</button>
+        </div>
     `;
     
     document.body.appendChild(modalBg);
