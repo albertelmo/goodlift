@@ -89,6 +89,9 @@ export function navigateToScreen(screen) {
                 const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
                 const appUserId = connectedMemberAppUserId || currentUser.id;
                 module.init(appUserId, false); // readOnly = false
+            }).catch(error => {
+                console.error('운동기록 화면 로드 오류:', error);
+                alert('운동기록 화면을 불러오는 중 오류가 발생했습니다.');
             });
             break;
         case 'diet':

@@ -869,13 +869,11 @@ function setupMemberClickEvents() {
  */
 function setupTrainerClickEvents() {
     const trainerItems = document.querySelectorAll('.app-member-item[data-trainer-username]');
-    console.log('트레이너 클릭 이벤트 설정:', trainerItems.length, '개');
     
     trainerItems.forEach(item => {
         item.addEventListener('click', async (e) => {
             e.stopPropagation();
             const trainerUsername = item.getAttribute('data-trainer-username');
-            console.log('트레이너 클릭:', trainerUsername);
             await viewTrainerWorkouts(trainerUsername);
         });
     });
@@ -942,7 +940,6 @@ async function connectMember(memberName) {
  * 트레이너 운동기록 보기
  */
 async function viewTrainerWorkouts(trainerUsername) {
-    console.log('viewTrainerWorkouts 호출:', trainerUsername);
     try {
         // 트레이너의 app_user_id 찾기
         const appUsersResponse = await fetch(`/api/app-users?username=${encodeURIComponent(trainerUsername)}`);
@@ -951,15 +948,12 @@ async function viewTrainerWorkouts(trainerUsername) {
         }
         
         const appUsers = await appUsersResponse.json();
-        console.log('트레이너 app_users 조회 결과:', appUsers);
         const trainerAppUser = appUsers.find(user => user.username === trainerUsername);
         
         if (!trainerAppUser) {
             alert('트레이너의 유저앱 계정을 찾을 수 없습니다.');
             return;
         }
-        
-        console.log('트레이너 app_user 찾음:', trainerAppUser);
         
         // 트레이너 이름 가져오기
         const trainerName = trainerAppUser.name || trainerUsername;
@@ -976,7 +970,6 @@ async function viewTrainerWorkouts(trainerUsername) {
         
         // 운동기록 화면으로 이동
         const { navigateToScreen } = await import('./index.js');
-        console.log('운동기록 화면으로 이동');
         navigateToScreen('workout');
     } catch (error) {
         console.error('트레이너 운동기록 조회 오류:', error);

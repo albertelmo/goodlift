@@ -1417,6 +1417,23 @@ app.get('/api/trainers', (req, res) => {
         const raw = fs.readFileSync(DATA_PATH, 'utf-8');
         if (raw) accounts = JSON.parse(raw);
     }
+    
+    // 특정 트레이너 username으로 조회 (성능 최적화)
+    if (req.query.username) {
+        const trainer = accounts.find(acc => acc.role === 'trainer' && acc.username === req.query.username);
+        if (trainer) {
+            return res.json([{
+                username: trainer.username,
+                name: trainer.name || trainer.username,
+                role: trainer.role,
+                vip_member: trainer.vip_member || false,
+                '30min_session': trainer['30min_session'] || 'off'
+            }]);
+        } else {
+            return res.json([]);
+        }
+    }
+    
     const trainers = accounts.filter(acc => acc.role === 'trainer')
         .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession }) => ({ 
             username, 

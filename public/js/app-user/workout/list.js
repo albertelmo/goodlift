@@ -950,6 +950,14 @@ function setupClickListeners() {
                 const type = checkbox.getAttribute('data-type');
                 const recordId = checkbox.getAttribute('data-record-id');
                 
+                // currentAppUserId 확인
+                if (!currentAppUserId) {
+                    console.error('currentAppUserId가 설정되지 않았습니다.');
+                    checkbox.checked = !isChecked;
+                    alert('사용자 정보를 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+                    return;
+                }
+                
                 try {
                     if (type === 'record') {
                         // 운동기록 완료 상태 업데이트
@@ -958,6 +966,12 @@ function setupClickListeners() {
                     } else if (type === 'set') {
                         // 세트 완료 상태 업데이트
                         const setId = checkbox.getAttribute('data-set-id');
+                        if (!setId) {
+                            console.error('setId가 없습니다.');
+                            checkbox.checked = !isChecked;
+                            alert('세트 정보를 찾을 수 없습니다.');
+                            return;
+                        }
                         const { updateWorkoutSetCompleted } = await import('../api.js');
                         await updateWorkoutSetCompleted(recordId, setId, currentAppUserId, isChecked);
                         
@@ -982,11 +996,14 @@ function setupClickListeners() {
                     }
                     
                     // 전체 세트 체크박스 상태 업데이트 (세트 타입인 경우)
-                    if (type === 'set' && allSetsCheckbox) {
-                        const record = currentRecords.find(r => r.id === recordId);
-                        if (record && record.sets) {
-                            const allCompleted = record.sets.every(set => set.is_completed === true) && record.sets.length > 0;
-                            allSetsCheckbox.checked = allCompleted;
+                    if (type === 'set') {
+                        const allSetsCheckbox = item.querySelector('.app-workout-item-all-sets-checkbox');
+                        if (allSetsCheckbox) {
+                            const record = currentRecords.find(r => r.id === recordId);
+                            if (record && record.sets) {
+                                const allCompleted = record.sets.every(set => set.is_completed === true) && record.sets.length > 0;
+                                allSetsCheckbox.checked = allCompleted;
+                            }
                         }
                     }
                     
@@ -999,9 +1016,17 @@ function setupClickListeners() {
                     }
                 } catch (error) {
                     console.error('완료 상태 업데이트 오류:', error);
+                    console.error('에러 상세:', {
+                        type,
+                        recordId,
+                        currentAppUserId,
+                        errorMessage: error.message,
+                        errorStack: error.stack
+                    });
                     // 실패 시 체크박스 상태 원복
                     checkbox.checked = !isChecked;
-                    alert('완료 상태 업데이트에 실패했습니다.');
+                    const errorMessage = error.message || '알 수 없는 오류';
+                    alert(`완료 상태 업데이트에 실패했습니다: ${errorMessage}`);
                 }
             });
         });
