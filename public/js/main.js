@@ -139,18 +139,18 @@ window.addEventListener('DOMContentLoaded', function() {
     
     if (savedUserType === 'operator') {
         // 기존 운영자 자동 로그인
-        const savedRole = localStorage.getItem('role');
-        const savedName = localStorage.getItem('name');
+    const savedRole = localStorage.getItem('role');
+    const savedName = localStorage.getItem('name');
         const viewMode = localStorage.getItem('viewMode');
         
-        if (savedRole && savedName) {
+    if (savedRole && savedName) {
             // viewMode가 app_user면 유저앱 화면으로
             if (viewMode === 'app_user') {
                 switchToAppUserView();
             } else {
-                showMainSection(savedRole, savedName);
-                document.getElementById('logoutBtn').style.display = 'inline-block';
-                document.getElementById('settingsBtn').style.display = 'inline-block';
+        showMainSection(savedRole, savedName);
+        document.getElementById('logoutBtn').style.display = 'inline-block';
+        document.getElementById('settingsBtn').style.display = 'inline-block';
             }
         } else {
             document.getElementById('logoutBtn').style.display = 'none';
@@ -180,11 +180,11 @@ window.addEventListener('DOMContentLoaded', function() {
         document.getElementById('settingsBtn').style.display = 'none';
     }
     
-    // 로그인하지 않은 상태에서는 secretBtn 숨김
-    const secretBtn = document.getElementById('secretBtn');
-    if (secretBtn) {
-        secretBtn.style.display = 'none';
-    }
+        // 로그인하지 않은 상태에서는 secretBtn 숨김
+        const secretBtn = document.getElementById('secretBtn');
+        if (secretBtn) {
+            secretBtn.style.display = 'none';
+        }
     document.getElementById('showSignupBtn').onclick = function() {
         document.getElementById('loginSection').style.display = 'none';
         document.getElementById('signupSection').style.display = 'block';
@@ -233,14 +233,14 @@ window.addEventListener('DOMContentLoaded', function() {
             // userType에 따라 분기
             if (result.userType === 'operator') {
                 // 기존 운영자 화면
-                localStorage.setItem('role', result.role);
-                localStorage.setItem('name', result.name);
-                localStorage.setItem('username', data.username);
+            localStorage.setItem('role', result.role);
+            localStorage.setItem('name', result.name);
+            localStorage.setItem('username', data.username);
                 localStorage.setItem('userType', 'operator');
-                if (result.center) {
-                    localStorage.setItem('center', result.center);
-                }
-                showMainSection(result.role, result.name);
+            if (result.center) {
+                localStorage.setItem('center', result.center);
+            }
+            showMainSection(result.role, result.name);
             } else if (result.userType === 'app_user') {
                 // 앱 유저 화면
                 // 기존 operator 관련 localStorage 항목 제거
@@ -411,14 +411,14 @@ window.addEventListener('DOMContentLoaded', function() {
             pwd2.value = '';
             
             // 회원가입 섹션을 즉시 숨김
-            document.getElementById('signupSection').style.display = 'none';
-            document.getElementById('loginSection').style.display = 'block';
+                document.getElementById('signupSection').style.display = 'none';
+                document.getElementById('loginSection').style.display = 'block';
             
             // 모든 입력 필드 초기화
             document.getElementById('signup-username').value = '';
             document.getElementById('signup-name').value = '';
             document.getElementById('signup-phone').value = '';
-            document.getElementById('signup-result').innerText = '';
+                document.getElementById('signup-result').innerText = '';
             // 아이디 중복 체크 결과 초기화
             if (usernameCheckResult) {
                 usernameCheckResult.textContent = '';
@@ -426,7 +426,7 @@ window.addEventListener('DOMContentLoaded', function() {
             }
             isUsernameAvailable = false;
             document.getElementById('loginForm').reset();
-            document.getElementById('login-result').innerText = '';
+                document.getElementById('login-result').innerText = '';
         }
     });
     // 유저앱 전환 버튼 이벤트

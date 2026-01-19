@@ -28,9 +28,12 @@ function render(container) {
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4 style="margin:0;color:#333;font-size:0.9rem;">운동종류 관리</h4>
-          <button id="user-app-workout-type-add-btn" style="background:#1976d2;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
-            운동종류 추가
-          </button>
+          <div style="display:flex;align-items:stretch;gap:8px;">
+            <input type="text" id="user-app-workout-types-search" placeholder="운동 이름 검색..." style="width:200px;padding:4px 8px;border:1px solid #ddd;border-radius:3px;font-size:0.75rem;box-sizing:border-box;margin:0;font-family:inherit;">
+            <button id="user-app-workout-type-add-btn" style="background:#1976d2;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;margin:0;font-family:inherit;white-space:nowrap;">
+              운동종류 추가
+            </button>
+          </div>
         </div>
         <div id="user-app-workout-types-list" style="background:#fff;border-radius:4px;padding:8px;">
           <div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">불러오는 중...</div>
@@ -111,6 +114,23 @@ function setupEventListeners(container) {
       showCategoryAddModal(categoryNumber);
     });
   });
+  
+  // 운동종류 검색 입력창
+  const workoutTypesSearchInput = container.querySelector('#user-app-workout-types-search');
+  if (workoutTypesSearchInput) {
+    workoutTypesSearchInput.addEventListener('input', () => {
+      const searchTerm = workoutTypesSearchInput.value.trim().toLowerCase();
+      // 전역 변수에 저장된 원본 데이터로 필터링 및 렌더링
+      if (window.allWorkoutTypes) {
+        const filtered = searchTerm === '' 
+          ? window.allWorkoutTypes 
+          : window.allWorkoutTypes.filter(type => 
+              (type.name || '').toLowerCase().includes(searchTerm)
+            );
+        renderWorkoutTypesList(filtered);
+      }
+    });
+  }
 }
 
 async function loadData() {
@@ -252,6 +272,8 @@ async function loadWorkoutTypes() {
     if (!response.ok) throw new Error('운동종류 조회 실패');
     
     const workoutTypes = await response.json();
+    // 원본 데이터를 전역 변수에 저장 (검색 필터링용)
+    window.allWorkoutTypes = workoutTypes;
     renderWorkoutTypesList(workoutTypes);
   } catch (error) {
     console.error('운동종류 조회 오류:', error);
@@ -262,6 +284,10 @@ async function loadWorkoutTypes() {
   }
 }
 
+// 정렬 상태 관리 (기본값: 이름순 오름차순)
+let workoutTypesSortColumn = 'name';
+let workoutTypesSortDirection = 'asc'; // 'asc' or 'desc'
+
 function renderWorkoutTypesList(workoutTypes) {
   const listContainer = document.getElementById('user-app-workout-types-list');
   if (!listContainer) return;
@@ -271,23 +297,74 @@ function renderWorkoutTypesList(workoutTypes) {
     return;
   }
   
+  // 정렬된 데이터 생성
+  const sortedTypes = [...workoutTypes];
+  if (workoutTypesSortColumn) {
+    sortedTypes.sort((a, b) => {
+      let aVal, bVal;
+      
+      switch (workoutTypesSortColumn) {
+        case 'name':
+          aVal = (a.name || '').toLowerCase();
+          bVal = (b.name || '').toLowerCase();
+          break;
+        case 'type':
+          aVal = (a.type || '세트').toLowerCase();
+          bVal = (b.type || '세트').toLowerCase();
+          break;
+        case 'category_1':
+          aVal = (a.category_1_name || '').toLowerCase();
+          bVal = (b.category_1_name || '').toLowerCase();
+          break;
+        case 'category_2':
+          aVal = (a.category_2_name || '').toLowerCase();
+          bVal = (b.category_2_name || '').toLowerCase();
+          break;
+        case 'category_3':
+          aVal = (a.category_3_name || '').toLowerCase();
+          bVal = (b.category_3_name || '').toLowerCase();
+          break;
+        case 'category_4':
+          aVal = (a.category_4_name || '').toLowerCase();
+          bVal = (b.category_4_name || '').toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+      
+      if (aVal < bVal) return workoutTypesSortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return workoutTypesSortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+  
+  // 정렬 아이콘 생성 함수
+  const getSortIcon = (column) => {
+    if (workoutTypesSortColumn !== column) {
+      return '<span style="color:#999;font-size:0.7rem;margin-left:4px;">↕</span>';
+    }
+    return workoutTypesSortDirection === 'asc' 
+      ? '<span style="color:#1976d2;font-size:0.7rem;margin-left:4px;">↑</span>'
+      : '<span style="color:#1976d2;font-size:0.7rem;margin-left:4px;">↓</span>';
+  };
+  
   let html = `
     <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
       <thead>
         <tr style="background:#f5f5f5;border-bottom:1px solid #ddd;">
-          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">운동 이름</th>
-          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">타입</th>
-          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">분류 1</th>
-          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">분류 2</th>
-          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">분류 3</th>
-          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">분류 4</th>
+          <th class="workout-types-sortable" data-column="name" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">운동 이름${getSortIcon('name')}</th>
+          <th class="workout-types-sortable" data-column="type" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">타입${getSortIcon('type')}</th>
+          <th class="workout-types-sortable" data-column="category_1" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">분류 1${getSortIcon('category_1')}</th>
+          <th class="workout-types-sortable" data-column="category_2" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">분류 2${getSortIcon('category_2')}</th>
+          <th class="workout-types-sortable" data-column="category_3" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">분류 3${getSortIcon('category_3')}</th>
+          <th class="workout-types-sortable" data-column="category_4" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">분류 4${getSortIcon('category_4')}</th>
           <th style="padding:4px 6px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;">작업</th>
         </tr>
       </thead>
       <tbody>
   `;
   
-  workoutTypes.forEach(type => {
+  sortedTypes.forEach(type => {
     html += `
       <tr style="border-bottom:1px solid #eee;">
         <td style="padding:4px 6px;">${escapeHtml(type.name)}</td>
@@ -315,9 +392,34 @@ function renderWorkoutTypesList(workoutTypes) {
   
   listContainer.innerHTML = html;
   
+  // 정렬 헤더 클릭 이벤트
+  listContainer.querySelectorAll('.workout-types-sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const column = th.getAttribute('data-column');
+      if (workoutTypesSortColumn === column) {
+        // 같은 컬럼 클릭 시 방향 전환
+        workoutTypesSortDirection = workoutTypesSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        // 다른 컬럼 클릭 시 오름차순으로 설정
+        workoutTypesSortColumn = column;
+        workoutTypesSortDirection = 'asc';
+      }
+      renderWorkoutTypesList(workoutTypes);
+    });
+    
+    // 호버 효과
+    th.addEventListener('mouseenter', () => {
+      th.style.backgroundColor = '#e0e0e0';
+    });
+    th.addEventListener('mouseleave', () => {
+      th.style.backgroundColor = '';
+    });
+  });
+  
   // 수정/삭제 버튼 이벤트
   listContainer.querySelectorAll('.user-app-workout-type-edit-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const id = btn.getAttribute('data-id');
       const workoutType = workoutTypes.find(t => t.id === id);
       if (workoutType) {
@@ -327,7 +429,8 @@ function renderWorkoutTypesList(workoutTypes) {
   });
   
   listContainer.querySelectorAll('.user-app-workout-type-delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       const id = btn.getAttribute('data-id');
       deleteWorkoutType(id);
     });

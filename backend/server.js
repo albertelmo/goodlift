@@ -523,7 +523,7 @@ app.post('/api/signup', async (req, res) => {
     if (accounts.find(acc => acc.username === username)) {
         return res.status(409).json({ message: '이미 존재하는 아이디입니다.' });
     }
-    
+
     // 2. 앱 유저 계정 확인
     try {
         const existingAppUser = await appUsersDB.getAppUserByUsername(username);
@@ -547,7 +547,7 @@ app.post('/api/signup', async (req, res) => {
         
         await appUsersDB.addAppUser(newAppUser);
         
-        res.json({ message: '회원가입이 완료되었습니다.' });
+    res.json({ message: '회원가입이 완료되었습니다.' });
     } catch (error) {
         console.error('[API] 앱 유저 회원가입 오류:', error);
         if (error.message && error.message.includes('UNIQUE')) {

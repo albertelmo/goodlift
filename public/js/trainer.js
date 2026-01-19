@@ -446,7 +446,7 @@ async function renderCalUI(container, forceDate) {
             <div class="tmc-modal" id="tmc-modal" style="display:none;">
                 <div class="tmc-modal-content">
                     <div class="tmc-modal-header">
-                        <h3>세션 추가</h3>
+                    <h3>세션 추가</h3>
                         <button class="tmc-modal-close-btn" id="tmc-modal-close-x" aria-label="닫기">×</button>
                     </div>
                     <form id="tmc-session-add-form" class="tmc-modal-form">
@@ -473,11 +473,11 @@ async function renderCalUI(container, forceDate) {
                         <div class="tmc-form-group" id="tmc-repeat-count-label" style="opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;margin:0;">
                             <label for="tmc-repeat-count-input">반복횟수</label>
                             <select name="repeatCount" id="tmc-repeat-count-input">
-                                <option value="5">5회</option>
-                                <option value="10">10회</option>
-                                <option value="15">15회</option>
-                                <option value="20">20회</option>
-                            </select>
+                          <option value="5">5회</option>
+                          <option value="10">10회</option>
+                          <option value="15">15회</option>
+                          <option value="20">20회</option>
+                        </select>
                         </div>
                         <div id="tmc-session-add-result" class="tmc-modal-result"></div>
                     </form>
@@ -489,7 +489,7 @@ async function renderCalUI(container, forceDate) {
             <div class="tmc-modal" id="tmc-30min-modal" style="display:none;">
                 <div class="tmc-modal-content">
                     <div class="tmc-modal-header">
-                        <h3>30분 세션 추가</h3>
+                    <h3>30분 세션 추가</h3>
                         <button class="tmc-modal-close-btn" id="tmc-30min-modal-close-x" aria-label="닫기">×</button>
                     </div>
                     <form id="tmc-30min-session-add-form" class="tmc-modal-form">
@@ -516,11 +516,11 @@ async function renderCalUI(container, forceDate) {
                         <div class="tmc-form-group" id="tmc-30min-repeat-count-label" style="opacity:0;height:0;overflow:hidden;transition:all 0.3s ease;margin:0;">
                             <label for="tmc-30min-repeat-count-input">반복횟수</label>
                             <select name="repeatCount" id="tmc-30min-repeat-count-input">
-                                <option value="5">5회</option>
-                                <option value="10">10회</option>
-                                <option value="15">15회</option>
-                                <option value="20">20회</option>
-                            </select>
+                          <option value="5">5회</option>
+                          <option value="10">10회</option>
+                          <option value="15">15회</option>
+                          <option value="20">20회</option>
+                        </select>
                         </div>
                         <div id="tmc-30min-session-add-result" class="tmc-modal-result"></div>
                     </form>
@@ -1183,10 +1183,10 @@ async function showExpenseAddModal(username) {
             });
             trainersListDiv.innerHTML = html;
         }
-        } catch (error) {
-            console.error('트레이너 목록 로드 오류:', error);
+    } catch (error) {
+        console.error('트레이너 목록 로드 오류:', error);
             trainersListDiv.innerHTML = '<div class="tmc-modal-result error">트레이너 목록을 불러오지 못했습니다.</div>';
-        }
+    }
     
     // 센터 목록 로드 (구매용)
     try {
@@ -1408,17 +1408,17 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   modal.innerHTML = `
     <div class="tmc-modal-content" id="attend-modal-content">
       <div class="tmc-modal-header">
-        <h3>세션 관리</h3>
+      <h3>세션 관리</h3>
         <button class="tmc-modal-close-btn" id="attend-modal-close-x" aria-label="닫기">×</button>
       </div>
       ${hasNoRemaining ? '<div class="tmc-warning-message">⚠️ 잔여세션이 부족하여 출석/변경이 불가능합니다.</div>' : ''}
       <div class="tmc-modal-form">
-        <div class="tmc-modal-btn-row" id="attend-btn-row">
-          <button id="attend-btn" ${attendDisabled}>출석</button>
-          <button id="change-btn" ${changeDisabled}>변경</button>
-          <button id="delete-btn">취소</button>
-        </div>
-        <div id="attend-modal-body"></div>
+      <div class="tmc-modal-btn-row" id="attend-btn-row">
+        <button id="attend-btn" ${attendDisabled}>출석</button>
+        <button id="change-btn" ${changeDisabled}>변경</button>
+        <button id="delete-btn">취소</button>
+      </div>
+      <div id="attend-modal-body"></div>
       </div>
     </div>
   `;

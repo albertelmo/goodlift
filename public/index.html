@@ -123,7 +123,7 @@
                             이름
                         </label>
                         <input type="text" id="signup-name" placeholder="이름을 입력하세요" required>
-                    </div>
+                </div>
                     <div class="form-group">
                         <label for="signup-phone">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -132,7 +132,7 @@
                             전화번호
                         </label>
                         <input type="tel" id="signup-phone" placeholder="010-1234-5678" required>
-                    </div>
+                </div>
                     <button type="button" id="signup-submit-btn" class="auth-btn-primary">
                         <span>회원가입</span>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -145,7 +145,7 @@
                     <p>이미 계정이 있으신가요?</p>
                     <button type="button" id="backToLoginBtn" class="auth-link-btn">로그인</button>
                 </div>
-            </div>
+                </div>
         </div>
     </div>
     <div id="accountSettingsModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
@@ -469,54 +469,54 @@
         </div>
         <form id="expenseAddForm" class="tmc-modal-form">
           <div class="tmc-form-group">
-            <label>지출 유형 *</label>
+          <label>지출 유형 *</label>
             <div class="tmc-radio-group">
               <label class="tmc-radio-label">
                 <input type="radio" name="expense-type" value="meal" id="expense-type-meal" checked>
                 <span>식대</span>
-              </label>
+            </label>
               <label class="tmc-radio-label">
                 <input type="radio" name="expense-type" value="purchase" id="expense-type-purchase">
                 <span>구매</span>
-              </label>
+            </label>
               <label class="tmc-radio-label">
                 <input type="radio" name="expense-type" value="personal" id="expense-type-personal">
                 <span>개인지출</span>
-              </label>
-            </div>
+            </label>
           </div>
+        </div>
           <div class="tmc-form-group">
-            <label for="expense-datetime">시각 *</label>
-            <input type="datetime-local" id="expense-datetime" name="datetime" required>
-          </div>
+          <label for="expense-datetime">시각 *</label>
+          <input type="datetime-local" id="expense-datetime" name="datetime" required>
+        </div>
           <div id="expense-purchase-item-row" class="tmc-form-group" style="display:none;">
-            <label for="expense-purchase-item">구매물품 *</label>
-            <input type="text" id="expense-purchase-item" name="purchase-item" placeholder="구매물품명을 입력하세요">
-          </div>
+          <label for="expense-purchase-item">구매물품 *</label>
+          <input type="text" id="expense-purchase-item" name="purchase-item" placeholder="구매물품명을 입력하세요">
+        </div>
           <div id="expense-personal-item-row" class="tmc-form-group" style="display:none;">
-            <label for="expense-personal-item">지출내역 *</label>
-            <input type="text" id="expense-personal-item" name="personal-item" placeholder="지출내역을 입력하세요">
-          </div>
+          <label for="expense-personal-item">지출내역 *</label>
+          <input type="text" id="expense-personal-item" name="personal-item" placeholder="지출내역을 입력하세요">
+        </div>
           <div class="tmc-form-group">
-            <label for="expense-amount">금액 *</label>
+          <label for="expense-amount">금액 *</label>
             <input type="text" id="expense-amount" name="amount" placeholder="원" inputmode="numeric" required>
-          </div>
+        </div>
           <div id="expense-trainers-row" class="tmc-form-group">
             <label class="tmc-label-top">함께한 트레이너 *</label>
             <div id="expense-trainers-list" class="tmc-trainers-list"></div>
-          </div>
+        </div>
           <div id="expense-center-row" class="tmc-form-group" style="display:none;">
-            <label for="expense-center">센터 *</label>
+          <label for="expense-center">센터 *</label>
             <select id="expense-center" name="center">
-              <option value="">센터를 선택하세요</option>
-            </select>
-          </div>
+            <option value="">센터를 선택하세요</option>
+          </select>
+        </div>
           <div id="expense-personal-center-row" class="tmc-form-group" style="display:none;">
-            <label for="expense-personal-center">센터 *</label>
+          <label for="expense-personal-center">센터 *</label>
             <select id="expense-personal-center" name="personal-center">
-              <option value="">센터를 선택하세요</option>
-            </select>
-          </div>
+            <option value="">센터를 선택하세요</option>
+          </select>
+        </div>
           <div id="expenseAddResult" class="tmc-modal-result"></div>
         </form>
         <div class="tmc-modal-actions">
