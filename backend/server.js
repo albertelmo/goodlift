@@ -656,6 +656,12 @@ app.get('/api/app-users', async (req, res) => {
         
         const appUsers = await appUsersDB.getAppUsers(filters);
         
+        // 특정 username으로 조회하는 경우 트레이너 필터링 제외 (트레이너의 app_user 조회 허용)
+        if (req.query.username) {
+            res.json(appUsers);
+            return;
+        }
+        
         // accounts.json에서 트레이너 username 목록 가져오기
         const trainerUsernames = new Set();
         if (fs.existsSync(DATA_PATH)) {
@@ -671,6 +677,7 @@ app.get('/api/app-users', async (req, res) => {
         }
         
         // 트레이너 제외 (트레이너 username에 해당하는 app_user 제외)
+        // 단, 특정 username으로 조회하는 경우는 위에서 이미 반환됨
         const filteredAppUsers = appUsers.filter(appUser => {
             return !trainerUsernames.has(appUser.username);
         });

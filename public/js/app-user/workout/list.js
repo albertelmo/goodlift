@@ -9,11 +9,14 @@ let sessionsByDate = {}; // 날짜별 세션 데이터
 let trainerNameMap = {}; // 트레이너 username -> name 매핑
 let cachedTimerSettings = null; // 타이머 설정 캐시
 
+let isReadOnly = false;
+
 /**
  * 운동기록 목록 초기화
  */
-export function init(appUserId) {
+export function init(appUserId, readOnly = false) {
     currentAppUserId = appUserId;
+    isReadOnly = readOnly;
     loadRecords();
 }
 
@@ -197,7 +200,7 @@ async function render(records) {
                         <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
                         <span class="app-workout-date-count">${dateRecords.length}건</span>
                     </div>
-                    <button class="app-workout-timer-btn" data-date="${date}" aria-label="타이머">
+                    <button class="app-workout-timer-btn" data-date="${date}" aria-label="타이머" ${isReadOnly ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
                         ⏱️<span class="app-workout-timer-text" style="margin-left: 4px; font-size: 14px; color: var(--app-text);">${timerDisplayText}</span>
                     </button>
                 </div>
@@ -310,16 +313,19 @@ function renderWorkoutItem(record) {
                 <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
                     <span class="app-workout-item-set-number ${completedClass}">${set.set_number}</span>
                     <span class="app-workout-item-set-info ${completedClass}">${weight} × ${reps}</span>
+                    ${!isReadOnly ? `
                     <input type="checkbox" class="app-workout-item-checkbox" 
                            data-record-id="${record.id}" 
                            data-set-id="${set.id}" 
                            data-type="set" 
                            ${checked}>
+                    ` : ''}
                 </div>
             `;
         }).join('');
         infoHtml = `
             <div class="app-workout-item-sets">
+                ${!isReadOnly ? `
                 <div class="app-workout-item-set-controls" style="display: flex; gap: 8px; align-items: center; justify-content: center; margin-bottom: 8px;">
                     <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 16px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
                     <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 24px; margin: 0; padding: 0;">세트</span>
@@ -330,6 +336,7 @@ function renderWorkoutItem(record) {
                            ${allSetsCompleted ? 'checked' : ''}
                            style="margin-left: 8px;">
                 </div>
+                ` : ''}
                 ${setsInfo}
             </div>
         `;
@@ -648,6 +655,11 @@ async function showTimerModal(date) {
  * 휴식 타이머 모달 표시
  */
 async function showRestTimerModal() {
+    // 읽기 전용 모드에서는 표시하지 않음
+    if (isReadOnly) {
+        return;
+    }
+    
     // 기존 타이머 모달이 있으면 제거
     const existingModal = document.getElementById('rest-timer-modal-bg');
     if (existingModal) {
@@ -838,15 +850,17 @@ async function loadTimerSettings() {
  * 클릭 이벤트 리스너 설정
  */
 function setupClickListeners() {
-    // 타이머 버튼 클릭 이벤트
-    const timerButtons = document.querySelectorAll('.app-workout-timer-btn');
-    timerButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const date = btn.getAttribute('data-date');
-            showTimerModal(date);
+    // 타이머 버튼 클릭 이벤트 (읽기 전용 모드가 아닌 경우만)
+    if (!isReadOnly) {
+        const timerButtons = document.querySelectorAll('.app-workout-timer-btn');
+        timerButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const date = btn.getAttribute('data-date');
+                showTimerModal(date);
+            });
         });
-    });
+    }
     
     const items = document.querySelectorAll('.app-workout-item');
     items.forEach(item => {
@@ -854,35 +868,38 @@ function setupClickListeners() {
         const record = currentRecords.find(r => r.id === recordId);
         if (!record) return;
         
-        // 수정 버튼 클릭 시 수정 모달 열기
-        const editBtn = item.querySelector('.app-workout-item-edit-btn');
-        if (editBtn) {
-            editBtn.addEventListener('click', async (e) => {
-                e.stopPropagation(); // 카드 클릭 이벤트 방지
-                try {
-                    const editModule = await import('./edit.js');
-                    // 최신 record 데이터 다시 가져오기
-                    const { getWorkoutRecordById } = await import('../api.js');
-                    const latestRecord = await getWorkoutRecordById(record.id, currentAppUserId);
-                    const recordToEdit = latestRecord || record;
-                    await editModule.showEditModal(recordToEdit, currentAppUserId, () => {
-                        loadRecords();
-                    });
-                } catch (error) {
-                    console.error('수정 모달 열기 오류:', error);
-                    alert('수정 모달을 열 수 없습니다.');
-                }
-            });
+        // 수정 버튼 클릭 시 수정 모달 열기 (읽기 전용 모드가 아닌 경우만)
+        if (!isReadOnly) {
+            const editBtn = item.querySelector('.app-workout-item-edit-btn');
+            if (editBtn) {
+                editBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation(); // 카드 클릭 이벤트 방지
+                    try {
+                        const editModule = await import('./edit.js');
+                        // 최신 record 데이터 다시 가져오기
+                        const { getWorkoutRecordById } = await import('../api.js');
+                        const latestRecord = await getWorkoutRecordById(record.id, currentAppUserId);
+                        const recordToEdit = latestRecord || record;
+                        await editModule.showEditModal(recordToEdit, currentAppUserId, () => {
+                            loadRecords();
+                        });
+                    } catch (error) {
+                        console.error('수정 모달 열기 오류:', error);
+                        alert('수정 모달을 열 수 없습니다.');
+                    }
+                });
+            }
         }
         
-        // 전체 세트 체크박스 이벤트
-        const allSetsCheckbox = item.querySelector('.app-workout-item-all-sets-checkbox');
-        if (allSetsCheckbox) {
-            allSetsCheckbox.addEventListener('click', (e) => {
-                e.stopPropagation(); // 카드 클릭 이벤트 방지
-            });
-            
-            allSetsCheckbox.addEventListener('change', async (e) => {
+        // 전체 세트 체크박스 이벤트 (읽기 전용 모드가 아닌 경우만)
+        if (!isReadOnly) {
+            const allSetsCheckbox = item.querySelector('.app-workout-item-all-sets-checkbox');
+            if (allSetsCheckbox) {
+                allSetsCheckbox.addEventListener('click', (e) => {
+                    e.stopPropagation(); // 카드 클릭 이벤트 방지
+                });
+                
+                allSetsCheckbox.addEventListener('change', async (e) => {
                 const isChecked = allSetsCheckbox.checked;
                 const recordId = allSetsCheckbox.getAttribute('data-record-id');
                 const record = currentRecords.find(r => r.id === recordId);
@@ -916,17 +933,19 @@ function setupClickListeners() {
                     allSetsCheckbox.checked = !isChecked;
                     alert('완료 상태 업데이트에 실패했습니다.');
                 }
-            });
+                });
+            }
         }
         
-        // 체크박스 클릭 이벤트 - 즉시 완료 상태 업데이트
-        const checkboxes = item.querySelectorAll('.app-workout-item-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('click', (e) => {
-                e.stopPropagation(); // 카드 클릭 이벤트 방지
-            });
-            
-            checkbox.addEventListener('change', async (e) => {
+        // 체크박스 클릭 이벤트 - 즉시 완료 상태 업데이트 (읽기 전용 모드가 아닌 경우만)
+        if (!isReadOnly) {
+            const checkboxes = item.querySelectorAll('.app-workout-item-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.addEventListener('click', (e) => {
+                    e.stopPropagation(); // 카드 클릭 이벤트 방지
+                });
+                
+                checkbox.addEventListener('change', async (e) => {
                 const isChecked = checkbox.checked;
                 const type = checkbox.getAttribute('data-type');
                 const recordId = checkbox.getAttribute('data-record-id');
@@ -986,11 +1005,13 @@ function setupClickListeners() {
                 }
             });
         });
+        }
         
-        // 세트 삭제 버튼 이벤트 (세트 목록 상단의 하나의 버튼)
-        const removeSetBtn = item.querySelector('.app-workout-item-remove-set-btn');
-        if (removeSetBtn) {
-            removeSetBtn.addEventListener('click', async (e) => {
+        // 세트 삭제 버튼 이벤트 (세트 목록 상단의 하나의 버튼) (읽기 전용 모드가 아닌 경우만)
+        if (!isReadOnly) {
+            const removeSetBtn = item.querySelector('.app-workout-item-remove-set-btn');
+            if (removeSetBtn) {
+                removeSetBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 if (removeSetBtn.disabled) return;
                 
@@ -1060,23 +1081,25 @@ function setupClickListeners() {
                     console.error('세트 삭제 오류:', error);
                     alert('세트 삭제 중 오류가 발생했습니다.');
                 }
-            });
+                });
+            }
         }
         
-        // 세트 추가 버튼 이벤트 (세트 목록 상단의 하나의 버튼)
-        const addSetBtn = item.querySelector('.app-workout-item-add-set-btn');
-        if (addSetBtn) {
-            addSetBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                
-                const recordId = addSetBtn.getAttribute('data-record-id');
-                const record = currentRecords.find(r => r.id === recordId);
-                if (!record || !record.sets) return;
-                
-                try {
-                    // 마지막 세트의 정보를 복사하여 새 세트 추가
-                    const lastSet = record.sets[record.sets.length - 1];
-                    const newSet = {
+        // 세트 추가 버튼 이벤트 (세트 목록 상단의 하나의 버튼) (읽기 전용 모드가 아닌 경우만)
+        if (!isReadOnly) {
+            const addSetBtn = item.querySelector('.app-workout-item-add-set-btn');
+            if (addSetBtn) {
+                addSetBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    
+                    const recordId = addSetBtn.getAttribute('data-record-id');
+                    const record = currentRecords.find(r => r.id === recordId);
+                    if (!record || !record.sets) return;
+                    
+                    try {
+                        // 마지막 세트의 정보를 복사하여 새 세트 추가
+                        const lastSet = record.sets[record.sets.length - 1];
+                        const newSet = {
                         id: null, // 새 세트는 ID 없음
                         set_number: record.sets.length + 1,
                         weight: lastSet.weight,
@@ -1141,6 +1164,7 @@ function setupClickListeners() {
                     alert('세트 추가 중 오류가 발생했습니다.');
                 }
             });
+        }
         }
     });
 }

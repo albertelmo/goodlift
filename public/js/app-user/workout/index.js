@@ -5,12 +5,14 @@ import { showWorkoutSelectModal } from './add.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
 
 let currentAppUserId = null;
+let isReadOnly = false;
 
 /**
  * 운동기록 화면 초기화
  */
-export function init(appUserId) {
+export function init(appUserId, readOnly = false) {
     currentAppUserId = appUserId;
+    isReadOnly = readOnly;
     
     // 헤더 숨기기
     const header = document.querySelector('.app-header');
@@ -35,7 +37,26 @@ function render() {
     
     // 연결된 회원 정보 확인 (트레이너가 회원을 선택한 경우)
     const connectedMemberName = localStorage.getItem('connectedMemberName');
-    const memberDisplay = connectedMemberName ? ` (${connectedMemberName}님의 운동기록)` : '';
+    // 회원이 트레이너를 보는 경우 (읽기 전용)
+    const viewingTrainerName = localStorage.getItem('viewingTrainerName');
+    let memberDisplay = '';
+    if (viewingTrainerName) {
+        memberDisplay = ` (${viewingTrainerName} 트레이너의 운동기록)`;
+    } else if (connectedMemberName) {
+        memberDisplay = ` (${connectedMemberName}님의 운동기록)`;
+    }
+    
+    // 뒤로가기 버튼 (트레이너 기록을 볼 때만 표시)
+    const backButton = isReadOnly && viewingTrainerName ? `
+        <div class="app-workout-back-section" style="padding: 12px 20px; border-bottom: 1px solid var(--app-border);">
+            <button class="app-workout-back-btn" id="workout-back-btn" title="내 기록으로 돌아가기" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: none; background: transparent; color: var(--app-text); cursor: pointer; font-size: 14px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                <span>내 기록으로 돌아가기</span>
+            </button>
+        </div>
+    ` : '';
     
     container.innerHTML = `
         <div class="app-workout-screen">
@@ -50,9 +71,10 @@ function render() {
                     </svg>
                 </button>
             </div>
+            ${backButton}
             <div id="workout-calendar-container"></div>
             <div class="app-workout-add-section">
-                <button class="app-btn-primary app-btn-full" id="workout-add-btn">
+                <button class="app-btn-primary app-btn-full" id="workout-add-btn" ${isReadOnly ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -66,6 +88,21 @@ function render() {
     
     // 월 변경 감지를 위한 인터벌 (캘린더 스와이프 시 업데이트)
     setupMonthUpdateObserver();
+    
+    // 뒤로가기 버튼 (트레이너 기록을 볼 때만)
+    const backBtn = document.getElementById('workout-back-btn');
+    if (backBtn) {
+        backBtn.addEventListener('click', async () => {
+            // localStorage에서 트레이너 관련 정보 제거
+            localStorage.removeItem('viewingTrainerAppUserId');
+            localStorage.removeItem('isReadOnly');
+            localStorage.removeItem('viewingTrainerName');
+            
+            // 자신의 기록으로 다시 로드
+            const { navigateToScreen } = await import('../index.js');
+            navigateToScreen('workout');
+        });
+    }
     
     // 오늘로 이동 버튼
     const todayBtn = document.getElementById('workout-today-btn');
@@ -139,25 +176,27 @@ function render() {
         await listModule.updateSessions(sessions);
         
         // 운동 목록 초기화 (선택된 날짜로 필터링)
-        initList(currentAppUserId);
+        initList(currentAppUserId, isReadOnly);
         const selectedDateStr = getSelectedDate();
         if (selectedDateStr) {
             await listModule.filterByDate(selectedDateStr);
         }
     });
     
-    // 추가 버튼 이벤트
-    const addBtn = document.getElementById('workout-add-btn');
-    if (addBtn) {
-        addBtn.addEventListener('click', () => {
-            const selectedDateStr = getSelectedDate();
-            showWorkoutSelectModal(currentAppUserId, selectedDateStr, () => {
-                // 추가 성공 후 목록 새로고침
-                import('./list.js').then(module => {
-                    module.refresh();
+    // 추가 버튼 이벤트 (읽기 전용 모드가 아닌 경우만)
+    if (!isReadOnly) {
+        const addBtn = document.getElementById('workout-add-btn');
+        if (addBtn) {
+            addBtn.addEventListener('click', () => {
+                const selectedDateStr = getSelectedDate();
+                showWorkoutSelectModal(currentAppUserId, selectedDateStr, () => {
+                    // 추가 성공 후 목록 새로고침
+                    import('./list.js').then(module => {
+                        module.refresh();
+                    });
                 });
             });
-        });
+        }
     }
     
     // 오늘의 운동 카드에서 온 경우 자동으로 운동 추가 모달 열기
@@ -187,7 +226,14 @@ function updateMonthDisplay() {
     
     // 연결된 회원 정보 확인 (트레이너가 회원을 선택한 경우)
     const connectedMemberName = localStorage.getItem('connectedMemberName');
-    const memberDisplay = connectedMemberName ? ` (${connectedMemberName}님의 운동기록)` : '';
+    // 회원이 트레이너를 보는 경우 (읽기 전용)
+    const viewingTrainerName = localStorage.getItem('viewingTrainerName');
+    let memberDisplay = '';
+    if (viewingTrainerName) {
+        memberDisplay = ` (${viewingTrainerName} 트레이너의 운동기록)`;
+    } else if (connectedMemberName) {
+        memberDisplay = ` (${connectedMemberName}님의 운동기록)`;
+    }
     
     const monthDisplay = document.querySelector('.app-workout-month-display');
     if (monthDisplay) {

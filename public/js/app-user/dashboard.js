@@ -6,6 +6,7 @@ import { getWorkoutRecords } from './api.js';
 let currentUser = null;
 let nextSession = null;
 let trainerMembers = null; // 트레이너의 연결된 회원 목록
+let memberTrainers = null; // 회원의 연결된 트레이너 목록
 let todayWorkoutSummary = null; // 오늘의 운동 요약
 let weeklyWorkoutSummary = null; // 주간 운동 요약
 
@@ -17,6 +18,7 @@ export async function init(userData) {
     await Promise.all([
         loadNextSession(),
         loadTrainerMembers(),
+        loadMemberTrainers(),
         loadTodayWorkoutSummary(),
         loadWeeklyWorkoutSummary()
     ]);
@@ -292,6 +294,61 @@ async function loadTrainerMembers() {
 }
 
 /**
+ * 회원의 연결된 트레이너 목록 조회
+ */
+async function loadMemberTrainers() {
+    // 트레이너가 아닌 경우만 (회원인 경우)
+    const isTrainer = currentUser?.isTrainer === true;
+    
+    if (isTrainer) {
+        memberTrainers = null;
+        return;
+    }
+    
+    // member_name 확인
+    const memberName = currentUser?.member_name;
+    if (!memberName || typeof memberName !== 'string' || memberName.trim() === '') {
+        memberTrainers = null;
+        return;
+    }
+    
+    try {
+        // 회원 정보 조회
+        const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(memberName)}`);
+        if (!membersResponse.ok) {
+            throw new Error('회원 정보 조회 실패');
+        }
+        
+        const members = await membersResponse.json();
+        const member = members.length > 0 ? members[0] : null;
+        
+        if (!member || !member.trainer) {
+            memberTrainers = null;
+            return;
+        }
+        
+        // 트레이너 정보 조회
+        const trainersResponse = await fetch(`/api/trainers?username=${encodeURIComponent(member.trainer)}`);
+        if (!trainersResponse.ok) {
+            throw new Error('트레이너 정보 조회 실패');
+        }
+        
+        const trainers = await trainersResponse.json();
+        if (trainers.length > 0) {
+            memberTrainers = [{
+                username: trainers[0].username,
+                name: trainers[0].name || trainers[0].username
+            }];
+        } else {
+            memberTrainers = null;
+        }
+    } catch (error) {
+        console.error('회원 트레이너 목록 조회 오류:', error);
+        memberTrainers = null;
+    }
+}
+
+/**
  * 날짜 형식 변환 (YYYY-MM-DD -> MM/DD)
  */
 function formatShortDate(dateStr) {
@@ -442,11 +499,34 @@ function render() {
                 </div>
             </div>
             ` : ''}
+            
+            ${memberTrainers && memberTrainers.length > 0 ? `
+            <div class="app-dashboard-section">
+                <h2 class="app-section-title">담당 트레이너 (${memberTrainers.length}명)</h2>
+                <div class="app-member-list">
+                    ${memberTrainers.map(trainer => {
+                        return `
+                        <div class="app-member-item" data-trainer-username="${escapeHtml(trainer.username)}" style="cursor:pointer;">
+                            <div class="app-member-info">
+                                <div style="display:flex;align-items:center;gap:8px;">
+                                    <p class="app-member-name">${escapeHtml(trainer.name)}</p>
+                                </div>
+                                <p class="app-member-details">트레이너</p>
+                            </div>
+                        </div>
+                    `;
+                    }).join('')}
+                </div>
+            </div>
+            ` : ''}
         </div>
     `;
     
     // 회원 목록 클릭 이벤트 설정
     setupMemberClickEvents();
+    
+    // 트레이너 목록 클릭 이벤트 설정
+    setupTrainerClickEvents();
     
     // 오늘의 운동 카드 클릭 이벤트 설정
     setupTodayWorkoutCardClick();
@@ -785,6 +865,23 @@ function setupMemberClickEvents() {
 }
 
 /**
+ * 트레이너 목록 클릭 이벤트 설정
+ */
+function setupTrainerClickEvents() {
+    const trainerItems = document.querySelectorAll('.app-member-item[data-trainer-username]');
+    console.log('트레이너 클릭 이벤트 설정:', trainerItems.length, '개');
+    
+    trainerItems.forEach(item => {
+        item.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const trainerUsername = item.getAttribute('data-trainer-username');
+            console.log('트레이너 클릭:', trainerUsername);
+            await viewTrainerWorkouts(trainerUsername);
+        });
+    });
+}
+
+/**
  * 회원 연결
  */
 async function connectMember(memberName) {
@@ -842,12 +939,59 @@ async function connectMember(memberName) {
 }
 
 /**
+ * 트레이너 운동기록 보기
+ */
+async function viewTrainerWorkouts(trainerUsername) {
+    console.log('viewTrainerWorkouts 호출:', trainerUsername);
+    try {
+        // 트레이너의 app_user_id 찾기
+        const appUsersResponse = await fetch(`/api/app-users?username=${encodeURIComponent(trainerUsername)}`);
+        if (!appUsersResponse.ok) {
+            throw new Error('트레이너 정보 조회 실패');
+        }
+        
+        const appUsers = await appUsersResponse.json();
+        console.log('트레이너 app_users 조회 결과:', appUsers);
+        const trainerAppUser = appUsers.find(user => user.username === trainerUsername);
+        
+        if (!trainerAppUser) {
+            alert('트레이너의 유저앱 계정을 찾을 수 없습니다.');
+            return;
+        }
+        
+        console.log('트레이너 app_user 찾음:', trainerAppUser);
+        
+        // 트레이너 이름 가져오기
+        const trainerName = trainerAppUser.name || trainerUsername;
+        
+        // 확인 메시지 표시
+        if (!confirm(`${trainerName} 트레이너의 운동기록을 보시겠습니까?`)) {
+            return;
+        }
+        
+        // 읽기 전용 모드로 설정
+        localStorage.setItem('viewingTrainerAppUserId', trainerAppUser.id);
+        localStorage.setItem('isReadOnly', 'true');
+        localStorage.setItem('viewingTrainerName', trainerName);
+        
+        // 운동기록 화면으로 이동
+        const { navigateToScreen } = await import('./index.js');
+        console.log('운동기록 화면으로 이동');
+        navigateToScreen('workout');
+    } catch (error) {
+        console.error('트레이너 운동기록 조회 오류:', error);
+        alert('트레이너 운동기록을 불러오는 중 오류가 발생했습니다.');
+    }
+}
+
+/**
  * 대시보드 새로고침
  */
 export async function refresh() {
     await Promise.all([
         loadNextSession(),
         loadTrainerMembers(),
+        loadMemberTrainers(),
         loadTodayWorkoutSummary(),
         loadWeeklyWorkoutSummary()
     ]);
