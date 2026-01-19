@@ -197,17 +197,22 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
         modalBg.classList.add('app-modal-show');
         modal.classList.add('app-modal-show');
         
-        // 포커스 완전히 차단: 모든 포커스 가능한 요소에 포커스 이벤트 리스너 추가
+        // 포커스 방지: 버튼과 다른 요소만 포커스 방지 (input 필드는 키보드 입력을 위해 제외)
         const preventFocus = (e) => {
+            const target = e.target;
+            // input, textarea, select는 키보드 입력을 위해 포커스 허용
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+                return; // input 필드는 포커스 허용
+            }
             e.preventDefault();
             e.stopPropagation();
-            if (e.target && e.target.blur) {
-                e.target.blur();
+            if (target && target.blur) {
+                target.blur();
             }
         };
         
-        // 모달 내 모든 포커스 가능한 요소에 포커스 방지
-        const allFocusableElements = modal.querySelectorAll('button, input, select, textarea, [tabindex]');
+        // 모달 내 버튼과 다른 요소에만 포커스 방지 (input 필드는 제외)
+        const allFocusableElements = modal.querySelectorAll('button, [tabindex]:not(input):not(textarea):not(select)');
         allFocusableElements.forEach(el => {
             // focus 이벤트 차단
             el.addEventListener('focus', preventFocus, { capture: true });
@@ -215,21 +220,28 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
             el.addEventListener('focusin', preventFocus, { capture: true });
         });
         
-        // 동적으로 추가되는 요소에도 적용하기 위해 모달에 이벤트 위임
+        // 동적으로 추가되는 요소에도 적용하기 위해 모달에 이벤트 위임 (input 필드는 제외)
         modal.addEventListener('focusin', (e) => {
-            if (modal.contains(e.target)) {
+            const target = e.target;
+            // input, textarea, select는 키보드 입력을 위해 포커스 허용
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+                return; // input 필드는 포커스 허용
+            }
+            if (modal.contains(target)) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (e.target && e.target.blur) {
-                    e.target.blur();
+                if (target && target.blur) {
+                    target.blur();
                 }
             }
         }, { capture: true });
         
-        // 초기 포커스 제거
+        // 초기 포커스 제거 (input 필드는 제외)
         const removeFocus = () => {
             const activeEl = document.activeElement;
-            if (activeEl && modal.contains(activeEl) && activeEl.blur) {
+            // input 필드가 아닌 경우에만 blur
+            if (activeEl && modal.contains(activeEl) && activeEl.blur && 
+                activeEl.tagName !== 'INPUT' && activeEl.tagName !== 'TEXTAREA' && activeEl.tagName !== 'SELECT') {
                 activeEl.blur();
             }
         };
@@ -916,7 +928,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             `}
             <div class="app-form-group" id="workout-add-duration-group" style="display: none;">
                 <label for="workout-add-duration">⏱ 시간 (분)</label>
-                <input type="number" id="workout-add-duration" min="0" placeholder="30" inputmode="numeric" tabindex="-1">
+                <input type="number" id="workout-add-duration" min="0" placeholder="30" inputmode="numeric">
             </div>
             <div class="app-form-group" id="workout-add-sets-group" style="display: none;">
                 <label>⚖️ 세트</label>
@@ -941,17 +953,22 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
         modalBg.classList.add('app-modal-show');
         modal.classList.add('app-modal-show');
         
-        // 포커스 완전히 차단: 모든 포커스 가능한 요소에 포커스 이벤트 리스너 추가
+        // 포커스 방지: 버튼과 다른 요소만 포커스 방지 (input 필드는 키보드 입력을 위해 제외)
         const preventFocus = (e) => {
+            const target = e.target;
+            // input, textarea, select는 키보드 입력을 위해 포커스 허용
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+                return; // input 필드는 포커스 허용
+            }
             e.preventDefault();
             e.stopPropagation();
-            if (e.target && e.target.blur) {
-                e.target.blur();
+            if (target && target.blur) {
+                target.blur();
             }
         };
         
-        // 모달 내 모든 포커스 가능한 요소에 포커스 방지
-        const allFocusableElements = modal.querySelectorAll('button, input, select, textarea, [tabindex]');
+        // 모달 내 버튼과 다른 요소에만 포커스 방지 (input 필드는 제외)
+        const allFocusableElements = modal.querySelectorAll('button, [tabindex]:not(input):not(textarea):not(select)');
         allFocusableElements.forEach(el => {
             // focus 이벤트 차단
             el.addEventListener('focus', preventFocus, { capture: true });
@@ -959,21 +976,28 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             el.addEventListener('focusin', preventFocus, { capture: true });
         });
         
-        // 동적으로 추가되는 요소에도 적용하기 위해 모달에 이벤트 위임
+        // 동적으로 추가되는 요소에도 적용하기 위해 모달에 이벤트 위임 (input 필드는 제외)
         modal.addEventListener('focusin', (e) => {
-            if (modal.contains(e.target)) {
+            const target = e.target;
+            // input, textarea, select는 키보드 입력을 위해 포커스 허용
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')) {
+                return; // input 필드는 포커스 허용
+            }
+            if (modal.contains(target)) {
                 e.preventDefault();
                 e.stopPropagation();
-                if (e.target && e.target.blur) {
-                    e.target.blur();
+                if (target && target.blur) {
+                    target.blur();
                 }
             }
         }, { capture: true });
         
-        // 초기 포커스 제거
+        // 초기 포커스 제거 (input 필드는 제외)
         setTimeout(() => {
             const activeEl = document.activeElement;
-            if (activeEl && modal.contains(activeEl) && activeEl.blur) {
+            // input 필드가 아닌 경우에만 blur
+            if (activeEl && modal.contains(activeEl) && activeEl.blur && 
+                activeEl.tagName !== 'INPUT' && activeEl.tagName !== 'TEXTAREA' && activeEl.tagName !== 'SELECT') {
                 activeEl.blur();
             }
         }, 50);
