@@ -944,7 +944,10 @@ async function showWorkoutTypeModal(workoutType = null) {
   modalBg.style.cssText = 'position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
   
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:8px;min-width:500px;max-width:90vw;max-height:90vh;overflow-y:auto;';
+  // 모바일에서는 더 작은 min-width 사용 (뷰포트 너비가 600px 미만일 때)
+  const isMobile = window.innerWidth < 600;
+  const minWidthStyle = isMobile ? 'min-width:300px;' : 'min-width:500px;';
+  modal.style.cssText = `position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:8px;${minWidthStyle}max-width:90vw;max-height:90vh;overflow-y:auto;`;
   
   modal.innerHTML = `
     <h3 style="margin-top:0;margin-bottom:20px;color:#1976d2;">${workoutType ? '운동종류 수정' : '운동종류 추가'}</h3>
@@ -1092,7 +1095,10 @@ function showCategoryModal(categoryNumber, category = null) {
   modalBg.style.cssText = 'position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
   
   const modal = document.createElement('div');
-  modal.style.cssText = 'position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:8px;min-width:400px;max-width:90vw;';
+  // 모바일에서는 더 작은 min-width 사용 (뷰포트 너비가 600px 미만일 때)
+  const isMobile = window.innerWidth < 600;
+  const minWidthStyle = isMobile ? 'min-width:300px;' : 'min-width:400px;';
+  modal.style.cssText = `position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:8px;${minWidthStyle}max-width:90vw;`;
   
   modal.innerHTML = `
     <h3 style="margin-top:0;margin-bottom:20px;color:#1976d2;">분류 ${categoryNumber} ${category ? '수정' : '추가'}</h3>
