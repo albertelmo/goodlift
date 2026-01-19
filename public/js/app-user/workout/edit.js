@@ -54,9 +54,11 @@ export async function showEditModal(record, appUserId, onSuccess) {
             <div class="app-form-group" id="workout-edit-sets-group" style="display: ${workoutTypeType === '세트' ? 'block' : 'none'};">
                 <label>⚖️ 세트</label>
                 <div id="workout-edit-sets-container" class="workout-sets-container"></div>
-                <button type="button" class="workout-add-set-btn" id="workout-edit-set-btn">
-                    <span>+</span> 세트 추가
-                </button>
+                <div class="workout-set-controls" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px;">
+                    <button type="button" class="workout-remove-set-btn" id="workout-edit-remove-set-btn" style="width: 32px; height: 32px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
+                    <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 32px; margin: 0; padding: 0;">세트</span>
+                    <button type="button" class="workout-add-set-btn" id="workout-edit-set-btn" style="width: 32px; height: 32px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                </div>
             </div>
             <div class="app-form-group">
                 <label for="workout-edit-notes">📝 메모</label>
@@ -89,6 +91,7 @@ export async function showEditModal(record, appUserId, onSuccess) {
     const setsGroup = modal.querySelector('#workout-edit-sets-group');
     const setsContainer = modal.querySelector('#workout-edit-sets-container');
     const addSetBtn = modal.querySelector('#workout-edit-set-btn');
+    const removeSetBtn = modal.querySelector('#workout-edit-remove-set-btn');
     
     // 기존 세트 데이터 로드 (무게는 정수로 변환, 완료 상태 보존)
     let sets = (record.sets || []).map(set => ({
@@ -103,6 +106,22 @@ export async function showEditModal(record, appUserId, onSuccess) {
         addSet();
     } else {
         renderSets();
+        // 모달이 열릴 때 마지막 세트로 스크롤
+        setTimeout(() => {
+            // 세트 컨테이너가 스크롤 가능한 경우
+            if (setsContainer.scrollHeight > setsContainer.clientHeight) {
+                setsContainer.scrollTop = setsContainer.scrollHeight;
+            }
+            // 또는 모달 자체를 스크롤
+            if (modal.scrollHeight > modal.clientHeight) {
+                modal.scrollTop = modal.scrollHeight;
+            }
+            // 마지막 세트 카드로 스크롤
+            const lastSetCard = setsContainer.lastElementChild;
+            if (lastSetCard) {
+                lastSetCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+        }, 100);
     }
     
     // 운동종류 선택 시 타입에 따라 UI 변경
@@ -134,6 +153,16 @@ export async function showEditModal(record, appUserId, onSuccess) {
         addSet();
     });
     
+    // 세트 삭제 버튼
+    if (removeSetBtn) {
+        removeSetBtn.addEventListener('click', () => {
+            // 세트가 1개 이상일 때만 삭제 가능 (최소 1개는 유지)
+            if (sets.length > 1) {
+                removeSet(sets.length - 1);
+            }
+        });
+    }
+    
     // 세트 추가 함수
     function addSet() {
         const setNumber = sets.length + 1;
@@ -149,6 +178,31 @@ export async function showEditModal(record, appUserId, onSuccess) {
             is_completed: false // 새 세트는 미완료
         });
         renderSets();
+        
+        // 세트 삭제 버튼 상태 업데이트
+        if (removeSetBtn) {
+            const canRemove = sets.length > 1;
+            removeSetBtn.disabled = !canRemove;
+            removeSetBtn.style.opacity = canRemove ? '1' : '0.5';
+            removeSetBtn.style.cursor = canRemove ? 'pointer' : 'not-allowed';
+        }
+        
+        // 세트 추가 후 스크롤을 맨 아래로 이동
+        setTimeout(() => {
+            // 세트 컨테이너가 스크롤 가능한 경우
+            if (setsContainer.scrollHeight > setsContainer.clientHeight) {
+                setsContainer.scrollTop = setsContainer.scrollHeight;
+            }
+            // 또는 모달 자체를 스크롤
+            if (modal.scrollHeight > modal.clientHeight) {
+                modal.scrollTop = modal.scrollHeight;
+            }
+            // 마지막 세트 카드로 스크롤
+            const lastSetCard = setsContainer.lastElementChild;
+            if (lastSetCard) {
+                lastSetCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+        }, 50);
     }
     
     // 세트 삭제 함수
@@ -159,6 +213,14 @@ export async function showEditModal(record, appUserId, onSuccess) {
             set.set_number = i + 1;
         });
         renderSets();
+        
+        // 세트 삭제 버튼 상태 업데이트
+        if (removeSetBtn) {
+            const canRemove = sets.length > 1;
+            removeSetBtn.disabled = !canRemove;
+            removeSetBtn.style.opacity = canRemove ? '1' : '0.5';
+            removeSetBtn.style.cursor = canRemove ? 'pointer' : 'not-allowed';
+        }
     }
     
     // 세트 렌더링 함수
@@ -167,7 +229,6 @@ export async function showEditModal(record, appUserId, onSuccess) {
             <div class="workout-set-card">
                 <div class="workout-set-header">
                     <span class="workout-set-number">${set.set_number}세트</span>
-                    <button type="button" class="workout-set-remove" data-index="${index}" aria-label="삭제">×</button>
                 </div>
                 <div class="workout-set-inputs">
                     <div class="workout-set-input-group">
@@ -211,12 +272,13 @@ export async function showEditModal(record, appUserId, onSuccess) {
         });
         
         // 세트 삭제 버튼
-        setsContainer.querySelectorAll('.workout-set-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const index = parseInt(e.target.getAttribute('data-index'));
-                removeSet(index);
-            });
-        });
+        // 세트 삭제 버튼 상태 업데이트 (세트가 1개일 때 비활성화)
+        if (removeSetBtn) {
+            const canRemove = sets.length > 1;
+            removeSetBtn.disabled = !canRemove;
+            removeSetBtn.style.opacity = canRemove ? '1' : '0.5';
+            removeSetBtn.style.cursor = canRemove ? 'pointer' : 'not-allowed';
+        }
     }
     
     const closeModal = () => {

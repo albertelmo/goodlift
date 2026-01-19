@@ -511,7 +511,6 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                     <div class="workout-input-set-item" data-set-index="${setIndex}">
                         <div class="workout-input-set-header">
                             <span class="workout-input-set-number">${set.set_number} 세트</span>
-                            <button type="button" class="workout-input-set-remove" data-workout-index="${index}" data-set-index="${setIndex}" aria-label="삭제">×</button>
                         </div>
                         <div class="workout-input-set-inputs">
                             <div class="workout-set-input-group">
@@ -537,9 +536,11 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                         <div class="workout-input-sets-container" id="workout-input-sets-${index}">
                             ${setsHTML}
                         </div>
-                        <button type="button" class="workout-input-add-set-btn" data-workout-index="${index}">
-                            <span>+</span> 세트 추가
-                        </button>
+                        <div class="workout-input-set-controls" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px;">
+                            <button type="button" class="workout-input-remove-set-btn" data-workout-index="${index}" style="width: 32px; height: 32px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
+                            <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 32px; margin: 0; padding: 0;">세트</span>
+                            <button type="button" class="workout-input-add-set-btn" data-workout-index="${index}" style="width: 32px; height: 32px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -612,6 +613,27 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         });
     });
     
+    // 세트 삭제 버튼 이벤트
+    modal.querySelectorAll('.workout-input-remove-set-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const workoutIndex = parseInt(btn.getAttribute('data-workout-index'));
+            const workout = selectedWorkouts[workoutIndex];
+            if (!workout || workout.type !== '세트') return;
+            
+            // 세트가 1개 이상일 때만 삭제 가능 (최소 1개는 유지)
+            if (workout.sets.length > 1) {
+                workout.sets.pop();
+                // 세트 번호 재정렬
+                workout.sets.forEach((set, i) => {
+                    set.set_number = i + 1;
+                });
+                renderWorkoutSets(workoutIndex, selectedWorkouts, -1);
+            }
+        });
+    });
+    
     // 세트 렌더링 함수
     function renderWorkoutSets(workoutIndex, workouts, newSetIndex = -1) {
         const workout = workouts[workoutIndex];
@@ -626,7 +648,6 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             <div class="workout-input-set-item ${isNew ? 'workout-input-set-item-new' : ''}" data-set-index="${setIndex}">
                 <div class="workout-input-set-header">
                     <span class="workout-input-set-number">${set.set_number} 세트</span>
-                    <button type="button" class="workout-input-set-remove" data-workout-index="${workoutIndex}" data-set-index="${setIndex}" aria-label="삭제">×</button>
                 </div>
                 <div class="workout-input-set-inputs">
                     <div class="workout-set-input-group">
@@ -651,6 +672,15 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                     newSetItem.classList.remove('workout-input-set-item-new');
                 }, 3000);
             }
+        }
+        
+        // 세트 삭제 버튼 상태 업데이트 (세트가 1개일 때 비활성화)
+        const removeBtn = modal.querySelector(`.workout-input-remove-set-btn[data-workout-index="${workoutIndex}"]`);
+        if (removeBtn) {
+            const canRemove = workout.sets.length > 1;
+            removeBtn.disabled = !canRemove;
+            removeBtn.style.opacity = canRemove ? '1' : '0.5';
+            removeBtn.style.cursor = canRemove ? 'pointer' : 'not-allowed';
         }
         
         // 세트 입력 이벤트
@@ -692,31 +722,6 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             });
         });
         
-        // 세트 삭제 버튼
-        setsContainer.querySelectorAll('.workout-input-set-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const wIndex = parseInt(btn.getAttribute('data-workout-index'));
-                const sIndex = parseInt(btn.getAttribute('data-set-index'));
-                
-                // 즉시 삭제 실행
-                selectedWorkouts[wIndex].sets.splice(sIndex, 1);
-                selectedWorkouts[wIndex].sets.forEach((set, i) => {
-                    set.set_number = i + 1;
-                });
-                
-                // 즉시 렌더링 (hover 상태 해제를 위해)
-                renderWorkoutSets(wIndex, selectedWorkouts, -1);
-                
-                // 포커스 제거
-                setTimeout(() => {
-                    if (document.activeElement) {
-                        document.activeElement.blur();
-                    }
-                }, 0);
-            });
-        });
     }
     
     // 시간 입력 이벤트
@@ -917,9 +922,11 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             <div class="app-form-group" id="workout-add-sets-group" style="display: none;">
                 <label>⚖️ 세트</label>
                 <div id="workout-add-sets-container" class="workout-sets-container"></div>
-                <button type="button" class="workout-add-set-btn" id="workout-add-set-btn">
-                    <span>+</span> 세트 추가
-                </button>
+                <div class="workout-set-controls" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px;">
+                    <button type="button" class="workout-remove-set-btn" id="workout-remove-set-btn" style="width: 32px; height: 32px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
+                    <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 32px; margin: 0; padding: 0;">세트</span>
+                    <button type="button" class="workout-add-set-btn" id="workout-add-set-btn" style="width: 32px; height: 32px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                </div>
             </div>
         </form>
         <div class="app-modal-actions">
@@ -1008,6 +1015,17 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
         addSet();
     });
     
+    // 세트 삭제 버튼
+    const removeSetBtn = modal.querySelector('#workout-remove-set-btn');
+    if (removeSetBtn) {
+        removeSetBtn.addEventListener('click', () => {
+            // 세트가 1개 이상일 때만 삭제 가능 (최소 1개는 유지)
+            if (sets.length > 1) {
+                removeSet(sets.length - 1);
+            }
+        });
+    }
+    
     // 세트 추가 함수
     function addSet() {
         const setNumber = sets.length + 1;
@@ -1053,7 +1071,6 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             <div class="workout-set-card">
                 <div class="workout-set-header">
                     <span class="workout-set-number">${set.set_number} 세트</span>
-                    <button type="button" class="workout-set-remove" data-index="${index}" aria-label="삭제">×</button>
                 </div>
                 <div class="workout-set-inputs">
                     <div class="workout-set-input-group">
@@ -1100,13 +1117,14 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             });
         });
         
-        // 세트 삭제 버튼
-        setsContainer.querySelectorAll('.workout-set-remove').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const index = parseInt(e.target.getAttribute('data-index'));
-                removeSet(index);
-            });
-        });
+        // 세트 삭제 버튼 상태 업데이트 (세트가 1개일 때 비활성화)
+        if (removeSetBtn) {
+            const canRemove = sets.length > 1;
+            removeSetBtn.disabled = !canRemove;
+            removeSetBtn.style.opacity = canRemove ? '1' : '0.5';
+            removeSetBtn.style.cursor = canRemove ? 'pointer' : 'not-allowed';
+        }
+        
     }
     
     const closeModal = () => {

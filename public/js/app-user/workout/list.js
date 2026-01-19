@@ -276,15 +276,18 @@ function renderWorkoutItem(record) {
             </div>
         `;
     } else if (workoutTypeType === '세트' && sets.length > 0) {
-        const setsInfo = sets.map(set => {
+        const canRemove = sets.length > 1;
+        // 모든 세트가 완료되었는지 확인
+        const allSetsCompleted = sets.every(set => set.is_completed === true) && sets.length > 0;
+        const setsInfo = sets.map((set, setIndex) => {
             const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
             const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
             const isCompleted = set.is_completed || false;
             const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
             const checked = isCompleted ? 'checked' : '';
             return `
-                <div class="app-workout-item-set-row">
-                    <span class="${completedClass}">${set.set_number} 세트: ${weight} × ${reps}</span>
+                <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
+                    <span class="${completedClass}" style="flex: 1;">${set.set_number} 세트: ${weight} × ${reps}</span>
                     <input type="checkbox" class="app-workout-item-checkbox" 
                            data-record-id="${record.id}" 
                            data-set-id="${set.id}" 
@@ -293,7 +296,21 @@ function renderWorkoutItem(record) {
                 </div>
             `;
         }).join('');
-        infoHtml = `<div class="app-workout-item-sets">${setsInfo}</div>`;
+        infoHtml = `
+            <div class="app-workout-item-sets">
+                <div class="app-workout-item-set-controls" style="display: flex; gap: 8px; align-items: center; justify-content: center; margin-bottom: 8px;">
+                    <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 20px; height: 20px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 14px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
+                    <span style="font-size: 12px; color: #333; display: flex; align-items: center; line-height: 1; height: 20px; margin: 0; padding: 0;">세트</span>
+                    <button type="button" class="app-workout-item-add-set-btn" data-record-id="${record.id}" style="width: 20px; height: 20px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                    <input type="checkbox" class="app-workout-item-all-sets-checkbox" 
+                           data-record-id="${record.id}" 
+                           data-type="all-sets" 
+                           ${allSetsCompleted ? 'checked' : ''}
+                           style="margin-left: 8px;">
+                </div>
+                ${setsInfo}
+            </div>
+        `;
     }
     
     return `
@@ -478,6 +495,50 @@ function setupClickListeners() {
             });
         }
         
+        // 전체 세트 체크박스 이벤트
+        const allSetsCheckbox = item.querySelector('.app-workout-item-all-sets-checkbox');
+        if (allSetsCheckbox) {
+            allSetsCheckbox.addEventListener('click', (e) => {
+                e.stopPropagation(); // 카드 클릭 이벤트 방지
+            });
+            
+            allSetsCheckbox.addEventListener('change', async (e) => {
+                const isChecked = allSetsCheckbox.checked;
+                const recordId = allSetsCheckbox.getAttribute('data-record-id');
+                const record = currentRecords.find(r => r.id === recordId);
+                if (!record || !record.sets) return;
+                
+                try {
+                    // 모든 세트의 완료 상태 업데이트
+                    const { updateWorkoutSetCompleted } = await import('../api.js');
+                    const updatePromises = record.sets.map(set => 
+                        updateWorkoutSetCompleted(recordId, set.id, currentAppUserId, isChecked)
+                    );
+                    await Promise.all(updatePromises);
+                    
+                    // 현재 레코드 데이터 업데이트
+                    if (record.sets) {
+                        record.sets.forEach(set => {
+                            set.is_completed = isChecked;
+                        });
+                    }
+                    
+                    // 카드 다시 렌더링
+                    render(currentRecords);
+                    
+                    // 캘린더 업데이트
+                    if (window.updateCalendarWorkoutRecords) {
+                        window.updateCalendarWorkoutRecords();
+                    }
+                } catch (error) {
+                    console.error('전체 세트 완료 상태 업데이트 오류:', error);
+                    // 실패 시 체크박스 상태 원복
+                    allSetsCheckbox.checked = !isChecked;
+                    alert('완료 상태 업데이트에 실패했습니다.');
+                }
+            });
+        }
+        
         // 체크박스 클릭 이벤트 - 즉시 완료 상태 업데이트
         const checkboxes = item.querySelectorAll('.app-workout-item-checkbox');
         checkboxes.forEach(checkbox => {
@@ -516,6 +577,15 @@ function setupClickListeners() {
                         }
                     }
                     
+                    // 전체 세트 체크박스 상태 업데이트 (세트 타입인 경우)
+                    if (type === 'set' && allSetsCheckbox) {
+                        const record = currentRecords.find(r => r.id === recordId);
+                        if (record && record.sets) {
+                            const allCompleted = record.sets.every(set => set.is_completed === true) && record.sets.length > 0;
+                            allSetsCheckbox.checked = allCompleted;
+                        }
+                    }
+                    
                     // 카드 다시 렌더링
                     render(currentRecords);
                     
@@ -531,6 +601,162 @@ function setupClickListeners() {
                 }
             });
         });
+        
+        // 세트 삭제 버튼 이벤트 (세트 목록 상단의 하나의 버튼)
+        const removeSetBtn = item.querySelector('.app-workout-item-remove-set-btn');
+        if (removeSetBtn) {
+            removeSetBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (removeSetBtn.disabled) return;
+                
+                const recordId = removeSetBtn.getAttribute('data-record-id');
+                const record = currentRecords.find(r => r.id === recordId);
+                if (!record || !record.sets || record.sets.length <= 1) return;
+                
+                try {
+                    // 마지막 세트 삭제
+                    const updatedSets = record.sets.slice(0, -1);
+                    // 세트 번호 재정렬
+                    updatedSets.forEach((set, i) => {
+                        set.set_number = i + 1;
+                    });
+                    
+                    const { updateWorkoutRecord } = await import('../api.js');
+                    const updatedRecord = await updateWorkoutRecord(recordId, {
+                        app_user_id: currentAppUserId,
+                        workout_date: record.workout_date,
+                        workout_type_id: record.workout_type_id,
+                        duration_minutes: record.duration_minutes,
+                        sets: updatedSets.map(set => ({
+                            id: set.id,
+                            set_number: set.set_number,
+                            weight: set.weight,
+                            reps: set.reps,
+                            is_completed: set.is_completed || false
+                        })),
+                        notes: record.notes
+                    });
+                    
+                    if (!updatedRecord) {
+                        throw new Error('업데이트된 레코드를 받지 못했습니다.');
+                    }
+                    
+                    // 날짜 정규화 (YYYY-MM-DD 형식으로 변환)
+                    if (updatedRecord.workout_date) {
+                        if (updatedRecord.workout_date instanceof Date) {
+                            const year = updatedRecord.workout_date.getFullYear();
+                            const month = String(updatedRecord.workout_date.getMonth() + 1).padStart(2, '0');
+                            const day = String(updatedRecord.workout_date.getDate()).padStart(2, '0');
+                            updatedRecord.workout_date = `${year}-${month}-${day}`;
+                        } else if (typeof updatedRecord.workout_date === 'string') {
+                            updatedRecord.workout_date = updatedRecord.workout_date.split('T')[0];
+                        }
+                    }
+                    
+                    // 해당 카드만 업데이트
+                    const recordIndex = currentRecords.findIndex(r => r.id === recordId);
+                    if (recordIndex !== -1) {
+                        // 기존 레코드의 날짜를 보존 (필터링을 위해)
+                        const originalDate = currentRecords[recordIndex].workout_date;
+                        currentRecords[recordIndex] = updatedRecord;
+                        // 날짜가 변경되지 않았는지 확인
+                        if (originalDate && updatedRecord.workout_date !== originalDate) {
+                            updatedRecord.workout_date = originalDate;
+                        }
+                        // 현재 필터 날짜로 다시 렌더링 (전체 목록은 유지)
+                        render(currentRecords);
+                    }
+                    
+                    // 캘린더 업데이트
+                    if (window.updateCalendarWorkoutRecords) {
+                        window.updateCalendarWorkoutRecords();
+                    }
+                } catch (error) {
+                    console.error('세트 삭제 오류:', error);
+                    alert('세트 삭제 중 오류가 발생했습니다.');
+                }
+            });
+        }
+        
+        // 세트 추가 버튼 이벤트 (세트 목록 상단의 하나의 버튼)
+        const addSetBtn = item.querySelector('.app-workout-item-add-set-btn');
+        if (addSetBtn) {
+            addSetBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                
+                const recordId = addSetBtn.getAttribute('data-record-id');
+                const record = currentRecords.find(r => r.id === recordId);
+                if (!record || !record.sets) return;
+                
+                try {
+                    // 마지막 세트의 정보를 복사하여 새 세트 추가
+                    const lastSet = record.sets[record.sets.length - 1];
+                    const newSet = {
+                        id: null, // 새 세트는 ID 없음
+                        set_number: record.sets.length + 1,
+                        weight: lastSet.weight,
+                        reps: lastSet.reps,
+                        is_completed: false
+                    };
+                    
+                    const updatedSets = [...record.sets, newSet];
+                    
+                    const { updateWorkoutRecord } = await import('../api.js');
+                    const updatedRecord = await updateWorkoutRecord(recordId, {
+                        app_user_id: currentAppUserId,
+                        workout_date: record.workout_date,
+                        workout_type_id: record.workout_type_id,
+                        duration_minutes: record.duration_minutes,
+                        sets: updatedSets.map(set => ({
+                            id: set.id,
+                            set_number: set.set_number,
+                            weight: set.weight,
+                            reps: set.reps,
+                            is_completed: set.is_completed || false
+                        })),
+                        notes: record.notes
+                    });
+                    
+                    if (!updatedRecord) {
+                        throw new Error('업데이트된 레코드를 받지 못했습니다.');
+                    }
+                    
+                    // 날짜 정규화 (YYYY-MM-DD 형식으로 변환)
+                    if (updatedRecord.workout_date) {
+                        if (updatedRecord.workout_date instanceof Date) {
+                            const year = updatedRecord.workout_date.getFullYear();
+                            const month = String(updatedRecord.workout_date.getMonth() + 1).padStart(2, '0');
+                            const day = String(updatedRecord.workout_date.getDate()).padStart(2, '0');
+                            updatedRecord.workout_date = `${year}-${month}-${day}`;
+                        } else if (typeof updatedRecord.workout_date === 'string') {
+                            updatedRecord.workout_date = updatedRecord.workout_date.split('T')[0];
+                        }
+                    }
+                    
+                    // 해당 카드만 업데이트
+                    const recordIndex = currentRecords.findIndex(r => r.id === recordId);
+                    if (recordIndex !== -1) {
+                        // 기존 레코드의 날짜를 보존 (필터링을 위해)
+                        const originalDate = currentRecords[recordIndex].workout_date;
+                        currentRecords[recordIndex] = updatedRecord;
+                        // 날짜가 변경되지 않았는지 확인
+                        if (originalDate && updatedRecord.workout_date !== originalDate) {
+                            updatedRecord.workout_date = originalDate;
+                        }
+                        // 현재 필터 날짜로 다시 렌더링 (전체 목록은 유지)
+                        render(currentRecords);
+                    }
+                    
+                    // 캘린더 업데이트
+                    if (window.updateCalendarWorkoutRecords) {
+                        window.updateCalendarWorkoutRecords();
+                    }
+                } catch (error) {
+                    console.error('세트 추가 오류:', error);
+                    alert('세트 추가 중 오류가 발생했습니다.');
+                }
+            });
+        }
     });
 }
 
