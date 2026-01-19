@@ -461,9 +461,8 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
-    // 모달 높이를 고정으로 설정
-    modal.style.height = '800px';
-    modal.style.maxHeight = '800px';
+    // 모달에 클래스 추가 (CSS에서 반응형 처리)
+    modal.classList.add('workout-input-modal');
     
     // 선택된 날짜가 있으면 사용, 없으면 오늘 날짜
     const defaultDate = selectedDate || getToday();
@@ -886,7 +885,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
     modal.innerHTML = `
         <div class="app-modal-header">
             <h2>운동기록 추가 (${dateDisplay})</h2>
-            <button class="app-modal-close" aria-label="닫기">×</button>
+            <button class="app-modal-close" aria-label="닫기" tabindex="-1">×</button>
         </div>
         <form class="app-modal-form" id="workout-add-form">
             <input type="hidden" id="workout-add-date" value="${defaultDate}">
@@ -897,7 +896,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
                 <label>💪 운동 종류</label>
                 <div class="workout-type-display">
                     <span class="workout-type-name">${escapeHtml(selectedWorkoutTypeInfo.name)}</span>
-                    <button type="button" class="workout-favorite-btn ${isFavorite ? 'active' : ''}" id="workout-favorite-btn" data-workout-type-id="${preselectedWorkoutTypeId}">
+                    <button type="button" class="workout-favorite-btn ${isFavorite ? 'active' : ''}" id="workout-favorite-btn" data-workout-type-id="${preselectedWorkoutTypeId}" tabindex="-1">
                         ${isFavorite ? `
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="currentColor"/>
@@ -917,21 +916,21 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             `}
             <div class="app-form-group" id="workout-add-duration-group" style="display: none;">
                 <label for="workout-add-duration">⏱ 시간 (분)</label>
-                <input type="number" id="workout-add-duration" min="0" placeholder="30" inputmode="numeric">
+                <input type="number" id="workout-add-duration" min="0" placeholder="30" inputmode="numeric" tabindex="-1">
             </div>
             <div class="app-form-group" id="workout-add-sets-group" style="display: none;">
                 <label>⚖️ 세트</label>
                 <div id="workout-add-sets-container" class="workout-sets-container"></div>
                 <div class="workout-set-controls" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px;">
-                    <button type="button" class="workout-remove-set-btn" id="workout-remove-set-btn" style="width: 32px; height: 32px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
+                    <button type="button" class="workout-remove-set-btn" id="workout-remove-set-btn" tabindex="-1" style="width: 32px; height: 32px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
                     <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 32px; margin: 0; padding: 0;">세트</span>
-                    <button type="button" class="workout-add-set-btn" id="workout-add-set-btn" style="width: 32px; height: 32px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                    <button type="button" class="workout-add-set-btn" id="workout-add-set-btn" tabindex="-1" style="width: 32px; height: 32px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
                 </div>
             </div>
         </form>
         <div class="app-modal-actions">
-            <button type="button" class="app-btn-secondary" id="workout-add-cancel">취소</button>
-            <button type="submit" form="workout-add-form" class="app-btn-primary">등록</button>
+            <button type="button" class="app-btn-secondary" id="workout-add-cancel" tabindex="-1">취소</button>
+            <button type="submit" form="workout-add-form" class="app-btn-primary" tabindex="-1">등록</button>
         </div>
     `;
     
@@ -941,6 +940,53 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
     setTimeout(() => {
         modalBg.classList.add('app-modal-show');
         modal.classList.add('app-modal-show');
+        
+        // 포커스 완전히 차단: 모든 포커스 가능한 요소에 포커스 이벤트 리스너 추가
+        const preventFocus = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.target && e.target.blur) {
+                e.target.blur();
+            }
+        };
+        
+        // 모달 내 모든 포커스 가능한 요소에 포커스 방지
+        const allFocusableElements = modal.querySelectorAll('button, input, select, textarea, [tabindex]');
+        allFocusableElements.forEach(el => {
+            // focus 이벤트 차단
+            el.addEventListener('focus', preventFocus, { capture: true });
+            // focusin 이벤트도 차단 (버블링 단계)
+            el.addEventListener('focusin', preventFocus, { capture: true });
+        });
+        
+        // 동적으로 추가되는 요소에도 적용하기 위해 모달에 이벤트 위임
+        modal.addEventListener('focusin', (e) => {
+            if (modal.contains(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.target && e.target.blur) {
+                    e.target.blur();
+                }
+            }
+        }, { capture: true });
+        
+        // 초기 포커스 제거
+        setTimeout(() => {
+            const activeEl = document.activeElement;
+            if (activeEl && modal.contains(activeEl) && activeEl.blur) {
+                activeEl.blur();
+            }
+        }, 50);
+        
+        // 사용자가 명시적으로 클릭했을 때는 tabindex 제거하여 정상 작동
+        const restoreTabIndex = (e) => {
+            if (e.target && e.target.hasAttribute('tabindex')) {
+                e.target.removeAttribute('tabindex');
+            }
+        };
+        
+        modal.addEventListener('mousedown', restoreTabIndex, { capture: true });
+        modal.addEventListener('touchstart', restoreTabIndex, { capture: true });
     }, 10);
     
     // 이벤트 리스너
@@ -1205,9 +1251,8 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
-    // 모달 높이를 고정으로 설정
-    modal.style.height = '600px';
-    modal.style.maxHeight = '600px';
+    // 모달에 클래스 추가 (CSS에서 반응형 처리)
+    modal.classList.add('workout-history-modal');
     
     modal.innerHTML = `
         <div class="app-modal-header">

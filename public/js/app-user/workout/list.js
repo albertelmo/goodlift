@@ -287,7 +287,8 @@ function renderWorkoutItem(record) {
             const checked = isCompleted ? 'checked' : '';
             return `
                 <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
-                    <span class="${completedClass}" style="flex: 1;">${set.set_number} 세트: ${weight} × ${reps}</span>
+                    <span class="app-workout-item-set-number ${completedClass}">${set.set_number}</span>
+                    <span class="app-workout-item-set-info ${completedClass}">${weight} × ${reps}</span>
                     <input type="checkbox" class="app-workout-item-checkbox" 
                            data-record-id="${record.id}" 
                            data-set-id="${set.id}" 
@@ -299,9 +300,9 @@ function renderWorkoutItem(record) {
         infoHtml = `
             <div class="app-workout-item-sets">
                 <div class="app-workout-item-set-controls" style="display: flex; gap: 8px; align-items: center; justify-content: center; margin-bottom: 8px;">
-                    <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 20px; height: 20px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 14px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
-                    <span style="font-size: 12px; color: #333; display: flex; align-items: center; line-height: 1; height: 20px; margin: 0; padding: 0;">세트</span>
-                    <button type="button" class="app-workout-item-add-set-btn" data-record-id="${record.id}" style="width: 20px; height: 20px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                    <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 16px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
+                    <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 24px; margin: 0; padding: 0;">세트</span>
+                    <button type="button" class="app-workout-item-add-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
                     <input type="checkbox" class="app-workout-item-all-sets-checkbox" 
                            data-record-id="${record.id}" 
                            data-type="all-sets" 

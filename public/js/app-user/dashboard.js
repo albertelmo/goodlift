@@ -474,9 +474,8 @@ async function showWeeklyWorkoutModal() {
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
-    // 모달 높이를 고정으로 설정 (최근 기록 모달과 동일)
-    modal.style.height = '600px';
-    modal.style.maxHeight = '600px';
+    // 모달에 클래스 추가 (CSS에서 반응형 처리)
+    modal.classList.add('weekly-workout-modal');
     
     // 현재 주차 계산 (오늘 기준)
     const today = new Date();

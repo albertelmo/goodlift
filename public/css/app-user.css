@@ -1061,15 +1061,15 @@ body.app-user-active {
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-    height: 24px;
+    height: 28px;
 }
 
 .app-workout-item-type {
-    font-size: 15px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--app-text);
-    line-height: 24px;
-    height: 24px;
+    line-height: 28px;
+    height: 28px;
     display: inline-flex;
     align-items: center;
 }
@@ -1078,10 +1078,10 @@ body.app-user-active {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    min-width: 24px;
-    min-height: 24px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
     padding: 0;
     margin: 0;
     border: none;
@@ -1096,8 +1096,8 @@ body.app-user-active {
 
 .app-workout-item-edit-btn svg {
     display: block;
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     margin: 0;
     padding: 0;
 }
@@ -1113,7 +1113,7 @@ body.app-user-active {
 }
 
 .app-workout-item-info {
-    font-size: 13px;
+    font-size: 15px;
     color: var(--app-text-muted);
     flex: 1;
     text-align: right;
@@ -1153,14 +1153,58 @@ body.app-user-active {
     line-height: 1.4;
     display: inline-flex;
     align-items: center;
-    min-height: 20px;
+    min-height: 24px;
+    font-size: 15px;
+}
+
+.app-workout-item-set-info {
+    min-width: 100px;
+    text-align: right;
+    justify-content: flex-end;
+}
+
+.app-workout-item-set-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    background: rgba(102, 126, 234, 0.4);
+    color: white !important;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.app-workout-item-set-number.app-workout-item-completed {
+    background: rgba(107, 114, 128, 0.3);
+    opacity: 0.8;
+    color: white !important;
 }
 
 .app-workout-item-checkbox {
-    width: 20px;
-    height: 20px;
-    min-width: 20px;
-    min-height: 20px;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
+    cursor: pointer;
+    accent-color: var(--app-primary);
+    flex-shrink: 0;
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+    align-self: center;
+}
+
+.app-workout-item-all-sets-checkbox {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    min-height: 24px;
     cursor: pointer;
     accent-color: var(--app-primary);
     flex-shrink: 0;
@@ -1394,7 +1438,7 @@ body.app-user-active {
 
 
 .app-workout-item-notes {
-    font-size: 13px;
+    font-size: 14px;
     color: var(--app-text-muted);
     line-height: 1.5;
     white-space: pre-wrap;
@@ -2637,4 +2681,75 @@ body.app-user-active {
 .workout-add-set-btn span {
     font-size: 16px;
     font-weight: 300;
+}
+
+/* 고정 높이 모달 - 데스크톱 기본값 */
+.workout-input-modal {
+    height: 800px;
+    max-height: 800px;
+}
+
+.workout-history-modal,
+.weekly-workout-modal {
+    height: 600px;
+    max-height: 600px;
+}
+
+/* 작은 화면 (모바일) - 전체 화면에 가깝게 확장 */
+@media (max-height: 700px) {
+    .workout-input-modal {
+        height: calc(100vh - 20px);
+        max-height: calc(100vh - 20px);
+        width: calc(100vw - 20px);
+        max-width: calc(100vw - 20px);
+        border-radius: var(--app-radius);
+    }
+    
+    .workout-history-modal,
+    .weekly-workout-modal {
+        height: calc(100vh - 20px);
+        max-height: calc(100vh - 20px);
+        width: calc(100vw - 20px);
+        max-width: calc(100vw - 20px);
+        border-radius: var(--app-radius);
+    }
+    
+    /* 모달 폼이 스크롤 가능하도록 */
+    .workout-input-modal .app-modal-form,
+    .workout-history-modal .app-modal-form,
+    .weekly-workout-modal .app-modal-form {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+    }
+    
+    /* 모달 액션 버튼이 항상 보이도록 */
+    .workout-input-modal .app-modal-actions,
+    .workout-history-modal .app-modal-actions,
+    .weekly-workout-modal .app-modal-actions {
+        flex-shrink: 0;
+        position: relative;
+        z-index: 10;
+        background: var(--app-surface);
+    }
+    
+    /* 모달 헤더도 고정 */
+    .workout-input-modal .app-modal-header,
+    .workout-history-modal .app-modal-header,
+    .weekly-workout-modal .app-modal-header {
+        flex-shrink: 0;
+    }
+}
+
+/* 중간 크기 화면 (태블릿 등) - 적절한 크기 유지 */
+@media (min-height: 701px) and (max-height: 900px) {
+    .workout-input-modal {
+        max-height: 85vh;
+    }
+    
+    .workout-history-modal,
+    .weekly-workout-modal {
+        max-height: 75vh;
+    }
 }

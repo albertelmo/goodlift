@@ -126,3 +126,25 @@ self.addEventListener('message', (event) => {
     );
   }
 });
+
+// 알림 클릭 이벤트: 알림을 클릭하면 앱 열기
+self.addEventListener('notificationclick', (event) => {
+  console.log('[Service Worker] 알림 클릭됨:', event.notification.tag);
+  event.notification.close();
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // 이미 열려있는 창이 있으면 포커스
+      for (let i = 0; i < clientList.length; i++) {
+        const client = clientList[i];
+        if (client.url === '/' && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // 열려있는 창이 없으면 새로 열기
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});
