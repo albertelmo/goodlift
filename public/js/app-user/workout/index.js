@@ -88,9 +88,8 @@ function render() {
             
             // 오늘 날짜의 운동기록 목록 필터링
             const todayStr = formatDate(today);
-            import('./list.js').then(module => {
-                module.filterByDate(todayStr);
-            });
+            const listModule = await import('./list.js');
+            await listModule.filterByDate(todayStr);
         });
     }
     
@@ -143,7 +142,7 @@ function render() {
         initList(currentAppUserId);
         const selectedDateStr = getSelectedDate();
         if (selectedDateStr) {
-            listModule.filterByDate(selectedDateStr);
+            await listModule.filterByDate(selectedDateStr);
         }
     });
     
@@ -270,9 +269,8 @@ async function loadWorkoutRecordsForCalendar() {
                 if (selectedDate) {
                     const { formatDate } = await import('../utils.js');
                     const selectedDateStr = formatDate(selectedDate);
-                    import('./list.js').then(module => {
-                        module.filterByDate(selectedDateStr);
-                    });
+                    const listModule = await import('./list.js');
+                    await listModule.filterByDate(selectedDateStr);
                 }
                 // 월이 변경되면 상단 연월 표시 업데이트
                 updateMonthDisplay();

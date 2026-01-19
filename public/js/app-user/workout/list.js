@@ -1,12 +1,13 @@
 // 운동기록 목록 렌더링
 
 import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml } from '../utils.js';
-import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted } from '../api.js';
+import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings } from '../api.js';
 
 let currentAppUserId = null;
 let currentRecords = [];
 let sessionsByDate = {}; // 날짜별 세션 데이터
 let trainerNameMap = {}; // 트레이너 username -> name 매핑
+let cachedTimerSettings = null; // 타이머 설정 캐시
 
 /**
  * 운동기록 목록 초기화
@@ -71,7 +72,7 @@ async function loadRecords(filters = {}) {
     try {
         const records = await getWorkoutRecords(currentAppUserId, filters);
         currentRecords = records;
-        render(records);
+        await render(records);
     } catch (error) {
         console.error('운동기록 로드 오류:', error);
         showError(container, '운동기록을 불러오는 중 오류가 발생했습니다.');
@@ -81,16 +82,16 @@ async function loadRecords(filters = {}) {
 /**
  * 날짜로 필터링
  */
-export function filterByDate(dateStr) {
+export async function filterByDate(dateStr) {
     currentFilterDate = dateStr;
     // 전체 레코드를 다시 렌더링 (필터링은 render에서 수행)
-    render(currentRecords);
+    await render(currentRecords);
 }
 
 /**
  * 운동기록 목록 렌더링
  */
-function render(records) {
+async function render(records) {
     // workout-list-wrapper 또는 app-user-content 찾기
     let container = document.getElementById('workout-list-wrapper');
     if (!container) {
@@ -159,6 +160,21 @@ function render(records) {
     // 날짜별로 정렬 (최신순)
     const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
     
+    // 타이머 설정 불러오기 (캐시가 없거나 만료된 경우)
+    if (!cachedTimerSettings) {
+        await loadTimerSettings();
+    }
+    
+    // 타이머 표시 텍스트 생성
+    let timerDisplayText = '-';
+    if (cachedTimerSettings) {
+        if (!cachedTimerSettings.restTimerEnabled) {
+            timerDisplayText = 'off';
+        } else {
+            timerDisplayText = formatTime(cachedTimerSettings.restMinutes * 60 + cachedTimerSettings.restSeconds);
+        }
+    }
+    
     let html = '<div class="app-workout-list">';
     
     sortedDates.forEach(date => {
@@ -177,8 +193,13 @@ function render(records) {
         html += `
             <div class="app-workout-date-section">
                 <div class="app-workout-date-header">
-                    <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
-                    <span class="app-workout-date-count">${dateRecords.length}건</span>
+                    <div class="app-workout-date-left">
+                        <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
+                        <span class="app-workout-date-count">${dateRecords.length}건</span>
+                    </div>
+                    <button class="app-workout-timer-btn" data-date="${date}" aria-label="타이머">
+                        ⏱️<span class="app-workout-timer-text" style="margin-left: 4px; font-size: 14px; color: var(--app-text);">${timerDisplayText}</span>
+                    </button>
                 </div>
         `;
         
@@ -431,7 +452,7 @@ function showCompletedCheckModal(record) {
                     // currentRecords 업데이트
                     currentRecords[recordIndex] = { ...record };
                     // 현재 필터 날짜로 다시 렌더링
-                    render(currentRecords);
+                    await render(currentRecords);
                 }
                 
                 // 캘린더 업데이트
@@ -466,9 +487,367 @@ function showCompletedCheckModal(record) {
 }
 
 /**
+ * 타이머 모달 표시
+ */
+async function showTimerModal(date) {
+    // 기본값: 30초 (0분 30초)
+    let useRestTimer = true;
+    let restMinutes = 0;
+    let restSeconds = 30;
+    
+    // DB에서 저장된 설정 불러오기
+    try {
+        if (currentAppUserId) {
+            const settings = await getUserSettings(currentAppUserId);
+            useRestTimer = settings.rest_timer_enabled !== undefined ? settings.rest_timer_enabled : true;
+            restMinutes = settings.rest_timer_minutes !== undefined ? settings.rest_timer_minutes : 0;
+            restSeconds = settings.rest_timer_seconds !== undefined ? settings.rest_timer_seconds : 30;
+        }
+    } catch (e) {
+        console.error('타이머 설정 불러오기 오류:', e);
+    }
+    
+    const modalHtml = `
+        <div class="app-modal-bg" id="timer-modal-bg">
+            <div class="app-modal timer-modal" id="timer-modal">
+                <div class="app-modal-header">
+                    <h3>휴식시간 설정</h3>
+                    <button class="app-modal-close-btn" id="timer-modal-close">×</button>
+                </div>
+                <div class="app-modal-content" id="timer-modal-content">
+                    <div class="app-form-group" style="margin-bottom: 20px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="timer-use-rest" ${useRestTimer ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
+                            <span style="font-size: 16px; color: var(--app-text);">휴식시간 사용</span>
+                        </label>
+                    </div>
+                    <div id="timer-settings-container" style="${useRestTimer ? '' : 'opacity: 0.5; pointer-events: none;'}">
+                        <div class="app-form-group" style="margin-bottom: 16px;">
+                            <label style="display: block; margin-bottom: 8px; font-size: 14px; color: var(--app-text-muted);">분</label>
+                            <select id="timer-rest-minutes" style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; background: var(--app-surface); color: var(--app-text);">
+                                ${Array.from({ length: 11 }, (_, i) => i).map(min => 
+                                    `<option value="${min}" ${min === restMinutes ? 'selected' : ''}>${min}분</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                        <div class="app-form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-size: 14px; color: var(--app-text-muted);">초</label>
+                            <select id="timer-rest-seconds" style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; background: var(--app-surface); color: var(--app-text);">
+                                ${[0, 10, 20, 30, 40, 50].map(sec => 
+                                    `<option value="${sec}" ${sec === restSeconds ? 'selected' : ''}>${sec}초</option>`
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="app-modal-actions">
+                    <button type="button" id="timer-modal-save" class="app-btn app-btn-primary" style="flex: 1;">저장</button>
+                    <button type="button" id="timer-modal-cancel" class="app-btn app-btn-secondary" style="flex: 1;">취소</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 기존 모달이 있으면 제거
+    const existingModal = document.getElementById('timer-modal-bg');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 모달 추가
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const modalBg = document.getElementById('timer-modal-bg');
+    const modal = document.getElementById('timer-modal');
+    const closeBtn = document.getElementById('timer-modal-close');
+    const cancelBtn = document.getElementById('timer-modal-cancel');
+    const saveBtn = document.getElementById('timer-modal-save');
+    const useRestCheckbox = document.getElementById('timer-use-rest');
+    const settingsContainer = document.getElementById('timer-settings-container');
+    const minutesSelect = document.getElementById('timer-rest-minutes');
+    const secondsSelect = document.getElementById('timer-rest-seconds');
+    
+    // 휴식시간 사용 체크박스 이벤트
+    useRestCheckbox.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        if (isChecked) {
+            settingsContainer.style.opacity = '1';
+            settingsContainer.style.pointerEvents = 'auto';
+        } else {
+            settingsContainer.style.opacity = '0.5';
+            settingsContainer.style.pointerEvents = 'none';
+        }
+    });
+    
+    // 저장 버튼 클릭 이벤트
+    saveBtn.addEventListener('click', async () => {
+        const useRest = useRestCheckbox.checked;
+        const minutes = parseInt(minutesSelect.value);
+        const seconds = parseInt(secondsSelect.value);
+        
+        // 0분 0초 체크
+        if (useRest && minutes === 0 && seconds === 0) {
+            alert('휴식시간은 0분 0초일 수 없습니다.');
+            return;
+        }
+        
+        // DB에 저장
+        try {
+            if (currentAppUserId) {
+                await updateUserSettings(currentAppUserId, {
+                    rest_timer_enabled: useRest,
+                    rest_timer_minutes: minutes,
+                    rest_timer_seconds: seconds
+                });
+                
+                // 모달 닫기
+                modalBg.remove();
+                
+                // 타이머 설정 캐시 무효화 (다음 렌더링 시 다시 불러오기)
+                cachedTimerSettings = null;
+                
+                // 목록 다시 렌더링하여 변경된 타이머 설정 표시
+                await render(currentRecords);
+                
+                // TODO: 타이머 시작 기능 구현
+                console.log('타이머 설정 저장 완료:', { useRest, minutes, seconds });
+            } else {
+                alert('사용자 정보를 찾을 수 없습니다.');
+            }
+        } catch (error) {
+            console.error('타이머 설정 저장 오류:', error);
+            alert('설정 저장 중 오류가 발생했습니다.');
+        }
+    });
+    
+    // 취소 버튼 클릭 이벤트
+    cancelBtn.addEventListener('click', () => {
+        modalBg.remove();
+    });
+    
+    // 닫기 버튼 클릭 이벤트
+    closeBtn.addEventListener('click', () => {
+        modalBg.remove();
+    });
+    
+    // 배경 클릭 시 닫기
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            modalBg.remove();
+        }
+    });
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+}
+
+/**
+ * 휴식 타이머 모달 표시
+ */
+async function showRestTimerModal() {
+    // 기존 타이머 모달이 있으면 제거
+    const existingModal = document.getElementById('rest-timer-modal-bg');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // DB에서 휴식 타이머 설정 불러오기 (기본값: 30초)
+    let restTimerEnabled = true;
+    let restMinutes = 0;
+    let restSeconds = 30;
+    
+    try {
+        if (currentAppUserId) {
+            const settings = await getUserSettings(currentAppUserId);
+            // 설정이 있으면 저장된 값 사용, 없으면 기본값 사용
+            if ('rest_timer_enabled' in settings) {
+                restTimerEnabled = settings.rest_timer_enabled;
+            }
+            if ('rest_timer_minutes' in settings) {
+                restMinutes = settings.rest_timer_minutes;
+            }
+            if ('rest_timer_seconds' in settings) {
+                restSeconds = settings.rest_timer_seconds;
+            }
+        }
+    } catch (e) {
+        console.error('휴식 타이머 설정 불러오기 오류:', e);
+        // 에러 발생 시 기본값 사용
+    }
+    
+    // 휴식 타이머가 비활성화되어 있거나 시간이 0이면 모달을 띄우지 않음
+    if (!restTimerEnabled || (restMinutes === 0 && restSeconds === 0)) {
+        return;
+    }
+    
+    // 총 초 계산
+    let totalSeconds = restMinutes * 60 + restSeconds;
+    
+    const modalHtml = `
+        <div class="app-modal-bg" id="rest-timer-modal-bg">
+            <div class="app-modal rest-timer-modal" id="rest-timer-modal">
+                <div class="app-modal-header">
+                    <h3>휴식 시간</h3>
+                    <button class="app-modal-close-btn" id="rest-timer-modal-close">×</button>
+                </div>
+                <div class="app-modal-content" id="rest-timer-modal-content" style="text-align: center; padding: 40px 20px;">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 24px; margin-bottom: 8px;">
+                        <button id="rest-timer-decrease-btn" style="width: 40px; height: 40px; border: 1px solid var(--app-border); background: var(--app-surface); color: var(--app-text); border-radius: var(--app-radius-sm); cursor: pointer; font-size: 24px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
+                        <div id="rest-timer-display" style="font-size: 48px; font-weight: bold; color: var(--app-primary); min-width: 120px;">
+                            ${formatTime(totalSeconds)}
+                        </div>
+                        <button id="rest-timer-increase-btn" style="width: 40px; height: 40px; border: 1px solid var(--app-primary); background: var(--app-primary); color: white; border-radius: var(--app-radius-sm); cursor: pointer; font-size: 24px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                    </div>
+                    <div id="rest-timer-set-time" style="font-size: 18px; color: var(--app-text-muted); margin-bottom: 20px;">
+                        ${formatTime(totalSeconds)}
+                    </div>
+                    <div style="font-size: 14px; color: var(--app-text-muted);">
+                        다음 세트까지 휴식하세요
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 모달 추가
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const modalBg = document.getElementById('rest-timer-modal-bg');
+    const modal = document.getElementById('rest-timer-modal');
+    const timerDisplay = document.getElementById('rest-timer-display');
+    const closeBtn = document.getElementById('rest-timer-modal-close');
+    const decreaseBtn = document.getElementById('rest-timer-decrease-btn');
+    const increaseBtn = document.getElementById('rest-timer-increase-btn');
+    
+    // 타이머 시작
+    let remainingSeconds = totalSeconds;
+    let timerInterval = setInterval(() => {
+        remainingSeconds--;
+        
+        if (remainingSeconds <= 0) {
+            clearInterval(timerInterval);
+            // 타이머가 끝나면 모달 닫기
+            modalBg.remove();
+        } else {
+            // 시간 표시 업데이트
+            timerDisplay.textContent = formatTime(remainingSeconds);
+        }
+    }, 1000);
+    
+    // - 버튼 클릭 이벤트 (10초 감소)
+    decreaseBtn.addEventListener('click', () => {
+        if (remainingSeconds > 10) {
+            remainingSeconds -= 10;
+            timerDisplay.textContent = formatTime(remainingSeconds);
+        } else {
+            // 10초 이하면 0으로 설정
+            remainingSeconds = 0;
+            timerDisplay.textContent = formatTime(remainingSeconds);
+            clearInterval(timerInterval);
+            // 타이머가 끝나면 모달 닫기
+            setTimeout(() => {
+                modalBg.remove();
+            }, 100);
+        }
+    });
+    
+    // + 버튼 클릭 이벤트 (10초 증가)
+    increaseBtn.addEventListener('click', () => {
+        remainingSeconds += 10;
+        timerDisplay.textContent = formatTime(remainingSeconds);
+    });
+    
+    // 닫기 버튼 클릭 이벤트
+    closeBtn.addEventListener('click', () => {
+        clearInterval(timerInterval);
+        modalBg.remove();
+    });
+    
+    // 배경 클릭 시 닫기
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            clearInterval(timerInterval);
+            modalBg.remove();
+        }
+    });
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 모달이 제거될 때 타이머 정리
+    const observer = new MutationObserver(() => {
+        if (!document.body.contains(modalBg)) {
+            clearInterval(timerInterval);
+            observer.disconnect();
+        }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+}
+
+/**
+ * 초를 분:초 형식으로 변환
+ */
+function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+/**
+ * 타이머 설정 불러오기 (캐시)
+ */
+async function loadTimerSettings() {
+    // 타이머 설정 불러오기 (기본값: 30초)
+    let restTimerEnabled = true;
+    let restMinutes = 0;
+    let restSeconds = 30;
+    
+    try {
+        if (currentAppUserId) {
+            const settings = await getUserSettings(currentAppUserId);
+            // 설정이 있으면 저장된 값 사용, 없으면 기본값 사용
+            if ('rest_timer_enabled' in settings) {
+                restTimerEnabled = settings.rest_timer_enabled;
+            }
+            if ('rest_timer_minutes' in settings) {
+                restMinutes = settings.rest_timer_minutes;
+            }
+            if ('rest_timer_seconds' in settings) {
+                restSeconds = settings.rest_timer_seconds;
+            }
+        }
+    } catch (e) {
+        console.error('타이머 설정 불러오기 오류:', e);
+        // 에러 발생 시 기본값 사용
+    }
+    
+    cachedTimerSettings = {
+        restTimerEnabled,
+        restMinutes,
+        restSeconds
+    };
+}
+
+/**
  * 클릭 이벤트 리스너 설정
  */
 function setupClickListeners() {
+    // 타이머 버튼 클릭 이벤트
+    const timerButtons = document.querySelectorAll('.app-workout-timer-btn');
+    timerButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const date = btn.getAttribute('data-date');
+            showTimerModal(date);
+        });
+    });
+    
     const items = document.querySelectorAll('.app-workout-item');
     items.forEach(item => {
         const recordId = item.getAttribute('data-record-id');
@@ -525,7 +904,7 @@ function setupClickListeners() {
                     }
                     
                     // 카드 다시 렌더링
-                    render(currentRecords);
+                    await render(currentRecords);
                     
                     // 캘린더 업데이트
                     if (window.updateCalendarWorkoutRecords) {
@@ -562,6 +941,11 @@ function setupClickListeners() {
                         const setId = checkbox.getAttribute('data-set-id');
                         const { updateWorkoutSetCompleted } = await import('../api.js');
                         await updateWorkoutSetCompleted(recordId, setId, currentAppUserId, isChecked);
+                        
+                        // 세트가 체크될 때만 휴식 타이머 모달 띄우기
+                        if (isChecked) {
+                            await showRestTimerModal();
+                        }
                     }
                     
                     // 현재 레코드 데이터 업데이트
@@ -588,7 +972,7 @@ function setupClickListeners() {
                     }
                     
                     // 카드 다시 렌더링
-                    render(currentRecords);
+                    await render(currentRecords);
                     
                     // 캘린더 업데이트
                     if (window.updateCalendarWorkoutRecords) {
@@ -665,7 +1049,7 @@ function setupClickListeners() {
                             updatedRecord.workout_date = originalDate;
                         }
                         // 현재 필터 날짜로 다시 렌더링 (전체 목록은 유지)
-                        render(currentRecords);
+                        await render(currentRecords);
                     }
                     
                     // 캘린더 업데이트
@@ -745,7 +1129,7 @@ function setupClickListeners() {
                             updatedRecord.workout_date = originalDate;
                         }
                         // 현재 필터 날짜로 다시 렌더링 (전체 목록은 유지)
-                        render(currentRecords);
+                        await render(currentRecords);
                     }
                     
                     // 캘린더 업데이트

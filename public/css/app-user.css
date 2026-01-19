@@ -957,11 +957,20 @@ body.app-user-active {
     border-bottom: 1px solid var(--app-border);
 }
 
+.app-workout-date-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .app-workout-date-title {
     font-size: 16px;
     font-weight: 600;
     color: var(--app-text);
     margin: 0;
+    line-height: 1.2;
+    display: flex;
+    align-items: center;
 }
 
 .app-workout-date-count {
@@ -970,6 +979,43 @@ body.app-user-active {
     background: var(--app-bg);
     padding: 4px 8px;
     border-radius: var(--app-radius-sm);
+}
+
+.app-workout-timer-btn {
+    background: transparent !important;
+    color: var(--app-text);
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity var(--app-transition);
+    width: auto;
+    height: auto;
+    font-size: 18px;
+    line-height: 1;
+    box-shadow: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    outline: none;
+    gap: 4px;
+}
+
+.app-workout-timer-text {
+    font-size: 14px;
+    color: var(--app-text);
+    margin-left: 4px;
+}
+
+.app-workout-timer-btn:hover {
+    opacity: 0.7;
+}
+
+.app-workout-timer-btn:active {
+    opacity: 0.5;
 }
 
 /* 세션 정보 카드 (방법 2, 하늘색 계열) */
@@ -2738,6 +2784,55 @@ body.app-user-active {
     .workout-input-modal .app-modal-header,
     .workout-history-modal .app-modal-header,
     .weekly-workout-modal .app-modal-header {
+        flex-shrink: 0;
+    }
+    
+    /* 타이머 모달도 동일하게 처리 */
+    .timer-modal {
+        width: calc(100vw - 20px);
+        max-width: calc(100vw - 20px);
+        height: calc(100vh - 20px);
+        max-height: calc(100vh - 20px);
+        display: flex;
+        flex-direction: column;
+        margin: 10px;
+    }
+    
+    .timer-modal .app-modal-content {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .timer-modal .app-modal-actions {
+        flex-shrink: 0;
+        position: relative;
+        z-index: 10;
+        background: var(--app-surface);
+    }
+    
+    .timer-modal .app-modal-header {
+        flex-shrink: 0;
+    }
+    
+    /* 휴식 타이머 모달도 동일하게 처리 */
+    .rest-timer-modal {
+        width: calc(100vw - 20px);
+        max-width: calc(100vw - 20px);
+        height: auto;
+        max-height: calc(100vh - 20px);
+        display: flex;
+        flex-direction: column;
+        margin: 10px;
+    }
+    
+    .rest-timer-modal .app-modal-content {
+        flex: 1;
+        min-height: 0;
+    }
+    
+    .rest-timer-modal .app-modal-header {
         flex-shrink: 0;
     }
 }
