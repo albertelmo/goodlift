@@ -477,8 +477,19 @@ async function loadWorkoutRecordsForCalendar() {
             throw new Error('사용자 ID가 없습니다.');
         }
         
-        const { getWorkoutRecords } = await import('../api.js');
-        const records = await getWorkoutRecords(targetAppUserId);
+        // 캘린더용 경량 API 사용 (날짜별 완료 여부만)
+        const { getWorkoutRecordsForCalendar } = await import('../api.js');
+        const { getToday } = await import('../utils.js');
+        const today = getToday();
+        const todayDate = new Date(today);
+        const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+        const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
+        
+        const summary = await getWorkoutRecordsForCalendar(
+            targetAppUserId,
+            startDate.toISOString().split('T')[0],
+            endDate.toISOString().split('T')[0]
+        );
         
         // 앱 유저 정보 가져오기 (member_name 확인용)
         let memberName = null;
@@ -531,7 +542,7 @@ async function loadWorkoutRecordsForCalendar() {
                 }
                 // 월이 변경되면 상단 연월 표시 업데이트
                 await updateMonthDisplay();
-            }, records);
+            }, summary);
             
             // 세션 데이터 업데이트
             updateSessions(sessions);
@@ -545,8 +556,19 @@ async function loadWorkoutRecordsForCalendar() {
                     console.error('운동기록 업데이트 오류: app_user_id가 없습니다.');
                     return;
                 }
-                const updatedRecords = await getWorkoutRecords(targetAppUserId);
-                updateWorkoutRecords(updatedRecords);
+                const { getWorkoutRecordsForCalendar } = await import('../api.js');
+                const { getToday } = await import('../utils.js');
+                const today = getToday();
+                const todayDate = new Date(today);
+                const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+                const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
+                
+                const updatedSummary = await getWorkoutRecordsForCalendar(
+                    targetAppUserId,
+                    startDate.toISOString().split('T')[0],
+                    endDate.toISOString().split('T')[0]
+                );
+                updateWorkoutRecords(updatedSummary);
                 renderCalendar(calendarContainer);
             };
         }

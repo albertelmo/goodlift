@@ -350,7 +350,10 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
     
     const result = await pool.query(query, params);
     
-    // 각 운동기록에 세트 정보 추가 및 날짜 정규화
+    // 날짜 정규화 및 세트 정보 일괄 조회를 위한 ID 수집
+    const recordIds = [];
+    const recordsMap = new Map();
+    
     for (const record of result.rows) {
       // workout_date를 YYYY-MM-DD 형식의 문자열로 변환 (타임존 이슈 방지)
       if (record.workout_date) {
@@ -365,13 +368,45 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
         }
       }
       
-      const sets = await pool.query(`
-        SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
+      // 초기화: 빈 배열로 시작
+      record.sets = [];
+      recordIds.push(record.id);
+      recordsMap.set(record.id, record);
+    }
+    
+    // 모든 세트를 한 번의 쿼리로 조회 (N+1 문제 해결)
+    if (recordIds.length > 0) {
+      const setsQuery = `
+        SELECT 
+          id, 
+          workout_record_id,
+          set_number, 
+          weight, 
+          reps, 
+          is_completed, 
+          created_at, 
+          updated_at
         FROM workout_record_sets
-        WHERE workout_record_id = $1
-        ORDER BY set_number ASC
-      `, [record.id]);
-      record.sets = sets.rows;
+        WHERE workout_record_id = ANY($1::uuid[])
+        ORDER BY workout_record_id, set_number ASC
+      `;
+      const setsResult = await pool.query(setsQuery, [recordIds]);
+      
+      // 세트를 workout_record_id별로 그룹화하여 각 운동기록에 할당
+      for (const set of setsResult.rows) {
+        const record = recordsMap.get(set.workout_record_id);
+        if (record) {
+          record.sets.push({
+            id: set.id,
+            set_number: set.set_number,
+            weight: set.weight,
+            reps: set.reps,
+            is_completed: set.is_completed,
+            created_at: set.created_at,
+            updated_at: set.updated_at
+          });
+        }
+      }
     }
     
     return result.rows;
@@ -668,6 +703,133 @@ const getWorkoutStats = async (appUserId, startDate, endDate) => {
   }
 };
 
+// 캘린더용 경량 조회 (날짜별 완료 여부만 반환)
+const getWorkoutRecordsForCalendar = async (appUserId, startDate = null, endDate = null) => {
+  try {
+    // 기본 조회 범위: 현재 월 기준 전후 1개월 (3개월)
+    let query = `
+      SELECT 
+        wr.workout_date,
+        wr.workout_type_id,
+        wt.type as workout_type_type,
+        wr.is_completed,
+        wr.id as workout_record_id
+      FROM workout_records wr
+      LEFT JOIN workout_types wt ON wr.workout_type_id = wt.id
+      WHERE wr.app_user_id = $1
+    `;
+    const params = [appUserId];
+    let paramIndex = 2;
+    
+    if (startDate) {
+      query += ` AND wr.workout_date >= $${paramIndex}`;
+      params.push(startDate);
+      paramIndex++;
+    }
+    if (endDate) {
+      query += ` AND wr.workout_date <= $${paramIndex}`;
+      params.push(endDate);
+      paramIndex++;
+    }
+    
+    query += ` ORDER BY wr.workout_date ASC`;
+    
+    const result = await pool.query(query, params);
+    
+    // 날짜별로 그룹화
+    const recordsByDate = {};
+    const recordIds = [];
+    const recordIdToDateMap = new Map();
+    
+    for (const record of result.rows) {
+      // workout_date를 YYYY-MM-DD 형식의 문자열로 변환
+      let dateStr = record.workout_date;
+      if (dateStr instanceof Date) {
+        const year = dateStr.getFullYear();
+        const month = String(dateStr.getMonth() + 1).padStart(2, '0');
+        const day = String(dateStr.getDate()).padStart(2, '0');
+        dateStr = `${year}-${month}-${day}`;
+      } else if (typeof dateStr === 'string') {
+        dateStr = dateStr.split('T')[0];
+      }
+      
+      if (!recordsByDate[dateStr]) {
+        recordsByDate[dateStr] = [];
+      }
+      
+      recordsByDate[dateStr].push({
+        workout_record_id: record.workout_record_id,
+        workout_type_type: record.workout_type_type,
+        is_completed: record.is_completed
+      });
+      
+      recordIds.push(record.workout_record_id);
+      recordIdToDateMap.set(record.workout_record_id, dateStr);
+    }
+    
+    // 세트 운동의 경우 세트 완료 여부도 확인 (일괄 조회)
+    if (recordIds.length > 0) {
+      const setsQuery = `
+        SELECT 
+          workout_record_id,
+          is_completed
+        FROM workout_record_sets
+        WHERE workout_record_id = ANY($1::uuid[])
+        ORDER BY workout_record_id, set_number ASC
+      `;
+      const setsResult = await pool.query(setsQuery, [recordIds]);
+      
+      // 세트를 workout_record_id별로 그룹화
+      const setsByRecordId = {};
+      for (const set of setsResult.rows) {
+        if (!setsByRecordId[set.workout_record_id]) {
+          setsByRecordId[set.workout_record_id] = [];
+        }
+        setsByRecordId[set.workout_record_id].push(set.is_completed);
+      }
+      
+      // 각 날짜별로 완료 여부 계산
+      for (const dateStr in recordsByDate) {
+        const records = recordsByDate[dateStr];
+        for (const record of records) {
+          if (record.workout_type_type === '세트') {
+            const sets = setsByRecordId[record.workout_record_id] || [];
+            // 세트가 있고 모두 완료되었는지 확인
+            record.allSetsCompleted = sets.length > 0 && sets.every(completed => completed === true);
+          }
+        }
+      }
+    }
+    
+    // 날짜별로 완료 여부 요약
+    const summary = {};
+    for (const dateStr in recordsByDate) {
+      const records = recordsByDate[dateStr];
+      const hasWorkout = records.length > 0;
+      
+      // 모든 운동이 완료되었는지 확인
+      const allCompleted = records.every(record => {
+        if (record.workout_type_type === '시간') {
+          return record.is_completed === true;
+        } else if (record.workout_type_type === '세트') {
+          return record.allSetsCompleted === true;
+        }
+        return false;
+      });
+      
+      summary[dateStr] = {
+        hasWorkout,
+        allCompleted: hasWorkout && allCompleted
+      };
+    }
+    
+    return summary;
+  } catch (error) {
+    console.error('[PostgreSQL] 캘린더용 운동기록 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   await createWorkoutRecordsTable();
@@ -683,5 +845,6 @@ module.exports = {
   deleteWorkoutRecord,
   getWorkoutStats,
   updateWorkoutRecordCompleted,
-  updateWorkoutSetCompleted
+  updateWorkoutSetCompleted,
+  getWorkoutRecordsForCalendar
 };

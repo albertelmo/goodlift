@@ -118,19 +118,11 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
     
     // 분류 필터 버튼 HTML 생성
     const createCategoryFilterButtons = () => {
-        const categoryLabels = {
-            1: '장비',
-            2: '부위',
-            3: '도구',
-            4: '분류4'
-        };
-        
         let html = '';
         for (let i = 1; i <= 4; i++) {
             const categories = allCategories[i] || [];
             if (categories.length > 0) {
                 html += `<div class="workout-filter-group">
-                    <div class="workout-filter-label">${categoryLabels[i] || `분류${i}`}</div>
                     <div class="workout-filter-buttons">`;
                 categories.forEach(cat => {
                     html += `<button type="button" class="workout-filter-btn" data-category="${i}" data-id="${cat.id}" tabindex="-1">${escapeHtml(cat.name)}</button>`;

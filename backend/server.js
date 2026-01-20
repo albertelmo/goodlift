@@ -1158,6 +1158,32 @@ app.get('/api/workout-records/stats', async (req, res) => {
     }
 });
 
+// 캘린더용 운동기록 조회 (경량 - 날짜별 완료 여부만)
+app.get('/api/workout-records/calendar', async (req, res) => {
+    try {
+        const { app_user_id, start_date, end_date } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 빈 객체 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json({});
+        }
+        
+        const summary = await workoutRecordsDB.getWorkoutRecordsForCalendar(
+            app_user_id,
+            start_date || null,
+            end_date || null
+        );
+        res.json(summary);
+    } catch (error) {
+        console.error('[API] 캘린더용 운동기록 조회 오류:', error);
+        res.status(500).json({ message: '캘린더용 운동기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // ========== 운동종류 API ==========
 
 // 분류 목록 조회

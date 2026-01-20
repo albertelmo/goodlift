@@ -67,38 +67,47 @@ export function updateSessions(sessions = []) {
 }
 
 /**
- * 운동기록 데이터 업데이트
+ * 운동기록 데이터 업데이트 (경량 summary 형식 지원)
  */
-export function updateWorkoutRecords(workoutRecords) {
+export function updateWorkoutRecords(workoutRecordsOrSummary) {
+    // 새로운 경량 summary 형식인지 확인
+    if (workoutRecordsOrSummary && typeof workoutRecordsByDate === 'object' && !Array.isArray(workoutRecordsByDate)) {
+        // summary 형식: { '2024-01-01': { hasWorkout: true, allCompleted: true }, ... }
+        workoutRecordsByDate = workoutRecordsOrSummary;
+        return;
+    }
+    
+    // 기존 형식 (배열) - 하위 호환성 유지
     workoutRecordsByDate = {};
-    workoutRecords.forEach(record => {
-        // workout_date가 Date 객체인 경우 문자열로 변환, 이미 문자열인 경우 그대로 사용
-        let dateStr = record.workout_date;
-        if (dateStr instanceof Date) {
-            dateStr = formatDate(dateStr);
-        } else if (typeof dateStr === 'string') {
-            // PostgreSQL DATE 타입은 이미 YYYY-MM-DD 형식
-            // YYYY-MM-DD 형식인지 확인 (정규식으로 체크)
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-                // 이미 올바른 형식이면 그대로 사용
-                // 타임존 문제를 피하기 위해 Date 객체로 변환하지 않음
-            } else {
-                // 다른 형식인 경우에만 변환 시도
-                const dateObj = new Date(dateStr);
-                if (!isNaN(dateObj.getTime())) {
-                    dateStr = formatDate(dateObj);
+    if (Array.isArray(workoutRecordsOrSummary)) {
+        workoutRecordsOrSummary.forEach(record => {
+            // workout_date가 Date 객체인 경우 문자열로 변환, 이미 문자열인 경우 그대로 사용
+            let dateStr = record.workout_date;
+            if (dateStr instanceof Date) {
+                dateStr = formatDate(dateStr);
+            } else if (typeof dateStr === 'string') {
+                // PostgreSQL DATE 타입은 이미 YYYY-MM-DD 형식
+                // YYYY-MM-DD 형식인지 확인 (정규식으로 체크)
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                    // 이미 올바른 형식이면 그대로 사용
+                    // 타임존 문제를 피하기 위해 Date 객체로 변환하지 않음
+                } else {
+                    // 다른 형식인 경우에만 변환 시도
+                    const dateObj = new Date(dateStr);
+                    if (!isNaN(dateObj.getTime())) {
+                        dateStr = formatDate(dateObj);
+                    }
                 }
             }
-        }
-        
-        if (dateStr) {
-            if (!workoutRecordsByDate[dateStr]) {
-                workoutRecordsByDate[dateStr] = [];
+            
+            if (dateStr) {
+                if (!workoutRecordsByDate[dateStr]) {
+                    workoutRecordsByDate[dateStr] = [];
+                }
+                workoutRecordsByDate[dateStr].push(record);
             }
-            workoutRecordsByDate[dateStr].push(record);
-        }
-    });
-    
+        });
+    }
 }
 
 /**
@@ -148,8 +157,9 @@ export function render(container) {
             const prevDate = new Date(prevYear, prevMonth, prevDay);
             prevDate.setHours(0, 0, 0, 0);
             const prevDateStr = formatDate(prevDate);
-            const hasWorkout = workoutRecordsByDate[prevDateStr] && workoutRecordsByDate[prevDateStr].length > 0;
-            const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[prevDateStr]) : false;
+            const workoutInfo = getWorkoutInfoForDate(prevDateStr);
+            const hasWorkout = workoutInfo.hasWorkout;
+            const allCompleted = workoutInfo.allCompleted;
             const hasSession = sessionsByDate[prevDateStr] && sessionsByDate[prevDateStr].length > 0;
             
             let dayClass = 'app-calendar-day app-calendar-day-empty';
@@ -179,8 +189,9 @@ export function render(container) {
         const isSunday = dayOfWeek === 0;
         const isSaturday = dayOfWeek === 6;
         const dateStr = formatDate(date);
-        const hasWorkout = workoutRecordsByDate[dateStr] && workoutRecordsByDate[dateStr].length > 0;
-        const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[dateStr]) : false;
+        const workoutInfo = getWorkoutInfoForDate(dateStr);
+        const hasWorkout = workoutInfo.hasWorkout;
+        const allCompleted = workoutInfo.allCompleted;
         const hasSession = sessionsByDate[dateStr] && sessionsByDate[dateStr].length > 0;
         
         let dayClass = 'app-calendar-day';
@@ -219,8 +230,9 @@ export function render(container) {
             const nextDate = new Date(nextYear, nextMonth, i);
             nextDate.setHours(0, 0, 0, 0);
             const nextDateStr = formatDate(nextDate);
-            const hasWorkout = workoutRecordsByDate[nextDateStr] && workoutRecordsByDate[nextDateStr].length > 0;
-            const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(workoutRecordsByDate[nextDateStr]) : false;
+            const workoutInfo = getWorkoutInfoForDate(nextDateStr);
+            const hasWorkout = workoutInfo.hasWorkout;
+            const allCompleted = workoutInfo.allCompleted;
             const hasSession = sessionsByDate[nextDateStr] && sessionsByDate[nextDateStr].length > 0;
             
             let dayClass = 'app-calendar-day app-calendar-day-empty';
@@ -252,7 +264,35 @@ export function render(container) {
 }
 
 /**
- * 모든 운동이 완료되었는지 확인
+ * 날짜별 운동기록 정보 가져오기 (경량 summary 형식 지원)
+ */
+function getWorkoutInfoForDate(dateStr) {
+    const data = workoutRecordsByDate[dateStr];
+    
+    if (!data) {
+        return { hasWorkout: false, allCompleted: false };
+    }
+    
+    // 경량 summary 형식인지 확인
+    if (typeof data === 'object' && 'hasWorkout' in data) {
+        return {
+            hasWorkout: data.hasWorkout || false,
+            allCompleted: data.allCompleted || false
+        };
+    }
+    
+    // 기존 형식 (배열) - 하위 호환성
+    if (Array.isArray(data)) {
+        const hasWorkout = data.length > 0;
+        const allCompleted = hasWorkout ? checkAllWorkoutsCompleted(data) : false;
+        return { hasWorkout, allCompleted };
+    }
+    
+    return { hasWorkout: false, allCompleted: false };
+}
+
+/**
+ * 모든 운동이 완료되었는지 확인 (기존 형식용)
  */
 function checkAllWorkoutsCompleted(records) {
     if (!records || records.length === 0) return false;

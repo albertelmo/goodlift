@@ -774,6 +774,195 @@ function formatTime(seconds) {
 }
 
 /**
+ * 특정 날짜의 모든 운동이 완료되었는지 확인
+ */
+function checkAllWorkoutsCompletedForDate(dateStr) {
+    if (!dateStr || !currentRecords || currentRecords.length === 0) {
+        return false;
+    }
+    
+    // 해당 날짜의 모든 운동기록 필터링
+    const dateRecords = currentRecords.filter(record => {
+        let recordDateStr = record.workout_date;
+        if (recordDateStr instanceof Date) {
+            recordDateStr = formatDate(recordDateStr);
+        } else if (typeof recordDateStr === 'string') {
+            recordDateStr = recordDateStr.split('T')[0];
+        }
+        return recordDateStr === dateStr;
+    });
+    
+    if (dateRecords.length === 0) {
+        return false;
+    }
+    
+    // 모든 운동이 완료되었는지 확인
+    return dateRecords.every(record => {
+        const workoutTypeType = record.workout_type_type || null;
+        
+        // 시간 운동의 경우
+        if (workoutTypeType === '시간') {
+            return record.is_completed === true;
+        }
+        // 세트 운동의 경우
+        else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
+            return record.sets.every(set => set.is_completed === true) && record.sets.length > 0;
+        }
+        
+        // 운동종류가 없거나 세트가 없는 경우 false
+        return false;
+    });
+}
+
+/**
+ * 축하 메시지 모달 표시
+ */
+async function showCelebrationModal() {
+    // 읽기 전용 모드에서는 표시하지 않음
+    if (isReadOnly) {
+        return;
+    }
+    
+    // 기존 모달이 있으면 제거 (타이머 모달, 축하 메시지 모달 모두)
+    const existingTimerModal = document.getElementById('rest-timer-modal-bg');
+    if (existingTimerModal) {
+        existingTimerModal.remove();
+    }
+    const existingCelebrationModal = document.getElementById('celebration-modal-bg');
+    if (existingCelebrationModal) {
+        existingCelebrationModal.remove();
+    }
+    
+    const modalHtml = `
+        <div class="app-modal-bg" id="celebration-modal-bg" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); z-index: 10000; display: flex; align-items: center; justify-content: center; margin: 0; padding: 0; box-sizing: border-box;">
+            <div class="celebration-modal" id="celebration-modal" style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: clamp(20px, 5vw, 40px) clamp(16px, 4vw, 20px); box-sizing: border-box; margin: 0;">
+                <div style="font-size: clamp(80px, 18vw, 150px); margin: 0 0 clamp(20px, 5vw, 40px) 0; padding: 0; animation: bounce 1s ease-in-out infinite; text-align: center; display: block; width: auto;">🎉</div>
+                <h2 style="margin: 0 0 clamp(12px, 3vw, 20px) 0; padding: 0; font-size: clamp(32px, 7vw, 56px); font-weight: 700; color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); text-align: center; width: 100%; max-width: 100%; box-sizing: border-box; display: block;">
+                    축하합니다!
+                </h2>
+                <div style="font-size: clamp(50px, 12vw, 100px); margin: 0 0 clamp(16px, 4vw, 30px) 0; padding: 0; text-align: center; display: block; width: auto;">💪</div>
+                <div style="font-size: clamp(42px, 10.5vw, 84px); font-weight: 700; color: #fff; margin: 0 0 clamp(12px, 3vw, 20px) 0; padding: 0 clamp(16px, 4vw, 32px); text-align: center; width: 100%; max-width: 100%; box-sizing: border-box; display: block; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                    오운완!
+                </div>
+                <div style="font-size: clamp(18px, 4.5vw, 28px); color: rgba(255, 255, 255, 0.9); line-height: 1.8; margin: 0 0 clamp(30px, 7vw, 50px) 0; padding: 0 clamp(16px, 4vw, 32px); text-align: center; width: 100%; max-width: 100%; box-sizing: border-box; display: block;">
+                    정말 수고하셨습니다!<br>
+                    내일도 화이팅! 🔥
+                </div>
+                <button type="button" id="celebration-modal-close" class="app-btn app-btn-primary" style="padding: clamp(14px, 3.5vw, 18px) clamp(36px, 9vw, 56px); font-size: clamp(18px, 4.5vw, 22px); font-weight: 600; border-radius: 50px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); margin: 0; display: block; width: auto; min-width: auto;">
+                    확인
+                </button>
+                <style>
+                    @keyframes bounce {
+                        0%, 100% { transform: translateY(0); }
+                        50% { transform: translateY(clamp(-10px, -2vw, -20px)); }
+                    }
+                    #celebration-modal-bg,
+                    #celebration-modal-bg * {
+                        box-sizing: border-box;
+                    }
+                    #celebration-modal {
+                        margin: 0 !important;
+                        padding: clamp(20px, 5vw, 40px) clamp(16px, 4vw, 20px) !important;
+                    }
+                    #celebration-modal > * {
+                        margin-left: auto !important;
+                        margin-right: auto !important;
+                        text-align: center !important;
+                    }
+                    #celebration-modal-close {
+                        margin-left: auto !important;
+                        margin-right: auto !important;
+                    }
+                    @media (max-width: 480px) {
+                        #celebration-modal {
+                            padding: 20px 16px !important;
+                        }
+                    }
+                </style>
+            </div>
+        </div>
+    `;
+    
+    // 모달 추가
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const modalBg = document.getElementById('celebration-modal-bg');
+    const modal = document.getElementById('celebration-modal');
+    const closeBtn = document.getElementById('celebration-modal-close');
+    
+    // 닫기 버튼 클릭 이벤트
+    closeBtn.addEventListener('click', () => {
+        modalBg.style.opacity = '0';
+        modal.style.opacity = '0';
+        modal.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                modalBg.remove();
+            }
+        }, 300);
+    });
+    
+    // 배경 클릭 시 닫기 (전체 화면이므로 비활성화)
+    // modalBg.addEventListener('click', (e) => {
+    //     if (e.target === modalBg) {
+    //         modalBg.classList.remove('app-modal-show');
+    //         modal.classList.remove('app-modal-show');
+    //         setTimeout(() => {
+    //             if (modalBg.parentNode) {
+    //                 modalBg.remove();
+    //             }
+    //         }, 300);
+    //     }
+    // });
+    
+    // ESC 키로 닫기
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            modalBg.style.opacity = '0';
+            modal.style.opacity = '0';
+            modal.style.transform = 'scale(0.9)';
+            document.removeEventListener('keydown', escHandler);
+            setTimeout(() => {
+                if (modalBg.parentNode) {
+                    modalBg.remove();
+                }
+            }, 300);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+    
+    // 모달 열기 애니메이션 (전체 화면이므로 즉시 표시)
+    setTimeout(() => {
+        modalBg.style.opacity = '0';
+        modalBg.style.transition = 'opacity 0.3s ease-in-out';
+        modal.style.opacity = '0';
+        modal.style.transform = 'scale(0.9)';
+        modal.style.transition = 'opacity 0.3s ease-in-out, transform 0.3s ease-in-out';
+        
+        requestAnimationFrame(() => {
+            modalBg.style.opacity = '1';
+            modal.style.opacity = '1';
+            modal.style.transform = 'scale(1)';
+        });
+    }, 10);
+    
+    // 5초 후 자동 닫기 (선택사항)
+    setTimeout(() => {
+        if (document.body.contains(modalBg)) {
+            modalBg.style.opacity = '0';
+            modal.style.opacity = '0';
+            modal.style.transform = 'scale(0.9)';
+            document.removeEventListener('keydown', escHandler);
+            setTimeout(() => {
+                if (modalBg.parentNode) {
+                    modalBg.remove();
+                }
+            }, 300);
+        }
+    }, 5000);
+}
+
+/**
  * 타이머 설정 불러오기 (캐시)
  */
 async function loadTimerSettings() {
@@ -880,6 +1069,15 @@ function setupClickListeners() {
                 if (!record || !record.sets) return;
                 
                 try {
+                    // 날짜 확인용
+                    const workoutDate = record.workout_date;
+                    let dateStr = workoutDate;
+                    if (dateStr instanceof Date) {
+                        dateStr = formatDate(dateStr);
+                    } else if (typeof dateStr === 'string') {
+                        dateStr = dateStr.split('T')[0];
+                    }
+                    
                     // 모든 세트의 완료 상태 업데이트
                     const { updateWorkoutSetCompleted } = await import('../api.js');
                     const updatePromises = record.sets.map(set => 
@@ -899,7 +1097,21 @@ function setupClickListeners() {
                     
                     // 캘린더 업데이트
                     if (window.updateCalendarWorkoutRecords) {
-                        window.updateCalendarWorkoutRecords();
+                        await window.updateCalendarWorkoutRecords();
+                    }
+                    
+                    // 체크된 경우에만 모달 처리 (체크 해제 시에는 모달 표시 안 함)
+                    if (isChecked) {
+                        // 해당 날짜의 모든 운동 완료 여부 확인
+                        const allCompleted = checkAllWorkoutsCompletedForDate(dateStr);
+                        
+                        if (allCompleted) {
+                            // 하루 운동이 모두 완료된 경우 축하 메시지 표시
+                            await showCelebrationModal();
+                        } else {
+                            // 완료되지 않은 경우 타이머 모달 표시
+                            await showRestTimerModal();
+                        }
                     }
                 } catch (error) {
                     console.error('전체 세트 완료 상태 업데이트 오류:', error);
@@ -933,6 +1145,22 @@ function setupClickListeners() {
                 }
                 
                 try {
+                    // 해당 레코드 찾기 (날짜 확인용)
+                    const record = currentRecords.find(r => r.id === recordId);
+                    if (!record) {
+                        checkbox.checked = !isChecked;
+                        alert('운동기록을 찾을 수 없습니다.');
+                        return;
+                    }
+                    
+                    const workoutDate = record.workout_date;
+                    let dateStr = workoutDate;
+                    if (dateStr instanceof Date) {
+                        dateStr = formatDate(dateStr);
+                    } else if (typeof dateStr === 'string') {
+                        dateStr = dateStr.split('T')[0];
+                    }
+                    
                     if (type === 'record') {
                         // 운동기록 완료 상태 업데이트
                         const { updateWorkoutRecordCompleted } = await import('../api.js');
@@ -948,11 +1176,6 @@ function setupClickListeners() {
                         }
                         const { updateWorkoutSetCompleted } = await import('../api.js');
                         await updateWorkoutSetCompleted(recordId, setId, currentAppUserId, isChecked);
-                        
-                        // 세트가 체크될 때만 휴식 타이머 모달 띄우기
-                        if (isChecked) {
-                            await showRestTimerModal();
-                        }
                     }
                     
                     // 현재 레코드 데이터 업데이트
@@ -981,12 +1204,28 @@ function setupClickListeners() {
                         }
                     }
                     
-                    // 카드 다시 렌더링
+                    // 카드 다시 렌더링 (데이터 업데이트 후)
                     await render(currentRecords);
                     
                     // 캘린더 업데이트
                     if (window.updateCalendarWorkoutRecords) {
-                        window.updateCalendarWorkoutRecords();
+                        await window.updateCalendarWorkoutRecords();
+                    }
+                    
+                    // 체크된 경우에만 모달 처리 (체크 해제 시에는 모달 표시 안 함)
+                    if (isChecked) {
+                        // 해당 날짜의 모든 운동 완료 여부 확인
+                        const allCompleted = checkAllWorkoutsCompletedForDate(dateStr);
+                        
+                        if (allCompleted) {
+                            // 하루 운동이 모두 완료된 경우 축하 메시지 표시
+                            await showCelebrationModal();
+                        } else {
+                            // 완료되지 않은 경우 타이머 모달 표시 (세트 타입인 경우만)
+                            if (type === 'set') {
+                                await showRestTimerModal();
+                            }
+                        }
                     }
                 } catch (error) {
                     console.error('완료 상태 업데이트 오류:', error);
