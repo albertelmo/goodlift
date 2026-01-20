@@ -11,41 +11,14 @@ let sessionsByDate = {}; // 날짜별 세션 데이터
 /**
  * 캘린더 초기화
  */
-export function init(container, onDateSelect, workoutRecords = []) {
+export function init(container, onDateSelect, workoutRecordsOrSummary = []) {
     onDateSelectCallback = onDateSelect;
     selectedDate = new Date();
     selectedDate.setHours(0, 0, 0, 0);
     currentMonth = new Date(selectedDate);
     
-    // 운동기록을 날짜별로 그룹화
-    workoutRecordsByDate = {};
-    workoutRecords.forEach(record => {
-        // workout_date가 Date 객체인 경우 문자열로 변환, 이미 문자열인 경우 그대로 사용
-        let dateStr = record.workout_date;
-        if (dateStr instanceof Date) {
-            dateStr = formatDate(dateStr);
-        } else if (typeof dateStr === 'string') {
-            // PostgreSQL DATE 타입은 이미 YYYY-MM-DD 형식
-            // YYYY-MM-DD 형식인지 확인 (정규식으로 체크)
-            if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-                // 이미 올바른 형식이면 그대로 사용
-                // 타임존 문제를 피하기 위해 Date 객체로 변환하지 않음
-            } else {
-                // 다른 형식인 경우에만 변환 시도
-                const dateObj = new Date(dateStr);
-                if (!isNaN(dateObj.getTime())) {
-                    dateStr = formatDate(dateObj);
-                }
-            }
-        }
-        
-        if (dateStr) {
-            if (!workoutRecordsByDate[dateStr]) {
-                workoutRecordsByDate[dateStr] = [];
-            }
-            workoutRecordsByDate[dateStr].push(record);
-        }
-    });
+    // 운동기록 데이터 업데이트 (summary 형식 또는 배열 형식 모두 지원)
+    updateWorkoutRecords(workoutRecordsOrSummary);
     
     render(container);
 }
@@ -71,10 +44,15 @@ export function updateSessions(sessions = []) {
  */
 export function updateWorkoutRecords(workoutRecordsOrSummary) {
     // 새로운 경량 summary 형식인지 확인
-    if (workoutRecordsOrSummary && typeof workoutRecordsByDate === 'object' && !Array.isArray(workoutRecordsByDate)) {
-        // summary 형식: { '2024-01-01': { hasWorkout: true, allCompleted: true }, ... }
-        workoutRecordsByDate = workoutRecordsOrSummary;
-        return;
+    // summary 형식: { '2024-01-01': { hasWorkout: true, allCompleted: true }, ... }
+    if (workoutRecordsOrSummary && typeof workoutRecordsOrSummary === 'object' && !Array.isArray(workoutRecordsOrSummary)) {
+        // summary 객체의 첫 번째 값을 확인하여 형식 판단
+        const firstKey = Object.keys(workoutRecordsOrSummary)[0];
+        if (firstKey && workoutRecordsOrSummary[firstKey] && typeof workoutRecordsOrSummary[firstKey] === 'object' && 'hasWorkout' in workoutRecordsOrSummary[firstKey]) {
+            // summary 형식
+            workoutRecordsByDate = workoutRecordsOrSummary;
+            return;
+        }
     }
     
     // 기존 형식 (배열) - 하위 호환성 유지
