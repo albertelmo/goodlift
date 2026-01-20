@@ -735,6 +735,23 @@ app.get('/api/app-users', async (req, res) => {
     }
 });
 
+// 트레이너별 연결된 회원 목록 조회 (최적화된 API)
+app.get('/api/trainer-members', async (req, res) => {
+    try {
+        const { trainer_username } = req.query;
+        
+        if (!trainer_username) {
+            return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
+        }
+        
+        const members = await appUsersDB.getTrainerMembers(trainer_username);
+        res.json(members);
+    } catch (error) {
+        console.error('[API] 트레이너 회원 목록 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 회원 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 앱 유저 단일 조회
 app.get('/api/app-users/:id', async (req, res) => {
     try {

@@ -358,21 +358,8 @@ const migrateWorkoutRecordsTable = async () => {
       }
     }
     
-    // 6. 인덱스 업데이트
-    const checkTypeIdIndexQuery = `
-      SELECT indexname 
-      FROM pg_indexes 
-      WHERE schemaname = 'public' AND tablename = 'workout_records' AND indexname = 'idx_workout_records_type_id'
-    `;
-    const checkTypeIdIndexResult = await pool.query(checkTypeIdIndexQuery);
-    
-    if (checkTypeIdIndexResult.rows.length === 0) {
-      await pool.query(`
-        CREATE INDEX IF NOT EXISTS idx_workout_records_type_id 
-        ON workout_records(workout_type_id)
-      `);
-      console.log('[PostgreSQL] idx_workout_records_type_id 인덱스가 생성되었습니다.');
-    }
+    // 6. 인덱스 업데이트 (createWorkoutRecordsIndexes에서 처리하므로 여기서는 제거)
+    // 인덱스는 createWorkoutRecordsIndexes()에서 일괄 생성됨
   } catch (error) {
     console.error('[PostgreSQL] workout_records 테이블 마이그레이션 오류:', error);
     throw error;
@@ -393,15 +380,23 @@ const createWorkoutRecordsIndexes = async () => {
     
     // 복합 인덱스 (app_user_id와 workout_date를 함께 필터링하는 쿼리 최적화)
     // 이 인덱스는 WHERE app_user_id = ? AND workout_date >= ? AND workout_date <= ? 쿼리에 유용
+    // 날짜 범위 쿼리를 위해 ASC로 변경 (범위 스캔에 더 효율적)
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_workout_records_user_date 
-      ON workout_records(app_user_id, workout_date DESC)
+      ON workout_records(app_user_id, workout_date)
     `);
     
-    // 정렬 최적화를 위한 인덱스
+    // 정렬 최적화를 위한 인덱스 (DESC 정렬이 필요한 경우)
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_workout_records_user_date_created 
       ON workout_records(app_user_id, workout_date DESC, created_at DESC)
+    `);
+    
+    // workout_type_id 인덱스 (JOIN 최적화)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_workout_records_type_id 
+      ON workout_records(workout_type_id)
+      WHERE workout_type_id IS NOT NULL
     `);
     
     console.log('[PostgreSQL] 운동기록 인덱스가 생성되었습니다.');

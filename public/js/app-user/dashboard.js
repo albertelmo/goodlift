@@ -267,51 +267,23 @@ async function loadTrainerMembers() {
     try {
         const trainerUsername = currentUser?.username;
         
-        // 1. member_name이 있는 유저앱 회원들 조회 (PT 회원과 연결된 회원)
-        const appUsersResponse = await fetch('/api/app-users');
-        if (!appUsersResponse.ok) {
-            throw new Error('유저앱 회원 목록 조회 실패');
+        // 최적화된 API 사용: 트레이너별 연결된 회원을 한 번에 조회
+        const response = await fetch(`/api/trainer-members?trainer_username=${encodeURIComponent(trainerUsername)}`);
+        if (!response.ok) {
+            throw new Error('트레이너 회원 목록 조회 실패');
         }
         
-        const appUsers = await appUsersResponse.json();
-        const appUsersWithMemberName = appUsers.filter(user => 
-            user.member_name && user.member_name.trim() !== ''
-        );
+        const members = await response.json();
         
-        // 2. 각 회원의 member_name으로 members 테이블 조회하여 트레이너 확인
-        trainerMembers = [];
-        
-        for (const appUser of appUsersWithMemberName) {
-            try {
-                // members 테이블에서 해당 회원 조회
-                const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(appUser.member_name)}`);
-                if (!membersResponse.ok) {
-                    continue;
-                }
-                
-                const members = await membersResponse.json();
-                const member = members.find(m => m.name === appUser.member_name);
-                
-                // 3. members.trainer가 현재 트레이너와 일치하는지 확인
-                if (member && member.trainer === trainerUsername) {
-                    // 4. 유저앱 회원 정보를 기준으로 표시할 정보 구성
-                    trainerMembers.push({
-                        app_user_id: appUser.id,
-                        name: appUser.name, // 유저앱 회원 이름
-                        phone: appUser.phone || '-', // 유저앱 회원 전화번호
-                        username: appUser.username, // 유저앱 회원 아이디
-                        member_name: appUser.member_name, // PT 회원 이름 (참고용)
-                        remainSessions: member.remainSessions || 0 // PT 회원의 남은 세션
-                    });
-                }
-            } catch (error) {
-                console.error(`회원 "${appUser.member_name}" 정보 조회 오류:`, error);
-                continue;
-            }
-        }
-        
-        // 이름순 정렬 (유저앱 회원 이름 기준)
-        trainerMembers.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+        // 응답 데이터를 기존 형식에 맞게 변환
+        trainerMembers = members.map(member => ({
+            app_user_id: member.app_user_id,
+            name: member.name,
+            phone: member.phone || '-',
+            username: member.username,
+            member_name: member.member_name,
+            remainSessions: member.remainSessions || 0
+        }));
         
     } catch (error) {
         console.error('트레이너 회원 목록 조회 오류:', error);

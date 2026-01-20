@@ -242,6 +242,33 @@ const getAppUserById = async (id) => {
 };
 
 // 아이디로 앱 유저 조회 (로그인용, password_hash 포함)
+// 트레이너별 연결된 회원 목록 조회 (JOIN으로 최적화)
+const getTrainerMembers = async (trainerUsername) => {
+  try {
+    const query = `
+      SELECT 
+        au.id as app_user_id,
+        au.name,
+        au.phone,
+        au.username,
+        au.member_name,
+        m.remain_sessions as remainSessions
+      FROM app_users au
+      INNER JOIN members m ON au.member_name = m.name
+      WHERE m.trainer = $1
+        AND au.member_name IS NOT NULL
+        AND au.member_name != ''
+        AND au.is_active = true
+      ORDER BY au.name
+    `;
+    const result = await pool.query(query, [trainerUsername]);
+    return result.rows;
+  } catch (error) {
+    console.error('[PostgreSQL] 트레이너 회원 목록 조회 오류:', error);
+    throw error;
+  }
+};
+
 const getAppUserByUsername = async (username) => {
   try {
     const query = `
@@ -415,6 +442,7 @@ module.exports = {
   getAppUsers,
   getAppUserById,
   getAppUserByUsername,
+  getTrainerMembers,
   addAppUser,
   updateAppUser,
   deleteAppUser,
