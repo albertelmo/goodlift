@@ -200,9 +200,16 @@ async function render(records) {
                         <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
                         <span class="app-workout-date-count">${dateRecords.length}건</span>
                     </div>
-                    <button class="app-workout-timer-btn" data-date="${date}" aria-label="타이머" ${isReadOnly ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-                        타이머<span class="app-workout-timer-text">${timerDisplayText}</span>
-                    </button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        ${!isReadOnly ? `
+                        <button class="app-workout-timer-btn" data-date="${date}" aria-label="복사" style="padding: 6px 12px; font-size: 13px; white-space: nowrap;">
+                            복사
+                        </button>
+                        ` : ''}
+                        <button class="app-workout-timer-btn" data-date="${date}" aria-label="타이머" ${isReadOnly ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                            타이머<span class="app-workout-timer-text">${timerDisplayText}</span>
+                        </button>
+                    </div>
                 </div>
         `;
         
@@ -844,9 +851,21 @@ async function loadTimerSettings() {
  * 클릭 이벤트 리스너 설정
  */
 function setupClickListeners() {
+    // 복사 버튼 클릭 이벤트 (읽기 전용 모드가 아닌 경우만)
+    if (!isReadOnly) {
+        const copyButtons = document.querySelectorAll('.app-workout-timer-btn[aria-label="복사"]');
+        copyButtons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const date = btn.getAttribute('data-date');
+                showCopyDateModal(date);
+            });
+        });
+    }
+    
     // 타이머 버튼 클릭 이벤트 (읽기 전용 모드가 아닌 경우만)
     if (!isReadOnly) {
-        const timerButtons = document.querySelectorAll('.app-workout-timer-btn');
+        const timerButtons = document.querySelectorAll('.app-workout-timer-btn[aria-label="타이머"]');
         timerButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1198,4 +1217,374 @@ export function refresh() {
     if (window.updateCalendarWorkoutRecords) {
         window.updateCalendarWorkoutRecords();
     }
+}
+
+/**
+ * 복사 모달용 날짜 포맷팅 (M/D 형식)
+ */
+function formatDateForCopy(date) {
+    if (!date) return '';
+    const d = new Date(date);
+    const month = d.getMonth() + 1;
+    const day = d.getDate();
+    return `${month}/${day}`;
+}
+
+/**
+ * 운동기록 복사 날짜 선택 모달 표시
+ */
+async function showCopyDateModal(sourceDate) {
+    // 해당 날짜의 운동기록 가져오기
+    const dateRecords = currentRecords.filter(record => {
+        let recordDateStr = record.workout_date;
+        if (recordDateStr instanceof Date) {
+            recordDateStr = formatDate(recordDateStr);
+        } else if (typeof recordDateStr === 'string') {
+            recordDateStr = recordDateStr.split('T')[0];
+        }
+        return recordDateStr === sourceDate;
+    });
+    
+    // 원래 순서대로 정렬 (created_at 기준 오름차순)
+    dateRecords.sort((a, b) => {
+        const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
+        const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
+        return dateA - dateB; // 오름차순 (먼저 생성된 것이 앞에)
+    });
+    
+    if (dateRecords.length === 0) {
+        alert('복사할 운동기록이 없습니다.');
+        return;
+    }
+    
+    // 트레이너의 연결된 회원 목록 가져오기
+    let trainerMembersList = [];
+    let isTrainer = false;
+    
+    try {
+        // 사용자 ID 확인
+        let originalAppUserId = localStorage.getItem('appUserId');
+        const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+        
+        // 연결된 회원을 보고 있는 경우, 원래 트레이너 ID 찾기
+        if (connectedMemberAppUserId && currentAppUserId === connectedMemberAppUserId) {
+            // 방법 1: 연결된 회원의 member_name으로 members 테이블 조회하여 trainer 찾기
+            const connectedUserResponse = await fetch(`/api/app-users/${connectedMemberAppUserId}`);
+            if (connectedUserResponse.ok) {
+                const connectedUser = await connectedUserResponse.json();
+                
+                if (connectedUser.member_name) {
+                    // members 테이블에서 트레이너 찾기
+                    const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(connectedUser.member_name)}`);
+                    if (membersResponse.ok) {
+                        const members = await membersResponse.json();
+                        const member = members.find(m => m.name === connectedUser.member_name);
+                        
+                        if (member && member.trainer) {
+                            // 트레이너의 app_user 찾기 (username으로 조회)
+                            const trainerUserResponse = await fetch(`/api/app-users?username=${encodeURIComponent(member.trainer)}`);
+                            if (trainerUserResponse.ok) {
+                                const trainerUsers = await trainerUserResponse.json();
+                                const trainerUser = trainerUsers.find(u => u.username === member.trainer);
+                                
+                                if (trainerUser) {
+                                    originalAppUserId = trainerUser.id;
+                                } else {
+                                    // /api/trainer-app-user 엔드포인트 사용
+                                    try {
+                                        const trainerAppUserResponse = await fetch('/api/trainer-app-user', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ 
+                                                username: member.trainer,
+                                                name: member.trainer 
+                                            })
+                                        });
+                                        
+                                        if (trainerAppUserResponse.ok) {
+                                            const trainerAppUser = await trainerAppUserResponse.json();
+                                            originalAppUserId = trainerAppUser.id;
+                                        }
+                                    } catch (error) {
+                                        console.error('트레이너 app_user 생성/조회 오류:', error);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 방법 2: 여전히 없으면 모든 사용자에서 트레이너 찾기
+            if (!originalAppUserId) {
+                const allUsersResponse = await fetch('/api/app-users');
+                if (allUsersResponse.ok) {
+                    const allUsers = await allUsersResponse.json();
+                    const trainerUsers = allUsers.filter(u => u.is_trainer === true || u.isTrainer === true);
+                    
+                    if (trainerUsers.length > 0) {
+                        // 첫 번째 트레이너 사용
+                        originalAppUserId = trainerUsers[0].id;
+                    }
+                }
+            }
+        }
+        
+        // 여전히 없으면 currentAppUserId 사용
+        if (!originalAppUserId) {
+            originalAppUserId = currentAppUserId;
+        }
+        
+        if (originalAppUserId) {
+            const userResponse = await fetch(`/api/app-users/${originalAppUserId}`);
+            
+            if (userResponse.ok) {
+                const user = await userResponse.json();
+                
+                // is_trainer 필드 확인 (DB 필드명)
+                isTrainer = user.is_trainer === true || user.isTrainer === true;
+                
+                if (isTrainer) {
+                    const trainerUsername = user.username;
+                    
+                    // 연결된 회원 목록 조회
+                    const appUsersResponse = await fetch('/api/app-users');
+                    
+                    if (appUsersResponse.ok) {
+                        const appUsers = await appUsersResponse.json();
+                        const appUsersWithMemberName = appUsers.filter(u => 
+                            u.member_name && u.member_name.trim() !== ''
+                        );
+                        
+                        for (const appUser of appUsersWithMemberName) {
+                            try {
+                                const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(appUser.member_name)}`);
+                                if (membersResponse.ok) {
+                                    const members = await membersResponse.json();
+                                    const member = members.find(m => m.name === appUser.member_name);
+                                    
+                                    if (member && member.trainer === trainerUsername) {
+                                        trainerMembersList.push({
+                                            app_user_id: appUser.id,
+                                            name: appUser.name
+                                        });
+                                    }
+                                }
+                            } catch (error) {
+                                console.error('회원 정보 조회 오류:', error);
+                            }
+                        }
+                        
+                        trainerMembersList.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('트레이너 회원 목록 조회 오류:', error);
+    }
+    
+    // 현재 연결된 회원 ID
+    const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+    const currentTargetUserId = connectedMemberAppUserId || currentAppUserId;
+    
+    const modalHtml = `
+        <div class="app-modal-bg" id="copy-date-modal-bg">
+            <div class="app-modal" id="copy-date-modal">
+                <div class="app-modal-header">
+                    <h3>운동기록 복사</h3>
+                    <button class="app-modal-close-btn" id="copy-date-modal-close">×</button>
+                </div>
+                <div class="app-modal-content" style="padding: 20px;">
+                    <p style="margin-bottom: 16px; color: var(--app-text-muted); text-align: center;">
+                        ${formatDateForCopy(new Date(sourceDate))} ${dateRecords.length}건 복사할 날짜를 선택하세요.
+                    </p>
+                    ${isTrainer && trainerMembersList.length > 0 ? `
+                    <div style="margin-bottom: 16px; display: flex; flex-direction: column; align-items: center;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--app-text);">
+                            복사할 회원
+                        </label>
+                        <select id="copy-target-member" style="width: 100%; max-width: 200px; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; box-sizing: border-box; background: var(--app-surface); color: var(--app-text);">
+                            <option value="${currentTargetUserId}">현재 회원</option>
+                            ${trainerMembersList.map(member => `
+                                <option value="${member.app_user_id}" ${member.app_user_id === currentTargetUserId ? 'selected' : ''}>${escapeHtml(member.name)}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+                    ` : ''}
+                    <div style="margin-bottom: 16px; display: flex; flex-direction: column; align-items: center;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: var(--app-text);">
+                            복사할 날짜
+                        </label>
+                        <input type="date" id="copy-target-date" style="width: 100%; max-width: 200px; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; box-sizing: border-box;">
+                    </div>
+                    <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                        <button class="app-btn-secondary" id="copy-date-cancel-btn" style="padding: 10px 20px;">취소</button>
+                        <button class="app-btn-primary" id="copy-date-confirm-btn" style="padding: 10px 20px;">복사</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // 기존 모달이 있으면 제거
+    const existingModal = document.getElementById('copy-date-modal-bg');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // 모달 추가
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    const modalBg = document.getElementById('copy-date-modal-bg');
+    const modal = document.getElementById('copy-date-modal');
+    const closeBtn = document.getElementById('copy-date-modal-close');
+    const cancelBtn = document.getElementById('copy-date-cancel-btn');
+    const confirmBtn = document.getElementById('copy-date-confirm-btn');
+    const targetDateInput = document.getElementById('copy-target-date');
+    const targetMemberSelect = document.getElementById('copy-target-member');
+    
+    // 오늘 날짜를 기본값으로 설정
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    targetDateInput.value = formatDate(today);
+    targetDateInput.min = formatDate(today); // 오늘 이후만 선택 가능
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 닫기 함수
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                modalBg.remove();
+            }
+        }, 200);
+    };
+    
+    // 취소 버튼
+    cancelBtn.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            closeModal();
+        }
+    });
+    
+    // ESC 키로 닫기
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+    
+    // 복사 확인 버튼
+    confirmBtn.addEventListener('click', async () => {
+        const targetDate = targetDateInput.value;
+        
+        if (!targetDate) {
+            alert('날짜를 선택해주세요.');
+            return;
+        }
+        
+        // 같은 날짜로 복사하는 경우 확인
+        if (targetDate === sourceDate) {
+            if (!confirm('같은 날짜로 복사하시겠습니까?')) {
+                return;
+            }
+        }
+        
+        // 복사할 회원 ID 확인
+        let targetMemberId = currentTargetUserId;
+        if (targetMemberSelect) {
+            targetMemberId = targetMemberSelect.value;
+        }
+        
+        if (!targetMemberId) {
+            alert('회원을 선택해주세요.');
+            return;
+        }
+        
+        // 복사 버튼 비활성화
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = '복사 중...';
+        
+        try {
+            await copyWorkoutRecords(dateRecords, targetDate, targetMemberId);
+            closeModal();
+            document.removeEventListener('keydown', escHandler);
+            
+            // 목록 새로고침
+            await loadRecords();
+            
+            // 캘린더 업데이트
+            if (window.updateCalendarWorkoutRecords) {
+                await window.updateCalendarWorkoutRecords();
+            }
+            
+            alert('운동기록이 복사되었습니다.');
+        } catch (error) {
+            console.error('운동기록 복사 오류:', error);
+            alert(error.message || '운동기록 복사 중 오류가 발생했습니다.');
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = '복사';
+        }
+    });
+}
+
+/**
+ * 운동기록 복사
+ */
+async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
+    const { addWorkoutRecord } = await import('../api.js');
+    
+    // targetAppUserId가 제공되지 않으면 연결된 회원 또는 현재 사용자 사용
+    if (!targetAppUserId) {
+        const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+        targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+    }
+    
+    if (!targetAppUserId) {
+        throw new Error('사용자 ID가 없습니다.');
+    }
+    
+    const copyPromises = records.map(async (record) => {
+        const workoutData = {
+            app_user_id: targetAppUserId,
+            workout_date: targetDate,
+            workout_type_id: record.workout_type_id,
+            notes: record.notes || null,
+            is_completed: false // 복사된 기록은 완료 상태 초기화
+        };
+        
+        // 시간 운동인 경우
+        if (record.workout_type_type === '시간' && record.duration_minutes) {
+            workoutData.duration_minutes = record.duration_minutes;
+            workoutData.sets = [];
+        } 
+        // 세트 운동인 경우
+        else if (record.workout_type_type === '세트' && record.sets && record.sets.length > 0) {
+            workoutData.duration_minutes = null;
+            workoutData.sets = record.sets.map(set => ({
+                set_number: set.set_number,
+                weight: set.weight !== null && set.weight !== undefined ? set.weight : 0,
+                reps: set.reps !== null && set.reps !== undefined ? set.reps : 0
+            }));
+        } else {
+            // 세트 정보가 없는 경우 기본 세트 추가
+            workoutData.duration_minutes = null;
+            workoutData.sets = [{ set_number: 1, weight: 0, reps: 0 }];
+        }
+        
+        return addWorkoutRecord(workoutData);
+    });
+    
+    await Promise.all(copyPromises);
 }

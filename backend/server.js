@@ -627,6 +627,12 @@ app.post('/api/login', async (req, res) => {
             }
         }
         
+        // DB에 is_trainer 필드 업데이트 (accounts.json과 동기화)
+        if (appUser.is_trainer !== isTrainer) {
+            await appUsersDB.updateAppUser(appUser.id, { is_trainer: isTrainer });
+            appUser.is_trainer = isTrainer;
+        }
+        
         // 앱 유저 로그인 성공
         res.json({
             message: '로그인 성공!',
@@ -636,7 +642,7 @@ app.post('/api/login', async (req, res) => {
             name: appUser.name,
             phone: appUser.phone,
             member_name: appUser.member_name,
-            isTrainer: isTrainer
+            isTrainer: appUser.is_trainer || isTrainer
         });
     } catch (error) {
         console.error('[API] 앱 유저 로그인 오류:', error);
@@ -700,7 +706,13 @@ app.get('/api/app-users/:id', async (req, res) => {
             return res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
         }
         
-        res.json(appUser);
+        // isTrainer 필드 추가 (is_trainer를 isTrainer로도 반환)
+        const responseData = {
+            ...appUser,
+            isTrainer: appUser.is_trainer === true
+        };
+        
+        res.json(responseData);
     } catch (error) {
         console.error('[API] 앱 유저 조회 오류:', error);
         res.status(500).json({ message: '앱 유저 조회 중 오류가 발생했습니다.' });
@@ -853,7 +865,13 @@ app.post('/api/trainer-app-user', async (req, res) => {
             }
         }
         
-        appUser.isTrainer = isTrainer;
+        // DB에 is_trainer 필드 업데이트 (accounts.json과 동기화)
+        if (appUser.is_trainer !== isTrainer) {
+            await appUsersDB.updateAppUser(appUser.id, { is_trainer: isTrainer });
+            appUser.is_trainer = isTrainer;
+        }
+        
+        appUser.isTrainer = appUser.is_trainer || isTrainer;
         res.json(appUser);
     } catch (error) {
         console.error('[API] 트레이너 app_user 조회/생성 오류:', error);

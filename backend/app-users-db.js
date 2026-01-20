@@ -28,6 +28,7 @@ const createAppUsersTable = async () => {
           phone VARCHAR(20) NOT NULL,
           member_name VARCHAR(100),
           trainer VARCHAR(50),
+          is_trainer BOOLEAN DEFAULT false,
           is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -106,6 +107,19 @@ const migrateAppUsersTable = async () => {
       console.log('[PostgreSQL] trainer 컬럼이 추가되었습니다.');
     }
     
+    // is_trainer 컬럼 확인 및 추가
+    const checkIsTrainerQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'app_users' AND column_name = 'is_trainer'
+    `;
+    const checkIsTrainerResult = await pool.query(checkIsTrainerQuery);
+    
+    if (checkIsTrainerResult.rows.length === 0) {
+      await pool.query(`ALTER TABLE app_users ADD COLUMN is_trainer BOOLEAN DEFAULT false`);
+      console.log('[PostgreSQL] is_trainer 컬럼이 추가되었습니다.');
+    }
+    
     // 인덱스 생성 (없으면 생성)
     await createAppUsersIndexes();
   } catch (error) {
@@ -164,7 +178,7 @@ const getAppUsers = async (filters = {}) => {
   try {
     let query = `
       SELECT 
-        id, username, name, phone, member_name, trainer, is_active,
+        id, username, name, phone, member_name, trainer, is_trainer, is_active,
         created_at, updated_at, last_login_at
       FROM app_users
     `;
@@ -208,7 +222,7 @@ const getAppUserById = async (id) => {
   try {
     const query = `
       SELECT 
-        id, username, name, phone, member_name, trainer, is_active,
+        id, username, name, phone, member_name, trainer, is_trainer, is_active,
         created_at, updated_at, last_login_at
       FROM app_users 
       WHERE id = $1
@@ -232,7 +246,7 @@ const getAppUserByUsername = async (username) => {
   try {
     const query = `
       SELECT 
-        id, username, password_hash, name, phone, member_name, trainer, is_active,
+        id, username, password_hash, name, phone, member_name, trainer, is_trainer, is_active,
         created_at, updated_at, last_login_at
       FROM app_users 
       WHERE username = $1
@@ -255,9 +269,9 @@ const getAppUserByUsername = async (username) => {
 const addAppUser = async (userData) => {
   try {
     const query = `
-      INSERT INTO app_users (username, password_hash, name, phone, member_name, trainer, is_active)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, username, name, phone, member_name, trainer, is_active, created_at, updated_at
+      INSERT INTO app_users (username, password_hash, name, phone, member_name, trainer, is_trainer, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, username, name, phone, member_name, trainer, is_trainer, is_active, created_at, updated_at
     `;
     const values = [
       userData.username,
@@ -266,6 +280,7 @@ const addAppUser = async (userData) => {
       userData.phone,
       userData.member_name || null,
       userData.trainer || null,
+      userData.is_trainer !== undefined ? userData.is_trainer : false,
       userData.is_active !== undefined ? userData.is_active : true
     ];
     const result = await pool.query(query, values);
@@ -299,6 +314,10 @@ const updateAppUser = async (id, updates) => {
       fields.push(`trainer = $${paramIndex++}`);
       values.push(updates.trainer || null);
     }
+    if (updates.is_trainer !== undefined) {
+      fields.push(`is_trainer = $${paramIndex++}`);
+      values.push(updates.is_trainer);
+    }
     if (updates.is_active !== undefined) {
       fields.push(`is_active = $${paramIndex++}`);
       values.push(updates.is_active);
@@ -320,7 +339,7 @@ const updateAppUser = async (id, updates) => {
       UPDATE app_users 
       SET ${fields.join(', ')}
       WHERE id = $${paramIndex}
-      RETURNING id, username, name, phone, member_name, trainer, is_active, created_at, updated_at, last_login_at
+      RETURNING id, username, name, phone, member_name, trainer, is_trainer, is_active, created_at, updated_at, last_login_at
     `;
     
     const result = await pool.query(query, values);

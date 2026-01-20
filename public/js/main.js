@@ -161,6 +161,39 @@ window.addEventListener('DOMContentLoaded', function() {
         const appUserId = localStorage.getItem('appUserId');
         const appUserName = localStorage.getItem('appUserName');
         if (appUserId && appUserName) {
+            // API를 통해 최신 사용자 정보 가져오기 (isTrainer 포함)
+            fetch(`/api/app-users/${appUserId}`)
+                .then(response => response.json())
+                .then(appUserData => {
+                    showAppUserSection({
+                        id: appUserData.id,
+                        name: appUserData.name,
+                        username: appUserData.username,
+                        phone: appUserData.phone || '',
+                        member_name: appUserData.member_name || null,
+                        isTrainer: appUserData.is_trainer === true || appUserData.isTrainer === true
+                    });
+                    document.getElementById('logoutBtn').style.display = 'inline-block';
+                    document.getElementById('settingsBtn').style.display = 'inline-block';
+                })
+                .catch(error => {
+                    console.error('자동 로그인 사용자 정보 조회 오류:', error);
+                    // API 실패 시 localStorage 데이터 사용
+                    showAppUserSection({
+                        id: appUserId,
+                        name: appUserName,
+                        username: localStorage.getItem('appUsername'),
+                        phone: localStorage.getItem('appUserPhone'),
+                        member_name: localStorage.getItem('appUserMemberName'),
+                        isTrainer: false
+                    });
+                    document.getElementById('logoutBtn').style.display = 'inline-block';
+                    document.getElementById('settingsBtn').style.display = 'inline-block';
+                });
+            return;
+        }
+        // 기존 코드 (사용하지 않지만 호환성을 위해 유지)
+        if (appUserId && appUserName) {
             showAppUserSection({
                 id: appUserId,
                 name: appUserName,
