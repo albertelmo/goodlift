@@ -190,9 +190,6 @@ async function render(records) {
         });
         const dateObj = new Date(date);
         
-        // 해당 날짜의 세션 정보
-        const dateSessions = sessionsByDate[date] || [];
-        
         html += `
             <div class="app-workout-date-section">
                 <div class="app-workout-date-header">
@@ -212,42 +209,6 @@ async function render(records) {
                     </div>
                 </div>
         `;
-        
-        // 세션 정보 카드 (세션이 있는 경우만) - 방법 2
-        if (dateSessions.length > 0) {
-            // 세션별로 시간과 트레이너 정보 수집
-            const sessionInfoList = dateSessions
-                .sort((a, b) => a.time.localeCompare(b.time))
-                .map(session => {
-                    const trainerName = trainerNameMap[session.trainer] || session.trainer;
-                    return {
-                        time: session.time,
-                        trainer: trainerName
-                    };
-                });
-            
-            // 트레이너가 동일한 경우와 다른 경우를 구분하여 표시
-            const uniqueTrainers = [...new Set(sessionInfoList.map(s => s.trainer))];
-            const sameTrainer = uniqueTrainers.length === 1;
-            
-            html += `
-                <div class="app-workout-session-card">
-                    <div class="app-workout-session-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="9" cy="7" r="4"></circle>
-                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                        </svg>
-                    </div>
-                    <div class="app-workout-session-info">
-                        <div class="app-workout-session-time">${escapeHtml(sessionInfoList.map(s => s.time).join(', '))}</div>
-                        ${sameTrainer ? `<div class="app-workout-session-trainer">${escapeHtml(sessionInfoList[0].trainer)}</div>` : ''}
-                        ${dateSessions.length > 1 ? `<div class="app-workout-session-count">${dateSessions.length}회</div>` : ''}
-                    </div>
-                </div>
-            `;
-        }
         
         html += `
                 <div class="app-workout-items">
