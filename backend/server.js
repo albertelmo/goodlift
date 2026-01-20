@@ -5416,4 +5416,10 @@ app.post('/api/ledger/copy-previous-month', async (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log('\n=== 쿼리 로깅 설정 ===');
+    console.log(`ENABLE_QUERY_LOGGING: ${process.env.ENABLE_QUERY_LOGGING !== 'false' ? 'true' : 'false'}`);
+    console.log(`SLOW_QUERY_THRESHOLD: ${parseInt(process.env.SLOW_QUERY_THRESHOLD || '100', 10)}ms`);
+    console.log(`DEBUG_QUERIES: ${process.env.DEBUG_QUERIES === 'true' ? 'true' : 'false'}`);
+    console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+    console.log('====================\n');
 });

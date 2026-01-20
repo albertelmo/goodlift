@@ -14,10 +14,22 @@ let isReadOnly = false;
 /**
  * 운동기록 목록 초기화
  */
-export function init(appUserId, readOnly = false) {
+export async function init(appUserId, readOnly = false) {
     currentAppUserId = appUserId;
     isReadOnly = readOnly;
-    loadRecords();
+    
+    // 초기 로드 시 최근 2개월만 로드 (성능 최적화)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const twoMonthsAgo = new Date(today);
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    twoMonthsAgo.setDate(1); // 월의 첫 날로 설정
+    
+    const { formatDate } = await import('../utils.js');
+    await loadRecords({
+        startDate: formatDate(twoMonthsAgo),
+        endDate: formatDate(today)
+    });
 }
 
 /**

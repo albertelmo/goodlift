@@ -1,10 +1,62 @@
 const { Pool } = require('pg');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
-const pool = new Pool({
+const basePool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
+// 쿼리 로깅 설정 (테스트용: Render에서도 기본 활성화)
+// 명시적으로 'false'로 설정하지 않는 한 항상 활성화
+const ENABLE_QUERY_LOGGING = process.env.ENABLE_QUERY_LOGGING !== 'false';
+const SLOW_QUERY_THRESHOLD = parseInt(process.env.SLOW_QUERY_THRESHOLD || '100', 10); // 기본 100ms
+
+/**
+ * 쿼리 실행 시간 측정 및 로깅
+ */
+const logQuery = (query, params, duration) => {
+  if (!ENABLE_QUERY_LOGGING) return;
+  
+  const isSlow = duration >= SLOW_QUERY_THRESHOLD;
+  const queryPreview = query.replace(/\s+/g, ' ').trim().substring(0, 150);
+  
+  if (isSlow) {
+    console.warn(`[SLOW QUERY] ${duration}ms - ${queryPreview}${query.length > 150 ? '...' : ''}`);
+    if (params && params.length > 0) {
+      console.warn(`[PARAMS]`, params.length > 3 ? params.slice(0, 3).concat(['...']) : params);
+    }
+  } else if (process.env.DEBUG_QUERIES === 'true') {
+    console.log(`[QUERY] ${duration}ms - ${queryPreview}${query.length > 150 ? '...' : ''}`);
+  }
+};
+
+// Pool의 query 메서드를 래핑하여 로깅 추가
+const pool = {
+  query: async (query, params) => {
+    const startTime = Date.now();
+    try {
+      const result = await basePool.query(query, params);
+      const duration = Date.now() - startTime;
+      logQuery(query, params, duration);
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`[QUERY ERROR] ${duration}ms - ${error.message}`);
+      console.error(`[QUERY] ${query.replace(/\s+/g, ' ').trim().substring(0, 200)}`);
+      if (params && params.length > 0) {
+        console.error(`[PARAMS]`, params.length > 3 ? params.slice(0, 3).concat(['...']) : params);
+      }
+      throw error;
+    }
+  },
+  // Pool의 다른 메서드들도 위임
+  connect: basePool.connect.bind(basePool),
+  end: basePool.end.bind(basePool),
+  on: basePool.on.bind(basePool),
+  once: basePool.once.bind(basePool),
+  removeListener: basePool.removeListener.bind(basePool),
+  removeAllListeners: basePool.removeAllListeners.bind(basePool)
+};
 
 // 운동기록 테이블 생성
 const createWorkoutRecordsTable = async () => {
@@ -104,6 +156,12 @@ const createWorkoutRecordSetsTable = async () => {
         ON workout_record_sets(workout_record_id)
       `);
       
+      // 정렬 최적화를 위한 인덱스
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_workout_record_sets_record_set 
+        ON workout_record_sets(workout_record_id, set_number ASC)
+      `);
+      
       console.log('[PostgreSQL] workout_record_sets 테이블이 생성되었습니다.');
     } else {
       console.log('[PostgreSQL] workout_record_sets 테이블이 이미 존재합니다.');
@@ -149,6 +207,29 @@ const addCompletedColumns = async () => {
         ADD COLUMN is_completed BOOLEAN DEFAULT false
       `);
       console.log('[PostgreSQL] workout_record_sets 테이블에 is_completed 컬럼이 추가되었습니다.');
+      
+      // is_completed 컬럼 추가 후 인덱스 생성
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_workout_record_sets_completed 
+        ON workout_record_sets(workout_record_id, is_completed)
+        WHERE is_completed IS NOT NULL
+      `);
+    } else {
+      // 컬럼이 이미 있는 경우에도 인덱스가 없으면 생성
+      const checkIndex = await pool.query(`
+        SELECT indexname 
+        FROM pg_indexes 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workout_record_sets' 
+        AND indexname = 'idx_workout_record_sets_completed'
+      `);
+      if (checkIndex.rows.length === 0) {
+        await pool.query(`
+          CREATE INDEX IF NOT EXISTS idx_workout_record_sets_completed 
+          ON workout_record_sets(workout_record_id, is_completed)
+          WHERE is_completed IS NOT NULL
+        `);
+      }
     }
   } catch (error) {
     console.error('[PostgreSQL] 완료 상태 컬럼 추가 오류:', error);
@@ -302,12 +383,28 @@ const migrateWorkoutRecordsTable = async () => {
 // 인덱스 생성
 const createWorkoutRecordsIndexes = async () => {
   try {
+    // 단일 컬럼 인덱스
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_workout_records_user_id ON workout_records(app_user_id)
     `);
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_workout_records_date ON workout_records(workout_date)
     `);
+    
+    // 복합 인덱스 (app_user_id와 workout_date를 함께 필터링하는 쿼리 최적화)
+    // 이 인덱스는 WHERE app_user_id = ? AND workout_date >= ? AND workout_date <= ? 쿼리에 유용
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_workout_records_user_date 
+      ON workout_records(app_user_id, workout_date DESC)
+    `);
+    
+    // 정렬 최적화를 위한 인덱스
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_workout_records_user_date_created 
+      ON workout_records(app_user_id, workout_date DESC, created_at DESC)
+    `);
+    
+    console.log('[PostgreSQL] 운동기록 인덱스가 생성되었습니다.');
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 인덱스 생성 오류:', error);
   }
