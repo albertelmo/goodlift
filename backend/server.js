@@ -298,7 +298,11 @@ salesDB.initializeDatabase();
 metricsDB.initializeDatabase();
 marketingDB.initializeDatabase();
 ledgerDB.initializeDatabase();
-appUsersDB.initializeDatabase();
+// app_users 테이블 초기화 후 트레이너 동기화 실행
+(async () => {
+    await appUsersDB.initializeDatabase();
+    await syncTrainersToAppUsers();
+})();
 workoutTypesDB.initializeDatabase(); // workout_types 테이블을 먼저 생성해야 함
 workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
 favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_users와 workout_types를 참조하므로 마지막에 생성
@@ -307,6 +311,42 @@ userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
     try {
+        // 마이그레이션이 완료될 때까지 대기 (trainer 컬럼 존재 확인)
+        let retryCount = 0;
+        const maxRetries = 10;
+        let trainerColumnExists = false;
+        
+        while (!trainerColumnExists && retryCount < maxRetries) {
+            try {
+                // trainer 컬럼 존재 여부 확인
+                const checkColumnQuery = `
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' AND table_name = 'app_users' AND column_name = 'trainer'
+                `;
+                const result = await appUsersDB.pool.query(checkColumnQuery);
+                trainerColumnExists = result.rows.length > 0;
+                
+                if (!trainerColumnExists) {
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                        await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 대기
+                    }
+                }
+            } catch (error) {
+                // 테이블이 아직 생성되지 않았을 수 있음
+                retryCount++;
+                if (retryCount < maxRetries) {
+                    await new Promise(resolve => setTimeout(resolve, 500)); // 0.5초 대기
+                }
+            }
+        }
+        
+        if (!trainerColumnExists) {
+            console.log('[GoodLift] trainer 컬럼 마이그레이션 대기 시간 초과. 트레이너 동기화를 건너뜁니다.');
+            return;
+        }
+        
         if (!fs.existsSync(DATA_PATH)) {
             console.log('[GoodLift] accounts.json 파일이 없어 트레이너 동기화를 건너뜁니다.');
             return;
@@ -363,8 +403,7 @@ async function syncTrainersToAppUsers() {
     }
 }
 
-// 서버 시작 시 트레이너 동기화 실행
-syncTrainersToAppUsers();
+// 서버 시작 시 트레이너 동기화 실행 (위의 async IIFE에서 실행됨)
 
 // 트레이너 VIP 기능 필드 마이그레이션
 function migrateTrainerVipField() {
