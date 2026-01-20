@@ -378,15 +378,36 @@ const createWorkoutRecordsIndexes = async () => {
       CREATE INDEX IF NOT EXISTS idx_workout_records_date ON workout_records(workout_date)
     `);
     
+    // 기존 ASC 인덱스가 있으면 제거 (DESC로 재생성하기 위해)
+    // 인덱스 방향 변경을 위해 기존 인덱스 확인 및 재생성
+    const checkIndexQuery = `
+      SELECT indexdef 
+      FROM pg_indexes 
+      WHERE schemaname = 'public' 
+        AND tablename = 'workout_records' 
+        AND indexname = 'idx_workout_records_user_date'
+    `;
+    const indexCheck = await pool.query(checkIndexQuery);
+    
+    if (indexCheck.rows.length > 0) {
+      const indexDef = indexCheck.rows[0].indexdef;
+      // ASC 인덱스가 있으면 제거하고 DESC로 재생성
+      if (indexDef && !indexDef.includes('DESC')) {
+        console.log('[PostgreSQL] 기존 ASC 인덱스를 DESC로 재생성합니다...');
+        await pool.query(`DROP INDEX IF EXISTS idx_workout_records_user_date`);
+      }
+    }
+    
     // 복합 인덱스 (app_user_id와 workout_date를 함께 필터링하는 쿼리 최적화)
-    // 이 인덱스는 WHERE app_user_id = ? AND workout_date >= ? AND workout_date <= ? 쿼리에 유용
-    // 날짜 범위 쿼리를 위해 ASC로 변경 (범위 스캔에 더 효율적)
+    // 날짜 범위 쿼리와 DESC 정렬을 모두 커버하는 인덱스
+    // PostgreSQL은 범위 쿼리 후 정렬을 위해 이 인덱스를 역순으로 스캔할 수 있음
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_workout_records_user_date 
-      ON workout_records(app_user_id, workout_date)
+      ON workout_records(app_user_id, workout_date DESC)
     `);
     
     // 정렬 최적화를 위한 인덱스 (DESC 정렬이 필요한 경우)
+    // 범위 쿼리와 정렬을 모두 커버하는 최적 인덱스
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_workout_records_user_date_created 
       ON workout_records(app_user_id, workout_date DESC, created_at DESC)
@@ -400,6 +421,10 @@ const createWorkoutRecordsIndexes = async () => {
     `);
     
     console.log('[PostgreSQL] 운동기록 인덱스가 생성되었습니다.');
+    
+    // 인덱스 변경 후 통계 정보 업데이트 (쿼리 플래너가 최신 인덱스를 활용하도록)
+    await pool.query(`ANALYZE workout_records`);
+    console.log('[PostgreSQL] workout_records 테이블 통계 정보가 업데이트되었습니다.');
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 인덱스 생성 오류:', error);
   }
@@ -438,6 +463,7 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
     }
     
     // 정렬 (최신순)
+    // 인덱스 (app_user_id, workout_date DESC)를 활용하여 정렬 비용 최소화
     query += ` ORDER BY wr.workout_date DESC, wr.created_at DESC`;
     
     const result = await pool.query(query, params);
