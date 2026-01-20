@@ -9,6 +9,7 @@ let trainerMembers = null; // 트레이너의 연결된 회원 목록
 let memberTrainers = null; // 회원의 연결된 트레이너 목록
 let todayWorkoutSummary = null; // 오늘의 운동 요약
 let weeklyWorkoutSummary = null; // 주간 운동 요약
+let connectedAppUserInfo = null; // 현재 연결된 유저앱 회원 정보
 
 /**
  * 대시보드 초기화
@@ -20,7 +21,8 @@ export async function init(userData) {
         loadTrainerMembers(),
         loadMemberTrainers(),
         loadTodayWorkoutSummary(),
-        loadWeeklyWorkoutSummary()
+        loadWeeklyWorkoutSummary(),
+        loadConnectedAppUserInfo()
     ]);
     render();
 }
@@ -246,6 +248,12 @@ async function loadWeeklyWorkoutSummary() {
 
 /**
  * 트레이너의 연결된 회원 목록 조회
+ * 
+ * 로직:
+ * 1. app_users에서 member_name이 있는 회원들 조회 (PT 회원과 연결된 유저앱 회원)
+ * 2. 각 회원의 member_name으로 members 테이블 조회
+ * 3. members.trainer가 현재 트레이너와 일치하는 것만 필터링
+ * 4. 유저앱 회원 정보를 표시 (이름, 전화번호 등은 app_users 기준)
  */
 async function loadTrainerMembers() {
     // 트레이너 여부 확인 (currentUser의 isTrainer 필드로 확인)
@@ -257,45 +265,87 @@ async function loadTrainerMembers() {
     }
     
     try {
-        // 트레이너의 회원 목록 조회 (trainer는 username)
         const trainerUsername = currentUser?.username;
-        const membersResponse = await fetch(`/api/members?trainer=${encodeURIComponent(trainerUsername)}`);
         
-        if (!membersResponse.ok) {
-            throw new Error('회원 목록 조회 실패');
-        }
-        
-        const members = await membersResponse.json();
-        
-        // 유효한 회원만 필터링 (무기명/체험 제외)
-        const validMembers = members.filter(member => 
-            member.status === '유효' && 
-            !member.name.startsWith('무기명') && 
-            !member.name.startsWith('체험')
-        );
-        
-        // 유저앱 회원 목록 조회 (회원 연결이 완료된 회원들만 - member_name이 있는 것들)
+        // 1. member_name이 있는 유저앱 회원들 조회 (PT 회원과 연결된 회원)
         const appUsersResponse = await fetch('/api/app-users');
         if (!appUsersResponse.ok) {
             throw new Error('유저앱 회원 목록 조회 실패');
         }
         
         const appUsers = await appUsersResponse.json();
-        
-        // 회원 연결이 완료된 유저앱 회원의 member_name 목록 생성
-        const appUserMemberNames = new Set(
-            appUsers
-                .filter(user => user.member_name && user.member_name.trim() !== '')
-                .map(user => user.member_name)
+        const appUsersWithMemberName = appUsers.filter(user => 
+            user.member_name && user.member_name.trim() !== ''
         );
         
-        // 트레이너의 회원 중 회원 연결이 완료된 유저앱 회원만 필터링
-        trainerMembers = validMembers.filter(member => 
-            appUserMemberNames.has(member.name)
-        );
+        // 2. 각 회원의 member_name으로 members 테이블 조회하여 트레이너 확인
+        trainerMembers = [];
+        
+        for (const appUser of appUsersWithMemberName) {
+            try {
+                // members 테이블에서 해당 회원 조회
+                const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(appUser.member_name)}`);
+                if (!membersResponse.ok) {
+                    continue;
+                }
+                
+                const members = await membersResponse.json();
+                const member = members.find(m => m.name === appUser.member_name);
+                
+                // 3. members.trainer가 현재 트레이너와 일치하는지 확인
+                if (member && member.trainer === trainerUsername) {
+                    // 4. 유저앱 회원 정보를 기준으로 표시할 정보 구성
+                    trainerMembers.push({
+                        app_user_id: appUser.id,
+                        name: appUser.name, // 유저앱 회원 이름
+                        phone: appUser.phone || '-', // 유저앱 회원 전화번호
+                        username: appUser.username, // 유저앱 회원 아이디
+                        member_name: appUser.member_name, // PT 회원 이름 (참고용)
+                        remainSessions: member.remainSessions || 0 // PT 회원의 남은 세션
+                    });
+                }
+            } catch (error) {
+                console.error(`회원 "${appUser.member_name}" 정보 조회 오류:`, error);
+                continue;
+            }
+        }
+        
+        // 이름순 정렬 (유저앱 회원 이름 기준)
+        trainerMembers.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+        
     } catch (error) {
         console.error('트레이너 회원 목록 조회 오류:', error);
         trainerMembers = null;
+    }
+}
+
+/**
+ * 현재 연결된 유저앱 회원 정보 조회
+ */
+async function loadConnectedAppUserInfo() {
+    const isTrainer = currentUser?.isTrainer === true;
+    if (!isTrainer) {
+        connectedAppUserInfo = null;
+        return;
+    }
+    
+    const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+    if (!connectedAppUserId) {
+        connectedAppUserInfo = null;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/app-users/${connectedAppUserId}`);
+        if (!response.ok) {
+            connectedAppUserInfo = null;
+            return;
+        }
+        
+        connectedAppUserInfo = await response.json();
+    } catch (error) {
+        console.error('연결된 회원 정보 조회 오류:', error);
+        connectedAppUserInfo = null;
     }
 }
 
@@ -499,25 +549,36 @@ function render() {
                 </div>
             </div>
             
-            ${trainerMembers && trainerMembers.length > 0 ? `
+            ${isTrainer ? `
             <div class="app-dashboard-section">
-                <h2 class="app-section-title">연결된 회원 (${trainerMembers.length}명)</h2>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <h2 class="app-section-title" style="margin: 0;">
+                        ${trainerMembers && trainerMembers.length > 0 ? `연결된 회원 (${trainerMembers.length}명)` : '연결된 회원'}
+                    </h2>
+                </div>
                 <div class="app-member-list">
-                    ${trainerMembers.map(member => {
-                        const connectedMemberName = localStorage.getItem('connectedMemberName');
-                        const isConnected = connectedMemberName === member.name;
+                    ${trainerMembers && trainerMembers.length > 0 ? trainerMembers.map(member => {
+                        const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                        const isConnected = connectedAppUserId === member.app_user_id;
                         return `
-                        <div class="app-member-item ${isConnected ? 'app-member-item-connected' : ''}" data-member-name="${escapeHtml(member.name)}" style="cursor:pointer;">
+                        <div class="app-member-item ${isConnected ? 'app-member-item-connected' : ''}" 
+                             data-app-user-id="${member.app_user_id}" 
+                             data-member-name="${member.member_name ? escapeHtml(member.member_name) : ''}"
+                             style="cursor:pointer;">
                             <div class="app-member-info">
                                 <div style="display:flex;align-items:center;gap:8px;">
                                     <p class="app-member-name">${escapeHtml(member.name)}</p>
                                     ${isConnected ? '<span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>' : ''}
+                                    <span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>
                                 </div>
-                                <p class="app-member-details">${escapeHtml(member.phone || '-')} | 남은 세션: ${member.remainSessions || 0}회</p>
+                                <p class="app-member-details">
+                                    ${escapeHtml(member.phone || '-')} | 아이디: ${escapeHtml(member.username)}
+                                    ${member.remainSessions !== undefined && member.remainSessions > 0 ? ` | 남은 세션: ${member.remainSessions}회` : ''}
+                                </p>
                             </div>
                         </div>
                     `;
-                    }).join('')}
+                    }).join('') : '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">연결된 회원이 없습니다</div>'}
                 </div>
             </div>
             ` : ''}
@@ -876,12 +937,19 @@ function setupTodayWorkoutCardClick() {
  * 회원 목록 클릭 이벤트 설정
  */
 function setupMemberClickEvents() {
-    const memberItems = document.querySelectorAll('.app-member-item[data-member-name]');
+    const memberItems = document.querySelectorAll('.app-member-item[data-app-user-id]');
     
     memberItems.forEach(item => {
         item.addEventListener('click', async () => {
-            const memberName = item.getAttribute('data-member-name');
-            await connectMember(memberName);
+            const appUserId = item.getAttribute('data-app-user-id');
+            const appUserName = item.querySelector('.app-member-name')?.textContent || '회원';
+            
+            // app_user_id를 직접 사용하여 연결 (member_name으로 찾으면 같은 이름의 다른 유저가 선택될 수 있음)
+            if (appUserId) {
+                await connectAppUser(appUserId, appUserName);
+            } else {
+                alert('회원 정보를 불러올 수 없습니다.');
+            }
         });
     });
 }
@@ -902,14 +970,219 @@ function setupTrainerClickEvents() {
 }
 
 /**
- * 회원 연결
+ * 회원 연결 버튼 클릭 이벤트 설정
  */
-async function connectMember(memberName) {
+function setupConnectUserButton() {
+    const connectUserBtn = document.getElementById('connect-user-btn');
+    if (connectUserBtn) {
+        connectUserBtn.addEventListener('click', () => {
+            showConnectUserModal();
+        });
+    }
+}
+
+/**
+ * 회원 연결 모달 표시
+ */
+async function showConnectUserModal() {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>회원 연결</h2>
+            <button class="app-modal-close-btn" aria-label="닫기">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        <div class="app-modal-content" style="padding: 16px;">
+            <div class="app-form-group" style="margin-bottom: 16px;">
+                <label style="display: block; font-size: 14px; font-weight: 600; color: var(--app-text); margin-bottom: 8px;">
+                    회원 검색
+                </label>
+                <input 
+                    type="text" 
+                    id="user-search-input" 
+                    placeholder="이름, 전화번호, 아이디로 검색"
+                    style="width: 100%; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; box-sizing: border-box;"
+                    autocomplete="off"
+                >
+            </div>
+            <div id="user-search-results" style="max-height: 400px; overflow-y: auto; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface);">
+                <div style="padding: 40px 20px; text-align: center; color: var(--app-text-muted);">
+                    검색어를 입력하세요
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modalBg);
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 검색 입력 이벤트
+    const searchInput = modal.querySelector('#user-search-input');
+    const resultsContainer = modal.querySelector('#user-search-results');
+    let searchTimeout = null;
+    
+    searchInput.addEventListener('input', async (e) => {
+        const query = e.target.value.trim();
+        
+        // 디바운싱
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(async () => {
+            if (query.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div style="padding: 40px 20px; text-align: center; color: var(--app-text-muted);">
+                        검색어를 입력하세요
+                    </div>
+                `;
+                return;
+            }
+            
+            // 검색 중 표시
+            resultsContainer.innerHTML = `
+                <div style="padding: 40px 20px; text-align: center; color: var(--app-text-muted);">
+                    검색 중...
+                </div>
+            `;
+            
+            try {
+                // 유저앱 전체 회원 조회
+                const response = await fetch('/api/app-users');
+                if (!response.ok) {
+                    throw new Error('회원 목록 조회 실패');
+                }
+                
+                const appUsers = await response.json();
+                
+                // PT 회원과 연결된 유저앱 회원만 필터링 (member_name이 있는 회원)
+                const appUsersWithMemberName = appUsers.filter(user => 
+                    user.member_name && user.member_name.trim() !== ''
+                );
+                
+                // 검색어로 필터링 (이름, 전화번호, 아이디로 검색)
+                const queryLower = query.toLowerCase();
+                const filteredUsers = appUsersWithMemberName.filter(user => {
+                    const name = (user.name || '').toLowerCase();
+                    const phone = (user.phone || '').replace(/[^0-9]/g, '');
+                    const username = (user.username || '').toLowerCase();
+                    const queryNoHyphen = query.replace(/[^0-9]/g, '');
+                    
+                    return name.includes(queryLower) || 
+                           phone.includes(queryNoHyphen) || 
+                           username.includes(queryLower);
+                });
+                
+                if (filteredUsers.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div style="padding: 40px 20px; text-align: center; color: var(--app-text-muted);">
+                            검색 결과가 없습니다
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 결과 목록 렌더링
+                const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                const resultsHTML = filteredUsers.map(user => {
+                    const isConnected = connectedAppUserId === user.id;
+                    return `
+                        <div 
+                            class="app-member-item ${isConnected ? 'app-member-item-connected' : ''}" 
+                            data-app-user-id="${user.id}"
+                            data-app-user-name="${escapeHtml(user.name)}"
+                            style="cursor: pointer; padding: 12px 16px; border-bottom: 1px solid var(--app-border);"
+                        >
+                            <div class="app-member-info">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <p class="app-member-name">${escapeHtml(user.name)}</p>
+                                    ${isConnected ? '<span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>' : ''}
+                                    ${user.member_name ? '<span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>' : ''}
+                                </div>
+                                <p class="app-member-details">
+                                    ${escapeHtml(user.phone || '-')} | 아이디: ${escapeHtml(user.username)}
+                                    ${user.member_name ? ` | PT: ${escapeHtml(user.member_name)}` : ''}
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                resultsContainer.innerHTML = resultsHTML;
+                
+                // 결과 항목 클릭 이벤트
+                resultsContainer.querySelectorAll('.app-member-item[data-app-user-id]').forEach(item => {
+                    item.addEventListener('click', async () => {
+                        const appUserId = item.getAttribute('data-app-user-id');
+                        const appUserName = item.getAttribute('data-app-user-name');
+                        await connectAppUser(appUserId, appUserName);
+                        closeModal();
+                    });
+                });
+                
+            } catch (error) {
+                console.error('회원 검색 오류:', error);
+                resultsContainer.innerHTML = `
+                    <div style="padding: 40px 20px; text-align: center; color: var(--app-danger);">
+                        검색 중 오류가 발생했습니다
+                    </div>
+                `;
+            }
+        }, 300);
+    });
+    
+    // 검색 입력 포커스
+    setTimeout(() => {
+        searchInput.focus();
+    }, 100);
+    
+    // 모달 닫기
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+    
+    const closeBtn = modal.querySelector('.app-modal-close-btn');
+    closeBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+    
+    // ESC 키로 닫기
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+}
+
+/**
+ * 유저앱 회원 연결 (app_user_id로 직접 연결)
+ * 
+ * 주의: 이 함수는 단순히 현재 세션에서 선택한 회원을 localStorage에 저장하는 것입니다.
+ * 실제 연결 여부는 member_name → members.trainer 매칭으로 확인됩니다.
+ */
+async function connectAppUser(appUserId, appUserName) {
     // 이미 연결된 회원인지 확인
-    const connectedMemberName = localStorage.getItem('connectedMemberName');
-    if (connectedMemberName === memberName) {
+    const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+    if (connectedAppUserId === appUserId) {
         // 이미 연결된 회원이면 해제 여부 확인
-        if (confirm(`"${memberName}" 회원과의 연결을 해제하시겠습니까?`)) {
+        if (confirm(`"${appUserName}" 회원과의 연결을 해제하시겠습니까?`)) {
             localStorage.removeItem('connectedMemberName');
             localStorage.removeItem('connectedMemberAppUserId');
             await refresh();
@@ -918,19 +1191,79 @@ async function connectMember(memberName) {
     }
     
     // 다른 회원이 연결되어 있으면 확인
-    if (connectedMemberName) {
-        if (!confirm(`"${connectedMemberName}" 회원과의 연결을 해제하고 "${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
+    if (connectedAppUserId) {
+        if (!confirm(`현재 연결된 회원과의 연결을 해제하고 "${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
             return;
         }
     } else {
         // 연결 확인
-        if (!confirm(`"${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
+        if (!confirm(`"${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
             return;
         }
     }
     
     try {
-        // 해당 회원의 app_user_id 조회
+        // 연결 정보 저장 (localStorage에만 저장, DB는 수정하지 않음)
+        localStorage.setItem('connectedMemberAppUserId', appUserId);
+        
+        // member_name이 있으면 connectedMemberName도 저장 (PT 회원인 경우)
+        try {
+            const appUserResponse = await fetch(`/api/app-users/${appUserId}`);
+            if (appUserResponse.ok) {
+                const appUser = await appUserResponse.json();
+                if (appUser.member_name) {
+                    localStorage.setItem('connectedMemberName', appUser.member_name);
+                } else {
+                    localStorage.removeItem('connectedMemberName');
+                }
+            }
+        } catch (error) {
+            console.error('앱 유저 정보 조회 오류:', error);
+        }
+        
+        // 대시보드 새로고침
+        await refresh();
+        
+        alert(`"${appUserName}" 회원과 연결되었습니다. 이제 운동/식단 탭에서 해당 회원의 정보를 확인하고 편집할 수 있습니다.`);
+    } catch (error) {
+        console.error('회원 연결 오류:', error);
+        alert('회원 연결 중 오류가 발생했습니다.');
+    }
+}
+
+/**
+ * 회원 연결 (PT 회원용 - member_name으로 연결)
+ */
+async function connectMember(memberName) {
+    // 이미 연결된 회원인지 확인
+    const connectedMemberName = localStorage.getItem('connectedMemberName');
+    if (connectedMemberName === memberName) {
+        // 이미 연결된 회원이면 해제 여부 확인
+        // 유저앱 회원 이름 조회
+        let appUserName = memberName;
+        try {
+            const appUsersResponse = await fetch('/api/app-users');
+            if (appUsersResponse.ok) {
+                const appUsers = await appUsersResponse.json();
+                const appUser = appUsers.find(user => user.member_name === memberName);
+                if (appUser) {
+                    appUserName = appUser.name;
+                }
+            }
+        } catch (error) {
+            console.error('유저앱 회원 정보 조회 오류:', error);
+        }
+        
+        if (confirm(`"${appUserName}" 회원과의 연결을 해제하시겠습니까?`)) {
+            localStorage.removeItem('connectedMemberName');
+            localStorage.removeItem('connectedMemberAppUserId');
+            await refresh();
+        }
+        return;
+    }
+    
+    try {
+        // 해당 회원의 app_user_id 조회 (먼저 조회하여 유저앱 회원 이름 확인)
         const appUsersResponse = await fetch('/api/app-users');
         if (!appUsersResponse.ok) {
             throw new Error('유저앱 회원 목록 조회 실패');
@@ -944,14 +1277,44 @@ async function connectMember(memberName) {
             return;
         }
         
-        // 연결 정보 저장
+        // 유저앱 회원 이름 사용
+        const appUserName = appUser.name;
+        
+        // 다른 회원이 연결되어 있으면 확인
+        if (connectedMemberName) {
+            // 현재 연결된 회원의 유저앱 이름도 조회
+            let currentAppUserName = connectedMemberName;
+            try {
+                const currentAppUsersResponse = await fetch('/api/app-users');
+                if (currentAppUsersResponse.ok) {
+                    const currentAppUsers = await currentAppUsersResponse.json();
+                    const currentAppUser = currentAppUsers.find(user => user.member_name === connectedMemberName);
+                    if (currentAppUser) {
+                        currentAppUserName = currentAppUser.name;
+                    }
+                }
+            } catch (error) {
+                console.error('현재 연결된 회원 정보 조회 오류:', error);
+            }
+            
+            if (!confirm(`"${currentAppUserName}" 회원과의 연결을 해제하고 "${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
+                return;
+            }
+        } else {
+            // 연결 확인
+            if (!confirm(`"${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
+                return;
+            }
+        }
+        
+        // 연결 정보 저장 (localStorage에만 저장, DB는 수정하지 않음)
         localStorage.setItem('connectedMemberName', memberName);
         localStorage.setItem('connectedMemberAppUserId', appUser.id);
         
         // 대시보드 새로고침
         await refresh();
         
-        alert(`"${memberName}" 회원과 연결되었습니다. 이제 운동/식단 탭에서 해당 회원의 정보를 확인하고 편집할 수 있습니다.`);
+        alert(`"${appUserName}" 회원과 연결되었습니다. 이제 운동/식단 탭에서 해당 회원의 정보를 확인하고 편집할 수 있습니다.`);
     } catch (error) {
         console.error('회원 연결 오류:', error);
         alert('회원 연결 중 오류가 발생했습니다.');
@@ -1008,7 +1371,8 @@ export async function refresh() {
         loadTrainerMembers(),
         loadMemberTrainers(),
         loadTodayWorkoutSummary(),
-        loadWeeklyWorkoutSummary()
+        loadWeeklyWorkoutSummary(),
+        loadConnectedAppUserInfo()
     ]);
     render();
 }

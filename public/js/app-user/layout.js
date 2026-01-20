@@ -281,6 +281,16 @@ function handleLogout() {
     localStorage.removeItem('appUsername');
     localStorage.removeItem('appUserName');
     localStorage.removeItem('appUserPhone');
+    localStorage.removeItem('appUserMemberName');
+    // 연결된 회원 정보 삭제
+    localStorage.removeItem('connectedMemberName');
+    localStorage.removeItem('connectedMemberAppUserId');
+    // 트레이너 뷰 모드 관련 정보 삭제
+    localStorage.removeItem('viewingTrainerAppUserId');
+    localStorage.removeItem('isReadOnly');
+    localStorage.removeItem('viewingTrainerName');
+    localStorage.removeItem('viewMode');
+    localStorage.removeItem('autoOpenWorkoutAdd');
 
     // 화면 전환
     document.getElementById('app-user-section').style.display = 'none';

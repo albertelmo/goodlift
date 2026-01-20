@@ -651,6 +651,7 @@ app.get('/api/app-users', async (req, res) => {
     try {
         const filters = {};
         if (req.query.member_name) filters.member_name = req.query.member_name;
+        if (req.query.trainer) filters.trainer = req.query.trainer;
         if (req.query.is_active !== undefined) filters.is_active = req.query.is_active === 'true';
         if (req.query.username) filters.username = req.query.username;
         
@@ -750,12 +751,13 @@ app.post('/api/app-users', async (req, res) => {
 app.patch('/api/app-users/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, phone, member_name, is_active, password } = req.body;
+        const { name, phone, member_name, trainer, is_active, password } = req.body;
         
         const updates = {};
         if (name !== undefined) updates.name = name.trim();
         if (phone !== undefined) updates.phone = phone.trim();
         if (member_name !== undefined) updates.member_name = member_name || null;
+        if (trainer !== undefined) updates.trainer = trainer || null;
         if (is_active !== undefined) updates.is_active = is_active;
         
         // 비밀번호 변경

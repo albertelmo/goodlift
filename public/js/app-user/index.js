@@ -78,20 +78,27 @@ export function navigateToScreen(screen) {
             if (header) {
                 header.style.display = 'none';
             }
-            import('./workout/index.js').then(module => {
+            import('./workout/index.js').then(async module => {
                 // 회원이 트레이너를 보는 경우 (읽기 전용)
                 const viewingTrainerAppUserId = localStorage.getItem('viewingTrainerAppUserId');
                 if (viewingTrainerAppUserId) {
-                    module.init(viewingTrainerAppUserId, true); // readOnly = true
+                    await module.init(viewingTrainerAppUserId, true); // readOnly = true
                     return;
                 }
                 // 트레이너가 회원을 선택한 경우 연결된 회원의 app_user_id 사용
                 const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
-                const appUserId = connectedMemberAppUserId || currentUser.id;
-                module.init(appUserId, false); // readOnly = false
+                const appUserId = connectedMemberAppUserId || currentUser?.id;
+                
+                if (!appUserId) {
+                    console.error('운동기록 화면 로드 오류: app_user_id가 없습니다.');
+                    alert('사용자 정보를 불러올 수 없습니다. 다시 로그인해주세요.');
+                    return;
+                }
+                
+                await module.init(appUserId, false); // readOnly = false
             }).catch(error => {
                 console.error('운동기록 화면 로드 오류:', error);
-                alert('운동기록 화면을 불러오는 중 오류가 발생했습니다.');
+                alert('운동기록 화면을 불러오는 중 오류가 발생했습니다: ' + (error.message || '알 수 없는 오류'));
             });
             break;
         case 'diet':

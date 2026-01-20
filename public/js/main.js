@@ -462,6 +462,14 @@ window.addEventListener('DOMContentLoaded', function() {
         localStorage.removeItem('originalCenter');
         localStorage.removeItem('originalUserType');
         localStorage.removeItem('originalUsername');
+        // 연결된 회원 정보 삭제
+        localStorage.removeItem('connectedMemberName');
+        localStorage.removeItem('connectedMemberAppUserId');
+        // 트레이너 뷰 모드 관련 정보 삭제
+        localStorage.removeItem('viewingTrainerAppUserId');
+        localStorage.removeItem('isReadOnly');
+        localStorage.removeItem('viewingTrainerName');
+        localStorage.removeItem('autoOpenWorkoutAdd');
         
         // 화면 전환
         document.getElementById('mainSection').style.display = 'none';
