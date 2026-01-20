@@ -6,6 +6,8 @@ import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calend
 
 let currentAppUserId = null;
 let isReadOnly = false;
+let lastButtonClickTime = 0; // 버튼 클릭 중복 방지용
+const BUTTON_CLICK_THROTTLE = 300; // 300ms 내 중복 클릭 방지
 
 /**
  * 운동기록 화면 초기화
@@ -20,7 +22,229 @@ export function init(appUserId, readOnly = false) {
         header.style.display = 'none';
     }
     
+    // 버튼 이벤트 위임 리스너 설정 (render() 전에 설정하여 DOM 업데이트 후에도 작동)
+    // setupBackButtonHandler는 setupButtonEventListeners에서 처리하므로 제거
+    setupButtonEventListeners();
+    
     render();
+}
+
+/**
+ * 뒤로가기 버튼 이벤트 핸들러 설정 (한 번만 설정)
+ */
+function setupBackButtonHandler() {
+    const container = document.getElementById('app-user-content');
+    if (!container) return;
+    
+    // 이미 설정되어 있으면 중복 설정 방지
+    if (container._backButtonHandlerSetup) {
+        return;
+    }
+    
+    // 이벤트 위임을 container에 설정 (한 번만)
+    const handler = async (e) => {
+        // 뒤로가기 버튼 또는 그 자식 요소 클릭 확인
+        const backBtn = e.target.closest('#workout-back-btn');
+        if (backBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // 현재 읽기 전용 모드인지 확인
+            const isReadOnlyMode = localStorage.getItem('isReadOnly') === 'true';
+            const viewingTrainerName = localStorage.getItem('viewingTrainerName');
+            
+            if (isReadOnlyMode && viewingTrainerName) {
+                // localStorage에서 트레이너 관련 정보 제거
+                localStorage.removeItem('viewingTrainerAppUserId');
+                localStorage.removeItem('isReadOnly');
+                localStorage.removeItem('viewingTrainerName');
+                
+                // 자신의 기록으로 다시 로드
+                const { navigateToScreen } = await import('../index.js');
+                navigateToScreen('workout');
+            }
+        }
+    };
+    
+    container.addEventListener('click', handler);
+    container._backButtonHandlerSetup = true; // 플래그 설정
+}
+
+
+/**
+ * 버튼 이벤트 핸들러 설정 (이벤트 위임 사용, 한 번만 설정)
+ */
+function setupButtonEventListeners() {
+    const container = document.getElementById('app-user-content');
+    if (!container) {
+        return;
+    }
+    
+    // 이미 설정되어 있으면 중복 설정 방지
+    if (container._buttonEventListenersSetup) {
+        return;
+    }
+    
+    // 이벤트 위임을 container에 설정 (한 번만)
+    const handler = async (e) => {
+        const target = e.target;
+        const eventType = e.type;
+        
+        // 버튼 찾기
+        let clickedBtn = null;
+        if (target.tagName === 'BUTTON' && target.id) {
+            clickedBtn = target;
+        } else if (target.closest) {
+            clickedBtn = target.closest('button[id]');
+        }
+        
+        if (!clickedBtn || !clickedBtn.id) {
+            return;
+        }
+        
+        const btnId = clickedBtn.id;
+        
+        // touch 이벤트 처리
+        if (eventType === 'touchstart') {
+            e.preventDefault(); // 기본 동작 방지 (스크롤 등)
+            return; // touchstart는 처리하지 않고 touchend에서 처리
+        }
+        
+        if (eventType === 'touchend') {
+            e.preventDefault(); // 기본 동작 방지 (스크롤 등)
+            e.stopPropagation();
+        }
+        
+        // 오늘 버튼 클릭
+        if (btnId === 'workout-today-btn') {
+            if (eventType === 'touchstart') {
+                return; // touchstart는 무시
+            }
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                const { setSelectedDate, setCurrentMonth } = await import('./calendar.js');
+                const { formatDate } = await import('../utils.js');
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                
+                setSelectedDate(today);
+                setCurrentMonth(today);
+                await loadWorkoutRecordsForCalendar();
+                updateMonthDisplay();
+                
+                const todayStr = formatDate(today);
+                const listModule = await import('./list.js');
+                await listModule.filterByDate(todayStr);
+            } catch (error) {
+                console.error('[Workout] 오늘 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+        
+        // 메모 버튼 클릭
+        if (btnId === 'workout-memo-btn') {
+            if (eventType === 'touchstart') {
+                return; // touchstart는 무시
+            }
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                await showMemoModal();
+            } catch (error) {
+                console.error('[Workout] 메모 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+        
+        // 내 기록으로 돌아가기 버튼 클릭
+        if (btnId === 'workout-back-btn') {
+            if (eventType === 'touchstart') {
+                return; // touchstart는 무시
+            }
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                // 현재 읽기 전용 모드인지 확인
+                const isReadOnlyMode = localStorage.getItem('isReadOnly') === 'true';
+                const viewingTrainerName = localStorage.getItem('viewingTrainerName');
+                
+                if (isReadOnlyMode && viewingTrainerName) {
+                    // localStorage에서 트레이너 관련 정보 제거
+                    localStorage.removeItem('viewingTrainerAppUserId');
+                    localStorage.removeItem('isReadOnly');
+                    localStorage.removeItem('viewingTrainerName');
+                    
+                    // 자신의 기록으로 다시 로드
+                    const { navigateToScreen } = await import('../index.js');
+                    navigateToScreen('workout');
+                }
+            } catch (error) {
+                console.error('[Workout] 돌아가기 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+        
+        // 운동 추가하기 버튼 클릭
+        if (btnId === 'workout-add-btn' && !isReadOnly) {
+            // 중복 클릭 방지: touchstart는 건너뛰고, 다른 이벤트는 throttle 체크
+            if (eventType === 'touchstart') {
+                return; // touchstart는 무시 (touchend에서만 처리)
+            }
+            
+            // 짧은 시간 내 중복 실행 방지
+            const now = Date.now();
+            if (now - lastButtonClickTime < BUTTON_CLICK_THROTTLE) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            lastButtonClickTime = now;
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                const selectedDateStr = getSelectedDate();
+                showWorkoutSelectModal(currentAppUserId, selectedDateStr, () => {
+                    import('./list.js').then(module => {
+                        module.refresh();
+                    });
+                });
+            } catch (error) {
+                console.error('[Workout] 운동 추가 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+    };
+    
+    // 여러 이벤트 타입 처리 (스와이프 직후 click 이벤트가 발생하지 않을 수 있음)
+    // click 이벤트
+    container.addEventListener('click', handler, true);
+    container.addEventListener('click', handler, false);
+    
+    // touch 이벤트 (모바일 및 스와이프 후 첫 클릭 처리)
+    container.addEventListener('touchstart', handler, true);
+    container.addEventListener('touchend', handler, true);
+    
+    // pointer 이벤트 (마우스, 터치, 펜 통합)
+    container.addEventListener('pointerdown', handler, true);
+    
+    container._buttonEventListenersSetup = true;
 }
 
 /**
@@ -28,7 +252,9 @@ export function init(appUserId, readOnly = false) {
  */
 function render() {
     const container = document.getElementById('app-user-content');
-    if (!container) return;
+    if (!container) {
+        return;
+    }
     
     // 현재 월 가져오기
     const currentMonth = getCurrentMonth();
@@ -48,12 +274,12 @@ function render() {
     
     // 뒤로가기 버튼 (트레이너 기록을 볼 때만 표시)
     const backButton = isReadOnly && viewingTrainerName ? `
-        <div class="app-workout-back-section" style="padding: 12px 20px; border-bottom: 1px solid var(--app-border);">
-            <button class="app-workout-back-btn" id="workout-back-btn" title="내 기록으로 돌아가기" style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: none; background: transparent; color: var(--app-text); cursor: pointer; font-size: 14px;">
+        <div class="app-workout-add-section">
+            <button class="app-btn-primary app-btn-full" id="workout-back-btn" title="내 기록으로 돌아가기">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
-                <span>내 기록으로 돌아가기</span>
+                내 기록으로 돌아가기
             </button>
         </div>
     ` : '';
@@ -62,19 +288,16 @@ function render() {
         <div class="app-workout-screen">
             <div class="app-workout-top-bar">
                 <div class="app-workout-month-display">${year}년 ${month}월${memberDisplay}</div>
-                <button class="app-workout-today-btn" id="workout-today-btn" title="오늘로 이동">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                    </svg>
-                </button>
+                <div class="app-workout-top-buttons">
+                    <button class="app-workout-today-btn" id="workout-today-btn" title="오늘로 이동">오늘</button>
+                    <button class="app-workout-today-btn" id="workout-memo-btn" title="메모 보기">메모</button>
+                </div>
             </div>
-            ${backButton}
             <div id="workout-calendar-container"></div>
+            ${backButton}
+            ${!isReadOnly ? `
             <div class="app-workout-add-section">
-                <button class="app-btn-primary app-btn-full" id="workout-add-btn" ${isReadOnly ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
+                <button class="app-btn-primary app-btn-full" id="workout-add-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="12" y1="5" x2="12" y2="19"></line>
                         <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -82,53 +305,13 @@ function render() {
                     운동 추가하기
                 </button>
             </div>
+            ` : ''}
             <div id="workout-list-wrapper"></div>
         </div>
     `;
     
     // 월 변경 감지를 위한 인터벌 (캘린더 스와이프 시 업데이트)
     setupMonthUpdateObserver();
-    
-    // 뒤로가기 버튼 (트레이너 기록을 볼 때만)
-    const backBtn = document.getElementById('workout-back-btn');
-    if (backBtn) {
-        backBtn.addEventListener('click', async () => {
-            // localStorage에서 트레이너 관련 정보 제거
-            localStorage.removeItem('viewingTrainerAppUserId');
-            localStorage.removeItem('isReadOnly');
-            localStorage.removeItem('viewingTrainerName');
-            
-            // 자신의 기록으로 다시 로드
-            const { navigateToScreen } = await import('../index.js');
-            navigateToScreen('workout');
-        });
-    }
-    
-    // 오늘로 이동 버튼
-    const todayBtn = document.getElementById('workout-today-btn');
-    if (todayBtn) {
-        todayBtn.addEventListener('click', async () => {
-            const { getCurrentMonth, setSelectedDate, setCurrentMonth } = await import('./calendar.js');
-            const { formatDate } = await import('../utils.js');
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            // 캘린더에 오늘 날짜 설정
-            setSelectedDate(today);
-            setCurrentMonth(today);
-            
-            // 캘린더 다시 렌더링
-            await loadWorkoutRecordsForCalendar();
-            
-            // 상단 연월 표시 업데이트
-            updateMonthDisplay();
-            
-            // 오늘 날짜의 운동기록 목록 필터링
-            const todayStr = formatDate(today);
-            const listModule = await import('./list.js');
-            await listModule.filterByDate(todayStr);
-        });
-    }
     
     // 캘린더용 운동기록 로드 (먼저 실행하여 캘린더에 데이터 전달)
     loadWorkoutRecordsForCalendar().then(async () => {
@@ -183,21 +366,7 @@ function render() {
         }
     });
     
-    // 추가 버튼 이벤트 (읽기 전용 모드가 아닌 경우만)
-    if (!isReadOnly) {
-        const addBtn = document.getElementById('workout-add-btn');
-        if (addBtn) {
-            addBtn.addEventListener('click', () => {
-                const selectedDateStr = getSelectedDate();
-                showWorkoutSelectModal(currentAppUserId, selectedDateStr, () => {
-                    // 추가 성공 후 목록 새로고침
-                    import('./list.js').then(module => {
-                        module.refresh();
-                    });
-                });
-            });
-        }
-    }
+    // 추가 버튼 이벤트는 init()에서 이벤트 위임으로 한 번만 설정되므로 여기서는 설정하지 않음
     
     // 오늘의 운동 카드에서 온 경우 자동으로 운동 추가 모달 열기
     const autoOpenWorkoutAdd = localStorage.getItem('autoOpenWorkoutAdd');
@@ -343,5 +512,131 @@ async function loadWorkoutRecordsForCalendar() {
                 updateMonthDisplay();
             }, []);
         }
+    }
+}
+
+/**
+ * 메모 모달 표시
+ */
+async function showMemoModal() {
+    try {
+        const { getCurrentMonth } = await import('./calendar.js');
+        const { getWorkoutRecords } = await import('../api.js');
+        const { formatDate, formatDateShort, escapeHtml } = await import('../utils.js');
+        
+        // 현재 달 가져오기
+        const currentMonth = getCurrentMonth();
+        const year = currentMonth.getFullYear();
+        const month = currentMonth.getMonth() + 1;
+        
+        // 달의 시작일과 마지막일 계산
+        const startDate = new Date(year, month - 1, 1);
+        const endDate = new Date(year, month, 0);
+        
+        const startDateStr = formatDate(startDate);
+        const endDateStr = formatDate(endDate);
+        
+        // 현재 달의 운동기록 가져오기
+        const records = await getWorkoutRecords(currentAppUserId, {
+            startDate: startDateStr,
+            endDate: endDateStr
+        });
+        
+        // 메모가 있는 기록 필터링
+        const recordsWithMemo = records.filter(record => 
+            record.notes && record.notes.trim().length > 0
+        );
+        
+        // 메모 모달 HTML 생성
+        let memoCardsHtml = '';
+        if (recordsWithMemo.length === 0) {
+            memoCardsHtml = '<div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">메모가 있는 운동기록이 없습니다.</div>';
+        } else {
+            memoCardsHtml = recordsWithMemo.map(record => {
+                const dateObj = new Date(record.workout_date + 'T00:00:00');
+                const dateStr = formatDateShort(dateObj);
+                const workoutName = escapeHtml(record.workout_type_name || '운동');
+                const memo = escapeHtml(record.notes || '');
+                
+                return `<div class="app-memo-card">
+                    <div class="app-memo-card-header">
+                        <span class="app-memo-card-date">${dateStr}</span>
+                        <span class="app-memo-card-workout">${workoutName}</span>
+                    </div>
+                    <div class="app-memo-card-content">${memo}</div>
+                </div>`;
+            }).join('');
+        }
+        
+        // 모달 HTML 생성
+        const modalHtml = `
+            <div class="app-modal-bg" id="memo-modal-bg">
+                <div class="app-modal" id="memo-modal">
+                    <div class="app-modal-header">
+                        <h2>${year}년 ${month}월 메모</h2>
+                        <button class="app-modal-close-btn" id="memo-modal-close">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="app-modal-content" style="max-height: 60vh; overflow-y: auto; padding: 16px;">
+                        <div class="app-memo-cards-container">
+                            ${memoCardsHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 기존 모달이 있으면 제거
+        const existingModal = document.getElementById('memo-modal-bg');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 모달 추가
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modalBg = document.getElementById('memo-modal-bg');
+        const modal = document.getElementById('memo-modal');
+        const closeBtn = document.getElementById('memo-modal-close');
+        
+        // 모달 표시 애니메이션
+        setTimeout(() => {
+            modalBg.classList.add('app-modal-show');
+            modal.classList.add('app-modal-show');
+        }, 10);
+        
+        // 닫기 버튼 클릭
+        closeBtn.addEventListener('click', closeMemoModal);
+        
+        // 배경 클릭 시 닫기
+        modalBg.addEventListener('click', (e) => {
+            if (e.target === modalBg) {
+                closeMemoModal();
+            }
+        });
+        
+        // ESC 키로 닫기
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeMemoModal();
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        
+        function closeMemoModal() {
+            modalBg.classList.remove('app-modal-show');
+            modal.classList.remove('app-modal-show');
+            document.removeEventListener('keydown', escHandler);
+            setTimeout(() => {
+                modalBg.remove();
+            }, 300);
+        }
+    } catch (error) {
+        console.error('메모 모달 표시 오류:', error);
+        alert('메모를 불러오는 중 오류가 발생했습니다.');
     }
 }

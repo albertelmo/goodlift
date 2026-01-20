@@ -7,6 +7,14 @@ import { addWorkoutRecord, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout
  * 운동 선택 모달 표시 (1단계)
  */
 export async function showWorkoutSelectModal(appUserId, selectedDate = null, onSuccess) {
+    // 기존 모달이 있으면 제거
+    const existingModals = document.querySelectorAll('.app-modal-bg');
+    existingModals.forEach(modal => {
+        if (modal.parentNode) {
+            modal.parentNode.removeChild(modal);
+        }
+    });
+    
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
@@ -406,17 +414,27 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
     });
     
     const closeModal = () => {
+        // 모달 닫기 애니메이션
         modalBg.classList.remove('app-modal-show');
         modal.classList.remove('app-modal-show');
+        // 모달 DOM에서 제거
         setTimeout(() => {
-            if (modalBg.parentNode) {
-                document.body.removeChild(modalBg);
+            if (modalBg && modalBg.parentNode) {
+                modalBg.parentNode.removeChild(modalBg);
             }
         }, 200);
     };
     
-    closeBtn.addEventListener('click', closeModal);
-    cancelBtn.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+    });
+    cancelBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+    });
     
     // 선택된 운동 개수에 따라 버튼 업데이트
     const updateAddButton = () => {
@@ -425,22 +443,32 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
         addBtn.disabled = count === 0;
     };
     
-    // 폼 제출 시 입력 모달 열기
+    // 폼 제출 시 입력 모달 열기 (한 번만 실행되도록 플래그 사용)
+    let isSubmitting = false;
     form.addEventListener('submit', (e) => {
         e.preventDefault();
+        e.stopPropagation();
+        
+        // 이미 제출 중이면 무시
+        if (isSubmitting) {
+            return;
+        }
         
         if (selectedWorkoutIds.size === 0) {
             alert('운동 종류를 선택해주세요.');
             return;
         }
         
+        isSubmitting = true;
+        
         // 선택 모달 닫기
         closeModal();
         
-        // 입력 모달 열기
+        // 입력 모달 열기 (모달이 완전히 닫힌 후)
         setTimeout(() => {
             showWorkoutInputModal(appUserId, selectedDate, Array.from(selectedWorkoutIds), selectedWorkoutMap, allWorkoutTypes, onSuccess);
-        }, 200);
+            isSubmitting = false;
+        }, 250);
     });
     
     // 사용자 설정에서 즐겨찾기 필터 옵션 불러오기 후 초기 렌더링 (updateWorkoutList 정의 후)

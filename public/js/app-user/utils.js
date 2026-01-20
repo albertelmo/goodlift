@@ -50,6 +50,29 @@ export function getToday() {
 }
 
 /**
+ * 서버 터미널에 디버깅 로그 전송
+ */
+export function debugLog(level, message, data = null) {
+    // 브라우저 콘솔에도 출력
+    if (data) {
+        console.log(`[${level}]`, message, data);
+    } else {
+        console.log(`[${level}]`, message);
+    }
+    
+    // 서버로 로그 전송 (비동기, 에러 무시)
+    fetch('/api/debug-log', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ level, message, data })
+    }).catch(() => {
+        // 서버 전송 실패는 무시
+    });
+}
+
+/**
  * HTML 이스케이프
  */
 export function escapeHtml(text) {

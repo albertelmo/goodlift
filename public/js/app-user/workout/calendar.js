@@ -47,9 +47,6 @@ export function init(container, onDateSelect, workoutRecords = []) {
         }
     });
     
-    console.log('[Calendar] 운동기록 데이터:', workoutRecordsByDate);
-    console.log('[Calendar] 운동기록 날짜 키들:', Object.keys(workoutRecordsByDate));
-    
     render(container);
 }
 
@@ -102,14 +99,15 @@ export function updateWorkoutRecords(workoutRecords) {
         }
     });
     
-    console.log('[Calendar] 운동기록 업데이트:', workoutRecordsByDate);
 }
 
 /**
  * 캘린더 렌더링
  */
 export function render(container) {
-    if (!container) return;
+    if (!container) {
+        return;
+    }
     
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
@@ -303,6 +301,9 @@ function setupEventListeners() {
                     const container = document.querySelector('.app-calendar')?.parentElement;
                     if (container) {
                         render(container);
+                        // 캘린더 렌더링 완료 이벤트 발생
+                        const event = new CustomEvent('calendar-rendered');
+                        document.dispatchEvent(event);
                     }
                     // 콜백 호출
                     if (onDateSelectCallback) {
@@ -325,6 +326,9 @@ function setupEventListeners() {
                     const container = document.querySelector('.app-calendar')?.parentElement;
                     if (container) {
                         render(container);
+                        // 캘린더 렌더링 완료 이벤트 발생
+                        const event = new CustomEvent('calendar-rendered');
+                        document.dispatchEvent(event);
                     }
                     
                     // 콜백 호출
@@ -365,12 +369,18 @@ function setupSwipeGesture() {
             currentMonth.setMonth(currentMonth.getMonth() - 1);
             const container = document.querySelector('.app-calendar').parentElement;
             render(container);
+            // 캘린더 렌더링 완료 이벤트 발생
+            const event = new CustomEvent('calendar-rendered');
+            document.dispatchEvent(event);
         }
         // 왼쪽으로 스와이프 (다음 달)
         else if (swipeDistance < -minSwipeDistance) {
             currentMonth.setMonth(currentMonth.getMonth() + 1);
             const container = document.querySelector('.app-calendar').parentElement;
             render(container);
+            // 캘린더 렌더링 완료 이벤트 발생
+            const event = new CustomEvent('calendar-rendered');
+            document.dispatchEvent(event);
         }
     }
 }

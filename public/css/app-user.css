@@ -291,6 +291,8 @@ body.app-user-active {
     gap: 16px;
     box-shadow: var(--app-shadow);
     transition: transform var(--app-transition), box-shadow var(--app-transition);
+    min-height: 0;
+    position: relative;
 }
 
 .app-card:active {
@@ -330,6 +332,7 @@ body.app-user-active {
     font-weight: 600;
     color: var(--app-text-muted);
     margin: 0 0 4px 0;
+    line-height: 1.2;
 }
 
 .app-card-value {
@@ -337,7 +340,7 @@ body.app-user-active {
     font-weight: 700;
     color: var(--app-text);
     margin: 0;
-    white-space: pre-line;
+    line-height: 1.2;
 }
 
 .app-dashboard-stats {
@@ -562,17 +565,17 @@ body.app-user-active {
 }
 
 .app-workout-today-btn {
-    background: transparent;
+    font-size: 12px;
+    color: var(--app-text-muted);
+    background: var(--app-bg);
+    padding: 4px 8px;
+    border-radius: var(--app-radius-sm);
     border: none;
     cursor: pointer;
-    padding: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--app-text-muted);
     transition: color var(--app-transition), background var(--app-transition);
-    border-radius: var(--app-radius-sm);
-    margin-right: 8px;
 }
 
 .app-workout-today-btn:hover {
@@ -582,6 +585,59 @@ body.app-user-active {
 
 .app-workout-today-btn:active {
     transform: scale(0.95);
+}
+
+.app-workout-top-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 12px;
+}
+
+/* 메모 카드 스타일 */
+.app-memo-cards-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.app-memo-card {
+    background: var(--app-surface);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius);
+    padding: 16px;
+    box-shadow: var(--app-shadow-sm);
+}
+
+.app-memo-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--app-border);
+}
+
+.app-memo-card-date {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--app-text);
+}
+
+.app-memo-card-workout {
+    font-size: 14px;
+    color: var(--app-text-muted);
+    background: var(--app-bg);
+    padding: 4px 8px;
+    border-radius: var(--app-radius-sm);
+}
+
+.app-memo-card-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--app-text);
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .app-workout-add-section {
@@ -944,13 +1000,13 @@ body.app-user-active {
 .app-workout-date-section {
     background: var(--app-surface);
     border-radius: var(--app-radius);
-    padding: 16px;
+    padding: 8px 16px 16px 16px;
     box-shadow: var(--app-shadow);
 }
 
 .app-workout-date-header {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     justify-content: space-between;
     margin-bottom: 12px;
     padding-bottom: 12px;
@@ -959,7 +1015,7 @@ body.app-user-active {
 
 .app-workout-date-left {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
 }
 
@@ -968,9 +1024,11 @@ body.app-user-active {
     font-weight: 600;
     color: var(--app-text);
     margin: 0;
-    line-height: 1.2;
-    display: flex;
-    align-items: center;
+    padding: 0;
+    line-height: 1.5;
+    display: inline-block;
+    vertical-align: baseline;
+    box-sizing: border-box;
 }
 
 .app-workout-date-count {
@@ -979,43 +1037,48 @@ body.app-user-active {
     background: var(--app-bg);
     padding: 4px 8px;
     border-radius: var(--app-radius-sm);
+    line-height: 1.5;
+    display: inline-block;
+    vertical-align: baseline;
+    box-sizing: border-box;
 }
 
 .app-workout-timer-btn {
-    background: transparent !important;
-    color: var(--app-text);
+    font-size: 14px;
+    color: var(--app-text-muted);
+    background: var(--app-bg);
+    padding: 4px 8px;
+    border-radius: var(--app-radius-sm);
     border: none;
-    border-radius: 0;
-    padding: 0;
     cursor: pointer;
-    display: flex;
-    align-items: center;
+    display: inline-flex;
+    align-items: baseline;
     justify-content: center;
-    transition: opacity var(--app-transition);
-    width: auto;
-    height: auto;
-    font-size: 18px;
-    line-height: 1;
-    box-shadow: none;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    outline: none;
     gap: 4px;
+    transition: all var(--app-transition);
+    line-height: 1.43;
+    box-sizing: border-box;
+    vertical-align: baseline;
 }
 
 .app-workout-timer-text {
     font-size: 14px;
-    color: var(--app-text);
-    margin-left: 4px;
+    color: var(--app-text-muted);
+    margin-left: 0;
+    line-height: 1.43;
 }
 
 .app-workout-timer-btn:hover {
-    opacity: 0.7;
+    color: var(--app-primary);
+    background: var(--app-bg-hover);
+}
+
+.app-workout-timer-btn:hover .app-workout-timer-text {
+    color: var(--app-primary);
 }
 
 .app-workout-timer-btn:active {
-    opacity: 0.5;
+    transform: scale(0.95);
 }
 
 /* 세션 정보 카드 (방법 2, 하늘색 계열) */
@@ -1419,8 +1482,12 @@ body.app-user-active {
     font-weight: 700;
     color: var(--app-text);
     margin: 0;
+    padding: 0;
+    line-height: 1;
     display: flex;
     align-items: center;
+    height: 32px;
+    box-sizing: border-box;
 }
 
 .app-modal-close-btn {
@@ -1431,12 +1498,18 @@ body.app-user-active {
     cursor: pointer;
     width: 32px;
     height: 32px;
+    min-width: 32px;
+    min-height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--app-radius-sm);
     transition: background var(--app-transition);
     padding: 0;
+    margin: 0;
+    line-height: 1;
+    box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .app-modal-close-btn:hover {
@@ -1531,6 +1604,40 @@ body.app-user-active {
 .app-modal.app-modal-show {
     transform: scale(1);
     opacity: 1;
+}
+
+.rest-timer-modal {
+    background: linear-gradient(135deg, #ffe5e5 0%, #ffcccc 50%, #ffe0cc 100%) !important;
+    box-shadow: 0 8px 32px rgba(255, 68, 68, 0.3) !important;
+    border: 2px solid #ff9999;
+}
+
+.rest-timer-modal .app-modal-header {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff4444 100%);
+    color: white;
+    border-radius: var(--app-radius) var(--app-radius) 0 0;
+    align-items: center;
+    min-height: 32px;
+}
+
+.rest-timer-modal .app-modal-header h3 {
+    color: white;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    height: 32px;
+    box-sizing: border-box;
+}
+
+.rest-timer-modal .app-modal-close-btn {
+    color: white !important;
+}
+
+.rest-timer-modal .app-modal-close-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white !important;
 }
 
 .app-modal-bg {

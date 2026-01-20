@@ -859,6 +859,27 @@ app.post('/api/trainer-app-user', async (req, res) => {
     }
 });
 
+// 디버깅 로그 전송 API
+app.post('/api/debug-log', async (req, res) => {
+    try {
+        const { level, message, data } = req.body;
+        const timestamp = new Date().toISOString();
+        
+        // 터미널에 로그 출력
+        const logMessage = `[${timestamp}] [${level}] ${message}`;
+        if (data) {
+            console.log(logMessage, data);
+        } else {
+            console.log(logMessage);
+        }
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[API] 디버깅 로그 처리 오류:', error);
+        res.status(500).json({ success: false });
+    }
+});
+
 // 운동기록 목록 조회
 app.get('/api/workout-records', async (req, res) => {
     try {

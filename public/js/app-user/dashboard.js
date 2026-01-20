@@ -211,6 +211,7 @@ async function loadWeeklyWorkoutSummary() {
         const workoutTypes = new Set();
         let totalSets = 0;
         let totalMinutes = 0;
+        const aerobicWorkouts = new Set(); // 유산소 운동 이름 목록
         
         records.forEach(record => {
             const workoutTypeName = record.workout_type_name;
@@ -224,13 +225,18 @@ async function loadWeeklyWorkoutSummary() {
                 totalSets += record.sets.length;
             } else if (workoutTypeType === '시간' && record.duration_minutes) {
                 totalMinutes += record.duration_minutes;
+                // 유산소 운동 이름 수집
+                if (workoutTypeName) {
+                    aerobicWorkouts.add(workoutTypeName);
+                }
             }
         });
         
         weeklyWorkoutSummary = {
             workoutCount: workoutTypes.size,
             totalSets: totalSets,
-            totalMinutes: totalMinutes
+            totalMinutes: totalMinutes,
+            aerobicWorkoutNames: Array.from(aerobicWorkouts) // 유산소 운동 이름 배열
         };
     } catch (error) {
         console.error('주간 운동 요약 조회 오류:', error);
@@ -415,17 +421,33 @@ function render() {
     // 주간 운동 요약 텍스트
     let weeklyWorkoutText = '기록 없음';
     if (weeklyWorkoutSummary) {
-        const parts = [];
+        const firstLineParts = [];
         if (weeklyWorkoutSummary.workoutCount > 0) {
-            parts.push(`${weeklyWorkoutSummary.workoutCount}개 운동`);
+            firstLineParts.push(`${weeklyWorkoutSummary.workoutCount}개 운동`);
         }
         if (weeklyWorkoutSummary.totalSets > 0) {
-            parts.push(`${weeklyWorkoutSummary.totalSets}세트`);
+            firstLineParts.push(`${weeklyWorkoutSummary.totalSets}세트`);
         }
+        
+        // 첫 번째 줄: 운동 개수와 세트 수
+        const firstLine = firstLineParts.length > 0 ? firstLineParts.join(' ') : '';
+        
+        // 두 번째 줄: 유산소 운동 시간 (시간이 있을 경우만)
+        let secondLine = '';
         if (weeklyWorkoutSummary.totalMinutes > 0) {
-            parts.push(`${weeklyWorkoutSummary.totalMinutes}분`);
+            secondLine = `유산소 ${weeklyWorkoutSummary.totalMinutes}분`;
         }
-        weeklyWorkoutText = parts.length > 0 ? parts.join(' · ') : '기록 없음';
+        
+        // 두 줄로 구성 (두 번째 줄이 있을 경우만 줄바꿈)
+        if (firstLine && secondLine) {
+            weeklyWorkoutText = `${firstLine}<br>${secondLine}`;
+        } else if (firstLine) {
+            weeklyWorkoutText = firstLine;
+        } else if (secondLine) {
+            weeklyWorkoutText = secondLine;
+        } else {
+            weeklyWorkoutText = '기록 없음';
+        }
     }
     
     container.innerHTML = `
@@ -469,7 +491,7 @@ function render() {
             <div class="app-dashboard-stats">
                 <div class="app-stat-item" id="weekly-workout-stat-item" style="cursor: pointer;">
                     <p class="app-stat-label">주간 운동</p>
-                    <p class="app-stat-value">${escapeHtml(weeklyWorkoutText)}</p>
+                    <p class="app-stat-value">${weeklyWorkoutText}</p>
                 </div>
                 <div class="app-stat-item">
                     <p class="app-stat-label">주간 소모 칼로리</p>

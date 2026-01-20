@@ -201,7 +201,7 @@ async function render(records) {
                         <span class="app-workout-date-count">${dateRecords.length}건</span>
                     </div>
                     <button class="app-workout-timer-btn" data-date="${date}" aria-label="타이머" ${isReadOnly ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
-                        ⏱️<span class="app-workout-timer-text" style="margin-left: 4px; font-size: 14px; color: var(--app-text);">${timerDisplayText}</span>
+                        타이머<span class="app-workout-timer-text">${timerDisplayText}</span>
                     </button>
                 </div>
         `;
@@ -326,15 +326,15 @@ function renderWorkoutItem(record) {
         infoHtml = `
             <div class="app-workout-item-sets">
                 ${!isReadOnly ? `
-                <div class="app-workout-item-set-controls" style="display: flex; gap: 8px; align-items: center; justify-content: center; margin-bottom: 8px;">
-                    <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 16px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
-                    <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 24px; margin: 0; padding: 0;">세트</span>
-                    <button type="button" class="app-workout-item-add-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 16px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                <div class="app-workout-item-set-controls" style="display: flex; gap: 16px; align-items: center; justify-content: flex-start; margin-bottom: 8px; height: 24px;">
+                    <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 18px; font-weight: bold; line-height: 24px; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
+                    <span style="font-size: 14px; color: #333; line-height: 24px; height: 24px; display: inline-flex; align-items: center; margin: 0; padding: 0;">세트</span>
+                    <button type="button" class="app-workout-item-add-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 18px; font-weight: bold; line-height: 24px; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
                     <input type="checkbox" class="app-workout-item-all-sets-checkbox" 
                            data-record-id="${record.id}" 
                            data-type="all-sets" 
                            ${allSetsCompleted ? 'checked' : ''}
-                           style="margin-left: 8px;">
+                           style="margin-left: 18px; width: 24px; height: 24px; flex-shrink: 0;">
                 </div>
                 ` : ''}
                 ${setsInfo}
@@ -518,14 +518,14 @@ async function showTimerModal(date) {
         <div class="app-modal-bg" id="timer-modal-bg">
             <div class="app-modal timer-modal" id="timer-modal">
                 <div class="app-modal-header">
-                    <h3>휴식시간 설정</h3>
+                    <h3>타이머 설정</h3>
                     <button class="app-modal-close-btn" id="timer-modal-close">×</button>
                 </div>
                 <div class="app-modal-content" id="timer-modal-content">
                     <div class="app-form-group" style="margin-bottom: 20px;">
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                             <input type="checkbox" id="timer-use-rest" ${useRestTimer ? 'checked' : ''} style="width: 18px; height: 18px; cursor: pointer;">
-                            <span style="font-size: 16px; color: var(--app-text);">휴식시간 사용</span>
+                            <span style="font-size: 16px; color: var(--app-text);">타이머 사용</span>
                         </label>
                     </div>
                     <div id="timer-settings-container" style="${useRestTimer ? '' : 'opacity: 0.5; pointer-events: none;'}">
@@ -702,22 +702,24 @@ async function showRestTimerModal() {
         <div class="app-modal-bg" id="rest-timer-modal-bg">
             <div class="app-modal rest-timer-modal" id="rest-timer-modal">
                 <div class="app-modal-header">
-                    <h3>휴식 시간</h3>
+                    <h3>숨고르기</h3>
                     <button class="app-modal-close-btn" id="rest-timer-modal-close">×</button>
                 </div>
                 <div class="app-modal-content" id="rest-timer-modal-content" style="text-align: center; padding: 40px 20px;">
                     <div style="display: flex; align-items: center; justify-content: center; gap: 24px; margin-bottom: 8px;">
-                        <button id="rest-timer-decrease-btn" style="width: 40px; height: 40px; border: 1px solid var(--app-border); background: var(--app-surface); color: var(--app-text); border-radius: var(--app-radius-sm); cursor: pointer; font-size: 24px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
-                        <div id="rest-timer-display" style="font-size: 48px; font-weight: bold; color: var(--app-primary); min-width: 120px;">
+                        <button id="rest-timer-decrease-btn" style="width: 40px; height: 40px; border: none; background: transparent; color: #000000; border-radius: var(--app-radius-sm); cursor: pointer; font-size: 24px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
+                        <div id="rest-timer-display" style="font-size: 48px; font-weight: bold; color: #000000; min-width: 120px;">
                             ${formatTime(totalSeconds)}
                         </div>
-                        <button id="rest-timer-increase-btn" style="width: 40px; height: 40px; border: 1px solid var(--app-primary); background: var(--app-primary); color: white; border-radius: var(--app-radius-sm); cursor: pointer; font-size: 24px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                        <button id="rest-timer-increase-btn" style="width: 40px; height: 40px; border: none; background: transparent; color: #000000; border-radius: var(--app-radius-sm); cursor: pointer; font-size: 24px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
                     </div>
-                    <div id="rest-timer-set-time" style="font-size: 18px; color: var(--app-text-muted); margin-bottom: 20px;">
+                    <div id="rest-timer-set-time" style="font-size: 18px; color: #000000; margin-bottom: 20px;">
                         ${formatTime(totalSeconds)}
                     </div>
-                    <div style="font-size: 14px; color: var(--app-text-muted);">
-                        다음 세트까지 휴식하세요
+                    <div style="font-size: 22px; font-weight: bold; margin-top: 20px;">
+                        <span style="background: linear-gradient(135deg, #ff6b6b 0%, #ff4444 50%, #ff8e53 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                            가보즈아아~!! 🔥
+                        </span>
                     </div>
                 </div>
             </div>
@@ -776,14 +778,6 @@ async function showRestTimerModal() {
     closeBtn.addEventListener('click', () => {
         clearInterval(timerInterval);
         modalBg.remove();
-    });
-    
-    // 배경 클릭 시 닫기
-    modalBg.addEventListener('click', (e) => {
-        if (e.target === modalBg) {
-            clearInterval(timerInterval);
-            modalBg.remove();
-        }
     });
     
     // 모달 열기 애니메이션
