@@ -1,7 +1,7 @@
 // 운동기록 목록 렌더링
 
 import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml } from '../utils.js';
-import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings } from '../api.js';
+import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers } from '../api.js';
 
 let currentAppUserId = null;
 let currentRecords = [];
@@ -18,17 +18,21 @@ export async function init(appUserId, readOnly = false) {
     currentAppUserId = appUserId;
     isReadOnly = readOnly;
     
-    // 초기 로드 시 최근 2개월만 로드 (성능 최적화)
+    // 초기 로드 시 최근 2개월 + 미래 2개월까지 로드 (성능 최적화)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const twoMonthsAgo = new Date(today);
     twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
     twoMonthsAgo.setDate(1); // 월의 첫 날로 설정
     
+    const twoMonthsLater = new Date(today);
+    twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
+    twoMonthsLater.setDate(0); // 다음 달의 마지막 날로 설정
+    
     const { formatDate } = await import('../utils.js');
     await loadRecords({
         startDate: formatDate(twoMonthsAgo),
-        endDate: formatDate(today)
+        endDate: formatDate(twoMonthsLater)
     });
 }
 
@@ -1493,33 +1497,30 @@ async function showCopyDateModal(sourceDate) {
                         const member = members.find(m => m.name === connectedUser.member_name);
                         
                         if (member && member.trainer) {
-                            // 트레이너의 app_user 찾기 (username으로 조회)
-                            const trainerUserResponse = await fetch(`/api/app-users?username=${encodeURIComponent(member.trainer)}`);
-                            if (trainerUserResponse.ok) {
-                                const trainerUsers = await trainerUserResponse.json();
-                                const trainerUser = trainerUsers.find(u => u.username === member.trainer);
-                                
-                                if (trainerUser) {
-                                    originalAppUserId = trainerUser.id;
-                                } else {
-                                    // /api/trainer-app-user 엔드포인트 사용
-                                    try {
-                                        const trainerAppUserResponse = await fetch('/api/trainer-app-user', {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ 
-                                                username: member.trainer,
-                                                name: member.trainer 
-                                            })
-                                        });
-                                        
-                                        if (trainerAppUserResponse.ok) {
-                                            const trainerAppUser = await trainerAppUserResponse.json();
-                                            originalAppUserId = trainerAppUser.id;
-                                        }
-                                    } catch (error) {
-                                        console.error('트레이너 app_user 생성/조회 오류:', error);
+                            // 트레이너의 app_user 찾기 (username으로 조회, 캐싱 사용)
+                            const trainerUsers = await getAppUsers({ username: member.trainer });
+                            const trainerUser = trainerUsers.find(u => u.username === member.trainer);
+                            
+                            if (trainerUser) {
+                                originalAppUserId = trainerUser.id;
+                            } else {
+                                // /api/trainer-app-user 엔드포인트 사용
+                                try {
+                                    const trainerAppUserResponse = await fetch('/api/trainer-app-user', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ 
+                                            username: member.trainer,
+                                            name: member.trainer 
+                                        })
+                                    });
+                                    
+                                    if (trainerAppUserResponse.ok) {
+                                        const trainerAppUser = await trainerAppUserResponse.json();
+                                        originalAppUserId = trainerAppUser.id;
                                     }
+                                } catch (error) {
+                                    console.error('트레이너 app_user 생성/조회 오류:', error);
                                 }
                             }
                         }
@@ -1527,17 +1528,18 @@ async function showCopyDateModal(sourceDate) {
                 }
             }
             
-            // 방법 2: 여전히 없으면 모든 사용자에서 트레이너 찾기
+            // 방법 2: 여전히 없으면 모든 사용자에서 트레이너 찾기 (캐싱 사용)
             if (!originalAppUserId) {
-                const allUsersResponse = await fetch('/api/app-users');
-                if (allUsersResponse.ok) {
-                    const allUsers = await allUsersResponse.json();
+                try {
+                    const allUsers = await getAppUsers();
                     const trainerUsers = allUsers.filter(u => u.is_trainer === true || u.isTrainer === true);
                     
                     if (trainerUsers.length > 0) {
                         // 첫 번째 트레이너 사용
                         originalAppUserId = trainerUsers[0].id;
                     }
+                } catch (error) {
+                    console.error('트레이너 조회 오류:', error);
                 }
             }
         }
@@ -1559,35 +1561,21 @@ async function showCopyDateModal(sourceDate) {
                 if (isTrainer) {
                     const trainerUsername = user.username;
                     
-                    // 연결된 회원 목록 조회
-                    const appUsersResponse = await fetch('/api/app-users');
-                    
-                    if (appUsersResponse.ok) {
-                        const appUsers = await appUsersResponse.json();
-                        const appUsersWithMemberName = appUsers.filter(u => 
-                            u.member_name && u.member_name.trim() !== ''
-                        );
-                        
-                        for (const appUser of appUsersWithMemberName) {
-                            try {
-                                const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(appUser.member_name)}`);
-                                if (membersResponse.ok) {
-                                    const members = await membersResponse.json();
-                                    const member = members.find(m => m.name === appUser.member_name);
-                                    
-                                    if (member && member.trainer === trainerUsername) {
-                                        trainerMembersList.push({
-                                            app_user_id: appUser.id,
-                                            name: appUser.name
-                                        });
-                                    }
-                                }
-                            } catch (error) {
-                                console.error('회원 정보 조회 오류:', error);
-                            }
+                    // 최적화된 API 사용: 트레이너별 연결된 회원을 한 번에 조회
+                    try {
+                        const response = await fetch(`/api/trainer-members?trainer_username=${encodeURIComponent(trainerUsername)}`);
+                        if (response.ok) {
+                            const members = await response.json();
+                            trainerMembersList = members.map(member => ({
+                                app_user_id: member.app_user_id,
+                                name: member.name
+                            }));
+                            
+                            // 이름순 정렬
+                            trainerMembersList.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
                         }
-                        
-                        trainerMembersList.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+                    } catch (error) {
+                        console.error('트레이너 회원 목록 조회 오류:', error);
                     }
                 }
             }

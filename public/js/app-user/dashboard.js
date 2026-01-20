@@ -1,7 +1,7 @@
 // 앱 유저 홈/대시보드 화면
 
 import { formatDate, getToday, escapeHtml } from './utils.js';
-import { getWorkoutRecords } from './api.js';
+import { getWorkoutRecords, getAppUsers } from './api.js';
 
 let currentUser = null;
 let nextSession = null;
@@ -1027,13 +1027,8 @@ async function showConnectUserModal() {
             `;
             
             try {
-                // 유저앱 전체 회원 조회
-                const response = await fetch('/api/app-users');
-                if (!response.ok) {
-                    throw new Error('회원 목록 조회 실패');
-                }
-                
-                const appUsers = await response.json();
+                // 유저앱 전체 회원 조회 (캐싱 사용)
+                const appUsers = await getAppUsers();
                 
                 // PT 회원과 연결된 유저앱 회원만 필터링 (member_name이 있는 회원)
                 const appUsersWithMemberName = appUsers.filter(user => 
@@ -1214,13 +1209,10 @@ async function connectMember(memberName) {
         // 유저앱 회원 이름 조회
         let appUserName = memberName;
         try {
-            const appUsersResponse = await fetch('/api/app-users');
-            if (appUsersResponse.ok) {
-                const appUsers = await appUsersResponse.json();
-                const appUser = appUsers.find(user => user.member_name === memberName);
-                if (appUser) {
-                    appUserName = appUser.name;
-                }
+            const appUsers = await getAppUsers();
+            const appUser = appUsers.find(user => user.member_name === memberName);
+            if (appUser) {
+                appUserName = appUser.name;
             }
         } catch (error) {
             console.error('유저앱 회원 정보 조회 오류:', error);
@@ -1235,13 +1227,8 @@ async function connectMember(memberName) {
     }
     
     try {
-        // 해당 회원의 app_user_id 조회 (먼저 조회하여 유저앱 회원 이름 확인)
-        const appUsersResponse = await fetch('/api/app-users');
-        if (!appUsersResponse.ok) {
-            throw new Error('유저앱 회원 목록 조회 실패');
-        }
-        
-        const appUsers = await appUsersResponse.json();
+        // 해당 회원의 app_user_id 조회 (먼저 조회하여 유저앱 회원 이름 확인, 캐싱 사용)
+        const appUsers = await getAppUsers();
         const appUser = appUsers.find(user => user.member_name === memberName);
         
         if (!appUser) {
@@ -1254,16 +1241,13 @@ async function connectMember(memberName) {
         
         // 다른 회원이 연결되어 있으면 확인
         if (connectedMemberName) {
-            // 현재 연결된 회원의 유저앱 이름도 조회
+            // 현재 연결된 회원의 유저앱 이름도 조회 (캐싱 사용)
             let currentAppUserName = connectedMemberName;
             try {
-                const currentAppUsersResponse = await fetch('/api/app-users');
-                if (currentAppUsersResponse.ok) {
-                    const currentAppUsers = await currentAppUsersResponse.json();
-                    const currentAppUser = currentAppUsers.find(user => user.member_name === connectedMemberName);
-                    if (currentAppUser) {
-                        currentAppUserName = currentAppUser.name;
-                    }
+                const currentAppUsers = await getAppUsers();
+                const currentAppUser = currentAppUsers.find(user => user.member_name === connectedMemberName);
+                if (currentAppUser) {
+                    currentAppUserName = currentAppUser.name;
                 }
             } catch (error) {
                 console.error('현재 연결된 회원 정보 조회 오류:', error);
@@ -1298,13 +1282,8 @@ async function connectMember(memberName) {
  */
 async function viewTrainerWorkouts(trainerUsername) {
     try {
-        // 트레이너의 app_user_id 찾기
-        const appUsersResponse = await fetch(`/api/app-users?username=${encodeURIComponent(trainerUsername)}`);
-        if (!appUsersResponse.ok) {
-            throw new Error('트레이너 정보 조회 실패');
-        }
-        
-        const appUsers = await appUsersResponse.json();
+        // 트레이너의 app_user_id 찾기 (캐싱 사용)
+        const appUsers = await getAppUsers({ username: trainerUsername });
         const trainerAppUser = appUsers.find(user => user.username === trainerUsername);
         
         if (!trainerAppUser) {

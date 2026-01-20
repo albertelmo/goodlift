@@ -445,10 +445,33 @@ export async function updateUserSettings(appUserId, updates) {
 // ========== 앱 유저 정보 API ==========
 
 /**
- * 앱 유저 정보 수정
+ * 앱 유저 목록 조회 (캐싱 지원)
+ */
+export async function getAppUsers(filters = {}) {
+    const params = new URLSearchParams();
+    if (filters.username) params.append('username', filters.username);
+    
+    const endpoint = `/app-users${params.toString() ? '?' + params.toString() : ''}`;
+    const cacheKey = cache.getKey('/app-users', filters);
+    
+    // 캐시 사용 (1분 TTL - 자주 변경되지 않는 데이터)
+    return get(endpoint, {
+        useCache: true,
+        ttl: 60 * 1000, // 1분
+        cacheKey
+    });
+}
+
+/**
+ * 앱 유저 정보 수정 (캐시 무효화 포함)
  */
 export async function updateAppUser(id, updates) {
-    return patch(`/app-users/${id}`, updates);
+    const result = await patch(`/app-users/${id}`, updates);
+    
+    // 앱 유저 목록 캐시 무효화
+    cache.invalidate(key => key.includes('/app-users'));
+    
+    return result;
 }
 
 // ========== 캐시 관리 함수 ==========

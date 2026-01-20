@@ -376,7 +376,7 @@ async function render() {
         
         // 운동 목록 초기화 (선택된 날짜로 필터링)
         if (currentAppUserId) {
-            initList(currentAppUserId, isReadOnly);
+            await initList(currentAppUserId, isReadOnly);
             const selectedDateStr = getSelectedDate();
             if (selectedDateStr) {
                 await listModule.filterByDate(selectedDateStr);
