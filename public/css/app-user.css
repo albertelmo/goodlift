@@ -922,59 +922,10 @@ body.app-user-active {
     pointer-events: none;
 }
 
-/* 세션이 있는 날짜 - 작은 동그라미 배경 (날짜 선택과 동일한 크기: 28px, 틸 계열) */
+/* 세션이 있는 날짜 - 배경 제거됨 */
 .app-calendar-day-has-session {
     position: relative;
     background: transparent !important;
-}
-
-/* 작은 동그라미 배경 (날짜 선택 동그라미와 동일한 크기: 28px, 하늘색 계열) */
-.app-calendar-day-has-session:not(.app-calendar-day-today.app-calendar-day-selected)::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 28px;
-    height: 28px;
-    background: rgba(100, 181, 246, 0.2);
-    border-radius: 50%;
-    z-index: 0;
-    pointer-events: none;
-}
-
-/* 세션이 있고 선택된 다른 날짜 - 파란 선택 원이 표시되도록 */
-.app-calendar-day-has-session.app-calendar-day-selected:not(.app-calendar-day-today)::before {
-    background: var(--app-primary-dark) !important; /* 파란 선택 원 우선 */
-    z-index: 0;
-}
-
-.app-calendar-day-today.app-calendar-day-has-session:not(.app-calendar-day-selected)::before {
-    background: rgba(100, 181, 246, 0.25);
-}
-
-/* 오늘 날짜가 선택되고 세션도 있는 경우 - 세션 배경은 ::after로, 선택 동그라미는 ::before */
-.app-calendar-day-today.app-calendar-day-has-session.app-calendar-day-selected::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 28px;
-    height: 28px;
-    background: rgba(100, 181, 246, 0.25);
-    border-radius: 50%;
-    z-index: 0;
-    pointer-events: none;
-}
-
-/* 선택된 동그라미(::before)가 세션 배경(::after) 위에 표시되도록 z-index 조정 */
-.app-calendar-day-today.app-calendar-day-has-session.app-calendar-day-selected::before {
-    z-index: 0; /* 선택 동그라미 */
-}
-
-.app-calendar-day-today.app-calendar-day-has-session.app-calendar-day-selected .app-calendar-day-number {
-    z-index: 2; /* 밑줄보다 위에 표시 */
 }
 
 .app-calendar-selected {
