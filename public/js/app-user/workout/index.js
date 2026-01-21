@@ -53,16 +53,34 @@ function setupBackButtonHandler() {
             const isReadOnlyMode = localStorage.getItem('isReadOnly') === 'true';
             const viewingTrainerName = localStorage.getItem('viewingTrainerName');
             
-            if (isReadOnlyMode && viewingTrainerName) {
-                // localStorage에서 트레이너 관련 정보 제거
-                localStorage.removeItem('viewingTrainerAppUserId');
-                localStorage.removeItem('isReadOnly');
-                localStorage.removeItem('viewingTrainerName');
-                
-                // 자신의 기록으로 다시 로드
-                const { navigateToScreen } = await import('../index.js');
-                navigateToScreen('workout');
-            }
+                if (isReadOnlyMode && viewingTrainerName) {
+                    // localStorage에서 트레이너 관련 정보 제거
+                    localStorage.removeItem('viewingTrainerAppUserId');
+                    localStorage.removeItem('isReadOnly');
+                    localStorage.removeItem('viewingTrainerName');
+                    
+                    // 탭 활성화 상태 업데이트 (layout.js의 함수 호출)
+                    // layout.js에서 export된 함수가 없으므로 직접 DOM 업데이트
+                    const disabledTabs = ['home', 'diet', 'profile'];
+                    disabledTabs.forEach(screen => {
+                        const bottomNavItem = document.querySelector(`.app-bottom-nav-item[data-screen="${screen}"]`);
+                        if (bottomNavItem) {
+                            bottomNavItem.style.pointerEvents = '';
+                            bottomNavItem.style.opacity = '';
+                            bottomNavItem.style.cursor = '';
+                        }
+                        const drawerItem = document.querySelector(`.app-drawer-item[data-screen="${screen}"]`);
+                        if (drawerItem) {
+                            drawerItem.style.pointerEvents = '';
+                            drawerItem.style.opacity = '';
+                            drawerItem.style.cursor = '';
+                        }
+                    });
+                    
+                    // 자신의 기록으로 다시 로드
+                    const { navigateToScreen } = await import('../index.js');
+                    navigateToScreen('workout');
+                }
         }
     };
     
@@ -186,6 +204,24 @@ function setupButtonEventListeners() {
                     localStorage.removeItem('viewingTrainerAppUserId');
                     localStorage.removeItem('isReadOnly');
                     localStorage.removeItem('viewingTrainerName');
+                    
+                    // 탭 활성화 상태 업데이트 (layout.js의 함수 호출)
+                    // layout.js에서 export된 함수가 없으므로 직접 DOM 업데이트
+                    const disabledTabs = ['home', 'diet', 'profile'];
+                    disabledTabs.forEach(screen => {
+                        const bottomNavItem = document.querySelector(`.app-bottom-nav-item[data-screen="${screen}"]`);
+                        if (bottomNavItem) {
+                            bottomNavItem.style.pointerEvents = '';
+                            bottomNavItem.style.opacity = '';
+                            bottomNavItem.style.cursor = '';
+                        }
+                        const drawerItem = document.querySelector(`.app-drawer-item[data-screen="${screen}"]`);
+                        if (drawerItem) {
+                            drawerItem.style.pointerEvents = '';
+                            drawerItem.style.opacity = '';
+                            drawerItem.style.cursor = '';
+                        }
+                    });
                     
                     // 자신의 기록으로 다시 로드
                     const { navigateToScreen } = await import('../index.js');
@@ -389,6 +425,25 @@ async function render() {
     });
     
     // 추가 버튼 이벤트는 init()에서 이벤트 위임으로 한 번만 설정되므로 여기서는 설정하지 않음
+    
+    // 트레이너 기록 조회 중인 경우 탭 비활성화
+    if (isReadOnly && viewingTrainerName) {
+        const disabledTabs = ['home', 'diet', 'profile'];
+        disabledTabs.forEach(screen => {
+            const bottomNavItem = document.querySelector(`.app-bottom-nav-item[data-screen="${screen}"]`);
+            if (bottomNavItem) {
+                bottomNavItem.style.pointerEvents = 'none';
+                bottomNavItem.style.opacity = '0.5';
+                bottomNavItem.style.cursor = 'not-allowed';
+            }
+            const drawerItem = document.querySelector(`.app-drawer-item[data-screen="${screen}"]`);
+            if (drawerItem) {
+                drawerItem.style.pointerEvents = 'none';
+                drawerItem.style.opacity = '0.5';
+                drawerItem.style.cursor = 'not-allowed';
+            }
+        });
+    }
     
     // 오늘의 운동 카드에서 온 경우 자동으로 운동 추가 모달 열기
     const autoOpenWorkoutAdd = localStorage.getItem('autoOpenWorkoutAdd');

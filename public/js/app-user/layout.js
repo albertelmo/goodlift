@@ -21,6 +21,9 @@ export function init(userData) {
     currentUser = userData;
     render();
     setupEventListeners();
+    
+    // 초기 탭 상태 업데이트
+    updateTabsEnabledState();
 }
 
 /**
@@ -149,7 +152,17 @@ function setupEventListeners() {
     drawerItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
+            
+            // 트레이너 기록 조회 중인지 확인
+            const isViewingTrainer = localStorage.getItem('isReadOnly') === 'true' && 
+                                     localStorage.getItem('viewingTrainerName');
             const screen = item.getAttribute('data-screen');
+            
+            // 비활성화된 탭 클릭 방지
+            if (isViewingTrainer && ['home', 'diet', 'profile'].includes(screen)) {
+                return;
+            }
+            
             navigateToScreen(screen);
             closeHamburgerMenu();
         });
@@ -160,7 +173,17 @@ function setupEventListeners() {
     bottomNavItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
+            
+            // 트레이너 기록 조회 중인지 확인
+            const isViewingTrainer = localStorage.getItem('isReadOnly') === 'true' && 
+                                     localStorage.getItem('viewingTrainerName');
             const screen = item.getAttribute('data-screen');
+            
+            // 비활성화된 탭 클릭 방지
+            if (isViewingTrainer && ['home', 'diet', 'profile'].includes(screen)) {
+                return;
+            }
+            
             navigateToScreen(screen);
         });
     });
@@ -232,6 +255,16 @@ function closeHamburgerMenu() {
  */
 function navigateToScreen(screen) {
     if (!screens[screen]) return;
+    
+    // 트레이너 기록 조회 중인지 확인
+    const isViewingTrainer = localStorage.getItem('isReadOnly') === 'true' && 
+                             localStorage.getItem('viewingTrainerName');
+    
+    // 비활성화된 탭으로 이동 시도 방지
+    if (isViewingTrainer && ['home', 'diet', 'profile'].includes(screen)) {
+        return;
+    }
+    
     currentScreen = screen;
     updateActiveScreen();
     
@@ -263,6 +296,52 @@ function updateActiveScreen() {
             item.classList.add('app-bottom-nav-item-active');
         } else {
             item.classList.remove('app-bottom-nav-item-active');
+        }
+    });
+    
+    // 트레이너 기록 조회 중인지 확인하여 탭 비활성화/활성화
+    updateTabsEnabledState();
+}
+
+/**
+ * 탭 활성화/비활성화 상태 업데이트
+ */
+function updateTabsEnabledState() {
+    const isViewingTrainer = localStorage.getItem('isReadOnly') === 'true' && 
+                             localStorage.getItem('viewingTrainerName');
+    
+    // 비활성화할 탭 목록
+    const disabledTabs = ['home', 'diet', 'profile'];
+    
+    // 하단 네비게이션 탭 비활성화/활성화
+    disabledTabs.forEach(screen => {
+        const bottomNavItem = document.querySelector(`.app-bottom-nav-item[data-screen="${screen}"]`);
+        if (bottomNavItem) {
+            if (isViewingTrainer) {
+                bottomNavItem.style.pointerEvents = 'none';
+                bottomNavItem.style.opacity = '0.5';
+                bottomNavItem.style.cursor = 'not-allowed';
+            } else {
+                bottomNavItem.style.pointerEvents = '';
+                bottomNavItem.style.opacity = '';
+                bottomNavItem.style.cursor = '';
+            }
+        }
+    });
+    
+    // 햄버거 메뉴 탭 비활성화/활성화
+    disabledTabs.forEach(screen => {
+        const drawerItem = document.querySelector(`.app-drawer-item[data-screen="${screen}"]`);
+        if (drawerItem) {
+            if (isViewingTrainer) {
+                drawerItem.style.pointerEvents = 'none';
+                drawerItem.style.opacity = '0.5';
+                drawerItem.style.cursor = 'not-allowed';
+            } else {
+                drawerItem.style.pointerEvents = '';
+                drawerItem.style.opacity = '';
+                drawerItem.style.cursor = '';
+            }
         }
     });
 }
