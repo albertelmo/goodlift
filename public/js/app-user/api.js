@@ -102,7 +102,11 @@ async function request(endpoint, options = {}) {
     
     // DELETE 요청일 때는 Content-Type 헤더를 설정하지 않음 (body가 없으므로)
     const headers = {};
-    if (options.method !== 'DELETE') {
+    
+    // FormData인 경우 Content-Type을 설정하지 않음 (브라우저가 자동으로 boundary 포함하여 설정)
+    const isFormData = options.body instanceof FormData;
+    
+    if (options.method !== 'DELETE' && !isFormData) {
         headers['Content-Type'] = 'application/json';
     }
     
@@ -114,7 +118,8 @@ async function request(endpoint, options = {}) {
         ...options
     };
 
-    if (config.body && typeof config.body === 'object') {
+    // FormData가 아닌 객체만 JSON.stringify
+    if (config.body && typeof config.body === 'object' && !isFormData) {
         config.body = JSON.stringify(config.body);
     }
 
@@ -242,6 +247,23 @@ export async function addWorkoutRecord(data) {
 }
 
 /**
+ * 운동기록 일괄 추가 (캐시 무효화 포함)
+ */
+export async function addWorkoutRecordsBatch(appUserId, workoutRecordsArray) {
+    const result = await post('/workout-records/batch', {
+        app_user_id: appUserId,
+        workout_records: workoutRecordsArray
+    });
+    
+    // 해당 사용자의 운동기록 캐시 무효화 (일반 조회 + 캘린더 조회)
+    if (appUserId) {
+        cache.invalidate(key => key.includes(`/workout-records`) && key.includes(`app_user_id=${appUserId}`));
+    }
+    
+    return result;
+}
+
+/**
  * 운동기록 수정 (캐시 무효화 포함)
  */
 export async function updateWorkoutRecord(id, data) {
@@ -341,6 +363,197 @@ export async function updateWorkoutSetCompleted(recordId, setId, appUserId, isCo
     }
     
     return result;
+}
+
+/**
+ * ========== 식단기록 API ==========
+ */
+
+/**
+ * 식단기록 목록 조회
+ */
+export async function getDietRecords(appUserId, filters = {}) {
+    if (!appUserId) {
+        throw new Error('앱 유저 ID가 필요합니다.');
+    }
+    
+    // 트레이너 전환 모드인 경우 빈 배열 반환
+    if (appUserId.startsWith('trainer-')) {
+        return [];
+    }
+    
+    const params = new URLSearchParams({ app_user_id: appUserId });
+    if (filters.startDate) params.append('start_date', filters.startDate);
+    if (filters.endDate) params.append('end_date', filters.endDate);
+    if (filters.page) params.append('page', filters.page);
+    if (filters.limit) params.append('limit', filters.limit);
+    
+    const endpoint = `/diet-records?${params.toString()}`;
+    
+    // 캐시 키 생성 (필터 포함)
+    const cacheKey = cache.getKey('/diet-records', {
+        app_user_id: appUserId,
+        start_date: filters.startDate || '',
+        end_date: filters.endDate || '',
+        page: filters.page || '',
+        limit: filters.limit || ''
+    });
+    
+    // 캐시 사용 (30초 TTL)
+    return get(endpoint, { 
+        useCache: true, 
+        ttl: 30 * 1000, // 30초
+        cacheKey 
+    });
+}
+
+/**
+ * 식단기록 단일 조회
+ */
+export async function getDietRecordById(id, appUserId) {
+    return get(`/diet-records/${id}?app_user_id=${appUserId}`);
+}
+
+/**
+ * 식단기록 추가 (이미지 업로드 지원)
+ */
+export async function addDietRecord(formData) {
+    const result = await postFormData('/diet-records', formData);
+    
+    // 해당 사용자의 식단기록 캐시 무효화
+    const appUserId = formData.get('app_user_id');
+    if (appUserId) {
+        cache.invalidate(key => key.includes(`/diet-records`) && key.includes(`app_user_id=${appUserId}`));
+    }
+    
+    return result;
+}
+
+/**
+ * 식단기록 수정 (이미지 업로드 지원)
+ */
+export async function updateDietRecord(id, formData) {
+    const result = await patchFormData(`/diet-records/${id}`, formData);
+    
+    // 해당 사용자의 식단기록 캐시 무효화
+    const appUserId = formData.get('app_user_id');
+    if (appUserId) {
+        cache.invalidate(key => key.includes(`/diet-records`) && key.includes(`app_user_id=${appUserId}`));
+    }
+    
+    return result;
+}
+
+/**
+ * 식단기록 삭제 (캐시 무효화 포함)
+ */
+export async function deleteDietRecord(id, appUserId) {
+    const result = await del(`/diet-records/${id}?app_user_id=${appUserId}`);
+    
+    // 해당 사용자의 식단기록 캐시 무효화
+    if (appUserId) {
+        cache.invalidate(key => key.includes(`/diet-records`) && key.includes(`app_user_id=${appUserId}`));
+    }
+    
+    return result;
+}
+
+/**
+ * 캘린더용 식단기록 조회 (경량 - 날짜별 존재 여부만)
+ */
+export async function getDietRecordsForCalendar(appUserId, startDate = null, endDate = null) {
+    // 트레이너 전환 모드인 경우 빈 객체 반환
+    if (appUserId && appUserId.startsWith('trainer-')) {
+        return {};
+    }
+    
+    const params = new URLSearchParams({ app_user_id: appUserId });
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const endpoint = `/diet-records/calendar?${params.toString()}`;
+    const cacheKey = cache.getKey('/diet-records/calendar', {
+        app_user_id: appUserId,
+        start_date: startDate || '',
+        end_date: endDate || ''
+    });
+    
+    // 캐시 사용 (1분 TTL)
+    return get(endpoint, { 
+        useCache: true, 
+        ttl: 60 * 1000, // 1분
+        cacheKey 
+    });
+}
+
+/**
+ * 식단 코멘트 추가
+ */
+export async function addDietComment(dietRecordId, commentData, appUserId = null) {
+    // app_user_id는 commentData에서 가져오거나 별도 파라미터로 받음
+    const app_user_id = appUserId || commentData.app_user_id;
+    const result = await post(`/diet-records/${dietRecordId}/comments?app_user_id=${app_user_id}`, {
+        commenter_type: commentData.commenter_type,
+        commenter_id: commentData.commenter_id,
+        commenter_name: commentData.commenter_name,
+        comment_text: commentData.comment_text
+    });
+    
+    // 해당 사용자의 식단기록 캐시 무효화 (코멘트 개수 변경)
+    if (app_user_id) {
+        cache.invalidate(key => key.includes(`/diet-records`) && key.includes(`app_user_id=${app_user_id}`));
+    }
+    
+    return result;
+}
+
+/**
+ * 식단 코멘트 수정
+ */
+export async function updateDietComment(dietRecordId, commentId, commentData) {
+    const result = await patch(`/diet-records/${dietRecordId}/comments/${commentId}`, {
+        commenter_type: commentData.commenter_type,
+        commenter_id: commentData.commenter_id,
+        comment_text: commentData.comment_text
+    });
+    
+    return result;
+}
+
+/**
+ * 식단 코멘트 삭제
+ */
+export async function deleteDietComment(dietRecordId, commentId, commenterType, commenterId, appUserId) {
+    const result = await del(`/diet-records/${dietRecordId}/comments/${commentId}?commenter_type=${commenterType}&commenter_id=${commenterId}`);
+    
+    // 해당 사용자의 식단기록 캐시 무효화
+    if (appUserId) {
+        cache.invalidate(key => key.includes(`/diet-records`) && key.includes(`app_user_id=${appUserId}`));
+    }
+    
+    return result;
+}
+
+/**
+ * FormData 전송 헬퍼 (POST)
+ */
+async function postFormData(endpoint, formData) {
+    // FormData는 request 함수에서 자동으로 처리됨 (Content-Type 헤더를 설정하지 않음)
+    return request(endpoint, {
+        method: 'POST',
+        body: formData
+    });
+}
+
+/**
+ * FormData 전송 헬퍼 (PATCH)
+ */
+async function patchFormData(endpoint, formData) {
+    // FormData는 request 함수에서 자동으로 처리됨 (Content-Type 헤더를 설정하지 않음)
+    return request(endpoint, {
+        method: 'PATCH',
+        body: formData
+    });
 }
 
 /**
@@ -522,4 +735,38 @@ export function invalidateUserSettingsCache(appUserId) {
     } else {
         cache.invalidate(key => key.includes(`/user-settings`));
     }
+}
+
+// ========== 트레이너 활동 로그 API ==========
+
+/**
+ * 트레이너 활동 로그 조회
+ */
+export async function getTrainerActivityLogs(trainerUsername, filters = {}) {
+    const params = new URLSearchParams();
+    params.append('trainer_username', trainerUsername);
+    if (filters.unread_only) params.append('unread_only', 'true');
+    if (filters.limit) params.append('limit', filters.limit);
+    if (filters.offset) params.append('offset', filters.offset);
+    
+    const endpoint = `/trainer-activity-logs?${params.toString()}`;
+    return get(endpoint);
+}
+
+/**
+ * 로그 읽음 처리
+ */
+export async function markActivityLogAsRead(logId, trainerUsername) {
+    return patch(`/trainer-activity-logs/${logId}/read`, {
+        trainer_username: trainerUsername
+    });
+}
+
+/**
+ * 전체 로그 읽음 처리
+ */
+export async function markAllActivityLogsAsRead(trainerUsername) {
+    return patch('/trainer-activity-logs/read-all', {
+        trainer_username: trainerUsername
+    });
 }

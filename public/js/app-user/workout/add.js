@@ -1,7 +1,7 @@
 // 운동기록 추가 모달
 
 import { formatDate, getToday, escapeHtml } from '../utils.js';
-import { addWorkoutRecord, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
+import { addWorkoutRecord, addWorkoutRecordsBatch, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
 
 /**
  * 운동 선택 모달 표시 (1단계)
@@ -831,11 +831,10 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         e.preventDefault();
         
         const workoutDate = document.getElementById('workout-input-date').value;
-        const addPromises = [];
+        const workoutRecordsArray = [];
         
         for (const workout of selectedWorkouts) {
             let workoutData = {
-                app_user_id: appUserId,
                 workout_date: workoutDate,
                 workout_type_id: workout.id,
                 notes: null
@@ -860,11 +859,12 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 }
             }
             
-            addPromises.push(addWorkoutRecord(workoutData));
+            workoutRecordsArray.push(workoutData);
         }
         
         try {
-            await Promise.all(addPromises);
+            // 일괄 추가 (한 번의 요청으로 모든 기록 추가)
+            await addWorkoutRecordsBatch(appUserId, workoutRecordsArray);
             closeModal();
             if (onSuccess) onSuccess();
         } catch (error) {

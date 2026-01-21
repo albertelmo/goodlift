@@ -657,6 +657,91 @@ const addWorkoutRecord = async (workoutData) => {
   }
 };
 
+// 운동기록 일괄 추가
+const addWorkoutRecordsBatch = async (workoutDataArray) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const addedRecords = [];
+    
+    for (const workoutData of workoutDataArray) {
+      // 운동기록 추가
+      const insertQuery = `
+        INSERT INTO workout_records (
+          app_user_id,
+          workout_date,
+          workout_type_id,
+          duration_minutes,
+          notes
+        ) VALUES ($1, $2, $3, $4, $5)
+        RETURNING *
+      `;
+      const insertValues = [
+        workoutData.app_user_id,
+        workoutData.workout_date,
+        workoutData.workout_type_id || null,
+        workoutData.duration_minutes || null,
+        workoutData.notes || null
+      ];
+      const insertResult = await client.query(insertQuery, insertValues);
+      const workoutRecord = insertResult.rows[0];
+      
+      // 세트 데이터 추가 (있는 경우)
+      if (workoutData.sets && Array.isArray(workoutData.sets) && workoutData.sets.length > 0) {
+        for (const set of workoutData.sets) {
+          await client.query(`
+            INSERT INTO workout_record_sets (
+              workout_record_id,
+              set_number,
+              weight,
+              reps
+            ) VALUES ($1, $2, $3, $4)
+          `, [
+            workoutRecord.id,
+            set.set_number,
+            set.weight !== null && set.weight !== undefined ? set.weight : null,
+            set.reps !== null && set.reps !== undefined ? set.reps : null
+          ]);
+        }
+      }
+      
+      addedRecords.push(workoutRecord);
+    }
+    
+    await client.query('COMMIT');
+    
+    // 모든 기록에 대해 세트 정보 및 workout_type 정보 조회
+    for (const record of addedRecords) {
+      const setsResult = await pool.query(`
+        SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
+        FROM workout_record_sets
+        WHERE workout_record_id = $1
+        ORDER BY set_number ASC
+      `, [record.id]);
+      record.sets = setsResult.rows;
+      
+      if (record.workout_type_id) {
+        const typeResult = await pool.query(`
+          SELECT name, type FROM workout_types WHERE id = $1
+        `, [record.workout_type_id]);
+        if (typeResult.rows.length > 0) {
+          record.workout_type_name = typeResult.rows[0].name;
+          record.workout_type_type = typeResult.rows[0].type;
+        }
+      }
+    }
+    
+    return addedRecords;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[PostgreSQL] 운동기록 일괄 추가 오류:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 // 운동기록 수정
 const updateWorkoutRecord = async (id, appUserId, updates) => {
   const client = await pool.connect();
@@ -959,6 +1044,7 @@ module.exports = {
   getWorkoutRecords,
   getWorkoutRecordById,
   addWorkoutRecord,
+  addWorkoutRecordsBatch,
   updateWorkoutRecord,
   deleteWorkoutRecord,
   getWorkoutStats,

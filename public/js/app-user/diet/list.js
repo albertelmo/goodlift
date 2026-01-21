@@ -1,0 +1,318 @@
+// 식단기록 목록 렌더링
+
+import { formatDate, formatDateShort, showLoading, showError, showEmpty, escapeHtml } from '../utils.js';
+import { getDietRecords } from '../api.js';
+
+let currentAppUserId = null;
+let currentRecords = [];
+let isReadOnly = false;
+
+/**
+ * 식단기록 목록 초기화
+ */
+export async function init(appUserId, readOnly = false) {
+    currentAppUserId = appUserId;
+    isReadOnly = readOnly;
+    
+    // 최근 2개월 + 미래 2개월까지 로드
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const twoMonthsAgo = new Date(today);
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    twoMonthsAgo.setDate(1);
+    
+    const twoMonthsLater = new Date(today);
+    twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
+    twoMonthsLater.setDate(0);
+    
+    const { formatDate } = await import('../utils.js');
+    await loadRecords({
+        startDate: formatDate(twoMonthsAgo),
+        endDate: formatDate(twoMonthsLater)
+    });
+}
+
+let currentFilterDate = null;
+
+/**
+ * 식단기록 목록 로드
+ */
+async function loadRecords(filters = {}) {
+    let container = document.getElementById('diet-list-wrapper');
+    if (!container) {
+        container = document.getElementById('app-user-content');
+    }
+    if (!container) return;
+    
+    showLoading(container);
+    
+    try {
+        const records = await getDietRecords(currentAppUserId, filters);
+        currentRecords = records;
+        await render(records);
+    } catch (error) {
+        console.error('식단기록 로드 오류:', error);
+        showError(container, '식단기록을 불러오는 중 오류가 발생했습니다.');
+    }
+}
+
+/**
+ * 식단기록 목록 렌더링
+ */
+async function render(records) {
+    let container = document.getElementById('diet-list-wrapper');
+    if (!container) {
+        container = document.getElementById('app-user-content');
+    }
+    if (!container) return;
+    
+    if (records.length === 0) {
+        showEmpty(container, '식단기록이 없습니다.');
+        return;
+    }
+    
+    // 날짜별로 그룹화
+    const recordsByDate = {};
+    records.forEach(record => {
+        const dateStr = record.meal_date;
+        if (!recordsByDate[dateStr]) {
+            recordsByDate[dateStr] = [];
+        }
+        recordsByDate[dateStr].push(record);
+    });
+    
+    let html = '<div class="app-diet-list">';
+    
+    // 날짜별로 렌더링 (최신순)
+    const sortedDates = Object.keys(recordsByDate).sort((a, b) => {
+        return new Date(b) - new Date(a);
+    });
+    
+    for (const dateStr of sortedDates) {
+        const dateRecords = recordsByDate[dateStr];
+        // 각 날짜 내에서 meal_time 순으로 정렬 (시간이 없는 것은 마지막에)
+        dateRecords.sort((a, b) => {
+            if (!a.meal_time && !b.meal_time) return 0;
+            if (!a.meal_time) return 1; // a가 시간 없으면 뒤로
+            if (!b.meal_time) return -1; // b가 시간 없으면 뒤로
+            return a.meal_time.localeCompare(b.meal_time);
+        });
+        
+        const dateObj = new Date(dateStr + 'T00:00:00');
+        const dateDisplay = formatDateShort(dateObj);
+        
+        html += `
+            <div class="app-diet-date-section" data-date="${dateStr}">
+                <div class="app-diet-date-header">
+                    <div class="app-diet-date-title">${dateDisplay}</div>
+                    <div class="app-diet-date-count">${dateRecords.length}건</div>
+                </div>
+                <div class="app-diet-items">
+        `;
+        
+        for (const record of dateRecords) {
+            // 시간 포맷팅 (HH:mm 형식으로 분 단위까지만)
+            let timeDisplay = '';
+            if (record.meal_time) {
+                // "HH:mm" 또는 "HH:mm:ss" 형식 처리
+                const timeMatch = record.meal_time.match(/^(\d{1,2}):(\d{2})/);
+                if (timeMatch) {
+                    const hours = String(parseInt(timeMatch[1], 10)).padStart(2, '0');
+                    const minutes = timeMatch[2];
+                    timeDisplay = `${hours}:${minutes}`;
+                } else {
+                    timeDisplay = record.meal_time;
+                }
+            }
+            
+            // 메모에 줄바꿈이 있으면 <br>로 변환
+            const notesRaw = record.notes || '';
+            const notes = notesRaw ? escapeHtml(notesRaw).replace(/\n/g, '<br>') : '-';
+            
+            // 식사 구분 한글 변환
+            const mealTypeLabels = {
+                'breakfast': '아침',
+                'lunch': '점심',
+                'dinner': '저녁',
+                'snack': '간식'
+            };
+            const mealTypeLabel = record.meal_type ? mealTypeLabels[record.meal_type] || record.meal_type : '';
+            const hasImage = record.image_thumbnail_url || record.image_url;
+            // 코멘트는 배열이거나 undefined일 수 있음
+            const comments = Array.isArray(record.comments) ? record.comments : [];
+            // 모든 코멘트 표시 (유저 + 트레이너) - 필터링 없이 모두 표시
+            const allComments = comments.filter(c => {
+                if (!c) return false;
+                // commenter_type이 있으면 그대로 사용, 없으면 기본값으로 처리
+                const commenterType = c.commenter_type || 'user';
+                return commenterType === 'user' || commenterType === 'trainer';
+            });
+            
+            html += `
+                <div class="app-diet-item-card" data-id="${record.id}">
+                    <div class="app-diet-card-content">
+                        ${hasImage ? `
+                            <div class="app-diet-card-image">
+                                <img src="${record.image_thumbnail_url || record.image_url}" 
+                                     alt="식단 사진" 
+                                     loading="lazy"
+                                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 100 100\\'%3E%3Ctext y=\\'.9em\\' font-size=\\'90\\'%3E🍽%3C/text%3E%3C/svg%3E'">
+                            </div>
+                        ` : `
+                            <div class="app-diet-card-image app-diet-card-image-placeholder">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                    <polyline points="21 15 16 10 5 21"></polyline>
+                                </svg>
+                            </div>
+                        `}
+                        <div class="app-diet-card-info">
+                            <div class="app-diet-card-header">
+                                <div class="app-diet-card-title-row">
+                                    <div class="app-diet-card-time-group">
+                                        ${timeDisplay ? `<span class="app-diet-card-time">${timeDisplay}</span>` : ''}
+                                        ${mealTypeLabel ? `<span class="app-diet-card-meal-type">${mealTypeLabel}</span>` : ''}
+                                    </div>
+                                    ${!isReadOnly ? `
+                                        <button class="app-diet-card-edit-btn" data-id="${record.id}" title="수정/삭제">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <circle cx="5" cy="12" r="1"></circle>
+                                                <circle cx="12" cy="12" r="1"></circle>
+                                                <circle cx="19" cy="12" r="1"></circle>
+                                            </svg>
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                <div class="app-diet-card-notes">${notes}</div>
+                                ${allComments.length > 0 ? `
+                                    <div class="app-diet-card-comments-section">
+                                        ${allComments.map(comment => {
+                                            const commentText = escapeHtml(comment.comment_text);
+                                            // 시간을 "11:11 AM" 형식으로 변환 (이미 한국 시간으로 저장됨)
+                                            let commentTime = '';
+                                            if (comment.created_at) {
+                                                const date = new Date(comment.created_at);
+                                                const hours = date.getHours();
+                                                const minutes = String(date.getMinutes()).padStart(2, '0');
+                                                const ampm = hours >= 12 ? 'PM' : 'AM';
+                                                const displayHours = hours % 12 || 12;
+                                                commentTime = `${displayHours}:${minutes} ${ampm}`;
+                                            }
+                                            // 코멘트 정렬 결정:
+                                            // - 트레이너 코멘트: 항상 왼쪽 정렬
+                                            // - 유저 코멘트: 현재 사용자가 작성한 경우만 오른쪽 정렬
+                                            const isTrainerComment = comment.commenter_type === 'trainer';
+                                            const isMyComment = !isTrainerComment && currentAppUserId && comment.commenter_id === currentAppUserId;
+                                            const trainerName = isTrainerComment && comment.commenter_name ? escapeHtml(comment.commenter_name) : '';
+                                            
+                                            return `
+                                                <div class="app-diet-card-comment-wrapper ${isTrainerComment ? 'app-diet-card-comment-wrapper-trainer' : ''} ${isMyComment ? 'app-diet-card-comment-wrapper-mine' : ''}">
+                                                    ${isTrainerComment && trainerName ? `
+                                                        <div class="app-diet-card-comment-trainer-name">${trainerName}</div>
+                                                    ` : ''}
+                                                    ${isMyComment ? `
+                                                        <div class="app-diet-card-comment-user-name">나</div>
+                                                    ` : ''}
+                                                    <div class="app-diet-card-comment-bubble ${isMyComment ? 'app-diet-card-comment-bubble-mine' : ''} ${isTrainerComment ? 'app-diet-card-comment-bubble-trainer' : ''}">
+                                                        <div class="app-diet-card-comment-content">
+                                                            <div class="app-diet-card-comment-text">${commentText}</div>
+                                                            ${commentTime ? `<div class="app-diet-card-comment-time">${commentTime}</div>` : ''}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        html += `
+                </div>
+            </div>
+        `;
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
+    
+    // 이벤트 리스너 설정
+    setupEventListeners();
+}
+
+/**
+ * 이벤트 리스너 설정
+ */
+function setupEventListeners() {
+    const container = document.getElementById('diet-list-wrapper');
+    if (!container) return;
+    
+    // 이미 이벤트 리스너가 등록되어 있으면 중복 등록 방지
+    if (container._dietListEventListenersSetup) {
+        return;
+    }
+    
+    // 수정/삭제 버튼 클릭
+    container.addEventListener('click', async (e) => {
+        const editBtn = e.target.closest('.app-diet-card-edit-btn');
+        if (editBtn) {
+            e.stopPropagation(); // 카드 클릭 이벤트 방지
+            const recordId = editBtn.getAttribute('data-id');
+            if (recordId) {
+                const { showDietEditModal } = await import('./edit.js');
+                const record = currentRecords.find(r => r.id === recordId);
+                if (record) {
+                    showDietEditModal(currentAppUserId, record, () => {
+                        refresh();
+                    });
+                }
+            }
+            return;
+        }
+        
+        // 식단기록 아이템 클릭 (상세 보기)
+        const dietItem = e.target.closest('.app-diet-item-card');
+        if (dietItem) {
+            const recordId = dietItem.getAttribute('data-id');
+            if (recordId) {
+                const { showDietDetailModal } = await import('./detail.js');
+                const record = currentRecords.find(r => r.id === recordId);
+                if (record) {
+                    showDietDetailModal(currentAppUserId, record, isReadOnly, () => {
+                        refresh();
+                    });
+                }
+            }
+        }
+    });
+    
+    container._dietListEventListenersSetup = true;
+}
+
+/**
+ * 날짜로 필터링
+ */
+export async function filterByDate(dateStr) {
+    currentFilterDate = dateStr;
+    await loadRecords({
+        startDate: dateStr,
+        endDate: dateStr
+    });
+}
+
+/**
+ * 목록 새로고침
+ */
+export async function refresh() {
+    await loadRecords({});
+    
+    // 캘린더도 업데이트
+    if (window.updateCalendarDietRecords) {
+        await window.updateCalendarDietRecords();
+    }
+}

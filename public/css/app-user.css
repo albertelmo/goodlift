@@ -18,6 +18,7 @@ body.app-user-active {
     --app-danger: #ef4444;
     --app-warning: #f59e0b;
     --app-bg: #f9fafb;
+    --app-bg-hover: rgba(102, 126, 234, 0.05);
     --app-surface: #ffffff;
     --app-text: #1f2937;
     --app-text-muted: #6b7280;
@@ -423,6 +424,78 @@ body.app-user-active {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* 활동 로그 스타일 */
+.app-activity-logs-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.app-activity-log-item {
+    background: var(--app-surface);
+    border-radius: var(--app-radius-sm);
+    padding: 12px;
+    transition: background var(--app-transition), transform var(--app-transition);
+    position: relative;
+    border-left: 3px solid transparent;
+}
+
+.app-activity-log-item-unread {
+    background: var(--app-surface);
+    border-left-color: var(--app-primary);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.app-activity-log-item-unread:hover {
+    background: var(--app-bg-hover);
+    transform: translateX(2px);
+}
+
+.app-activity-log-item-read {
+    background: var(--app-bg);
+    opacity: 0.8;
+}
+
+.app-activity-log-item-read:hover {
+    background: var(--app-bg-hover);
+}
+
+.app-activity-log-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.app-activity-log-message {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--app-text);
+    margin: 0;
+    font-weight: 500;
+}
+
+.app-activity-log-item-read .app-activity-log-message {
+    color: var(--app-text-muted);
+    font-weight: 400;
+}
+
+.app-activity-log-time {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    margin: 0;
+}
+
+.app-activity-log-indicator {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    background: var(--app-primary);
+    border-radius: 50%;
+}
+
 /* 하단 네비게이션 - 최대한 컴팩트하게 */
 .app-bottom-nav {
     position: fixed;
@@ -594,6 +667,381 @@ body.app-user-active {
     margin-right: 12px;
 }
 
+/* 식단 화면 스타일 - 운동기록과 동일한 구조 */
+.app-diet-top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: transparent;
+    padding: 8px 0;
+    margin: -16px -16px 16px -16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.app-diet-month-display {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--app-text);
+    padding-left: 12px;
+}
+
+.app-diet-today-btn {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    background: var(--app-bg);
+    padding: 4px 8px;
+    border-radius: var(--app-radius-sm);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--app-transition), background var(--app-transition);
+}
+
+.app-diet-today-btn:hover {
+    color: var(--app-primary);
+    background: var(--app-bg-hover);
+}
+
+.app-diet-today-btn:active {
+    transform: scale(0.95);
+}
+
+.app-diet-top-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 12px;
+}
+
+/* 식단 목록 스타일 */
+.app-diet-list {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+/* 식단 날짜 섹션 (배경 포함) */
+.app-diet-date-section {
+    background: var(--app-surface);
+    border-radius: var(--app-radius);
+    padding: 8px 16px 16px 16px;
+    box-shadow: var(--app-shadow);
+}
+
+.app-diet-date-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--app-border);
+}
+
+.app-diet-date-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--app-text);
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+    display: inline-block;
+    vertical-align: baseline;
+}
+
+.app-diet-date-count {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    background: var(--app-bg);
+    padding: 4px 8px;
+    border-radius: var(--app-radius-sm);
+    line-height: 1.5;
+    display: inline-block;
+    vertical-align: baseline;
+}
+
+.app-diet-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* 식단 카드 스타일 */
+.app-diet-item-card {
+    background: var(--app-surface);
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius);
+    padding: 12px;
+    box-shadow: var(--app-shadow);
+    transition: background var(--app-transition), box-shadow var(--app-transition), transform var(--app-transition);
+    cursor: pointer;
+    position: relative;
+}
+
+.app-diet-item-card:hover {
+    background: var(--app-bg);
+    box-shadow: var(--app-shadow-lg);
+}
+
+.app-diet-item-card:active {
+    background: var(--app-border);
+    transform: scale(0.98);
+    box-shadow: var(--app-shadow-sm);
+}
+
+.app-diet-card-content {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    pointer-events: none; /* 카드 내부 요소가 클릭을 방해하지 않도록 */
+}
+
+.app-diet-card-content > * {
+    pointer-events: auto; /* 각 요소는 다시 클릭 가능 */
+}
+
+.app-diet-card-edit-btn {
+    pointer-events: auto; /* 수정 버튼은 항상 클릭 가능 */
+}
+
+/* 식단 카드 이미지 */
+.app-diet-card-image {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    border-radius: var(--app-radius-sm);
+    overflow: hidden;
+    background: var(--app-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.app-diet-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.app-diet-card-image-placeholder {
+    background: var(--app-bg);
+    color: var(--app-text-muted);
+}
+
+.app-diet-card-image-placeholder svg {
+    width: 32px;
+    height: 32px;
+    opacity: 0.5;
+}
+
+/* 식단 카드 정보 */
+.app-diet-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.app-diet-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.app-diet-card-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.app-diet-card-time-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+}
+
+.app-diet-card-time {
+    font-size: 14px;
+    color: var(--app-text-muted);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.app-diet-card-meal-type {
+    font-size: 12px;
+    color: var(--app-primary);
+    font-weight: 600;
+    background: rgba(102, 126, 234, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.app-diet-card-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--app-text);
+    line-height: 1.4;
+    word-wrap: break-word;
+    flex: 1;
+    min-width: 0;
+}
+
+.app-diet-card-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: var(--app-text-muted);
+    cursor: pointer;
+    border-radius: var(--app-radius-sm);
+    transition: background var(--app-transition), color var(--app-transition);
+    flex-shrink: 0;
+}
+
+.app-diet-card-edit-btn:hover {
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+.app-diet-card-edit-btn:active {
+    background: var(--app-border);
+    transform: scale(0.95);
+}
+
+.app-diet-card-notes {
+    font-size: 14px;
+    color: var(--app-text-muted);
+    line-height: 1.5;
+    word-wrap: break-word;
+    margin-top: 4px;
+    white-space: pre-line;
+}
+
+.app-diet-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--app-text-muted);
+    margin-top: 4px;
+}
+
+.app-diet-card-comments {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--app-text-muted);
+}
+
+/* 식단 카드 코멘트 말풍선 스타일 */
+.app-diet-card-comments-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+/* 코멘트 래퍼 */
+.app-diet-card-comment-wrapper {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* 트레이너 코멘트 래퍼 (왼쪽 정렬) */
+.app-diet-card-comment-wrapper-trainer {
+    align-items: flex-start;
+}
+
+/* 사용자 코멘트 래퍼 (오른쪽 정렬) */
+.app-diet-card-comment-wrapper-mine {
+    align-items: flex-end;
+}
+
+/* 트레이너 이름 표시 */
+.app-diet-card-comment-trainer-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--app-text-muted);
+    padding: 0 4px;
+    margin-bottom: 2px;
+}
+
+/* 사용자 이름 표시 (나) */
+.app-diet-card-comment-user-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--app-text-muted);
+    padding: 0 4px;
+    margin-bottom: 2px;
+}
+
+.app-diet-card-comment-bubble {
+    background: linear-gradient(315deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border-radius: 12px;
+    padding: 8px 12px;
+    max-width: 85%;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+/* 사용자가 작성한 코멘트 (오른쪽 정렬) */
+.app-diet-card-comment-bubble-mine {
+    align-self: flex-end;
+    background: linear-gradient(315deg, #60a5fa 0%, #3b82f6 100%);
+}
+
+/* 트레이너가 작성한 코멘트 (왼쪽 정렬, 다른 색상) */
+.app-diet-card-comment-bubble-trainer {
+    align-self: flex-start;
+    background: linear-gradient(315deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.app-diet-card-comment-content {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+}
+
+.app-diet-card-comment-text {
+    font-size: 14px;
+    line-height: 1.4;
+    word-wrap: break-word;
+    color: white;
+    flex: 1;
+    min-width: 0;
+}
+
+.app-diet-card-comment-time {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 400;
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: flex-end;
+    padding-top: 2px;
+}
+
 /* 메모 카드 스타일 */
 .app-memo-cards-container {
     display: flex;
@@ -642,6 +1090,59 @@ body.app-user-active {
 
 .app-workout-add-section {
     margin: 12px 0;
+}
+
+.app-diet-add-section {
+    margin: 12px 0;
+}
+
+/* 식단 추가하기 버튼 빨간색 계열 */
+#diet-add-btn {
+    background: #ef4444 !important;
+    color: white !important;
+}
+
+#diet-add-btn:hover {
+    background: #dc2626 !important;
+}
+
+#diet-add-btn:active {
+    background: #b91c1c !important;
+}
+
+/* 식단 캘린더 컨테이너 */
+#diet-calendar-container {
+    padding: 0;
+}
+
+/* 식단 캘린더 전용 빨간색 계열 스타일 */
+#diet-calendar-container .app-calendar-day-today::before {
+    border-color: #ef4444; /* 빨간색 */
+}
+
+#diet-calendar-container .app-calendar-day-today.app-calendar-day-selected::before {
+    background: #dc2626; /* 진한 빨간색 */
+}
+
+#diet-calendar-container .app-calendar-day-selected:not(.app-calendar-day-today)::before {
+    background: #dc2626; /* 진한 빨간색 */
+}
+
+#diet-calendar-container .app-calendar-day-has-workout::after {
+    background: #ef4444; /* 빨간색 */
+}
+
+#diet-calendar-container .app-calendar-day-today.app-calendar-day-has-workout::after {
+    background: #ef4444; /* 빨간색 */
+}
+
+#diet-calendar-container .app-calendar-day-today.app-calendar-day-selected.app-calendar-day-has-workout::after {
+    background: #ef4444 !important; /* 빨간색 */
+}
+
+/* 식단 목록 래퍼 */
+#diet-list-wrapper {
+    padding: 0;
 }
 
 .app-btn-full {
@@ -1461,14 +1962,76 @@ body.app-user-active {
     line-height: 1;
     box-sizing: border-box;
     flex-shrink: 0;
+    position: relative;
+    z-index: 100;
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .app-modal-close-btn:hover {
     background: var(--app-bg);
 }
 
+.app-modal-close-btn svg {
+    pointer-events: none;
+}
+
+/* 전체 화면 이미지 뷰어 스타일 */
+.app-image-fullscreen-bg {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 3000;
+    background: rgba(0, 0, 0, 0.95);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.app-image-fullscreen-bg.app-modal-show {
+    opacity: 1;
+}
+
+.app-image-fullscreen-close {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: white;
+    z-index: 3001;
+    transition: background 0.2s ease;
+}
+
+.app-image-fullscreen-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.app-image-fullscreen-bg img {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
 .app-modal-content {
     padding: 16px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
 }
 
 .app-modal-actions {
@@ -1476,6 +2039,8 @@ body.app-user-active {
     gap: 8px;
     padding: 12px 16px;
     border-top: 1px solid var(--app-border);
+    flex-shrink: 0;
+    background: var(--app-surface);
 }
 
 .app-modal-btn {
@@ -1557,6 +2122,10 @@ body.app-user-active {
     opacity: 1;
 }
 
+.app-modal.app-modal-large {
+    max-width: 500px;
+}
+
 .rest-timer-modal {
     background: linear-gradient(135deg, #ffe5e5 0%, #ffcccc 50%, #ffe0cc 100%) !important;
     box-shadow: 0 8px 32px rgba(255, 68, 68, 0.3) !important;
@@ -1606,6 +2175,9 @@ body.app-user-active {
     justify-content: space-between;
     padding: 16px;
     border-bottom: 1px solid var(--app-border);
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
 }
 
 .app-modal-header h2 {
@@ -1665,9 +2237,10 @@ body.app-user-active {
 }
 
 /* 날짜 입력 필드 스타일 통일 */
-.app-form-group input[type="date"] {
+.app-form-group input[type="date"],
+.app-form-group input[type="time"] {
     width: 100%;
-    max-width: 100%;
+    max-width: 200px;
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -1686,10 +2259,309 @@ body.app-user-active {
     min-height: 80px;
 }
 
+/* 식사 구분 체크박스 스타일 */
+.app-meal-type-checkboxes {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.app-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--app-text);
+    user-select: none;
+}
+
+.app-checkbox-label input[type="checkbox"],
+.app-checkbox-label input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    min-height: 18px;
+    max-width: 18px;
+    max-height: 18px;
+    cursor: pointer;
+    accent-color: var(--app-primary);
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    align-self: center;
+    position: relative;
+    top: 0;
+    vertical-align: top;
+}
+
+.app-checkbox-label input[type="radio"] {
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    max-width: 20px;
+    max-height: 20px;
+    border: 2.5px solid #666;
+    border-radius: 50%;
+    background: var(--app-surface);
+    position: relative;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+}
+
+.app-checkbox-label input[type="radio"]:hover {
+    border-color: var(--app-primary);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+    transform: scale(1.1);
+}
+
+.app-checkbox-label input[type="radio"]:checked {
+    border-color: var(--app-primary);
+    background: var(--app-primary);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+.app-checkbox-label input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.app-checkbox-label span {
+    font-weight: 400;
+    line-height: 1.4;
+    display: inline-block;
+    vertical-align: middle;
+}
+
 .app-modal-actions {
     display: flex;
     gap: 8px;
     margin-top: 24px;
+}
+
+/* 식단 추가/수정 모달 폭 조정 */
+#diet-add-modal,
+#diet-edit-modal {
+    max-width: 400px;
+}
+
+/* 식단 추가/수정 모달 입력란 가운데 정렬 */
+#diet-add-modal .app-form-group,
+#diet-edit-modal .app-form-group {
+    text-align: center;
+}
+
+/* 식단 추가/수정 모달 라벨 굵게 및 글자 크기 */
+#diet-add-modal .app-form-group label,
+#diet-edit-modal .app-form-group label {
+    font-weight: 700;
+    font-size: 16px;
+    color: #1a1a1a;
+}
+
+#diet-add-modal .app-form-group input,
+#diet-add-modal .app-form-group textarea,
+#diet-edit-modal .app-form-group input,
+#diet-edit-modal .app-form-group textarea {
+    margin: 0 auto;
+    display: block;
+}
+
+#diet-add-modal .app-form-group input[type="date"],
+#diet-add-modal .app-form-group input[type="time"],
+#diet-edit-modal .app-form-group input[type="date"],
+#diet-edit-modal .app-form-group input[type="time"] {
+    margin: 0 auto;
+}
+
+#diet-add-modal .app-meal-type-checkboxes,
+#diet-edit-modal .app-meal-type-checkboxes {
+    justify-content: center;
+}
+
+#diet-add-modal .app-image-upload-area,
+#diet-edit-modal .app-image-upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* 식단 추가/수정 모달 버튼 오른쪽 정렬 */
+#diet-add-modal .app-modal-actions,
+#diet-edit-modal .app-modal-actions {
+    justify-content: flex-end;
+}
+
+/* 식단 상세 모달 스타일 */
+.app-diet-detail-header {
+    margin-bottom: 16px;
+}
+
+.app-diet-detail-time-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.app-diet-detail-date {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1a1a;
+}
+
+.app-diet-detail-time {
+    font-size: 14px;
+    color: var(--app-text-muted);
+    font-weight: 500;
+}
+
+.app-diet-detail-meal-type {
+    font-size: 12px;
+    color: var(--app-primary);
+    font-weight: 600;
+    background: rgba(102, 126, 234, 0.1);
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.app-diet-detail-image {
+    margin-bottom: 16px;
+    text-align: center;
+}
+
+.app-diet-detail-image img {
+    max-width: 300px;
+    max-height: 300px;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+}
+
+.app-diet-detail-notes {
+    font-size: 14px;
+    color: var(--app-text);
+    line-height: 1.6;
+    white-space: pre-line;
+    margin-top: 8px;
+}
+
+/* 식단 상세 모달 코멘트 섹션 */
+.app-diet-comments-section {
+    margin-top: 24px;
+}
+
+.app-diet-comments-section .app-diet-card-comments-section {
+    margin-top: 0;
+}
+
+.app-diet-comment-input {
+    margin-top: 16px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.app-diet-comment-input-field {
+    flex: 1;
+    padding: 0 12px !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border: 1px solid var(--app-border);
+    border-width: 1px !important;
+    border-radius: var(--app-radius-sm);
+    font-size: 14px;
+    font-family: inherit;
+    color: var(--app-text);
+    background: var(--app-surface);
+    height: 40px !important;
+    line-height: 40px !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    vertical-align: top;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.app-diet-comment-input-field::placeholder {
+    color: var(--app-text-muted);
+}
+
+.app-diet-comment-input-field:focus {
+    outline: none;
+    border-color: var(--app-primary);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.app-diet-comment-input .app-btn-primary {
+    /* 완전히 새로운 스타일 - input과 동일한 기준 */
+    all: initial !important;
+    box-sizing: border-box !important;
+    
+    /* 높이와 정렬 - input과 완전히 동일 (border 고려) */
+    height: 40px !important;
+    line-height: 40px !important;
+    padding: 0 20px !important;
+    margin: 0 !important;
+    
+    /* 텍스트 스타일 */
+    font-family: inherit !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: white !important;
+    text-align: center !important;
+    white-space: nowrap !important;
+    
+    /* 레이아웃 */
+    display: block !important;
+    flex-shrink: 0 !important;
+    vertical-align: top !important;
+    
+    /* 시각적 스타일 */
+    background: var(--app-primary) !important;
+    border: none !important;
+    border-radius: var(--app-radius-sm) !important;
+    
+    /* 인터랙션 */
+    cursor: pointer !important;
+    transition: background var(--app-transition), transform var(--app-transition) !important;
+    
+    /* 브라우저 기본 스타일 제거 */
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    appearance: none !important;
+}
+
+.app-diet-comment-input .app-btn-primary:hover {
+    background: var(--app-primary-dark);
+}
+
+.app-diet-comment-input .app-btn-primary:active {
+    background: var(--app-primary-dark);
+    transform: scale(0.98);
+}
+
+.app-diet-comment-input .app-btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .app-btn-primary,
@@ -1773,9 +2645,10 @@ body.app-user-active {
 }
 
 /* 날짜 입력 필드 스타일 통일 */
-.app-form-group input[type="date"] {
+.app-form-group input[type="date"],
+.app-form-group input[type="time"] {
     width: 100%;
-    max-width: 100%;
+    max-width: 200px;
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
@@ -1798,6 +2671,8 @@ body.app-user-active {
     padding: 8px 16px;
     font-size: 14px;
 }
+
+/* 중복 규칙 제거됨 - 위의 .app-diet-comment-input .app-btn-primary 규칙으로 대체 */
 
 /* 세트 입력 스타일 */
 .workout-sets-container {
@@ -2837,7 +3712,9 @@ body.app-user-active {
     /* 모달 액션 버튼이 항상 보이도록 */
     .workout-input-modal .app-modal-actions,
     .workout-history-modal .app-modal-actions,
-    .weekly-workout-modal .app-modal-actions {
+    .weekly-workout-modal .app-modal-actions,
+    #diet-add-modal .app-modal-actions,
+    #diet-edit-modal .app-modal-actions {
         flex-shrink: 0;
         position: relative;
         z-index: 10;
@@ -2847,8 +3724,19 @@ body.app-user-active {
     /* 모달 헤더도 고정 */
     .workout-input-modal .app-modal-header,
     .workout-history-modal .app-modal-header,
-    .weekly-workout-modal .app-modal-header {
+    .weekly-workout-modal .app-modal-header,
+    #diet-add-modal .app-modal-header,
+    #diet-edit-modal .app-modal-header {
         flex-shrink: 0;
+    }
+    
+    /* 식단 추가/수정 모달 콘텐츠 스크롤 가능 */
+    #diet-add-modal .app-modal-content,
+    #diet-edit-modal .app-modal-content {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
+        -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
     }
     
     /* 타이머 모달도 동일하게 처리 */

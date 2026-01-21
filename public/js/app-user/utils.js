@@ -50,6 +50,34 @@ export function getToday() {
 }
 
 /**
+ * 상대 시간 계산 (예: "2시간 전", "방금 전")
+ */
+export function getTimeAgo(dateString) {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffSeconds = Math.floor(diffMs / 1000);
+    const diffMinutes = Math.floor(diffSeconds / 60);
+    const diffHours = Math.floor(diffMinutes / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffSeconds < 60) {
+        return '방금 전';
+    } else if (diffMinutes < 60) {
+        return `${diffMinutes}분 전`;
+    } else if (diffHours < 24) {
+        return `${diffHours}시간 전`;
+    } else if (diffDays < 7) {
+        return `${diffDays}일 전`;
+    } else {
+        // 7일 이상이면 날짜 표시
+        return formatDateShort(date);
+    }
+}
+
+/**
  * 서버 터미널에 디버깅 로그 전송
  */
 export function debugLog(level, message, data = null) {

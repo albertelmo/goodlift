@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
+const sharp = require('sharp');
 const ExcelJS = require('exceljs');
 const { getKoreanDate, getKoreanToday, parseKoreanDate, getKoreanYearMonth } = require('./utils');
 
@@ -28,6 +29,8 @@ const workoutRecordsDB = require('./workout-records-db');
 const workoutTypesDB = require('./workout-types-db');
 const favoriteWorkoutsDB = require('./app-user-favorite-workouts-db');
 const userSettingsDB = require('./app-user-settings-db');
+const dietRecordsDB = require('./diet-records-db');
+const activityLogsDB = require('./trainer-activity-logs-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -35,6 +38,55 @@ function isTrialSession(memberName) {
     memberName.startsWith('무기명') || 
     memberName.startsWith('체험')
   );
+}
+
+// 트레이너 활동 로그 생성 유틸리티 함수
+async function createActivityLogForTrainer(appUserId, activityType, message, recordId = null, recordDate = null) {
+  try {
+    // app_user_id로 회원 정보 조회
+    const appUser = await appUsersDB.getAppUserById(appUserId);
+    if (!appUser || !appUser.member_name) {
+      // 회원과 연결되지 않은 앱 유저는 로그 생성 안함
+      return;
+    }
+    
+    // 회원 정보로 트레이너 확인
+    const member = await membersDB.getMemberByName(appUser.member_name);
+    if (!member || !member.trainer) {
+      // 트레이너가 없는 회원은 로그 생성 안함
+      return;
+    }
+    
+    // 날짜 포맷팅 (월/일 형식) - 실제 기록 날짜 사용, 없으면 오늘 날짜
+    let dateStr = '';
+    if (recordDate) {
+      const date = new Date(recordDate);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      dateStr = `${month}/${day}`;
+    } else {
+      const today = new Date();
+      const month = today.getMonth() + 1;
+      const day = today.getDate();
+      dateStr = `${month}/${day}`;
+    }
+    
+    // 로그 메시지 생성: "회원명님의 날짜 기록타입이 등록되었습니다."
+    const activityMessage = `${appUser.member_name}님의 ${dateStr} ${message}`;
+    
+    // 활동 로그 생성 (비동기로 처리, 실패해도 에러를 throw하지 않음)
+    await activityLogsDB.addActivityLog({
+      trainer_username: member.trainer,
+      member_name: appUser.member_name,
+      activity_type: activityType,
+      activity_message: activityMessage,
+      related_record_id: recordId,
+      record_date: recordDate
+    });
+  } catch (error) {
+    // 로그 생성 실패해도 주요 기능에는 영향 없도록 에러만 기록
+    console.error('[Activity Log] 활동 로그 생성 실패:', error);
+  }
 }
 
 // 트레이너별 시간대별 센터 매핑 함수
@@ -168,6 +220,38 @@ const PORT = 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const DATA_PATH = path.join(DATA_DIR, 'accounts.json');
 const CENTERS_PATH = path.join(DATA_DIR, 'centers.json');
+
+// 이미지 업로드 디렉토리 설정 (로컬/Render 구분)
+const getUploadsDir = () => {
+  // 기존 패턴: DATA_DIR 환경변수 사용 (기본값: ../data)
+  const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
+  
+  // Local과 Render 모두 data 폴더 안에 uploads 생성
+  return process.env.UPLOADS_DIR || path.join(DATA_DIR, 'uploads');
+};
+
+const UPLOADS_DIR = getUploadsDir();
+const DIET_IMAGES_DIR = path.join(UPLOADS_DIR, 'diet-images');
+
+// 디렉토리 자동 생성
+const ensureDirectories = () => {
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      console.log(`[Diet Records] 업로드 디렉토리 생성: ${UPLOADS_DIR}`);
+    }
+    if (!fs.existsSync(DIET_IMAGES_DIR)) {
+      fs.mkdirSync(DIET_IMAGES_DIR, { recursive: true });
+      console.log(`[Diet Records] 식단 이미지 디렉토리 생성: ${DIET_IMAGES_DIR}`);
+    }
+  } catch (error) {
+    console.error(`[Diet Records] 디렉토리 생성 오류: ${error.message}`);
+    throw error;
+  }
+};
+
+// 서버 시작 시 디렉토리 생성
+ensureDirectories();
 
 
 // 데이터 파일 자동 생성 기능 수정: 디렉토리가 없으면 에러만 출력
@@ -306,7 +390,9 @@ ledgerDB.initializeDatabase();
 workoutTypesDB.initializeDatabase(); // workout_types 테이블을 먼저 생성해야 함
 workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
 favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_users와 workout_types를 참조하므로 마지막에 생성
+dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
+activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -468,6 +554,51 @@ function migrateTrainer30minSessionField() {
 // migrateTrainerVipField();
 // migrateTrainer30minSessionField();
 
+// 식단 이미지 저장 함수
+const saveDietImage = async (dietRecordId, imageBuffer, mealDate) => {
+  try {
+    // 날짜별 디렉토리 구조: 2025/01/{diet_record_id}/
+    const date = new Date(mealDate);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const recordDir = path.join(DIET_IMAGES_DIR, String(year), month, dietRecordId);
+    
+    // 디렉토리 생성 (recursive: true로 하위 디렉토리까지 자동 생성)
+    if (!fs.existsSync(recordDir)) {
+      fs.mkdirSync(recordDir, { recursive: true });
+    }
+    
+    // 원본 저장 (최대 1920x1920, JPEG 품질 85%)
+    // rotate()는 EXIF orientation 정보를 자동으로 적용하여 이미지를 올바른 방향으로 회전시킵니다
+    const originalPath = path.join(recordDir, 'original.jpg');
+    await sharp(imageBuffer)
+      .rotate() // EXIF orientation 자동 적용
+      .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 85 })
+      .toFile(originalPath);
+    
+    // 썸네일 저장 (300x300, JPEG 품질 80%)
+    const thumbnailPath = path.join(recordDir, 'thumbnail_300x300.jpg');
+    await sharp(imageBuffer)
+      .rotate() // EXIF orientation 자동 적용
+      .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toFile(thumbnailPath);
+    
+    // 상대 경로 반환 (DB 저장용)
+    // Local: /uploads/diet-images/2025/01/{uuid}/original.jpg
+    // Render: /uploads/diet-images/2025/01/{uuid}/original.jpg (동일)
+    const relativeDir = path.join('uploads', 'diet-images', String(year), month, dietRecordId);
+    return {
+      image_url: path.join(relativeDir, 'original.jpg').replace(/\\/g, '/'),
+      image_thumbnail_url: path.join(relativeDir, 'thumbnail_300x300.jpg').replace(/\\/g, '/')
+    };
+  } catch (error) {
+    console.error('[Diet Records] 이미지 저장 오류:', error);
+    throw error;
+  }
+};
+
 // 파일 업로드 설정
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -480,6 +611,22 @@ const upload = multer({
             cb(null, true);
         } else {
             cb(new Error('엑셀 파일만 업로드 가능합니다.'), false);
+        }
+    }
+});
+
+// 식단 이미지 업로드 설정
+const imageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB 제한
+    },
+    fileFilter: (req, file, cb) => {
+        // 이미지 파일만 허용
+        if (file.mimetype.startsWith('image/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('이미지 파일만 업로드 가능합니다.'), false);
         }
     }
 });
@@ -499,6 +646,9 @@ app.get('/manifest.json', (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
+
+// uploads 폴더를 정적 파일로 서빙 (이미지 접근)
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // 아이디 중복 체크 API
 app.get('/api/check-username', async (req, res) => {
@@ -1053,7 +1203,75 @@ app.get('/api/workout-records/:id', async (req, res) => {
     }
 });
 
-// 운동기록 추가
+// 운동기록 일괄 추가
+app.post('/api/workout-records/batch', async (req, res) => {
+    try {
+        const { app_user_id, workout_records } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        if (!Array.isArray(workout_records) || workout_records.length === 0) {
+            return res.status(400).json({ message: '운동기록 배열이 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 에러 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 운동기록을 추가할 수 없습니다.' });
+        }
+        
+        // 입력 데이터 검증 및 변환
+        const workoutDataArray = workout_records.map(record => ({
+            app_user_id,
+            workout_date: record.workout_date,
+            workout_type_id: record.workout_type_id || null,
+            duration_minutes: record.duration_minutes ? parseInt(record.duration_minutes) : null,
+            sets: record.sets || [],
+            notes: record.notes || null
+        }));
+        
+        // 모든 기록의 workout_date 검증
+        for (const data of workoutDataArray) {
+            if (!data.workout_date) {
+                return res.status(400).json({ message: '모든 운동기록에 운동 날짜가 필요합니다.' });
+            }
+        }
+        
+        // 일괄 추가
+        const records = await workoutRecordsDB.addWorkoutRecordsBatch(workoutDataArray);
+        
+        // 같은 날짜의 기록들을 그룹화하여 로그 생성 (각 날짜별로 1개만)
+        const dateToRecordMap = new Map();
+        for (const record of records) {
+            const dateStr = record.workout_date instanceof Date 
+                ? record.workout_date.toISOString().split('T')[0]
+                : record.workout_date.split('T')[0];
+            
+            if (!dateToRecordMap.has(dateStr)) {
+                dateToRecordMap.set(dateStr, record);
+            }
+        }
+        
+        // 각 날짜별로 로그 생성 (비동기, 실패해도 영향 없음)
+        for (const [dateStr, record] of dateToRecordMap.entries()) {
+            createActivityLogForTrainer(
+                app_user_id, 
+                'workout_recorded', 
+                '운동기록이 등록되었습니다.', 
+                record.id,
+                dateStr
+            ).catch(err => console.error('[Activity Log]', err));
+        }
+        
+        res.status(201).json(records);
+    } catch (error) {
+        console.error('[API] 운동기록 일괄 추가 오류:', error);
+        res.status(500).json({ message: '운동기록 일괄 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동기록 단일 추가 (하위 호환성 유지)
 app.post('/api/workout-records', async (req, res) => {
     try {
         const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes } = req.body;
@@ -1077,6 +1295,16 @@ app.post('/api/workout-records', async (req, res) => {
         };
         
         const record = await workoutRecordsDB.addWorkoutRecord(workoutData);
+        
+        // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
+        createActivityLogForTrainer(
+            app_user_id, 
+            'workout_recorded', 
+            '운동기록이 등록되었습니다.', 
+            record.id,
+            workout_date
+        ).catch(err => console.error('[Activity Log]', err));
+        
         res.status(201).json(record);
     } catch (error) {
         console.error('[API] 운동기록 추가 오류:', error);
@@ -1198,6 +1426,450 @@ app.delete('/api/workout-records/:id', async (req, res) => {
     } catch (error) {
         console.error('[API] 운동기록 삭제 오류:', error);
         res.status(500).json({ message: '운동기록 삭제 중 오류가 발생했습니다.' });
+    }
+});
+
+// ============================================
+// 식단기록 API
+// ============================================
+
+// 식단기록 목록 조회
+app.get('/api/diet-records', async (req, res) => {
+    try {
+        const { app_user_id, start_date, end_date, page, limit } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 빈 배열 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json([]);
+        }
+        
+        const filters = {};
+        if (start_date) filters.startDate = start_date;
+        if (end_date) filters.endDate = end_date;
+        if (page) filters.offset = (parseInt(page) - 1) * (parseInt(limit) || 20);
+        if (limit) filters.limit = parseInt(limit);
+        
+        const records = await dietRecordsDB.getDietRecords(app_user_id, filters);
+        res.json(records);
+    } catch (error) {
+        console.error('[API] 식단기록 조회 오류:', error);
+        res.status(500).json({ message: '식단기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 캘린더용 식단기록 조회 (경량 - 날짜별 존재 여부만)
+app.get('/api/diet-records/calendar', async (req, res) => {
+    try {
+        const { app_user_id, start_date, end_date } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 빈 객체 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json({});
+        }
+        
+        const summary = await dietRecordsDB.getDietRecordsForCalendar(
+            app_user_id,
+            start_date || null,
+            end_date || null
+        );
+        res.json(summary);
+    } catch (error) {
+        console.error('[API] 캘린더용 식단기록 조회 오류:', error);
+        res.status(500).json({ message: '캘린더용 식단기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단기록 단일 조회
+app.get('/api/diet-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 404 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
+        }
+        
+        const record = await dietRecordsDB.getDietRecordById(id, app_user_id);
+        
+        if (!record) {
+            return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 식단기록 단일 조회 오류:', error);
+        res.status(500).json({ message: '식단기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단기록 추가 (이미지 업로드 지원)
+app.post('/api/diet-records', imageUpload.single('image'), async (req, res) => {
+    try {
+        const { app_user_id, meal_date, meal_time, meal_type, notes } = req.body;
+        
+        if (!app_user_id || !meal_date) {
+            return res.status(400).json({ message: '앱 유저 ID와 식사 날짜가 필요합니다.' });
+        }
+        
+        if (!meal_type) {
+            return res.status(400).json({ message: '식사 구분을 선택해주세요.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 에러 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 식단기록을 추가할 수 없습니다.' });
+        }
+        
+        // notes 처리: null, undefined, "null" 문자열을 빈 문자열로 변환
+        const processedNotes = (notes === null || notes === undefined || notes === 'null') ? '' : (notes || '');
+        
+        // 이미지 처리 (있는 경우)
+        let imageUrls = { image_url: null, image_thumbnail_url: null };
+        if (req.file) {
+            // 파일 타입 검증
+            if (!req.file.mimetype.startsWith('image/')) {
+                return res.status(400).json({ message: '이미지 파일만 업로드 가능합니다.' });
+            }
+            
+            // 파일 크기 제한 (10MB)
+            if (req.file.size > 10 * 1024 * 1024) {
+                return res.status(400).json({ message: '이미지 파일 크기는 10MB 이하여야 합니다.' });
+            }
+            
+            // 식단기록을 먼저 생성하여 ID 획득
+            const tempDietData = {
+                app_user_id,
+                meal_date,
+                meal_time: meal_time || null,
+                meal_type: meal_type || null,
+                notes: processedNotes
+            };
+            const tempRecord = await dietRecordsDB.addDietRecord(tempDietData);
+            
+            // 이미지 저장
+            imageUrls = await saveDietImage(tempRecord.id, req.file.buffer, meal_date);
+            
+            // 이미지 URL 업데이트
+            await dietRecordsDB.updateDietRecord(tempRecord.id, app_user_id, imageUrls);
+            
+            // 업데이트된 레코드 조회
+            const record = await dietRecordsDB.getDietRecordById(tempRecord.id, app_user_id);
+            
+            // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
+            createActivityLogForTrainer(
+                app_user_id, 
+                'diet_recorded', 
+                '식단기록이 등록되었습니다.', 
+                record.id,
+                meal_date
+            ).catch(err => console.error('[Activity Log]', err));
+            
+            res.status(201).json(record);
+        } else {
+            // 이미지 없이 추가
+            const dietData = {
+                app_user_id,
+                meal_date,
+                meal_time: meal_time || null,
+                meal_type: meal_type || null,
+                notes: processedNotes
+            };
+            
+            const record = await dietRecordsDB.addDietRecord(dietData);
+            
+            // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
+            createActivityLogForTrainer(
+                app_user_id, 
+                'diet_recorded', 
+                '식단기록이 등록되었습니다.', 
+                record.id,
+                meal_date
+            ).catch(err => console.error('[Activity Log]', err));
+            
+            res.status(201).json(record);
+        }
+    } catch (error) {
+        console.error('[API] 식단기록 추가 오류:', error);
+        res.status(500).json({ message: '식단기록 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단기록 수정 (이미지 업로드 지원)
+app.patch('/api/diet-records/:id', imageUpload.single('image'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id, meal_date, meal_time, meal_type, notes, remove_image } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // meal_type이 업데이트되는 경우 필수 검증
+        if (meal_type !== undefined && !meal_type) {
+            return res.status(400).json({ message: '식사 구분을 선택해주세요.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 에러 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 식단기록을 수정할 수 없습니다.' });
+        }
+        
+        // 기존 레코드 조회 (meal_date 확인 필요)
+        const existingRecord = await dietRecordsDB.getDietRecordById(id, app_user_id);
+        if (!existingRecord) {
+            return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
+        }
+        
+        const updates = {};
+        if (meal_date !== undefined) updates.meal_date = meal_date;
+        if (meal_time !== undefined) updates.meal_time = meal_time;
+        if (meal_type !== undefined) updates.meal_type = meal_type;
+        if (notes !== undefined) {
+            // notes 처리: null, undefined, "null" 문자열을 빈 문자열로 변환
+            updates.notes = (notes === null || notes === undefined || notes === 'null') ? '' : (notes || '');
+        }
+        
+        // 이미지 제거 요청
+        if (remove_image === 'true') {
+            // 기존 이미지 파일 삭제 (선택사항, 나중에 추가 가능)
+            updates.image_url = null;
+            updates.image_thumbnail_url = null;
+        }
+        
+        // 새 이미지 업로드
+        if (req.file) {
+            // 파일 타입 검증
+            if (!req.file.mimetype.startsWith('image/')) {
+                return res.status(400).json({ message: '이미지 파일만 업로드 가능합니다.' });
+            }
+            
+            // 파일 크기 제한 (10MB)
+            if (req.file.size > 10 * 1024 * 1024) {
+                return res.status(400).json({ message: '이미지 파일 크기는 10MB 이하여야 합니다.' });
+            }
+            
+            // 이미지 저장 (meal_date는 업데이트된 값 또는 기존 값 사용)
+            const dateForImage = updates.meal_date || existingRecord.meal_date;
+            const imageUrls = await saveDietImage(id, req.file.buffer, dateForImage);
+            updates.image_url = imageUrls.image_url;
+            updates.image_thumbnail_url = imageUrls.image_thumbnail_url;
+        }
+        
+        const record = await dietRecordsDB.updateDietRecord(id, app_user_id, updates);
+        
+        if (!record) {
+            return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 식단기록 수정 오류:', error);
+        res.status(500).json({ message: '식단기록 수정 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단기록 삭제
+app.delete('/api/diet-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        // 트레이너 전환 모드인 경우 에러 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 식단기록을 삭제할 수 없습니다.' });
+        }
+        
+        const deleted = await dietRecordsDB.deleteDietRecord(id, app_user_id);
+        
+        if (!deleted) {
+            return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json({ message: '식단기록이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 식단기록 삭제 오류:', error);
+        res.status(500).json({ message: '식단기록 삭제 중 오류가 발생했습니다.' });
+    }
+});
+
+// ========== 트레이너 활동 로그 API ==========
+
+// 트레이너 활동 로그 조회
+app.get('/api/trainer-activity-logs', async (req, res) => {
+    try {
+        const { trainer_username, unread_only, limit, offset } = req.query;
+        
+        if (!trainer_username) {
+            return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
+        }
+        
+        const filters = {};
+        if (unread_only === 'true') {
+            filters.unread_only = true;
+        }
+        if (limit) {
+            filters.limit = parseInt(limit);
+        }
+        if (offset) {
+            filters.offset = parseInt(offset);
+        }
+        
+        const logs = await activityLogsDB.getActivityLogs(trainer_username, filters);
+        const unreadCount = await activityLogsDB.getUnreadCount(trainer_username);
+        
+        res.json({
+            logs,
+            unreadCount
+        });
+    } catch (error) {
+        console.error('[API] 트레이너 활동 로그 조회 오류:', error);
+        res.status(500).json({ message: '활동 로그 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 로그 읽음 처리
+app.patch('/api/trainer-activity-logs/:id/read', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { trainer_username } = req.body;
+        
+        if (!trainer_username) {
+            return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
+        }
+        
+        const result = await activityLogsDB.markAsRead(id, trainer_username);
+        
+        if (!result) {
+            return res.status(404).json({ message: '로그를 찾을 수 없습니다.' });
+        }
+        
+        res.json({ message: '로그가 읽음 처리되었습니다.', log: result });
+    } catch (error) {
+        console.error('[API] 로그 읽음 처리 오류:', error);
+        res.status(500).json({ message: '로그 읽음 처리 중 오류가 발생했습니다.' });
+    }
+});
+
+// 전체 로그 읽음 처리
+app.patch('/api/trainer-activity-logs/read-all', async (req, res) => {
+    try {
+        const { trainer_username } = req.body;
+        
+        if (!trainer_username) {
+            return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
+        }
+        
+        const result = await activityLogsDB.markAllAsRead(trainer_username);
+        
+        res.json({ 
+            message: '모든 로그가 읽음 처리되었습니다.', 
+            readCount: result.count 
+        });
+    } catch (error) {
+        console.error('[API] 전체 로그 읽음 처리 오류:', error);
+        res.status(500).json({ message: '전체 로그 읽음 처리 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단 코멘트 추가
+app.post('/api/diet-records/:id/comments', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { commenter_type, commenter_id, commenter_name, comment_text } = req.body;
+        
+        if (!commenter_type || !commenter_id || !comment_text) {
+            return res.status(400).json({ message: '코멘트 작성자 타입, ID, 코멘트 내용이 필요합니다.' });
+        }
+        
+        if (!['user', 'trainer'].includes(commenter_type)) {
+            return res.status(400).json({ message: 'commenter_type은 "user" 또는 "trainer"여야 합니다.' });
+        }
+        
+        // 식단기록 존재 여부 확인 (권한 체크를 위해 app_user_id도 필요)
+        const { app_user_id } = req.query;
+        if (app_user_id) {
+            const record = await dietRecordsDB.getDietRecordById(id, app_user_id);
+            if (!record) {
+                return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
+            }
+        }
+        
+        const commentData = {
+            commenter_type,
+            commenter_id,
+            commenter_name: commenter_name || null,
+            comment_text
+        };
+        
+        const comment = await dietRecordsDB.addDietComment(id, commentData);
+        res.status(201).json(comment);
+    } catch (error) {
+        console.error('[API] 식단 코멘트 추가 오류:', error);
+        res.status(500).json({ message: '식단 코멘트 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단 코멘트 수정
+app.patch('/api/diet-records/:id/comments/:comment_id', async (req, res) => {
+    try {
+        const { id, comment_id } = req.params;
+        const { commenter_type, commenter_id, comment_text } = req.body;
+        
+        if (!commenter_type || !commenter_id || !comment_text) {
+            return res.status(400).json({ message: '코멘트 작성자 타입, ID, 코멘트 내용이 필요합니다.' });
+        }
+        
+        const updates = { comment_text };
+        const comment = await dietRecordsDB.updateDietComment(comment_id, commenter_id, commenter_type, updates);
+        
+        if (!comment) {
+            return res.status(404).json({ message: '코멘트를 찾을 수 없습니다.' });
+        }
+        
+        res.json(comment);
+    } catch (error) {
+        console.error('[API] 식단 코멘트 수정 오류:', error);
+        res.status(500).json({ message: '식단 코멘트 수정 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단 코멘트 삭제
+app.delete('/api/diet-records/:id/comments/:comment_id', async (req, res) => {
+    try {
+        const { comment_id } = req.params;
+        const { commenter_type, commenter_id } = req.query;
+        
+        if (!commenter_type || !commenter_id) {
+            return res.status(400).json({ message: '코멘트 작성자 타입과 ID가 필요합니다.' });
+        }
+        
+        const deleted = await dietRecordsDB.deleteDietComment(comment_id, commenter_id, commenter_type);
+        
+        if (!deleted) {
+            return res.status(404).json({ message: '코멘트를 찾을 수 없습니다.' });
+        }
+        
+        res.json({ message: '코멘트가 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 식단 코멘트 삭제 오류:', error);
+        res.status(500).json({ message: '식단 코멘트 삭제 중 오류가 발생했습니다.' });
     }
 });
 
@@ -4644,7 +5316,7 @@ app.post('/api/sales/upload-excel', upload.single('file'), async (req, res) => {
                     membership: membership || null,
                     paymentMethod: paymentMethod || null,
                     amount: amount,
-                    notes: notes || null
+                    notes: notes || ''
                 });
             }
 

@@ -1,0 +1,289 @@
+const { Pool } = require('pg');
+
+// PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+// 트레이너 활동 로그 테이블 생성
+const createTrainerActivityLogsTable = async () => {
+  try {
+    const checkQuery = `
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = 'trainer_activity_logs'
+    `;
+    const checkResult = await pool.query(checkQuery);
+    
+    if (checkResult.rows.length === 0) {
+      const createQuery = `
+        CREATE TABLE trainer_activity_logs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          trainer_username VARCHAR(50) NOT NULL,
+          member_name VARCHAR(100) NOT NULL,
+          activity_type VARCHAR(20) NOT NULL CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'workout_recorded', 'workout_edited', 'workout_deleted')),
+          activity_message TEXT NOT NULL,
+          related_record_id UUID,
+          record_date DATE,
+          is_read BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `;
+      await pool.query(createQuery);
+      await pool.query("SET client_encoding TO 'UTF8'");
+      
+      // 인덱스 생성
+      await createTrainerActivityLogsIndexes();
+      
+      console.log('[PostgreSQL] trainer_activity_logs 테이블이 생성되었습니다.');
+    } else {
+      console.log('[PostgreSQL] trainer_activity_logs 테이블이 이미 존재합니다.');
+      // 기존 테이블 마이그레이션
+      await migrateTrainerActivityLogsTable();
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 트레이너 활동 로그 테이블 생성 오류:', error);
+    throw error;
+  }
+};
+
+// 기존 테이블 마이그레이션 (record_date 컬럼 추가)
+const migrateTrainerActivityLogsTable = async () => {
+  try {
+    // record_date 컬럼 확인 및 추가
+    const checkColumnQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = 'trainer_activity_logs' 
+        AND column_name = 'record_date'
+    `;
+    const checkResult = await pool.query(checkColumnQuery);
+    
+    if (checkResult.rows.length === 0) {
+      await pool.query(`ALTER TABLE trainer_activity_logs ADD COLUMN record_date DATE`);
+      console.log('[PostgreSQL] record_date 컬럼이 추가되었습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] trainer_activity_logs 테이블 마이그레이션 오류:', error);
+    throw error;
+  }
+};
+
+// 인덱스 생성
+const createTrainerActivityLogsIndexes = async () => {
+  try {
+    // 트레이너별 최신순 조회를 위한 인덱스
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_trainer_activity_logs_trainer_created 
+      ON trainer_activity_logs(trainer_username, created_at DESC)
+    `);
+    
+    // 읽지 않은 로그 조회를 위한 인덱스
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_trainer_activity_logs_trainer_unread 
+      ON trainer_activity_logs(trainer_username, is_read, created_at DESC)
+    `);
+    
+    console.log('[PostgreSQL] 트레이너 활동 로그 인덱스가 생성되었습니다.');
+  } catch (error) {
+    console.error('[PostgreSQL] 트레이너 활동 로그 인덱스 생성 오류:', error);
+    throw error;
+  }
+};
+
+// 활동 로그 추가 (운동기록과 식단기록 모두 매번 로그 생성)
+const addActivityLog = async (logData) => {
+  try {
+    // 로그 추가
+    const query = `
+      INSERT INTO trainer_activity_logs (
+        trainer_username,
+        member_name,
+        activity_type,
+        activity_message,
+        related_record_id,
+        record_date,
+        is_read,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'Asia/Seoul')
+      RETURNING 
+        id, trainer_username, member_name, activity_type, activity_message, 
+        related_record_id, record_date, is_read, created_at
+    `;
+    const values = [
+      logData.trainer_username,
+      logData.member_name,
+      logData.activity_type,
+      logData.activity_message,
+      logData.related_record_id || null,
+      logData.record_date || null,
+      false
+    ];
+    const result = await pool.query(query, values);
+    return result.rows[0];
+  } catch (error) {
+    console.error('[PostgreSQL] 활동 로그 추가 오류:', error);
+    throw error;
+  }
+};
+
+// 트레이너 활동 로그 조회
+const getActivityLogs = async (trainerUsername, filters = {}) => {
+  try {
+    let query = `
+      SELECT 
+        id,
+        trainer_username,
+        member_name,
+        activity_type,
+        activity_message,
+        related_record_id,
+        record_date,
+        is_read,
+        created_at
+      FROM trainer_activity_logs
+      WHERE trainer_username = $1
+    `;
+    const params = [trainerUsername];
+    let paramIndex = 2;
+    
+    // 읽지 않은 로그만 조회
+    if (filters.unread_only === true) {
+      query += ` AND is_read = false`;
+    }
+    
+    // 날짜 필터
+    if (filters.start_date) {
+      query += ` AND created_at >= $${paramIndex++}`;
+      params.push(filters.start_date);
+    }
+    if (filters.end_date) {
+      query += ` AND created_at <= $${paramIndex++}`;
+      params.push(filters.end_date);
+    }
+    
+    // 정렬 (최신순)
+    query += ` ORDER BY created_at DESC`;
+    
+    // 제한
+    if (filters.limit) {
+      query += ` LIMIT $${paramIndex++}`;
+      params.push(filters.limit);
+    } else {
+      // 기본값: 최신 50개
+      query += ` LIMIT $${paramIndex++}`;
+      params.push(50);
+    }
+    
+    // 오프셋 (페이지네이션)
+    if (filters.offset) {
+      query += ` OFFSET $${paramIndex++}`;
+      params.push(filters.offset);
+    }
+    
+    const result = await pool.query(query, params);
+    
+    // 날짜 정규화
+    for (const log of result.rows) {
+      if (log.created_at) {
+        if (log.created_at instanceof Date) {
+          // 이미 Date 객체면 그대로 사용 (Asia/Seoul 시간대로 저장됨)
+          log.created_at = log.created_at.toISOString();
+        }
+      }
+    }
+    
+    return result.rows;
+  } catch (error) {
+    console.error('[PostgreSQL] 활동 로그 조회 오류:', error);
+    throw error;
+  }
+};
+
+// 읽지 않은 로그 개수 조회
+const getUnreadCount = async (trainerUsername) => {
+  try {
+    const query = `
+      SELECT COUNT(*) as count
+      FROM trainer_activity_logs
+      WHERE trainer_username = $1 AND is_read = false
+    `;
+    const result = await pool.query(query, [trainerUsername]);
+    return parseInt(result.rows[0].count);
+  } catch (error) {
+    console.error('[PostgreSQL] 읽지 않은 로그 개수 조회 오류:', error);
+    throw error;
+  }
+};
+
+// 로그 읽음 처리
+const markAsRead = async (logId, trainerUsername) => {
+  try {
+    const query = `
+      UPDATE trainer_activity_logs
+      SET is_read = true
+      WHERE id = $1 AND trainer_username = $2
+      RETURNING id, is_read
+    `;
+    const result = await pool.query(query, [logId, trainerUsername]);
+    return result.rows[0] || null;
+  } catch (error) {
+    console.error('[PostgreSQL] 로그 읽음 처리 오류:', error);
+    throw error;
+  }
+};
+
+// 모든 로그 읽음 처리
+const markAllAsRead = async (trainerUsername) => {
+  try {
+    const query = `
+      UPDATE trainer_activity_logs
+      SET is_read = true
+      WHERE trainer_username = $1 AND is_read = false
+      RETURNING COUNT(*) as count
+    `;
+    const result = await pool.query(query, [trainerUsername]);
+    return { count: parseInt(result.rows[0]?.count || 0) };
+  } catch (error) {
+    console.error('[PostgreSQL] 전체 로그 읽음 처리 오류:', error);
+    throw error;
+  }
+};
+
+// 오래된 로그 삭제 (30일 이상 된 읽은 로그)
+const cleanOldLogs = async (daysOld = 30) => {
+  try {
+    const query = `
+      DELETE FROM trainer_activity_logs
+      WHERE is_read = true 
+        AND created_at < NOW() AT TIME ZONE 'Asia/Seoul' - INTERVAL '${daysOld} days'
+      RETURNING COUNT(*) as count
+    `;
+    const result = await pool.query(query);
+    const deletedCount = parseInt(result.rows[0]?.count || 0);
+    if (deletedCount > 0) {
+      console.log(`[PostgreSQL] ${deletedCount}개의 오래된 활동 로그가 삭제되었습니다.`);
+    }
+    return { deletedCount };
+  } catch (error) {
+    console.error('[PostgreSQL] 오래된 로그 삭제 오류:', error);
+    throw error;
+  }
+};
+
+// 데이터베이스 초기화
+const initializeDatabase = async () => {
+  await createTrainerActivityLogsTable();
+};
+
+module.exports = {
+  initializeDatabase,
+  addActivityLog,
+  getActivityLogs,
+  getUnreadCount,
+  markAsRead,
+  markAllAsRead,
+  cleanOldLogs
+};
