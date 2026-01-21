@@ -515,8 +515,44 @@ function render() {
                 <p class="app-dashboard-subtitle">${formatDate(new Date())}</p>
             </div>
             
+            ${isTrainer ? `
+            <!-- 활동 로그 섹션 (트레이너: 맨 위로 이동) -->
+            <div class="app-dashboard-section">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <h2 class="app-section-title" style="margin: 0;">
+                        📋 회원 활동 로그
+                        ${activityLogsUnreadCount > 0 ? `<span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>` : ''}
+                    </h2>
+                    ${activityLogs && activityLogsUnreadCount > 0 ? `
+                        <button id="mark-all-read-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
+                            전체 읽음 처리
+                        </button>
+                    ` : ''}
+                </div>
+                <div class="app-activity-logs-list">
+                    ${activityLogs && activityLogs.length > 0 ? activityLogs.map(log => {
+                        // 상대 시간 계산
+                        const timeAgo = getTimeAgo(log.created_at);
+                        const isUnread = !log.is_read;
+                        
+                        return `
+                        <div class="app-activity-log-item ${isUnread ? 'app-activity-log-item-unread' : 'app-activity-log-item-read'}" 
+                             data-log-id="${log.id}"
+                             style="cursor:pointer;">
+                            <div class="app-activity-log-content">
+                                <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
+                                <p class="app-activity-log-time">${timeAgo}</p>
+                            </div>
+                            ${isUnread ? '<div class="app-activity-log-indicator"></div>' : '<div style="width: 10px; flex-shrink: 0;"></div>'}
+                        </div>
+                        `;
+                    }).join('') : '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">활동 로그가 없습니다</div>'}
+                </div>
+            </div>
+            
+            ` : `
+            <!-- 일반 회원용 카드 및 통계 -->
             <div class="app-dashboard-cards">
-                ${!isTrainer ? `
                 <div class="app-card app-card-info">
                     <div class="app-card-icon">🏋️</div>
                     <div class="app-card-content">
@@ -527,7 +563,6 @@ function render() {
                         </p>
                     </div>
                 </div>
-                ` : ''}
                 
                 <div class="app-card app-card-primary" id="today-workout-card" ${!todayWorkoutSummary ? 'style="cursor: pointer;"' : ''}>
                     <div class="app-card-icon">💪</div>
@@ -537,32 +572,32 @@ function render() {
                     </div>
                 </div>
                 
-                <div class="app-card app-card-secondary">
-                    <div class="app-card-icon">🍎</div>
+                <div class="app-card app-card-secondary" id="weekly-workout-card" style="cursor: pointer;">
+                    <div class="app-card-icon">📊</div>
                     <div class="app-card-content">
-                        <h3>오늘의 식단</h3>
-                        <p class="app-card-value">준비 중입니다</p>
+                        <h3>주간 운동</h3>
+                        <p class="app-card-value">${weeklyWorkoutText}</p>
                     </div>
                 </div>
             </div>
-            
-            <div class="app-dashboard-stats">
-                <div class="app-stat-item" id="weekly-workout-stat-item" style="cursor: pointer;">
-                    <p class="app-stat-label">주간 운동</p>
-                    <p class="app-stat-value">${weeklyWorkoutText}</p>
-                </div>
-                <div class="app-stat-item">
-                    <p class="app-stat-label">주간 소모 칼로리</p>
-                    <p class="app-stat-value">0kcal</p>
-                </div>
-            </div>
+            `}
             
             ${isTrainer ? `
             <div class="app-dashboard-section">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                     <h2 class="app-section-title" style="margin: 0;">
-                        ${trainerMembers && trainerMembers.length > 0 ? `연결된 회원 (${trainerMembers.length}명)` : '연결된 회원'}
+                        👥 ${trainerMembers && trainerMembers.length > 0 ? `나의 회원 (${trainerMembers.length}명)` : '나의 회원'}
                     </h2>
+                    ${(() => {
+                        const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                        if (connectedAppUserId && trainerMembers) {
+                            const connectedMember = trainerMembers.find(m => m.app_user_id === connectedAppUserId);
+                            if (connectedMember && connectedMember.name) {
+                                return `<span style="font-size: 0.875rem; color: var(--app-primary); font-weight: 500;">${escapeHtml(connectedMember.name)} 회원과 연결중</span>`;
+                            }
+                        }
+                        return '';
+                    })()}
                 </div>
                 <div class="app-member-list">
                     ${trainerMembers && trainerMembers.length > 0 ? trainerMembers.map(member => {
@@ -588,42 +623,6 @@ function render() {
                     `;
                     }).join('') : '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">연결된 회원이 없습니다</div>'}
                 </div>
-            </div>
-            
-            <!-- 활동 로그 섹션 -->
-            <div class="app-dashboard-section">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <h2 class="app-section-title" style="margin: 0;">
-                        📋 활동 로그
-                        ${activityLogsUnreadCount > 0 ? `<span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>` : ''}
-                    </h2>
-                </div>
-                <div class="app-activity-logs-list">
-                    ${activityLogs && activityLogs.length > 0 ? activityLogs.map(log => {
-                        // 상대 시간 계산
-                        const timeAgo = getTimeAgo(log.created_at);
-                        const isUnread = !log.is_read;
-                        
-                        return `
-                        <div class="app-activity-log-item ${isUnread ? 'app-activity-log-item-unread' : 'app-activity-log-item-read'}" 
-                             data-log-id="${log.id}"
-                             style="cursor:pointer;">
-                            <div class="app-activity-log-content">
-                                <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
-                                <p class="app-activity-log-time">${timeAgo}</p>
-                            </div>
-                            ${isUnread ? '<div class="app-activity-log-indicator"></div>' : ''}
-                        </div>
-                        `;
-                    }).join('') : '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">활동 로그가 없습니다</div>'}
-                </div>
-                ${activityLogs && activityLogsUnreadCount > 0 ? `
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                        <button id="mark-all-read-btn" class="app-btn-secondary" style="flex: 1;">
-                            전체 읽음 처리
-                        </button>
-                    </div>
-                ` : ''}
             </div>
             ` : ''}
             
@@ -655,23 +654,28 @@ function render() {
     // 트레이너 목록 클릭 이벤트 설정
     setupTrainerClickEvents();
     
-    // 오늘의 운동 카드 클릭 이벤트 설정
-    setupTodayWorkoutCardClick();
+    // 일반 회원만 카드 클릭 이벤트 설정
+    if (!isTrainer) {
+        // 오늘의 운동 카드 클릭 이벤트 설정
+        setupTodayWorkoutCardClick();
+        
+        // 주간 운동 카드 클릭 이벤트 설정
+        setupWeeklyWorkoutCardClick();
+    }
     
-    // 주간 운동 카드 클릭 이벤트 설정
-    setupWeeklyWorkoutClick();
-    
-    // 활동 로그 이벤트 설정
-    setupActivityLogEvents();
+    // 활동 로그 이벤트 설정 (트레이너만)
+    if (isTrainer) {
+        setupActivityLogEvents();
+    }
 }
 
 /**
  * 주간 운동 카드 클릭 이벤트 설정
  */
-function setupWeeklyWorkoutClick() {
-    const weeklyWorkoutStatItem = document.getElementById('weekly-workout-stat-item');
-    if (weeklyWorkoutStatItem) {
-        weeklyWorkoutStatItem.addEventListener('click', () => {
+function setupWeeklyWorkoutCardClick() {
+    const weeklyWorkoutCard = document.getElementById('weekly-workout-card');
+    if (weeklyWorkoutCard) {
+        weeklyWorkoutCard.addEventListener('click', () => {
             showWeeklyWorkoutModal();
         });
     }
@@ -1488,19 +1492,19 @@ function setupActivityLogEvents() {
                     if (indicator) indicator.remove();
                 });
                 
-                // 전체 읽음 처리 버튼 제거
-                if (markAllBtn && markAllBtn.parentElement) {
-                    markAllBtn.parentElement.remove();
-                }
-                
                 // 읽지 않은 개수 0으로 업데이트
                 activityLogsUnreadCount = 0;
                 
-                // 헤더의 읽지 않은 개수 제거
+                // 헤더의 읽지 않은 개수 뱃지만 제거 (제목과 버튼은 유지)
                 const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
                 if (sectionTitle) {
                     const badge = sectionTitle.querySelector('span');
                     if (badge) badge.remove();
+                }
+                
+                // 버튼 비활성화 (제거하지 않고 숨김 처리)
+                if (markAllBtn) {
+                    markAllBtn.style.display = 'none';
                 }
                 
                 // 로그 데이터 업데이트

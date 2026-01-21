@@ -568,21 +568,27 @@ const saveDietImage = async (dietRecordId, imageBuffer, mealDate) => {
       fs.mkdirSync(recordDir, { recursive: true });
     }
     
-    // 원본 저장 (최대 1920x1920, JPEG 품질 85%)
+    // 원본 저장 (최대 1600x1600, JPEG 품질 70%로 압축 강화)
     // rotate()는 EXIF orientation 정보를 자동으로 적용하여 이미지를 올바른 방향으로 회전시킵니다
     const originalPath = path.join(recordDir, 'original.jpg');
     await sharp(imageBuffer)
       .rotate() // EXIF orientation 자동 적용
-      .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 85 })
+      .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ 
+        quality: 70, // 85% → 70%로 낮춰서 압축 강화
+        progressive: true // Progressive JPEG 사용 (더 나은 압축)
+      })
       .toFile(originalPath);
     
-    // 썸네일 저장 (300x300, JPEG 품질 80%)
+    // 썸네일 저장 (300x300, JPEG 품질 65%로 압축 강화)
     const thumbnailPath = path.join(recordDir, 'thumbnail_300x300.jpg');
     await sharp(imageBuffer)
       .rotate() // EXIF orientation 자동 적용
       .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 80 })
+      .jpeg({ 
+        quality: 65, // 80% → 65%로 낮춰서 압축 강화
+        progressive: true // Progressive JPEG 사용 (더 나은 압축)
+      })
       .toFile(thumbnailPath);
     
     // 상대 경로 반환 (DB 저장용)
@@ -1819,6 +1825,23 @@ app.post('/api/diet-records/:id/comments', async (req, res) => {
         };
         
         const comment = await dietRecordsDB.addDietComment(id, commentData);
+        
+        // 회원이 코멘트를 남긴 경우에만 로그 생성
+        if (commenter_type === 'user') {
+            // 식단 기록 조회 (app_user_id 없이도 조회 가능)
+            const record = await dietRecordsDB.getDietRecordById(id);
+            if (record && record.app_user_id) {
+                // 식단 기록의 날짜를 record_date로 사용
+                await createActivityLogForTrainer(
+                    record.app_user_id,
+                    'diet_comment_added',
+                    '식단에 코멘트가 등록되었습니다.',
+                    id, // related_record_id: 식단 기록 ID
+                    record.meal_date // record_date: 식단 날짜
+                ).catch(err => console.error('[Activity Log] 코멘트 로그 생성 실패:', err));
+            }
+        }
+        
         res.status(201).json(comment);
     } catch (error) {
         console.error('[API] 식단 코멘트 추가 오류:', error);

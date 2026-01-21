@@ -476,9 +476,9 @@ const getDietRecords = async (appUserId, filters = {}) => {
 };
 
 // 식단기록 단일 조회
-const getDietRecordById = async (id, appUserId) => {
+const getDietRecordById = async (id, appUserId = null) => {
   try {
-    const query = `
+    let query = `
       SELECT 
         dr.id,
         dr.app_user_id,
@@ -491,9 +491,17 @@ const getDietRecordById = async (id, appUserId) => {
         dr.created_at,
         dr.updated_at
       FROM diet_records dr
-      WHERE dr.id = $1 AND dr.app_user_id = $2
+      WHERE dr.id = $1
     `;
-    const result = await pool.query(query, [id, appUserId]);
+    const params = [id];
+    
+    // appUserId가 제공된 경우에만 필터 추가
+    if (appUserId) {
+      query += ` AND dr.app_user_id = $2`;
+      params.push(appUserId);
+    }
+    
+    const result = await pool.query(query, params);
     
     if (result.rows.length === 0) {
       return null;

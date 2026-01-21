@@ -22,7 +22,7 @@ const createTrainerActivityLogsTable = async () => {
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           trainer_username VARCHAR(50) NOT NULL,
           member_name VARCHAR(100) NOT NULL,
-          activity_type VARCHAR(20) NOT NULL CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'workout_recorded', 'workout_edited', 'workout_deleted')),
+          activity_type VARCHAR(20) NOT NULL CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'diet_comment_added', 'workout_recorded', 'workout_edited', 'workout_deleted')),
           activity_message TEXT NOT NULL,
           related_record_id UUID,
           record_date DATE,
@@ -48,7 +48,7 @@ const createTrainerActivityLogsTable = async () => {
   }
 };
 
-// 기존 테이블 마이그레이션 (record_date 컬럼 추가)
+// 기존 테이블 마이그레이션 (record_date 컬럼 추가, activity_type에 diet_comment_added 추가)
 const migrateTrainerActivityLogsTable = async () => {
   try {
     // record_date 컬럼 확인 및 추가
@@ -64,6 +64,49 @@ const migrateTrainerActivityLogsTable = async () => {
     if (checkResult.rows.length === 0) {
       await pool.query(`ALTER TABLE trainer_activity_logs ADD COLUMN record_date DATE`);
       console.log('[PostgreSQL] record_date 컬럼이 추가되었습니다.');
+    }
+    
+    // activity_type CHECK 제약조건 확인 및 업데이트 (diet_comment_added 추가)
+    try {
+      // 기존 제약조건 확인 (더 정확한 방법)
+      const constraintQuery = `
+        SELECT constraint_name
+        FROM information_schema.table_constraints
+        WHERE table_schema = 'public'
+          AND table_name = 'trainer_activity_logs'
+          AND constraint_type = 'CHECK'
+      `;
+      const constraintResult = await pool.query(constraintQuery);
+      
+      // activity_type 관련 제약조건 찾기
+      let activityTypeConstraint = null;
+      for (const row of constraintResult.rows) {
+        const checkQuery = `
+          SELECT check_clause
+          FROM information_schema.check_constraints
+          WHERE constraint_name = $1
+        `;
+        const checkResult = await pool.query(checkQuery, [row.constraint_name]);
+        if (checkResult.rows.length > 0 && checkResult.rows[0].check_clause && checkResult.rows[0].check_clause.includes('activity_type')) {
+          activityTypeConstraint = row.constraint_name;
+          break;
+        }
+      }
+      
+      if (activityTypeConstraint) {
+        // 기존 제약조건 삭제
+        await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}`);
+        // 새로운 제약조건 추가 (diet_comment_added 포함)
+        await pool.query(`
+          ALTER TABLE trainer_activity_logs 
+          ADD CONSTRAINT trainer_activity_logs_activity_type_check 
+          CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'diet_comment_added', 'workout_recorded', 'workout_edited', 'workout_deleted'))
+        `);
+        console.log('[PostgreSQL] activity_type CHECK 제약조건이 업데이트되었습니다. (diet_comment_added 추가)');
+      }
+    } catch (constraintError) {
+      // 제약조건이 없거나 이미 업데이트된 경우 무시
+      console.log('[PostgreSQL] activity_type 제약조건 확인/업데이트:', constraintError.message);
     }
   } catch (error) {
     console.error('[PostgreSQL] trainer_activity_logs 테이블 마이그레이션 오류:', error);
@@ -242,10 +285,9 @@ const markAllAsRead = async (trainerUsername) => {
       UPDATE trainer_activity_logs
       SET is_read = true
       WHERE trainer_username = $1 AND is_read = false
-      RETURNING COUNT(*) as count
     `;
     const result = await pool.query(query, [trainerUsername]);
-    return { count: parseInt(result.rows[0]?.count || 0) };
+    return { count: result.rowCount || 0 };
   } catch (error) {
     console.error('[PostgreSQL] 전체 로그 읽음 처리 오류:', error);
     throw error;
