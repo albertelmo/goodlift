@@ -367,13 +367,11 @@ export async function showDietDetailModal(appUserId, record, isReadOnly = false,
                 // 코멘트 입력창 초기화
                 commentInput.value = '';
                 
-                // 모달 새로고침 (최신 코멘트 포함)
+                // 모달 닫기
                 closeModal();
                 if (onSuccess) {
                     onSuccess();
                 }
-                // 모달 다시 열기
-                showDietDetailModal(appUserId, fullRecord, isReadOnly, onSuccess);
             } catch (error) {
                 console.error('코멘트 추가 오류:', error);
                 alert(error.message || '코멘트 추가 중 오류가 발생했습니다.');
