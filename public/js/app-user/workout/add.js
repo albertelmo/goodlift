@@ -863,6 +863,10 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         }
         
         try {
+            // 트레이너 정보 확인은 서버에서 자동으로 처리하므로
+            // 프론트엔드에서는 별도 조회 없이 바로 요청
+            // (성능 최적화: 서버에서 한 번에 처리)
+            
             // 일괄 추가 (한 번의 요청으로 모든 기록 추가)
             await addWorkoutRecordsBatch(appUserId, workoutRecordsArray);
             closeModal();
@@ -1276,6 +1280,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
         };
         
         try {
+            // 트레이너 정보는 서버에서 자동으로 확인하여 처리 (성능 최적화)
             await addWorkoutRecord(workoutData);
             
             closeModal();

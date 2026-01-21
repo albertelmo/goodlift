@@ -236,6 +236,7 @@ export async function getWorkoutRecordById(id, appUserId) {
  * 운동기록 추가 (캐시 무효화 포함)
  */
 export async function addWorkoutRecord(data) {
+    // 트레이너 정보는 서버에서 자동으로 확인하여 처리
     const result = await post('/workout-records', data);
     
     // 해당 사용자의 운동기록 캐시 무효화 (일반 조회 + 캘린더 조회)
@@ -248,12 +249,15 @@ export async function addWorkoutRecord(data) {
 
 /**
  * 운동기록 일괄 추가 (캐시 무효화 포함)
+ * 트레이너 정보는 서버에서 자동으로 확인하여 처리
  */
 export async function addWorkoutRecordsBatch(appUserId, workoutRecordsArray) {
-    const result = await post('/workout-records/batch', {
+    const body = {
         app_user_id: appUserId,
         workout_records: workoutRecordsArray
-    });
+    };
+    
+    const result = await post('/workout-records/batch', body);
     
     // 해당 사용자의 운동기록 캐시 무효화 (일반 조회 + 캘린더 조회)
     if (appUserId) {
@@ -735,6 +739,40 @@ export function invalidateUserSettingsCache(appUserId) {
     } else {
         cache.invalidate(key => key.includes(`/user-settings`));
     }
+}
+
+// ========== 회원 활동 로그 API ==========
+
+/**
+ * 회원 활동 로그 조회
+ */
+export async function getMemberActivityLogs(appUserId, filters = {}) {
+    const params = new URLSearchParams();
+    params.append('app_user_id', appUserId);
+    if (filters.unread_only) params.append('unread_only', 'true');
+    if (filters.limit) params.append('limit', filters.limit);
+    if (filters.offset) params.append('offset', filters.offset);
+    
+    const endpoint = `/member-activity-logs?${params.toString()}`;
+    return get(endpoint);
+}
+
+/**
+ * 회원 로그 읽음 처리
+ */
+export async function markMemberActivityLogAsRead(logId, appUserId) {
+    return patch(`/member-activity-logs/${logId}/read`, {
+        app_user_id: appUserId
+    });
+}
+
+/**
+ * 회원 전체 로그 읽음 처리
+ */
+export async function markAllMemberActivityLogsAsRead(appUserId) {
+    return patch('/member-activity-logs/read-all', {
+        app_user_id: appUserId
+    });
 }
 
 // ========== 트레이너 활동 로그 API ==========

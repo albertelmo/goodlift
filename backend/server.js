@@ -31,6 +31,7 @@ const favoriteWorkoutsDB = require('./app-user-favorite-workouts-db');
 const userSettingsDB = require('./app-user-settings-db');
 const dietRecordsDB = require('./diet-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
+const memberActivityLogsDB = require('./member-activity-logs-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -86,6 +87,102 @@ async function createActivityLogForTrainer(appUserId, activityType, message, rec
   } catch (error) {
     // 로그 생성 실패해도 주요 기능에는 영향 없도록 에러만 기록
     console.error('[Activity Log] 활동 로그 생성 실패:', error);
+  }
+}
+
+// 회원 활동 로그 생성 유틸리티 함수 (트레이너 정보 자동 확인 버전)
+async function createActivityLogForMemberAuto(appUserId, activityType, message, recordId, recordDate) {
+  try {
+    // app_user_id로 회원 정보 조회
+    const appUser = await appUsersDB.getAppUserById(appUserId);
+    if (!appUser || !appUser.member_name) {
+      return;
+    }
+    
+    // 회원 정보로 트레이너 확인
+    const member = await membersDB.getMemberByName(appUser.member_name);
+    if (!member || !member.trainer) {
+      return;
+    }
+    
+    // 트레이너의 app_user 정보 조회하여 이름 확인
+    let trainerName = member.trainer;
+    try {
+      const trainerAppUsers = await appUsersDB.getAppUsers({ username: member.trainer });
+      const trainerAppUser = Array.isArray(trainerAppUsers) ? trainerAppUsers[0] : trainerAppUsers;
+      if (trainerAppUser && trainerAppUser.name) {
+        trainerName = trainerAppUser.name;
+      }
+    } catch (e) {
+      // 트레이너 app_user 조회 실패해도 username 사용
+    }
+    
+    // 트레이너 정보로 회원 로그 생성
+    await createActivityLogForMember(appUserId, activityType, message, recordId, recordDate, member.trainer, trainerName);
+  } catch (error) {
+    console.error('[Activity Log] 회원 활동 로그 자동 생성 실패:', error);
+  }
+}
+
+// 회원 활동 로그 생성 유틸리티 함수
+async function createActivityLogForMember(appUserId, activityType, message, recordId, recordDate, trainerUsername, trainerName) {
+  try {
+    // app_user_id로 회원 정보 조회
+    const appUser = await appUsersDB.getAppUserById(appUserId);
+    
+    if (!appUser || !appUser.member_name) {
+      // 회원과 연결되지 않은 앱 유저는 로그 생성 안함
+      return;
+    }
+    
+    // 회원 정보로 트레이너 확인 (trainerUsername과 일치하는지 검증)
+    const member = await membersDB.getMemberByName(appUser.member_name);
+    
+    if (!member || !member.trainer) {
+      return;
+    }
+    
+    if (member.trainer !== trainerUsername) {
+      return;
+    }
+    
+    // 트레이너 이름이 없으면 조회
+    let finalTrainerName = trainerName;
+    if (!finalTrainerName) {
+      const trainerAppUser = await appUsersDB.getAppUserByUsername(trainerUsername);
+      finalTrainerName = trainerAppUser ? trainerAppUser.name : trainerUsername;
+    }
+    
+    // 날짜 포맷팅 (월/일 형식) - 실제 기록 날짜 사용, 없으면 오늘 날짜
+    let dateStr = '';
+    if (recordDate) {
+      const date = new Date(recordDate);
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      dateStr = `${month}/${day}`;
+    } else {
+      const today = new Date();
+      const month = today.getMonth() + 1;
+      const day = today.getDate();
+      dateStr = `${month}/${day}`;
+    }
+    
+    // 로그 메시지 생성: "{트레이너명} 트레이너가 {월}/{일} {메시지}"
+    const activityMessage = `${finalTrainerName} 트레이너가 ${dateStr} ${message}`;
+    
+    // 활동 로그 생성 (비동기로 처리, 실패해도 에러를 throw하지 않음)
+    await memberActivityLogsDB.addActivityLog({
+      app_user_id: appUserId,
+      trainer_username: trainerUsername,
+      trainer_name: finalTrainerName,
+      activity_type: activityType,
+      activity_message: activityMessage,
+      related_record_id: recordId,
+      record_date: recordDate
+    });
+  } catch (error) {
+    // 로그 생성 실패해도 주요 기능에는 영향 없도록 에러만 기록
+    console.error('[Activity Log] 회원 활동 로그 생성 실패:', error);
   }
 }
 
@@ -393,6 +490,7 @@ favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_us
 dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
+memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -1212,7 +1310,7 @@ app.get('/api/workout-records/:id', async (req, res) => {
 // 운동기록 일괄 추가
 app.post('/api/workout-records/batch', async (req, res) => {
     try {
-        const { app_user_id, workout_records } = req.body;
+        const { app_user_id, workout_records, trainer_username, trainer_name } = req.body;
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
@@ -1261,13 +1359,32 @@ app.post('/api/workout-records/batch', async (req, res) => {
         
         // 각 날짜별로 로그 생성 (비동기, 실패해도 영향 없음)
         for (const [dateStr, record] of dateToRecordMap.entries()) {
+            // 트레이너 활동 로그 생성 (항상 생성)
             createActivityLogForTrainer(
                 app_user_id, 
                 'workout_recorded', 
                 '운동기록이 등록되었습니다.', 
                 record.id,
                 dateStr
-            ).catch(err => console.error('[Activity Log]', err));
+            ).catch(err => console.error('[Activity Log] 트레이너 로그 생성 실패:', err));
+            
+            // 트레이너가 생성한 경우 회원 활동 로그 생성
+            // trainer_username이 있으면 사용하고, 없으면 서버에서 자동으로 확인
+            if (trainer_username) {
+                createActivityLogForMember(
+                    app_user_id,
+                    'workout_recorded',
+                    '운동기록을 등록했습니다.',
+                    record.id,
+                    dateStr,
+                    trainer_username,
+                    trainer_name
+                ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
+            } else {
+                // trainer_username이 없으면 서버에서 자동으로 확인 시도
+                createActivityLogForMemberAuto(app_user_id, 'workout_recorded', '운동기록을 등록했습니다.', record.id, dateStr)
+                    .catch(err => console.error('[Activity Log] 회원 로그 자동 생성 실패:', err));
+            }
         }
         
         res.status(201).json(records);
@@ -1280,7 +1397,7 @@ app.post('/api/workout-records/batch', async (req, res) => {
 // 운동기록 단일 추가 (하위 호환성 유지)
 app.post('/api/workout-records', async (req, res) => {
     try {
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, trainer_username, trainer_name } = req.body;
         
         if (!app_user_id || !workout_date) {
             return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
@@ -1310,6 +1427,19 @@ app.post('/api/workout-records', async (req, res) => {
             record.id,
             workout_date
         ).catch(err => console.error('[Activity Log]', err));
+        
+        // 트레이너가 생성한 경우 회원 활동 로그 생성
+        if (trainer_username) {
+            createActivityLogForMember(
+                app_user_id,
+                'workout_recorded',
+                '운동기록을 등록했습니다.',
+                record.id,
+                workout_date,
+                trainer_username,
+                trainer_name
+            ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
+        }
         
         res.status(201).json(record);
     } catch (error) {
@@ -1715,6 +1845,85 @@ app.delete('/api/diet-records/:id', async (req, res) => {
     }
 });
 
+// ========== 회원 활동 로그 API ==========
+
+// 회원 활동 로그 조회
+app.get('/api/member-activity-logs', async (req, res) => {
+    try {
+        const { app_user_id, unread_only, limit, offset } = req.query;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const filters = {};
+        if (unread_only === 'true') {
+            filters.unread_only = true;
+        }
+        if (limit) {
+            filters.limit = parseInt(limit);
+        }
+        if (offset) {
+            filters.offset = parseInt(offset);
+        }
+        
+        const logs = await memberActivityLogsDB.getActivityLogs(app_user_id, filters);
+        const unreadCount = await memberActivityLogsDB.getUnreadCount(app_user_id);
+        
+        res.json({
+            logs,
+            unreadCount
+        });
+    } catch (error) {
+        console.error('[API] 회원 활동 로그 조회 오류:', error);
+        res.status(500).json({ message: '회원 활동 로그 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 회원 활동 로그 개별 읽음 처리
+app.patch('/api/member-activity-logs/:id/read', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_id } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const result = await memberActivityLogsDB.markAsRead(id, app_user_id);
+        
+        if (!result) {
+            return res.status(404).json({ message: '로그를 찾을 수 없습니다.' });
+        }
+        
+        res.json({ message: '로그가 읽음 처리되었습니다.', log: result });
+    } catch (error) {
+        console.error('[API] 회원 활동 로그 읽음 처리 오류:', error);
+        res.status(500).json({ message: '로그 읽음 처리 중 오류가 발생했습니다.' });
+    }
+});
+
+// 회원 활동 로그 전체 읽음 처리
+app.patch('/api/member-activity-logs/read-all', async (req, res) => {
+    try {
+        const { app_user_id } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const result = await memberActivityLogsDB.markAllAsRead(app_user_id);
+        
+        res.json({ 
+            message: '모든 로그가 읽음 처리되었습니다.', 
+            readCount: result.count 
+        });
+    } catch (error) {
+        console.error('[API] 회원 활동 로그 전체 읽음 처리 오류:', error);
+        res.status(500).json({ message: '전체 로그 읽음 처리 중 오류가 발생했습니다.' });
+    }
+});
+
 // ========== 트레이너 활동 로그 API ==========
 
 // 트레이너 활동 로그 조회
@@ -1826,12 +2035,12 @@ app.post('/api/diet-records/:id/comments', async (req, res) => {
         
         const comment = await dietRecordsDB.addDietComment(id, commentData);
         
-        // 회원이 코멘트를 남긴 경우에만 로그 생성
-        if (commenter_type === 'user') {
-            // 식단 기록 조회 (app_user_id 없이도 조회 가능)
-            const record = await dietRecordsDB.getDietRecordById(id);
-            if (record && record.app_user_id) {
-                // 식단 기록의 날짜를 record_date로 사용
+        // 식단 기록 조회 (app_user_id 없이도 조회 가능)
+        const record = await dietRecordsDB.getDietRecordById(id);
+        
+        if (record && record.app_user_id) {
+            // 회원이 코멘트를 남긴 경우 트레이너에게 로그 생성
+            if (commenter_type === 'user') {
                 await createActivityLogForTrainer(
                     record.app_user_id,
                     'diet_comment_added',
@@ -1839,6 +2048,19 @@ app.post('/api/diet-records/:id/comments', async (req, res) => {
                     id, // related_record_id: 식단 기록 ID
                     record.meal_date // record_date: 식단 날짜
                 ).catch(err => console.error('[Activity Log] 코멘트 로그 생성 실패:', err));
+            }
+            
+            // 트레이너가 코멘트를 남긴 경우 회원에게 로그 생성
+            if (commenter_type === 'trainer') {
+                await createActivityLogForMember(
+                    record.app_user_id,
+                    'diet_comment_added',
+                    '식단기록에 코멘트를 남겼습니다.',
+                    id,
+                    record.meal_date,
+                    commenter_id, // trainer username
+                    commenter_name // trainer name
+                ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
             }
         }
         

@@ -6,6 +6,7 @@ import { getDietRecords } from '../api.js';
 let currentAppUserId = null;
 let currentRecords = [];
 let isReadOnly = false;
+let currentFilters = {}; // 현재 필터 상태 저장
 
 /**
  * 식단기록 목록 초기화
@@ -26,10 +27,12 @@ export async function init(appUserId, readOnly = false) {
     twoMonthsLater.setDate(0);
     
     const { formatDate } = await import('../utils.js');
-    await loadRecords({
+    const filters = {
         startDate: formatDate(twoMonthsAgo),
         endDate: formatDate(twoMonthsLater)
-    });
+    };
+    currentFilters = { ...filters }; // 필터 상태 저장
+    await loadRecords(filters);
 }
 
 let currentFilterDate = null;
@@ -44,10 +47,17 @@ async function loadRecords(filters = {}) {
     }
     if (!container) return;
     
+    // 필터 상태 저장 (초기화 필터 유지)
+    if (filters.startDate || filters.endDate) {
+        currentFilters = { ...currentFilters, ...filters };
+    }
+    
     showLoading(container);
     
     try {
-        const records = await getDietRecords(currentAppUserId, filters);
+        // 저장된 필터 사용 (빈 필터인 경우 기본 필터 사용)
+        const filtersToUse = Object.keys(filters).length > 0 ? filters : currentFilters;
+        const records = await getDietRecords(currentAppUserId, filtersToUse);
         currentRecords = records;
         await render(records);
     } catch (error) {
@@ -299,17 +309,29 @@ function setupEventListeners() {
  */
 export async function filterByDate(dateStr) {
     currentFilterDate = dateStr;
-    await loadRecords({
+    const filters = {
         startDate: dateStr,
         endDate: dateStr
-    });
+    };
+    currentFilters = filters; // 필터 상태 업데이트
+    await loadRecords(filters);
 }
 
 /**
  * 목록 새로고침
  */
 export async function refresh() {
-    await loadRecords({});
+    // 현재 선택된 날짜가 있으면 그 날짜로 필터링, 없으면 저장된 필터 사용
+    let filtersToUse = currentFilters;
+    if (currentFilterDate) {
+        filtersToUse = {
+            startDate: currentFilterDate,
+            endDate: currentFilterDate
+        };
+        currentFilters = filtersToUse; // 필터 상태 업데이트
+    }
+    
+    await loadRecords(filtersToUse);
     
     // 캘린더도 업데이트
     if (window.updateCalendarDietRecords) {
