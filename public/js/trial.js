@@ -33,7 +33,10 @@ function render(container) {
   container.innerHTML = `
     <div style="max-width:1200px;margin:0 auto;padding:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-        <h3 id="trial-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">신규 상담 현황</h3>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <h3 id="trial-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">신규 상담 현황</h3>
+          <button id="trial-consultation-list-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">상담목록</button>
+        </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button id="trial-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">추가</button>
           <div class="date-navigation">
@@ -63,6 +66,18 @@ function render(container) {
   container.querySelector('#trial-add-btn').addEventListener('click', () => {
     showTrialAddModal();
   });
+  
+  const consultationListBtn = container.querySelector('#trial-consultation-list-btn');
+  if (consultationListBtn) {
+    consultationListBtn.addEventListener('click', () => {
+      // 이미 구현된 상담목록 모달 열기 함수 호출
+      if (typeof window.openConsultationListModal === 'function') {
+        window.openConsultationListModal();
+      } else {
+        console.error('openConsultationListModal 함수를 찾을 수 없습니다.');
+      }
+    });
+  }
   
   container.querySelector('#trial-title').addEventListener('click', () => {
     loadTrialData(container);
@@ -171,9 +186,9 @@ function renderTrialSessions(data, centerOrder) {
                 <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">회원명</th>
                 <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">성별</th>
                 <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">연락처</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">유입경로</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">운동목적</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">특이사항</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">방문경로</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">상담목적</th>
+                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">요구사항</th>
                 <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">결과</th>
               </tr>
             </thead>
@@ -238,7 +253,10 @@ async function showTrialEditModal(trial) {
     <div class="trial-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
     <div class="trial-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:400px;max-width:90vw;max-height:90vh;overflow-y:auto;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">상담 정보 수정</h3>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">상담 정보 수정</h3>
+          <button type="button" id="trial-create-consultation-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">상세 상담 생성</button>
+        </div>
         <button id="trial-edit-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
       
@@ -279,17 +297,28 @@ async function showTrialEditModal(trial) {
         </div>
         
         <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">유입경로</label>
-          <input type="text" id="trial-edit-source" value="${trial.source || ''}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">방문경로</label>
+          <select id="trial-edit-source" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="워크인" ${trial.source === '워크인' ? 'selected' : ''}>워크인</option>
+            <option value="지인소개" ${trial.source === '지인소개' ? 'selected' : ''}>지인소개</option>
+            <option value="네이버지도" ${trial.source === '네이버지도' ? 'selected' : ''}>네이버지도</option>
+            <option value="네이버블로그" ${trial.source === '네이버블로그' ? 'selected' : ''}>네이버블로그</option>
+            <option value="당근" ${trial.source === '당근' ? 'selected' : ''}>당근</option>
+            <option value="홍보물" ${trial.source === '홍보물' ? 'selected' : ''}>홍보물</option>
+            <option value="배너" ${trial.source === '배너' ? 'selected' : ''}>배너</option>
+            <option value="간판" ${trial.source === '간판' ? 'selected' : ''}>간판</option>
+            <option value="모름" ${trial.source === '모름' ? 'selected' : ''}>모름</option>
+          </select>
         </div>
         
         <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">운동목적</label>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">상담목적</label>
           <input type="text" id="trial-edit-purpose" value="${(trial.purpose || '').replace(/"/g, '&quot;')}" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
         </div>
         
         <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">특이사항</label>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">요구사항</label>
           <textarea id="trial-edit-notes" rows="4" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;resize:vertical;font-family:inherit;">${(trial.notes || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
         </div>
         
@@ -327,6 +356,11 @@ async function showTrialEditModal(trial) {
   document.getElementById('trial-edit-modal-close').addEventListener('click', closeTrialEditModal);
   document.getElementById('trial-edit-cancel-btn').addEventListener('click', closeTrialEditModal);
   document.querySelector('.trial-edit-modal-overlay').addEventListener('click', closeTrialEditModal);
+  
+  // 상세 상담 생성 버튼 클릭 이벤트
+  document.getElementById('trial-create-consultation-btn').addEventListener('click', async function() {
+    await createConsultationFromTrial();
+  });
   
   // 삭제 버튼 클릭 이벤트
   document.getElementById('trial-edit-delete-btn').addEventListener('click', async function() {
@@ -529,17 +563,28 @@ async function showTrialAddModal() {
         </div>
         
         <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">유입경로</label>
-          <input type="text" id="trial-add-source" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">방문경로</label>
+          <select id="trial-add-source" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">선택</option>
+            <option value="워크인">워크인</option>
+            <option value="지인소개">지인소개</option>
+            <option value="네이버지도">네이버지도</option>
+            <option value="네이버블로그">네이버블로그</option>
+            <option value="당근">당근</option>
+            <option value="홍보물">홍보물</option>
+            <option value="배너">배너</option>
+            <option value="간판">간판</option>
+            <option value="모름">모름</option>
+          </select>
         </div>
         
         <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">운동목적</label>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">상담목적</label>
           <input type="text" id="trial-add-purpose" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
         </div>
         
         <div>
-          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">특이사항</label>
+          <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">요구사항</label>
           <textarea id="trial-add-notes" rows="4" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;resize:vertical;font-family:inherit;"></textarea>
         </div>
         
@@ -654,3 +699,118 @@ function closeTrialAddModal() {
   if (overlay) overlay.remove();
   if (modal) modal.remove();
 }
+
+// 신규상담현황에서 상담기록 생성
+async function createConsultationFromTrial() {
+  try {
+    // 현재 모달의 모든 필드 값 가져오기 (결과 필드 제외)
+    const center = document.getElementById('trial-edit-center').value;
+    const trainer = document.getElementById('trial-edit-trainer').value;
+    const memberName = document.getElementById('trial-edit-member-name').value.trim();
+    const gender = document.getElementById('trial-edit-gender').value || null;
+    const phone = document.getElementById('trial-edit-phone').value.trim() || null;
+    const source = document.getElementById('trial-edit-source').value.trim() || null;
+    const purpose = document.getElementById('trial-edit-purpose').value.trim() || null;
+    const notes = document.getElementById('trial-edit-notes').value.trim() || null;
+    
+    // 필수 필드 검증
+    if (!center || !trainer) {
+      alert('센터와 트레이너는 필수 항목입니다.');
+      return;
+    }
+    
+    // 이름이 없으면 회원명 사용, 둘 다 없으면 기본값
+    const name = memberName || '상담자';
+    
+    // 현재 사용자 정보 가져오기
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    
+    // 상담목적 드롭다운 옵션 목록
+    const validPurposes = ['체력증진', '근력강화', '자세교정', '재활', '다이어트', '선수지망', '기타'];
+    
+    // 상담목적이 드롭다운 옵션에 있는지 확인
+    let finalPurpose = purpose;
+    let purposeOther = null;
+    
+    if (purpose && !validPurposes.includes(purpose)) {
+      // 드롭다운에 없는 경우 "기타"로 설정하고 원래 값을 purpose_other에 저장
+      finalPurpose = '기타';
+      purposeOther = purpose;
+    }
+    
+    // 상담기록 데이터 구성
+    const consultationData = {
+      currentUser: currentUser,
+      center: center,
+      trainer_username: trainer,
+      name: name,
+      phone: phone,
+      gender: gender === '남' ? 'M' : (gender === '여' ? 'F' : null),
+      visit_source: source,
+      purpose: finalPurpose,
+      purpose_other: purposeOther,
+      requirements: notes, // 요구사항을 requirements 필드에 저장
+      // 나머지 필드는 null로 설정
+      age_range: null,
+      exercise_history: null,
+      medical_history: null,
+      preferred_time: null,
+      visit_reason: null,
+      referrer: null,
+      inbody: null,
+      overhead_squat: null,
+      slr_test: null,
+      empty_can_test: null,
+      rom: null,
+      flexibility: null,
+      static_posture: null,
+      exercise_performed: null,
+      summary: null
+    };
+    
+    // 버튼 비활성화 및 로딩 표시
+    const createBtn = document.getElementById('trial-create-consultation-btn');
+    const originalText = createBtn.textContent;
+    createBtn.disabled = true;
+    createBtn.textContent = '생성 중...';
+    
+    // 상담기록 생성 API 호출
+    const response = await fetch('/api/consultation-records', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(consultationData)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: '상담기록 생성에 실패했습니다.' }));
+      throw new Error(errorData.message || '상담기록 생성에 실패했습니다.');
+    }
+    
+    const result = await response.json();
+    
+    // 성공 메시지 표시
+    alert('상담기록이 성공적으로 생성되었습니다.');
+    
+    // 버튼 복원
+    createBtn.disabled = false;
+    createBtn.textContent = originalText;
+    
+  } catch (error) {
+    console.error('상담기록 생성 오류:', error);
+    alert('상담기록 생성 중 오류가 발생했습니다: ' + error.message);
+    
+    // 버튼 복원
+    const createBtn = document.getElementById('trial-create-consultation-btn');
+    if (createBtn) {
+      createBtn.disabled = false;
+      createBtn.textContent = '상세 상담 생성';
+    }
+  }
+}
+

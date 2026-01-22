@@ -5840,8 +5840,8 @@ app.post('/api/consultation-records', async (req, res) => {
         }
         
         // 필수 필드 검증
-        if (!recordData.name || !recordData.phone || !recordData.trainer_username || !recordData.center) {
-            return res.status(400).json({ message: '이름, 연락처, 센터, 담당 트레이너는 필수 항목입니다.' });
+        if (!recordData.name || !recordData.trainer_username || !recordData.center) {
+            return res.status(400).json({ message: '이름, 센터, 담당 트레이너는 필수 항목입니다.' });
         }
         
         const record = await consultationRecordsDB.addConsultationRecord(recordData);

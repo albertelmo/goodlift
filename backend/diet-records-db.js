@@ -429,7 +429,7 @@ const getDietRecords = async (appUserId, filters = {}) => {
         countMap.set(row.diet_record_id, parseInt(row.count));
       });
       
-      // 코멘트 내용 조회 (유저 + 트레이너 코멘트 모두) - 변환 없이 그대로 반환
+      // 코멘트 내용 조회 (유저 + 트레이너 코멘트 모두) - 한국 시간으로 변환
       const commentsQuery = `
         SELECT 
           id,
@@ -438,7 +438,7 @@ const getDietRecords = async (appUserId, filters = {}) => {
           commenter_id,
           commenter_name,
           comment_text,
-          created_at
+          created_at AT TIME ZONE 'Asia/Seoul' as created_at
         FROM diet_comments
         WHERE diet_record_id = ANY($1::uuid[])
           AND commenter_type IN ('user', 'trainer')
@@ -446,7 +446,7 @@ const getDietRecords = async (appUserId, filters = {}) => {
       `;
       const commentsResult = await pool.query(commentsQuery, [recordIds]);
       
-      // 코멘트를 각 레코드에 할당 (PostgreSQL에서 이미 한국 시간으로 변환됨)
+      // 코멘트를 각 레코드에 할당 (PostgreSQL에서 한국 시간으로 변환되어 반환됨)
       const commentsMap = new Map();
       commentsResult.rows.forEach(comment => {
         if (!commentsMap.has(comment.diet_record_id)) {
@@ -526,7 +526,7 @@ const getDietRecordById = async (id, appUserId = null) => {
       record.meal_time = record.meal_time.split('.')[0];
     }
     
-    // 코멘트 정보 조회 - 변환 없이 그대로 반환
+    // 코멘트 정보 조회 - 한국 시간으로 변환
     const comments = await pool.query(`
       SELECT 
         id,
@@ -535,8 +535,8 @@ const getDietRecordById = async (id, appUserId = null) => {
         commenter_id,
         commenter_name,
         comment_text,
-        created_at,
-        updated_at
+        created_at AT TIME ZONE 'Asia/Seoul' as created_at,
+        updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
       FROM diet_comments
       WHERE diet_record_id = $1
       ORDER BY created_at ASC

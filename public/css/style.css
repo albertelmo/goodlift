@@ -2062,6 +2062,7 @@ li, td, th {
 /* 상담목록 버튼 스타일 (display는 JavaScript에서 제어) */
 #consultationBtn.consultation-list-btn,
 .header-btns #consultationBtn {
+    display: none !important;
     font-size: 11px !important;
     color: #000 !important;
     background: #fff !important;

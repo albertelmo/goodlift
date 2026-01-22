@@ -279,25 +279,61 @@
     padding: 6px 12px;
     border-top: 1px solid var(--trainer-border);
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
     gap: 6px;
     flex-shrink: 0;
 }
 
 #consultationModal .tmc-modal-submit-btn {
-    flex: 0 0 auto;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    min-width: 60px;
+    flex: none !important;
+    width: auto !important;
+    padding: 4px 16px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    min-width: auto !important;
+    max-width: none !important;
 }
 
 #consultationModal .tmc-modal-cancel-btn {
-    flex: 0 0 auto;
-    padding: 6px 14px;
-    font-size: 12px;
-    font-weight: 600;
-    min-width: 60px;
+    flex: none !important;
+    width: auto !important;
+    padding: 4px 16px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    min-width: auto !important;
+    max-width: none !important;
+}
+
+#consultationModal .tmc-modal-delete-btn {
+    flex: none !important;
+    width: auto !important;
+    padding: 4px 16px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    min-width: auto !important;
+    max-width: none !important;
+    background: #d32f2f !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: var(--trainer-radius-sm);
+    cursor: pointer;
+    transition: all var(--trainer-transition);
+}
+
+#consultationModal .tmc-modal-delete-btn:hover {
+    background: #b71c1c !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(211, 47, 47, 0.3);
+}
+
+#consultationModal .tmc-modal-delete-btn:active {
+    transform: translateY(0);
+}
+
+#consultationModal .tmc-modal-delete-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 /* 모바일에서는 기본 크기 유지 */

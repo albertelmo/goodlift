@@ -30,7 +30,7 @@ const createConsultationRecordsTable = async () => {
           center VARCHAR(100) NOT NULL,
           trainer_username VARCHAR(100) NOT NULL,
           name VARCHAR(100) NOT NULL,
-          phone VARCHAR(50) NOT NULL,
+          phone VARCHAR(50),
           gender VARCHAR(20),
           age_range VARCHAR(50),
           exercise_history TEXT,
@@ -92,7 +92,7 @@ const migrateConsultationRecordsTable = async () => {
       'center': 'VARCHAR(100) NOT NULL',
       'trainer_username': 'VARCHAR(100) NOT NULL',
       'name': 'VARCHAR(100) NOT NULL',
-      'phone': 'VARCHAR(50) NOT NULL',
+      'phone': 'VARCHAR(50)',
       'gender': 'VARCHAR(20)',
       'age_range': 'VARCHAR(50)',
       'exercise_history': 'TEXT',
@@ -134,7 +134,7 @@ const migrateConsultationRecordsTable = async () => {
         
         if (columnType.includes('NOT NULL') && !columnType.includes('DEFAULT')) {
           // NOT NULL이지만 DEFAULT가 없는 경우, 기본값 추가
-          if (columnName === 'center' || columnName === 'trainer_username' || columnName === 'name' || columnName === 'phone') {
+          if (columnName === 'center' || columnName === 'trainer_username' || columnName === 'name') {
             // 필수 필드는 빈 문자열로 기본값 설정 (나중에 데이터 입력 시 채워짐)
             alterQuery = `ALTER TABLE consultation_records ADD COLUMN ${columnName} ${columnType.replace('NOT NULL', '')} DEFAULT ''`;
             await pool.query(alterQuery);
@@ -150,6 +150,32 @@ const migrateConsultationRecordsTable = async () => {
         }
         
         console.log(`[PostgreSQL] 상담기록 테이블에 ${columnName} 컬럼이 추가되었습니다.`);
+      }
+    }
+    
+    // phone 컬럼이 이미 존재하고 NOT NULL인 경우, NULL 허용으로 변경
+    if (existingColumns.includes('phone')) {
+      try {
+        // phone 컬럼의 NOT NULL 제약조건 확인 및 제거
+        const checkNotNullQuery = `
+          SELECT 
+            CASE 
+              WHEN is_nullable = 'NO' THEN true 
+              ELSE false 
+            END as is_not_null
+          FROM information_schema.columns 
+          WHERE table_name = 'consultation_records' AND column_name = 'phone'
+        `;
+        const checkNotNullResult = await pool.query(checkNotNullQuery);
+        
+        if (checkNotNullResult.rows.length > 0 && checkNotNullResult.rows[0].is_not_null) {
+          // NOT NULL 제약조건 제거
+          await pool.query(`ALTER TABLE consultation_records ALTER COLUMN phone DROP NOT NULL`);
+          console.log('[PostgreSQL] 상담기록 테이블의 phone 컬럼이 NULL 허용으로 변경되었습니다.');
+        }
+      } catch (error) {
+        // 이미 NULL 허용이거나 다른 이유로 실패한 경우 무시
+        console.log('[PostgreSQL] phone 컬럼 제약조건 변경 스킵:', error.message);
       }
     }
     
@@ -218,7 +244,7 @@ const addConsultationRecord = async (recordData) => {
       recordData.center,
       recordData.trainer_username,
       recordData.name,
-      recordData.phone,
+      (recordData.phone && recordData.phone.trim()) || null,
       recordData.gender || null,
       recordData.age_range || null,
       recordData.exercise_history || null,

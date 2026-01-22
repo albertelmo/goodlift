@@ -119,6 +119,9 @@ async function openConsultationListModal() {
     }
 }
 
+// 전역에서 접근 가능하도록 window 객체에 할당
+window.openConsultationListModal = openConsultationListModal;
+
 // 상담기록 목록 모달 닫기
 function closeConsultationListModal() {
     const modal = document.getElementById('consultationListModal');
@@ -150,6 +153,12 @@ function openConsultationModal() {
         document.getElementById('consultationResult').textContent = '';
         document.getElementById('consultation-purpose-other-row').style.display = 'none';
         
+        // 삭제 버튼 숨김
+        const deleteBtn = document.getElementById('consultationDeleteBtn');
+        if (deleteBtn) {
+            deleteBtn.style.display = 'none';
+        }
+        
         // 모달 제목 변경
         const modalTitle = modal.querySelector('h3');
         if (modalTitle) {
@@ -173,6 +182,14 @@ function closeConsultationModal() {
         document.getElementById('consultationForm').reset();
         document.getElementById('consultationResult').textContent = '';
         document.getElementById('consultation-purpose-other-row').style.display = 'none';
+        
+        // 삭제 버튼 상태 초기화
+        const deleteBtn = document.getElementById('consultationDeleteBtn');
+        if (deleteBtn) {
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = '삭제';
+            deleteBtn.style.display = 'none';
+        }
     }
 }
 
@@ -240,8 +257,8 @@ async function handleConsultationSubmit(e) {
     };
     
     // 필수 필드 검증
-    if (!data.name || !data.phone || !data.trainer_username || !data.center) {
-        resultDiv.textContent = '이름, 연락처, 센터, 담당 트레이너는 필수 항목입니다.';
+    if (!data.name || !data.trainer_username || !data.center) {
+        resultDiv.textContent = '이름, 센터, 담당 트레이너는 필수 항목입니다.';
         resultDiv.style.color = 'red';
         return;
     }
@@ -491,10 +508,82 @@ async function openConsultationEditModal(recordId) {
         if (modalTitle) {
             modalTitle.textContent = '📝 상담기록 수정';
         }
+        
+        // 삭제 버튼 표시 및 상태 초기화
+        const deleteBtn = document.getElementById('consultationDeleteBtn');
+        if (deleteBtn) {
+            deleteBtn.style.display = 'block';
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = '삭제';
+        }
     } catch (error) {
         console.error('상담기록 로드 오류:', error);
         alert('상담기록을 불러오는 중 오류가 발생했습니다.');
         closeConsultationModal();
+    }
+}
+
+// 상담기록 삭제
+async function handleConsultationDelete() {
+    if (!currentEditRecordId) {
+        alert('삭제할 상담기록이 없습니다.');
+        return;
+    }
+    
+    if (!confirm('정말로 이 상담기록을 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+        
+        const deleteBtn = document.getElementById('consultationDeleteBtn');
+        if (deleteBtn) {
+            deleteBtn.disabled = true;
+            deleteBtn.textContent = '삭제 중...';
+        }
+        
+        const response = await fetch(`/api/consultation-records/${currentEditRecordId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ currentUser: currentUser })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '상담기록 삭제에 실패했습니다.' }));
+            throw new Error(errorData.message || '상담기록 삭제에 실패했습니다.');
+        }
+        
+        const result = await response.json();
+        
+        // 성공 메시지 표시
+        alert('상담기록이 삭제되었습니다.');
+        
+        // 모달 닫기
+        closeConsultationModal();
+        
+        // 목록 새로고침 (목록 모달이 열려있는 경우)
+        const listModal = document.getElementById('consultationListModal');
+        if (listModal && listModal.style.display === 'block') {
+            await loadConsultationList();
+        }
+        
+    } catch (error) {
+        console.error('상담기록 삭제 오류:', error);
+        alert('상담기록 삭제 중 오류가 발생했습니다: ' + error.message);
+        
+        // 버튼 복원
+        const deleteBtn = document.getElementById('consultationDeleteBtn');
+        if (deleteBtn) {
+            deleteBtn.disabled = false;
+            deleteBtn.textContent = '삭제';
+        }
     }
 }
 
@@ -559,6 +648,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (modalBg) {
         modalBg.addEventListener('click', closeConsultationModal);
+    }
+    
+    // 삭제 버튼 이벤트
+    const deleteBtn = document.getElementById('consultationDeleteBtn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', handleConsultationDelete);
     }
     
     // 상담목적 변경 이벤트

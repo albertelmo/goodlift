@@ -604,8 +604,8 @@
                 <input type="text" id="consultation-name" name="name" required>
               </div>
               <div class="tmc-form-group">
-                <label for="consultation-phone">연락처 *</label>
-                <input type="text" id="consultation-phone" name="phone" required>
+                <label for="consultation-phone">연락처</label>
+                <input type="text" id="consultation-phone" name="phone">
               </div>
               <div class="tmc-form-group">
                 <label for="consultation-gender">성별</label>
@@ -643,6 +643,7 @@
                 <label for="consultation-visit-source">방문경로</label>
                 <select id="consultation-visit-source" name="visit_source">
                   <option value="">선택</option>
+                  <option value="워크인">워크인</option>
                   <option value="지인소개">지인소개</option>
                   <option value="네이버지도">네이버지도</option>
                   <option value="네이버블로그">네이버블로그</option>
@@ -686,13 +687,13 @@
                 <option value="기타">기타</option>
               </select>
             </div>
-            <div class="tmc-form-group">
-              <label for="consultation-requirements">요구사항</label>
-              <input type="text" id="consultation-requirements" name="requirements" placeholder="요구사항을 입력하세요">
-            </div>
             <div class="tmc-form-group" id="consultation-purpose-other-row" style="display:none;">
               <label for="consultation-purpose-other">상담목적 (기타 직접입력)</label>
               <input type="text" id="consultation-purpose-other" name="purpose_other">
+            </div>
+            <div class="tmc-form-group">
+              <label for="consultation-requirements">요구사항</label>
+              <input type="text" id="consultation-requirements" name="requirements" placeholder="요구사항을 입력하세요">
             </div>
           </div>
           
@@ -755,8 +756,11 @@
           <div id="consultationResult" class="tmc-modal-result"></div>
         </form>
         <div class="tmc-modal-actions">
-          <button type="button" id="consultationCancelBtn" class="tmc-modal-cancel-btn">취소</button>
-          <button type="submit" form="consultationForm" class="tmc-modal-submit-btn">저장</button>
+          <button type="button" id="consultationDeleteBtn" class="tmc-modal-delete-btn" style="display:none;">삭제</button>
+          <div style="display:flex;gap:6px;margin-left:auto;">
+            <button type="button" id="consultationCancelBtn" class="tmc-modal-cancel-btn">취소</button>
+            <button type="submit" form="consultationForm" class="tmc-modal-submit-btn">저장</button>
+          </div>
         </div>
       </div>
     </div>
