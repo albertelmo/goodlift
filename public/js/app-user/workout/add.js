@@ -2,6 +2,7 @@
 
 import { formatDate, getToday, escapeHtml, formatWeight, parseWeight } from '../utils.js';
 import { addWorkoutRecord, addWorkoutRecordsBatch, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
+import { getCurrentUser } from '../index.js';
 
 /**
  * 운동 선택 모달 표시 (1단계)
@@ -868,7 +869,9 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             // (성능 최적화: 서버에서 한 번에 처리)
             
             // 일괄 추가 (한 번의 요청으로 모든 기록 추가)
-            await addWorkoutRecordsBatch(appUserId, workoutRecordsArray);
+            // 현재 로그인한 사용자 정보 전달 (트레이너 정보 확인용)
+            const currentUser = getCurrentUser();
+            await addWorkoutRecordsBatch(appUserId, workoutRecordsArray, currentUser);
             closeModal();
             if (onSuccess) onSuccess();
         } catch (error) {

@@ -251,11 +251,25 @@ export async function addWorkoutRecord(data) {
  * 운동기록 일괄 추가 (캐시 무효화 포함)
  * 트레이너 정보는 서버에서 자동으로 확인하여 처리
  */
-export async function addWorkoutRecordsBatch(appUserId, workoutRecordsArray) {
+export async function addWorkoutRecordsBatch(appUserId, workoutRecordsArray, currentUser = null) {
+    // 트레이너가 회원에게 접속한 상태인지 확인
+    const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+    
+    // currentUser에서 트레이너 정보 추출
+    const currentUsername = currentUser?.username || null;
+    const currentUserName = currentUser?.name || null;
+    const isTrainer = currentUser?.isTrainer === true;
+    
     const body = {
         app_user_id: appUserId,
         workout_records: workoutRecordsArray
     };
+    
+    // 트레이너가 회원에게 접속한 상태인 경우 trainer_username 전달
+    if (connectedMemberAppUserId && connectedMemberAppUserId === appUserId && currentUsername && isTrainer) {
+        body.trainer_username = currentUsername;
+        body.trainer_name = currentUserName || currentUsername;
+    }
     
     const result = await post('/workout-records/batch', body);
     

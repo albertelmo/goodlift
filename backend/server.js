@@ -62,7 +62,15 @@ async function createActivityLogForTrainer(appUserId, activityType, message, rec
     // 날짜 포맷팅 (월/일 형식) - 실제 기록 날짜 사용, 없으면 오늘 날짜
     let dateStr = '';
     if (recordDate) {
-      const date = new Date(recordDate);
+      // 문자열 날짜(YYYY-MM-DD)를 로컬 타임존 기준으로 파싱
+      let date;
+      if (typeof recordDate === 'string' && recordDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // YYYY-MM-DD 형식인 경우 로컬 타임존 기준으로 파싱
+        const [year, month, day] = recordDate.split('-').map(Number);
+        date = new Date(year, month - 1, day);
+      } else {
+        date = new Date(recordDate);
+      }
       const month = date.getMonth() + 1;
       const day = date.getDate();
       dateStr = `${month}/${day}`;
@@ -157,7 +165,15 @@ async function createActivityLogForMember(appUserId, activityType, message, reco
     // 날짜 포맷팅 (월/일 형식) - 실제 기록 날짜 사용, 없으면 오늘 날짜
     let dateStr = '';
     if (recordDate) {
-      const date = new Date(recordDate);
+      // 문자열 날짜(YYYY-MM-DD)를 로컬 타임존 기준으로 파싱
+      let date;
+      if (typeof recordDate === 'string' && recordDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // YYYY-MM-DD 형식인 경우 로컬 타임존 기준으로 파싱
+        const [year, month, day] = recordDate.split('-').map(Number);
+        date = new Date(year, month - 1, day);
+      } else {
+        date = new Date(recordDate);
+      }
       const month = date.getMonth() + 1;
       const day = date.getDate();
       dateStr = `${month}/${day}`;
@@ -1350,9 +1366,21 @@ app.post('/api/workout-records/batch', async (req, res) => {
         // 같은 날짜의 기록들을 그룹화하여 로그 생성 (각 날짜별로 1개만)
         const dateToRecordMap = new Map();
         for (const record of records) {
-            const dateStr = record.workout_date instanceof Date 
-                ? record.workout_date.toISOString().split('T')[0]
-                : record.workout_date.split('T')[0];
+            // workout_date를 로컬 타임존 기준으로 YYYY-MM-DD 형식으로 변환
+            let dateStr = '';
+            if (record.workout_date instanceof Date) {
+                // Date 객체를 로컬 타임존(KST) 기준으로 YYYY-MM-DD 형식으로 변환
+                const year = record.workout_date.getFullYear();
+                const month = String(record.workout_date.getMonth() + 1).padStart(2, '0');
+                const day = String(record.workout_date.getDate()).padStart(2, '0');
+                dateStr = `${year}-${month}-${day}`;
+            } else if (typeof record.workout_date === 'string') {
+                // 문자열인 경우 'T' 이전 부분만 추출 (YYYY-MM-DD 형식)
+                dateStr = record.workout_date.split('T')[0];
+            } else {
+                // 기타 경우는 문자열로 변환 후 처리
+                dateStr = String(record.workout_date).split('T')[0];
+            }
             
             if (!dateToRecordMap.has(dateStr)) {
                 dateToRecordMap.set(dateStr, record);
@@ -1370,8 +1398,8 @@ app.post('/api/workout-records/batch', async (req, res) => {
                 dateStr
             ).catch(err => console.error('[Activity Log] 트레이너 로그 생성 실패:', err));
             
-            // 트레이너가 생성한 경우 회원 활동 로그 생성
-            // trainer_username이 있으면 사용하고, 없으면 서버에서 자동으로 확인
+            // 트레이너가 생성한 경우에만 회원 활동 로그 생성
+            // trainer_username이 있을 때만 생성 (회원이 직접 등록한 경우는 생성하지 않음)
             if (trainer_username) {
                 createActivityLogForMember(
                     app_user_id,
@@ -1382,10 +1410,6 @@ app.post('/api/workout-records/batch', async (req, res) => {
                     trainer_username,
                     trainer_name
                 ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
-            } else {
-                // trainer_username이 없으면 서버에서 자동으로 확인 시도
-                createActivityLogForMemberAuto(app_user_id, 'workout_recorded', '운동기록을 등록했습니다.', record.id, dateStr)
-                    .catch(err => console.error('[Activity Log] 회원 로그 자동 생성 실패:', err));
             }
         }
         

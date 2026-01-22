@@ -8,6 +8,11 @@ import { updateAppUser, get } from './api.js';
 let currentUser = null;
 let currentScreen = 'home';
 
+// currentUser를 export하여 다른 모듈에서 사용할 수 있도록 함
+export function getCurrentUser() {
+    return currentUser;
+}
+
 /**
  * 앱 유저 화면 표시 (main.js에서 호출)
  */

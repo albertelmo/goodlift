@@ -713,6 +713,19 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
     
     // 모든 기록에 대해 세트 정보 및 workout_type 정보 조회
     for (const record of addedRecords) {
+      // workout_date를 YYYY-MM-DD 형식의 문자열로 변환 (타임존 이슈 방지)
+      if (record.workout_date) {
+        if (record.workout_date instanceof Date) {
+          const year = record.workout_date.getFullYear();
+          const month = String(record.workout_date.getMonth() + 1).padStart(2, '0');
+          const day = String(record.workout_date.getDate()).padStart(2, '0');
+          record.workout_date = `${year}-${month}-${day}`;
+        } else if (typeof record.workout_date === 'string') {
+          // ISO 형식 문자열인 경우 날짜 부분만 추출
+          record.workout_date = record.workout_date.split('T')[0];
+        }
+      }
+      
       const setsResult = await pool.query(`
         SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
         FROM workout_record_sets
