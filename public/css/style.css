@@ -615,22 +615,7 @@ button:hover, button:focus {
     transition: box-shadow 0.2s ease;
 }
 
-#logoutBtn {
-    background: var(--accent-light);
-    color: var(--primary-dark);
-    border-radius: 6px;
-    padding: 10px 24px;
-    font-size: 1rem;
-    font-weight: 600;
-    margin-top: 0;
-    box-shadow: none;
-    border: 1.5px solid var(--accent);
-    transition: background var(--transition), color var(--transition);
-}
-#logoutBtn:hover {
-    background: var(--accent);
-    color: #fff;
-}
+/* 로그아웃 버튼 스타일은 위의 .header-text-btn으로 통일됨 */
 
 #login-result, #signup-result {
     min-height: 24px;
@@ -1461,42 +1446,51 @@ li, td, th {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 3px 16px;
+    padding: 12px 16px;
     border-bottom: 1px solid var(--trainer-border);
     flex-shrink: 0;
-    min-height: 28px;
+    min-height: 48px;
+    box-sizing: border-box;
 }
 
 .tmc-modal-header h3 {
     margin: 0;
+    padding: 0;
     color: var(--trainer-primary);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: -0.5px;
-    line-height: 1;
+    line-height: 1.2;
     display: flex;
     align-items: center;
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .tmc-modal-close-btn {
     background: none !important;
     border: none !important;
-    font-size: 18px;
+    font-size: 24px;
+    line-height: 1;
     color: var(--trainer-text-muted);
     cursor: pointer;
-    width: 22px !important;
-    height: 22px;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--trainer-radius-sm);
     transition: all var(--trainer-transition);
     padding: 0 !important;
-    line-height: 1;
-    min-width: 22px !important;
-    max-width: 22px !important;
-    flex-shrink: 0 !important;
     margin: 0 !important;
+    flex: 0 0 24px !important;
+    box-sizing: border-box;
 }
 
 .tmc-modal-close-btn:hover {
@@ -2004,7 +1998,7 @@ li, td, th {
 }
 .header-btns button {
     margin: 0;
-    padding: 0 4px;
+    padding: 4px;
     background: none;
     border: none;
     font-size: 1.7rem;
@@ -2013,22 +2007,149 @@ li, td, th {
     outline: none;
     display: none;
     transition: color 0.15s;
+    min-width: 34px;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
-.header-btns button:focus,
-.header-btns button:hover {
+
+/* 상담 버튼 명시적 스타일 - 모바일에서도 보이도록 */
+/* 헤더 텍스트 버튼 스타일 - 검은색 글자, 흰색 배경, 타원형 (설정, 로그아웃) */
+.header-btns #settingsBtn,
+.header-btns #logoutBtn,
+.header-text-btn {
+    font-size: 11px !important;
+    color: #000 !important;
+    background: #fff !important;
+    padding: 4px 12px !important;
+    border-radius: 20px !important;
+    border: none !important;
+    cursor: pointer;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.15s;
+    white-space: nowrap;
+    min-height: 24px !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* 유저앱 버튼 스타일 (display는 JavaScript에서 제어) */
+.header-btns #switchToAppUserBtn {
+    display: none !important; /* 기본적으로 숨김, JavaScript에서 트레이너일 때만 표시 */
+    font-size: 11px !important;
+    color: #000 !important;
+    background: #fff !important;
+    padding: 4px 12px !important;
+    border-radius: 20px !important;
+    border: none !important;
+    cursor: pointer;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.15s;
+    white-space: nowrap;
+    min-height: 24px !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* 상담목록 버튼 스타일 (display는 JavaScript에서 제어) */
+#consultationBtn.consultation-list-btn,
+.header-btns #consultationBtn {
+    font-size: 11px !important;
+    color: #000 !important;
+    background: #fff !important;
+    padding: 4px 12px !important;
+    border-radius: 20px !important;
+    border: none !important;
+    cursor: pointer;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.15s;
+    white-space: nowrap;
+    min-height: 24px !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.header-btns #settingsBtn:hover,
+.header-btns #logoutBtn:hover,
+.header-btns #switchToAppUserBtn:hover,
+.header-text-btn:hover,
+#consultationBtn.consultation-list-btn:hover,
+.header-btns #consultationBtn:hover {
+    background: #f5f5f5 !important;
+    color: #000 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.header-btns #settingsBtn:active,
+.header-btns #logoutBtn:active,
+.header-btns #switchToAppUserBtn:active,
+.header-text-btn:active,
+#consultationBtn.consultation-list-btn:active,
+.header-btns #consultationBtn:active {
+    background: #e0e0e0 !important;
+    color: #000 !important;
+    transform: translateY(0);
+}
+
+.header-btns #settingsBtn:focus,
+.header-btns #logoutBtn:focus,
+.header-btns #switchToAppUserBtn:focus,
+.header-text-btn:focus,
+#consultationBtn.consultation-list-btn:focus,
+.header-btns #consultationBtn:focus {
+    color: #000 !important;
+    outline: none !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+#consultationBtn[style*="display: none"] {
+    display: none !important;
+}
+.header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn):focus,
+.header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn):hover {
     color: #1565c0;
 } 
 
-.header-btns button svg {
+.header-btns button:not(#logoutBtn):not(#settingsBtn):not(#consultationBtn) svg {
     display: block;
     stroke: #1976d2;
+    fill: none;
     transition: stroke 0.15s;
     outline: none;
     border: none;
     box-shadow: none;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
 }
-.header-btns button:focus svg,
-.header-btns button:focus-visible svg {
+
+/* 로그아웃, 설정, 상담목록, 유저앱 버튼 내부 SVG 숨기기 */
+#logoutBtn svg,
+#settingsBtn svg,
+#consultationBtn svg,
+#switchToAppUserBtn svg {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+.header-btns button:not(#logoutBtn):not(#settingsBtn):not(#consultationBtn):focus svg,
+.header-btns button:not(#logoutBtn):not(#settingsBtn):not(#consultationBtn):focus-visible svg {
     outline: none;
     border: none;
     box-shadow: none;
@@ -2039,10 +2160,10 @@ li, td, th {
 #logoutBtn:focus,
 #logoutBtn:active,
 #logoutBtn:focus-visible,
-.header-btns button,
-.header-btns button:focus,
-.header-btns button:active,
-.header-btns button:focus-visible {
+.header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn),
+.header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn):focus,
+.header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn):active,
+.header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn):focus-visible {
     outline: none !important;
     border: none !important;
     box-shadow: none !important;

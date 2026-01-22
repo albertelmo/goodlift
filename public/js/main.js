@@ -471,7 +471,7 @@ window.addEventListener('DOMContentLoaded', function() {
     }
     
     // 로그아웃 처리
-    document.getElementById('logoutBtn').innerText = '🚪';
+    document.getElementById('logoutBtn').innerText = '로그아웃';
     document.getElementById('logoutBtn').onclick = function() {
         // 로그아웃 확인 메시지
         if (!confirm('정말 로그아웃 하시겠습니까?')) {
@@ -573,10 +573,24 @@ function showMainSection(role, name) {
         secretBtn.style.display = isAdminOrSu(role) ? 'inline-block' : 'none';
     }
     
+    // 관리자일 때만 상담 버튼 표시 (트레이너는 제외)
+    const consultationBtn = document.getElementById('consultationBtn');
+    if (consultationBtn) {
+        if (role === 'trainer') {
+            consultationBtn.style.display = 'none';
+        } else {
+            consultationBtn.style.display = isAdminOrSu(role) ? 'flex' : 'none';
+        }
+    }
+    
     // 트레이너일 때만 유저앱 전환 버튼 표시
     const switchToAppUserBtn = document.getElementById('switchToAppUserBtn');
     if (switchToAppUserBtn) {
-        switchToAppUserBtn.style.display = (role === 'trainer') ? 'inline-block' : 'none';
+        if (role === 'trainer') {
+            switchToAppUserBtn.style.setProperty('display', 'flex', 'important');
+        } else {
+            switchToAppUserBtn.style.setProperty('display', 'none', 'important');
+        }
     }
     
     let tabs;

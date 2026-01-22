@@ -1,0 +1,332 @@
+/* 상담기록 관련 스타일 */
+
+/* 헤더 정렬 수정 - 다른 스타일 오버라이드 방지 */
+#consultationListModal .tmc-modal-header h3,
+#consultationModal .tmc-modal-header h3 {
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    line-height: 1.2 !important;
+    height: auto !important;
+    color: #000 !important;
+    font-size: 0.85rem !important;
+}
+
+#consultationListModal .tmc-modal-close-btn,
+#consultationModal .tmc-modal-close-btn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    flex: 0 0 24px !important;
+}
+
+/* 상담기록 목록 모달 - 데스크탑 최적화 */
+#consultationListModal {
+    min-width: 600px;
+    max-width: 700px;
+    width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#consultationListModal .tmc-modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+}
+
+#consultationListModal .tmc-modal-form {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 8px 12px;
+    max-height: calc(90vh - 100px);
+}
+
+/* 목록 영역 가로 스크롤 - 테이블이 있는 div */
+#consultationListModal .tmc-modal-form > div:not(.consultation-filter-row) {
+    overflow-x: auto !important;
+}
+
+/* 필터 영역 컴팩트 스타일 */
+.consultation-filter-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.consultation-filter-item {
+    flex: 1;
+    min-width: 100px;
+    display: flex;
+    flex-direction: column;
+}
+
+.consultation-filter-item label {
+    display: block;
+    font-size: 10px;
+    margin-bottom: 2px;
+    color: var(--trainer-text-muted);
+    font-weight: 600;
+    height: 14px;
+    line-height: 14px;
+}
+
+.consultation-filter-item select,
+.consultation-filter-item input[type="month"] {
+    width: 100%;
+    padding: 4px 6px;
+    font-size: 12px;
+    border: 1px solid var(--trainer-border);
+    border-radius: var(--trainer-radius-sm);
+    background: var(--trainer-surface);
+    color: var(--trainer-text);
+    box-sizing: border-box;
+    height: 28px;
+}
+
+.consultation-filter-item select:focus,
+.consultation-filter-item input[type="month"]:focus {
+    outline: none;
+    border-color: var(--trainer-primary);
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.consultation-search-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    background: var(--trainer-primary);
+    color: white;
+    border: none;
+    border-radius: var(--trainer-radius-sm);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--trainer-transition);
+    white-space: nowrap;
+}
+
+.consultation-search-btn:hover {
+    background: var(--trainer-secondary);
+    transform: translateY(-1px);
+}
+
+#consultationListModal table {
+    width: 100%;
+    min-width: 600px;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+#consultationListModal thead th {
+    background: var(--trainer-bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    white-space: nowrap;
+}
+
+#consultationListModal tbody tr:hover {
+    background: var(--trainer-bg);
+}
+
+#consultationListModal tbody td {
+    padding: 8px;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+
+#consultationListModal .tmc-modal-actions {
+    padding: 6px 12px;
+    border-top: 1px solid var(--trainer-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+#consultationListModal #consultation-list-add-btn {
+    flex: 0 0 auto;
+    padding: 4px 12px;
+    font-size: 12px;
+    min-width: auto;
+}
+
+/* 상담기록지 입력 모달 - 데스크탑 최적화 */
+#consultationModal {
+    min-width: 600px;
+    max-width: 700px;
+    width: 90vw;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#consultationModal .tmc-modal-content {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+}
+
+#consultationModal .tmc-modal-form {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 12px 16px;
+    max-height: calc(90vh - 100px); /* 헤더와 액션 버튼 영역 제외 */
+}
+
+#consultationModal .tmc-form-group {
+    margin-bottom: 6px;
+}
+
+#consultationModal .tmc-form-group label {
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+#consultationModal .tmc-form-group input[type="text"],
+#consultationModal .tmc-form-group select {
+    padding: 6px 8px;
+    font-size: 13px;
+}
+
+#consultationModal .tmc-form-group textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--trainer-border);
+    border-radius: var(--trainer-radius-sm);
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--trainer-text);
+    background: var(--trainer-surface);
+    box-sizing: border-box;
+    resize: vertical;
+    transition: all var(--trainer-transition);
+    line-height: 1.4;
+}
+
+#consultationModal .tmc-form-group textarea:focus {
+    outline: none;
+    border-color: var(--trainer-primary);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* 센터/담당 트레이너 한 줄 배치 */
+#consultationModal .consultation-trainer-center-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+    margin-bottom: 6px;
+}
+
+/* 기본정보 4열 레이아웃 */
+#consultationModal .consultation-basic-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px 8px;
+    margin-bottom: 6px;
+}
+
+#consultationModal .consultation-basic-info .tmc-form-group {
+    margin-bottom: 6px;
+}
+
+/* 전체 너비 필요한 필드 (2열 차지) */
+#consultationModal .consultation-full-width {
+    grid-column: span 2;
+}
+
+/* 섹션 구분 */
+#consultationModal .consultation-section {
+    margin-top: 12px;
+    margin-bottom: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--trainer-border);
+}
+
+#consultationModal .consultation-section:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+#consultationModal .consultation-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--trainer-primary);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+}
+
+/* 상담기록지 모달 하단 버튼 영역 - 컴팩트하게 */
+#consultationModal .tmc-modal-actions {
+    padding: 6px 12px;
+    border-top: 1px solid var(--trainer-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+#consultationModal .tmc-modal-submit-btn {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 60px;
+}
+
+#consultationModal .tmc-modal-cancel-btn {
+    flex: 0 0 auto;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    min-width: 60px;
+}
+
+/* 모바일에서는 기본 크기 유지 */
+@media (max-width: 768px) {
+    #consultationListModal {
+        min-width: 320px;
+        max-width: 90vw;
+        width: 90vw;
+    }
+    
+    #consultationModal {
+        min-width: 320px;
+        max-width: 90vw;
+        width: 90vw;
+    }
+    
+    #consultationModal .consultation-trainer-center-row {
+        grid-template-columns: 1fr;
+    }
+    
+    #consultationModal .consultation-basic-info {
+        grid-template-columns: 1fr 1fr;
+    }
+    
+    /* 모바일에서도 이름/연락처/성별/연령대는 2열로 */
+    #consultationModal .consultation-basic-info .tmc-form-group:nth-child(1),
+    #consultationModal .consultation-basic-info .tmc-form-group:nth-child(2),
+    #consultationModal .consultation-basic-info .tmc-form-group:nth-child(3),
+    #consultationModal .consultation-basic-info .tmc-form-group:nth-child(4) {
+        grid-column: span 1;
+    }
+}

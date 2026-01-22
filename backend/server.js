@@ -32,6 +32,7 @@ const userSettingsDB = require('./app-user-settings-db');
 const dietRecordsDB = require('./diet-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
+const consultationRecordsDB = require('./consultation-records-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -491,6 +492,7 @@ dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
+consultationRecordsDB.initializeDatabase(); // 상담기록 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -5813,6 +5815,166 @@ app.delete('/api/sales/all', async (req, res) => {
     } catch (error) {
         console.error('[API] 매출 데이터 전체 삭제 오류:', error);
         res.status(500).json({ message: '매출 데이터 삭제에 실패했습니다.' });
+    }
+});
+
+// ============================================
+// 상담기록 API
+// ============================================
+
+// 상담기록 추가
+app.post('/api/consultation-records', async (req, res) => {
+    try {
+        const { currentUser, ...recordData } = req.body;
+        
+        // 관리자 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        
+        // 필수 필드 검증
+        if (!recordData.name || !recordData.phone || !recordData.trainer_username || !recordData.center) {
+            return res.status(400).json({ message: '이름, 연락처, 센터, 담당 트레이너는 필수 항목입니다.' });
+        }
+        
+        const record = await consultationRecordsDB.addConsultationRecord(recordData);
+        
+        res.status(201).json(record);
+    } catch (error) {
+        console.error('[API] 상담기록 추가 오류:', error);
+        res.status(500).json({ message: '상담기록 추가에 실패했습니다.' });
+    }
+});
+
+// 상담기록 목록 조회
+app.get('/api/consultation-records', async (req, res) => {
+    try {
+        const { currentUser, center, trainer, startDate, endDate } = req.query;
+        
+        // 관리자 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        
+        const filters = {};
+        if (center && center.trim() !== '') filters.center = center.trim();
+        if (trainer && trainer.trim() !== '') filters.trainer = trainer.trim();
+        if (startDate && startDate.trim() !== '') filters.startDate = startDate.trim();
+        if (endDate && endDate.trim() !== '') filters.endDate = endDate.trim();
+        
+        const records = await consultationRecordsDB.getConsultationRecords(filters);
+        
+        res.json({ records });
+    } catch (error) {
+        console.error('[API] 상담기록 목록 조회 오류:', error);
+        res.status(500).json({ message: '상담기록 조회에 실패했습니다.' });
+    }
+});
+
+// 상담기록 단건 조회
+app.get('/api/consultation-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.query;
+        
+        // 관리자 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        
+        const record = await consultationRecordsDB.getConsultationRecordById(id);
+        
+        if (!record) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 상담기록 단건 조회 오류:', error);
+        res.status(500).json({ message: '상담기록 조회에 실패했습니다.' });
+    }
+});
+
+// 상담기록 수정
+app.patch('/api/consultation-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser, ...updates } = req.body;
+        
+        // 관리자 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        
+        const record = await consultationRecordsDB.updateConsultationRecord(id, updates);
+        
+        if (!record) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 상담기록 수정 오류:', error);
+        res.status(500).json({ message: '상담기록 수정에 실패했습니다.' });
+    }
+});
+
+// 상담기록 삭제
+app.delete('/api/consultation-records/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.body;
+        
+        // 관리자 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        
+        const deleted = await consultationRecordsDB.deleteConsultationRecord(id);
+        
+        if (!deleted) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        res.json({ message: '상담기록이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 상담기록 삭제 오류:', error);
+        res.status(500).json({ message: '상담기록 삭제에 실패했습니다.' });
     }
 });
 
