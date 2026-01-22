@@ -1,6 +1,6 @@
 // 운동기록 추가 모달
 
-import { formatDate, getToday, escapeHtml } from '../utils.js';
+import { formatDate, getToday, escapeHtml, formatWeight, parseWeight } from '../utils.js';
 import { addWorkoutRecord, addWorkoutRecordsBatch, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
 
 /**
@@ -546,7 +546,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                         <div class="workout-input-set-inputs">
                             <div class="workout-set-input-group">
                                 <label>무게 (kg)</label>
-                                <input type="number" class="workout-input-set-weight" data-workout-index="${index}" data-set-index="${setIndex}" step="1" min="0" placeholder="0" value="${set.weight !== null && set.weight !== undefined ? Math.round(set.weight) : ''}" inputmode="numeric">
+                                <input type="number" class="workout-input-set-weight" data-workout-index="${index}" data-set-index="${setIndex}" step="0.01" min="0" max="999.99" placeholder="0" value="${set.weight !== null && set.weight !== undefined ? parseFloat(set.weight) : ''}" inputmode="decimal">
                             </div>
                             <div class="workout-set-input-group">
                                 <label>횟수</label>
@@ -683,7 +683,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 <div class="workout-input-set-inputs">
                     <div class="workout-set-input-group">
                         <label>무게 (kg)</label>
-                        <input type="number" class="workout-input-set-weight" data-workout-index="${workoutIndex}" data-set-index="${setIndex}" step="1" min="0" placeholder="0" value="${set.weight !== null && set.weight !== undefined ? Math.round(set.weight) : ''}" inputmode="numeric">
+                        <input type="number" class="workout-input-set-weight" data-workout-index="${workoutIndex}" data-set-index="${setIndex}" step="0.01" min="0" max="999.99" placeholder="0" value="${set.weight !== null && set.weight !== undefined ? parseFloat(set.weight) : ''}" inputmode="decimal">
                     </div>
                     <div class="workout-set-input-group">
                         <label>횟수</label>
@@ -730,7 +730,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 const wIndex = parseInt(e.target.getAttribute('data-workout-index'));
                 const sIndex = parseInt(e.target.getAttribute('data-set-index'));
                 const value = e.target.value.trim();
-                selectedWorkouts[wIndex].sets[sIndex].weight = value === '' ? null : (isNaN(parseInt(value)) ? null : parseInt(value));
+                selectedWorkouts[wIndex].sets[sIndex].weight = parseWeight(value);
             });
         });
         
@@ -1169,7 +1169,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
                 <div class="workout-set-inputs">
                     <div class="workout-set-input-group">
                         <label>무게 (kg)</label>
-                        <input type="number" class="workout-set-weight" data-index="${index}" step="1" min="0" placeholder="0" value="${set.weight !== null && set.weight !== undefined ? Math.round(set.weight) : ''}" inputmode="numeric">
+                        <input type="number" class="workout-set-weight" data-index="${index}" step="0.01" min="0" max="999.99" placeholder="0" value="${set.weight !== null && set.weight !== undefined ? parseFloat(set.weight) : ''}" inputmode="decimal">
                     </div>
                     <div class="workout-set-input-group">
                         <label>횟수</label>
@@ -1185,7 +1185,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
                 const index = parseInt(e.target.getAttribute('data-index'));
                 const value = e.target.value.trim();
                 // 빈 문자열이면 null, 그 외에는 숫자로 변환 (0도 유효한 값)
-                sets[index].weight = value === '' ? null : (isNaN(parseInt(value)) ? null : parseInt(value));
+                sets[index].weight = parseWeight(value);
             });
             
             // Enter 키 입력 시 해당 세트의 횟수 입력 필드로 포커스 이동
@@ -1423,7 +1423,7 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
                 `;
             } else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
                 const setsHTML = record.sets.map(set => {
-                    const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
+                    const weight = formatWeight(set.weight);
                     const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
                     const isCompleted = set.is_completed;
                     return `

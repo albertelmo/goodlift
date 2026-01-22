@@ -141,3 +141,63 @@ export function showEmpty(container, message = '데이터가 없습니다.') {
     if (!container) return;
     container.innerHTML = `<div class="app-empty"><p>${escapeHtml(message)}</p></div>`;
 }
+
+/**
+ * 무게 포맷팅 (소수점 두자리까지, 예: "10.25kg", "10kg")
+ */
+export function formatWeight(weight) {
+    if (weight === null || weight === undefined) return '-';
+    const num = parseFloat(weight);
+    if (isNaN(num)) return '-';
+    // 소수점 두자리까지 표시, 불필요한 .00 제거
+    const formatted = num.toFixed(2).replace(/\.?0+$/, '');
+    return `${formatted}kg`;
+}
+
+/**
+ * 무게 파싱 및 검증 (소수점 두자리까지 허용)
+ */
+export function parseWeight(value) {
+    if (!value || value === '') return null;
+    const trimmed = String(value).trim();
+    if (trimmed === '') return null;
+    
+    const num = parseFloat(trimmed);
+    if (isNaN(num)) return null;
+    if (num < 0) return null;
+    
+    // 소수점 두자리로 제한
+    return Math.round(num * 100) / 100;
+}
+
+/**
+ * 텍스트가 컨테이너를 넘치면 폰트 크기를 자동으로 줄이는 함수
+ * @param {HTMLElement} element - 조정할 요소
+ * @param {number} minFontSize - 최소 폰트 크기 (기본값: 10px)
+ * @param {number} maxFontSize - 최대 폰트 크기 (기본값: 15px)
+ */
+export function autoResizeText(element, minFontSize = 10, maxFontSize = 15) {
+    if (!element) return;
+    
+    // 초기 폰트 크기 설정
+    element.style.fontSize = `${maxFontSize}px`;
+    
+    // 요소가 보이는지 확인
+    if (element.offsetWidth === 0 && element.offsetHeight === 0) {
+        // 요소가 아직 렌더링되지 않았으면 다음 프레임에 다시 시도
+        requestAnimationFrame(() => autoResizeText(element, minFontSize, maxFontSize));
+        return;
+    }
+    
+    // 스크롤 너비와 실제 너비 비교
+    const scrollWidth = element.scrollWidth;
+    const clientWidth = element.clientWidth;
+    
+    // 텍스트가 넘치면 폰트 크기 줄이기
+    if (scrollWidth > clientWidth && maxFontSize > minFontSize) {
+        const newFontSize = Math.max(minFontSize, maxFontSize - 1);
+        element.style.fontSize = `${newFontSize}px`;
+        // 재귀적으로 다시 확인
+        requestAnimationFrame(() => autoResizeText(element, minFontSize, newFontSize));
+    }
+}

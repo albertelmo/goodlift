@@ -1,6 +1,6 @@
 // 운동기록 목록 렌더링
 
-import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml } from '../utils.js';
+import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText } from '../utils.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers } from '../api.js';
 
 let currentAppUserId = null;
@@ -243,6 +243,16 @@ async function render(records) {
     html += '</div>';
     container.innerHTML = html;
     
+    // 무게 표시 영역 자동 크기 조정
+    requestAnimationFrame(() => {
+        container.querySelectorAll('.app-workout-item-set-info').forEach(element => {
+            autoResizeText(element, 10, 15);
+        });
+        container.querySelectorAll('.workout-history-set-value').forEach(element => {
+            autoResizeText(element, 10, 15);
+        });
+    });
+    
     // 클릭 이벤트 리스너 추가
     setupClickListeners();
 }
@@ -288,7 +298,7 @@ function renderWorkoutItem(record) {
         // 모든 세트가 완료되었는지 확인
         const allSetsCompleted = sets.every(set => set.is_completed === true) && sets.length > 0;
         const setsInfo = sets.map((set, setIndex) => {
-            const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
+            const weight = formatWeight(set.weight);
             const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
             const isCompleted = set.is_completed || false;
             const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
@@ -373,7 +383,7 @@ function showCompletedCheckModal(record) {
     } else if (workoutTypeType === '세트' && sets.length > 0) {
         contentHtml = '<div class="app-completed-modal-sets">';
         sets.forEach(set => {
-            const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';
+            const weight = formatWeight(set.weight);
             const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
             const checked = set.is_completed ? 'checked' : '';
             contentHtml += `

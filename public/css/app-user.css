@@ -1811,8 +1811,13 @@ body.app-user-active {
 
 .app-workout-item-set-info {
     min-width: 100px;
+    max-width: 150px;
     text-align: right;
     justify-content: flex-end;
+    font-size: clamp(12px, 2.5vw, 15px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .app-workout-item-set-number {
@@ -3543,11 +3548,15 @@ body.app-user-active {
 }
 
 .workout-history-set-value {
-    font-size: 15px;
+    font-size: clamp(12px, 2.5vw, 15px);
     font-weight: 500;
     color: var(--app-text);
     flex: 1;
     letter-spacing: -0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 120px;
 }
 
 .workout-history-set-check {

@@ -1,6 +1,6 @@
 // 운동기록 수정/삭제 모달
 
-import { formatDate, escapeHtml } from '../utils.js';
+import { formatDate, escapeHtml, formatWeight, parseWeight } from '../utils.js';
 import { updateWorkoutRecord, deleteWorkoutRecord, getWorkoutTypes } from '../api.js';
 
 /**
@@ -93,11 +93,11 @@ export async function showEditModal(record, appUserId, onSuccess) {
     const addSetBtn = modal.querySelector('#workout-edit-set-btn');
     const removeSetBtn = modal.querySelector('#workout-edit-remove-set-btn');
     
-    // 기존 세트 데이터 로드 (무게는 정수로 변환, 완료 상태 보존)
+    // 기존 세트 데이터 로드 (무게는 소수점 두자리까지 유지, 완료 상태 보존)
     let sets = (record.sets || []).map(set => ({
         id: set.id, // 기존 세트 ID 보존
         set_number: set.set_number,
-        weight: set.weight ? Math.round(set.weight) : null,
+        weight: set.weight !== null && set.weight !== undefined ? parseFloat(set.weight) : null,
         reps: set.reps,
         is_completed: set.is_completed || false // 완료 상태 보존
     }));
@@ -233,7 +233,7 @@ export async function showEditModal(record, appUserId, onSuccess) {
                 <div class="workout-set-inputs">
                     <div class="workout-set-input-group">
                         <label>무게 (kg)</label>
-                        <input type="number" class="workout-set-weight" data-index="${index}" step="1" min="0" placeholder="0" value="${set.weight ? Math.round(set.weight) : ''}" inputmode="numeric">
+                        <input type="number" class="workout-set-weight" data-index="${index}" step="0.01" min="0" max="999.99" placeholder="0" value="${set.weight !== null && set.weight !== undefined ? parseFloat(set.weight) : ''}" inputmode="decimal">
                     </div>
                     <div class="workout-set-input-group">
                         <label>횟수</label>
@@ -247,7 +247,7 @@ export async function showEditModal(record, appUserId, onSuccess) {
         setsContainer.querySelectorAll('.workout-set-weight').forEach(input => {
             input.addEventListener('input', (e) => {
                 const index = parseInt(e.target.getAttribute('data-index'));
-                sets[index].weight = e.target.value ? parseInt(e.target.value) : null;
+                sets[index].weight = parseWeight(e.target.value);
             });
             
             // Enter 키 입력 시 해당 세트의 횟수 입력 필드로 포커스 이동
