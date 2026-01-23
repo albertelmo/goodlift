@@ -336,6 +336,37 @@
     cursor: not-allowed;
 }
 
+#consultationModal .tmc-modal-share-btn {
+    flex: none !important;
+    width: auto !important;
+    padding: 4px 16px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    min-width: auto !important;
+    max-width: none !important;
+    background: #1976d2 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: var(--trainer-radius-sm);
+    cursor: pointer;
+    transition: all var(--trainer-transition);
+}
+
+#consultationModal .tmc-modal-share-btn:hover {
+    background: #1565c0 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
+}
+
+#consultationModal .tmc-modal-share-btn:active {
+    transform: translateY(0);
+}
+
+#consultationModal .tmc-modal-share-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* 모바일에서는 기본 크기 유지 */
 @media (max-width: 768px) {
     #consultationListModal {

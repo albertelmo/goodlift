@@ -159,6 +159,12 @@ function openConsultationModal() {
             deleteBtn.style.display = 'none';
         }
         
+        // 상담지 제작 버튼 숨김
+        const createShareBtn = document.getElementById('consultationCreateShareBtn');
+        if (createShareBtn) {
+            createShareBtn.style.display = 'none';
+        }
+        
         // 모달 제목 변경
         const modalTitle = modal.querySelector('h3');
         if (modalTitle) {
@@ -189,6 +195,12 @@ function closeConsultationModal() {
             deleteBtn.disabled = false;
             deleteBtn.textContent = '삭제';
             deleteBtn.style.display = 'none';
+        }
+        
+        // 상담지 제작 버튼 숨김
+        const createShareBtn = document.getElementById('consultationCreateShareBtn');
+        if (createShareBtn) {
+            createShareBtn.style.display = 'none';
         }
     }
 }
@@ -516,10 +528,122 @@ async function openConsultationEditModal(recordId) {
             deleteBtn.disabled = false;
             deleteBtn.textContent = '삭제';
         }
+        
+        // 상담지 제작 버튼 표시
+        const createShareBtn = document.getElementById('consultationCreateShareBtn');
+        if (createShareBtn) {
+            createShareBtn.style.display = 'block';
+        }
     } catch (error) {
         console.error('상담기록 로드 오류:', error);
         alert('상담기록을 불러오는 중 오류가 발생했습니다.');
         closeConsultationModal();
+    }
+}
+
+// 상담지 제작 (공유 링크 생성)
+async function handleCreateConsultationShare() {
+    if (!currentEditRecordId) {
+        alert('상담기록이 없습니다.');
+        return;
+    }
+    
+    const nameInput = document.getElementById('consultation-name');
+    const phoneInput = document.getElementById('consultation-phone');
+    
+    if (!nameInput || !nameInput.value) {
+        alert('회원 이름을 입력해주세요.');
+        return;
+    }
+    
+    const name = nameInput.value.trim();
+    const phone = phoneInput ? phoneInput.value.trim() : '';
+    
+    // 만료일 선택 (기본 90일)
+    const expiresInDays = prompt('링크 만료일을 입력하세요 (일 단위, 기본값: 90일):', '90');
+    if (expiresInDays === null) {
+        return; // 취소
+    }
+    
+    const expiresIn = parseInt(expiresInDays) || 90;
+    
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+        
+        const createShareBtn = document.getElementById('consultationCreateShareBtn');
+        if (createShareBtn) {
+            createShareBtn.disabled = true;
+            createShareBtn.textContent = '생성 중...';
+        }
+        
+        const response = await fetch(`/api/consultation-records/${currentEditRecordId}/share`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                currentUser: currentUser,
+                name: name,
+                phone: phone || null,
+                expiresInDays: expiresIn
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '공유 링크 생성에 실패했습니다.' }));
+            throw new Error(errorData.message || '공유 링크 생성에 실패했습니다.');
+        }
+        
+        const result = await response.json();
+        
+        // 링크 표시 모달
+        const linkText = result.shareUrl;
+        const linkDisplay = `
+상담지 링크가 생성되었습니다.
+
+링크:
+${linkText}
+
+만료일: ${result.expiresAt ? new Date(result.expiresAt).toLocaleDateString('ko-KR') : '없음'}
+
+링크를 복사하시겠습니까?`;
+        
+        if (confirm(linkDisplay)) {
+            // 클립보드에 복사
+            try {
+                await navigator.clipboard.writeText(linkText);
+                alert('링크가 클립보드에 복사되었습니다.');
+            } catch (err) {
+                // 클립보드 복사 실패 시 수동 선택 가능하도록
+                const textarea = document.createElement('textarea');
+                textarea.value = linkText;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    alert('링크가 클립보드에 복사되었습니다.');
+                } catch (e) {
+                    alert('링크 복사에 실패했습니다. 아래 링크를 수동으로 복사해주세요:\n\n' + linkText);
+                }
+                document.body.removeChild(textarea);
+            }
+        }
+        
+    } catch (error) {
+        console.error('공유 링크 생성 오류:', error);
+        alert('공유 링크 생성 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+        const createShareBtn = document.getElementById('consultationCreateShareBtn');
+        if (createShareBtn) {
+            createShareBtn.disabled = false;
+            createShareBtn.textContent = '상담지 제작';
+        }
     }
 }
 
@@ -654,6 +778,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const deleteBtn = document.getElementById('consultationDeleteBtn');
     if (deleteBtn) {
         deleteBtn.addEventListener('click', handleConsultationDelete);
+    }
+    
+    // 상담지 제작 버튼 이벤트
+    const createShareBtn = document.getElementById('consultationCreateShareBtn');
+    if (createShareBtn) {
+        createShareBtn.addEventListener('click', handleCreateConsultationShare);
     }
     
     // 상담목적 변경 이벤트

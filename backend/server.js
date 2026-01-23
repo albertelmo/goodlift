@@ -33,6 +33,7 @@ const dietRecordsDB = require('./diet-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
 const consultationRecordsDB = require('./consultation-records-db');
+const consultationSharesDB = require('./consultation-shares-db');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -510,6 +511,7 @@ userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
 consultationRecordsDB.initializeDatabase(); // 상담기록 테이블 초기화
+consultationSharesDB.initializeDatabase(); // 상담기록 공유 토큰 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -768,6 +770,11 @@ function isAdminOrSu(userAccount) {
 app.get('/manifest.json', (req, res) => {
     res.setHeader('Content-Type', 'application/manifest+json');
     res.sendFile(path.join(__dirname, '../public/manifest.json'));
+});
+
+// 공개 상담기록 조회 페이지 라우트 (정적 파일 서빙 전에 추가)
+app.get('/consultation/view/:token', (req, res) => {
+    res.sendFile(path.join(__dirname, '../public/consultation-view.html'));
 });
 
 app.use(express.static(path.join(__dirname, '../public')));
@@ -6046,6 +6053,177 @@ app.delete('/api/consultation-records/:id', async (req, res) => {
     } catch (error) {
         console.error('[API] 상담기록 삭제 오류:', error);
         res.status(500).json({ message: '상담기록 삭제에 실패했습니다.' });
+    }
+});
+
+// 상담기록 공유 링크 생성
+app.post('/api/consultation-records/:id/share', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser, name, phone, expiresInDays } = req.body;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인: admin/su는 모든 상담기록, trainer는 본인 작성만
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 필수 필드 검증
+        if (!name) {
+            return res.status(400).json({ message: '회원 이름은 필수입니다.' });
+        }
+        
+        // 만료일 계산 (기본 90일)
+        const expiresIn = expiresInDays || 90;
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + expiresIn);
+        
+        // 공유 토큰 생성
+        const shareToken = await consultationSharesDB.createShareToken({
+            consultation_record_id: id,
+            name: name,
+            phone: phone || null,
+            expires_at: expiresAt,
+            created_by: currentUser
+        });
+        
+        if (!shareToken) {
+            return res.status(500).json({ message: '공유 링크 생성에 실패했습니다.' });
+        }
+        
+        // 전체 URL 생성
+        let baseUrl = process.env.PUBLIC_URL;
+        if (!baseUrl) {
+            const protocol = req.protocol || (req.secure ? 'https' : 'http');
+            const host = req.get('host');
+            if (host) {
+                baseUrl = `${protocol}://${host}`;
+            } else {
+                baseUrl = process.env.NODE_ENV === 'production' 
+                    ? 'https://goodlift.onrender.com' 
+                    : 'http://localhost:3000';
+            }
+        }
+        const shareUrl = `${baseUrl}/consultation/view/${shareToken.token}`;
+        
+        res.json({
+            token: shareToken.token,
+            shareUrl: shareUrl,
+            expiresAt: shareToken.expires_at
+        });
+    } catch (error) {
+        console.error('[API] 공유 링크 생성 오류:', error);
+        res.status(500).json({ message: '공유 링크 생성에 실패했습니다.' });
+    }
+});
+
+// 공개 상담기록 조회 (토큰 기반)
+app.get('/api/public/consultation/:token', async (req, res) => {
+    try {
+        const { token } = req.params;
+        
+        // 토큰으로 공유 정보 조회
+        const shareToken = await consultationSharesDB.getShareTokenByToken(token);
+        
+        if (!shareToken) {
+            return res.status(404).json({ error: 'NOT_FOUND', message: '링크를 찾을 수 없습니다.' });
+        }
+        
+        // 비활성화 확인
+        if (!shareToken.is_active) {
+            return res.status(403).json({ error: 'TOKEN_DISABLED', message: '비활성화된 링크입니다.' });
+        }
+        
+        // 만료 확인
+        if (shareToken.expires_at) {
+            const expiresAt = new Date(shareToken.expires_at);
+            if (expiresAt < new Date()) {
+                return res.status(403).json({ error: 'EXPIRED_TOKEN', message: '만료된 링크입니다.' });
+            }
+        }
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(shareToken.consultation_record_id);
+        
+        if (!consultation) {
+            return res.status(404).json({ error: 'NOT_FOUND', message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 접근 횟수 증가
+        await consultationSharesDB.incrementAccessCount(token);
+        
+        res.json({
+            consultation: consultation,
+            shareInfo: {
+                expiresAt: shareToken.expires_at,
+                accessCount: shareToken.access_count + 1
+            }
+        });
+    } catch (error) {
+        console.error('[API] 공개 상담기록 조회 오류:', error);
+        res.status(500).json({ error: 'SERVER_ERROR', message: '상담기록 조회에 실패했습니다.' });
+    }
+});
+
+// 상담기록의 공유 링크 목록 조회
+app.get('/api/consultation-records/:id/shares', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.query;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 공유 링크 목록 조회
+        const shares = await consultationSharesDB.getShareTokensByConsultationId(id);
+        
+        res.json({ shares: shares });
+    } catch (error) {
+        console.error('[API] 공유 링크 목록 조회 오류:', error);
+        res.status(500).json({ message: '공유 링크 목록 조회에 실패했습니다.' });
     }
 });
 
