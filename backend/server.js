@@ -81,13 +81,13 @@ async function createActivityLogForTrainer(appUserId, activityType, message, rec
       dateStr = `${month}/${day}`;
     }
     
-    // 로그 메시지 생성: "회원명님의 날짜 기록타입이 등록되었습니다."
-    const activityMessage = `${appUser.member_name}님의 ${dateStr} ${message}`;
+    // 로그 메시지 생성: "앱유저명님의 날짜 기록타입이 등록되었습니다."
+    const activityMessage = `${appUser.name}님의 ${dateStr} ${message}`;
     
     // 활동 로그 생성 (비동기로 처리, 실패해도 에러를 throw하지 않음)
     await activityLogsDB.addActivityLog({
       trainer_username: member.trainer,
-      member_name: appUser.member_name,
+      member_name: appUser.name,  // 앱 유저 이름으로 저장
       activity_type: activityType,
       activity_message: activityMessage,
       related_record_id: recordId,
