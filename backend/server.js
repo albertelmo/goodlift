@@ -88,6 +88,7 @@ async function createActivityLogForTrainer(appUserId, activityType, message, rec
     await activityLogsDB.addActivityLog({
       trainer_username: member.trainer,
       member_name: appUser.name,  // 앱 유저 이름으로 저장
+      app_user_id: appUserId,  // app_user_id 추가
       activity_type: activityType,
       activity_message: activityMessage,
       related_record_id: recordId,
@@ -2028,6 +2029,33 @@ app.get('/api/trainer-activity-logs', async (req, res) => {
 });
 
 // 전체 로그 읽음 처리 (더 구체적인 라우트를 먼저 등록)
+// 개별 로그 읽음 처리 (더 구체적인 라우트를 먼저 등록)
+app.patch('/api/trainer-activity-logs/:id/read', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { trainer_username } = req.body;
+    
+    if (!trainer_username) {
+      return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
+    }
+    
+    const result = await activityLogsDB.markAsRead(id, trainer_username);
+    
+    if (!result) {
+      return res.status(404).json({ message: '로그를 찾을 수 없습니다.' });
+    }
+    
+    res.json({ 
+      message: '로그가 읽음 처리되었습니다.',
+      log: result
+    });
+  } catch (error) {
+    console.error('[API] 로그 읽음 처리 오류:', error);
+    res.status(500).json({ message: '로그 읽음 처리 중 오류가 발생했습니다.' });
+  }
+});
+
+// 전체 로그 읽음 처리
 app.patch('/api/trainer-activity-logs/read-all', async (req, res) => {
   try {
     const { trainer_username } = req.body;

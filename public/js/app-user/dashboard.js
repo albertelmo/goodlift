@@ -126,6 +126,8 @@ function updateActivityLogsUI() {
                     return `
                     <div class="app-activity-log-item ${isUnread ? 'app-activity-log-item-unread' : 'app-activity-log-item-read'}" 
                          data-log-id="${log.id}"
+                         data-app-user-id="${log.app_user_id || ''}"
+                         data-member-name="${escapeHtml(log.member_name || '')}"
                          style="cursor:pointer;">
                         <div class="app-activity-log-content">
                             <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -169,6 +171,8 @@ function updateActivityLogsUI() {
                     return `
                     <div class="app-activity-log-item ${isUnread ? 'app-activity-log-item-unread' : 'app-activity-log-item-read'}" 
                          data-log-id="${log.id}"
+                         data-app-user-id="${log.app_user_id || ''}"
+                         data-member-name="${escapeHtml(log.member_name || '')}"
                          style="cursor:pointer;">
                         <div class="app-activity-log-content">
                             <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -728,6 +732,8 @@ function render() {
                         return `
                         <div class="app-activity-log-item ${isUnread ? 'app-activity-log-item-unread' : 'app-activity-log-item-read'}" 
                              data-log-id="${log.id}"
+                             data-app-user-id="${log.app_user_id || ''}"
+                             data-member-name="${escapeHtml(log.member_name || '')}"
                              style="cursor:pointer;">
                             <div class="app-activity-log-content">
                                 <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -794,6 +800,8 @@ function render() {
                         return `
                         <div class="app-activity-log-item ${isUnread ? 'app-activity-log-item-unread' : 'app-activity-log-item-read'}" 
                              data-log-id="${log.id}"
+                             data-app-user-id="${log.app_user_id || ''}"
+                             data-member-name="${escapeHtml(log.member_name || '')}"
                              style="cursor:pointer;">
                             <div class="app-activity-log-content">
                                 <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -1449,29 +1457,40 @@ async function showConnectUserModal() {
  * 
  * 주의: 이 함수는 단순히 현재 세션에서 선택한 회원을 localStorage에 저장하는 것입니다.
  * 실제 연결 여부는 member_name → members.trainer 매칭으로 확인됩니다.
+ * 
+ * @param {string} appUserId - 연결할 앱 유저 ID
+ * @param {string} appUserName - 연결할 앱 유저 이름
+ * @param {boolean} skipConfirm - 확인 다이얼로그를 스킵할지 여부 (기본값: false)
  */
-async function connectAppUser(appUserId, appUserName) {
+async function connectAppUser(appUserId, appUserName, skipConfirm = false) {
     // 이미 연결된 회원인지 확인
     const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
     if (connectedAppUserId === appUserId) {
         // 이미 연결된 회원이면 해제 여부 확인
-        if (confirm(`"${appUserName}" 회원과의 연결을 해제하시겠습니까?`)) {
-            localStorage.removeItem('connectedMemberName');
-            localStorage.removeItem('connectedMemberAppUserId');
-            await refresh();
+        if (!skipConfirm) {
+            if (confirm(`"${appUserName}" 회원과의 연결을 해제하시겠습니까?`)) {
+                localStorage.removeItem('connectedMemberName');
+                localStorage.removeItem('connectedMemberAppUserId');
+                await refresh();
+            }
+        } else {
+            // skipConfirm이 true면 해제하지 않고 그냥 리턴
+            return;
         }
         return;
     }
     
     // 다른 회원이 연결되어 있으면 확인
-    if (connectedAppUserId) {
-        if (!confirm(`현재 연결된 회원과의 연결을 해제하고 "${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
-            return;
-        }
-    } else {
-        // 연결 확인
-        if (!confirm(`"${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
-            return;
+    if (!skipConfirm) {
+        if (connectedAppUserId) {
+            if (!confirm(`현재 연결된 회원과의 연결을 해제하고 "${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
+                return;
+            }
+        } else {
+            // 연결 확인
+            if (!confirm(`"${appUserName}" 회원의 정보를 불러오시겠습니까?`)) {
+                return;
+            }
         }
     }
     
@@ -1769,8 +1788,12 @@ function setupActivityLogEvents() {
         container._markAllReadObserver.disconnect();
         container._markAllReadObserver = null;
     }
+    if (container._logItemsObserver) {
+        container._logItemsObserver.disconnect();
+        container._logItemsObserver = null;
+    }
     
-    // 중복 이벤트 리스너 방지: 이미 설정되어 있으면 스킵
+    // 중복 이벤트 리스너 방지: 이미 설정되어 있으면 기존 로그 아이템만 다시 확인
     if (container._activityLogEventsSetup) {
         // 버튼이 나중에 생성되었을 수 있으므로 버튼만 다시 확인
         const markAllBtn = document.getElementById('mark-all-read-btn');
@@ -1824,22 +1847,131 @@ function setupActivityLogEvents() {
             }, { passive: false });
             markAllBtn._markAllReadSetup = true;
         }
+        
+        // 로그 아이템이 나중에 생성되었을 수 있으므로 로그 아이템도 다시 확인
+        const existingLogItems = container.querySelectorAll('.app-activity-log-item');
+        existingLogItems.forEach(item => {
+            if (!item._logClickSetup) {
+                // handleLogClick 함수는 아래에 정의되어 있으므로 여기서는 직접 등록
+                const handleLogClick = async (item) => {
+                    const logId = item.getAttribute('data-log-id');
+                    const appUserId = item.getAttribute('data-app-user-id');
+                    const memberName = item.getAttribute('data-member-name');
+                    const isUnread = item.classList.contains('app-activity-log-item-unread');
+                    
+                    if (!logId || !isUnread) return;
+                    
+                    const trainerUsername = currentUser?.username;
+                    if (!trainerUsername) return;
+                    
+                    try {
+                        await markActivityLogAsRead(logId, trainerUsername);
+                        
+                        item.classList.remove('app-activity-log-item-unread');
+                        item.classList.add('app-activity-log-item-read');
+                        
+                        const indicator = item.querySelector('.app-activity-log-indicator');
+                        if (indicator) indicator.remove();
+                        
+                        activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
+                        
+                        const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                        if (sectionTitle) {
+                            const badge = sectionTitle.querySelector('span');
+                            if (activityLogsUnreadCount > 0) {
+                                if (badge) {
+                                    badge.textContent = activityLogsUnreadCount;
+                                } else {
+                                    sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
+                                }
+                            } else {
+                                if (badge) badge.remove();
+                                const markAllBtn = document.getElementById('mark-all-read-btn');
+                                if (markAllBtn) markAllBtn.parentElement.remove();
+                            }
+                        }
+                        
+                        const log = activityLogs.find(l => l.id === logId);
+                        if (log) {
+                            log.is_read = true;
+                        }
+                        
+                        // 회원 연결 로직
+                        const hasValidAppUserId = appUserId && appUserId !== 'null' && appUserId !== '' && appUserId !== 'undefined';
+                        const hasValidMemberName = memberName && memberName !== '' && memberName !== 'undefined';
+                        
+                        if (hasValidAppUserId && hasValidMemberName) {
+                            const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                            
+                            if (connectedAppUserId === appUserId) {
+                                return;
+                            }
+                            
+                            if (connectedAppUserId) {
+                                if (confirm(`현재 연결된 회원과의 연결을 해제하고 "${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
+                                    await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                                }
+                            } else {
+                                if (confirm(`"${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
+                                    await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('로그 읽음 처리 오류:', error);
+                        alert(`로그 읽음 처리 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+                    }
+                };
+                
+                item.addEventListener('click', () => handleLogClick(item));
+                item.addEventListener('touchstart', async (e) => {
+                    const isUnread = item.classList.contains('app-activity-log-item-unread');
+                    if (!isUnread) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    await handleLogClick(item);
+                }, { passive: false });
+                
+                item._logClickSetup = true;
+            }
+        });
+        
         return;
     }
     
-    // 로그 카드 클릭 이벤트 (읽음 처리)
+    // 로그 카드 클릭 이벤트 (읽음 처리 + 회원 연결)
     const logItems = container.querySelectorAll('.app-activity-log-item');
-    logItems.forEach(item => {
-        item.addEventListener('click', async () => {
-            const logId = item.getAttribute('data-log-id');
-            const isUnread = item.classList.contains('app-activity-log-item-unread');
-            
-            if (!logId || !isUnread) return;
-            
-            const trainerUsername = currentUser?.username;
-            if (!trainerUsername) return;
-            
-            try {
+    console.log('[로그 이벤트] 로그 아이템 개수:', logItems.length);
+    
+    // 로그 클릭 핸들러 함수
+    const handleLogClick = async (item) => {
+        const logId = item.getAttribute('data-log-id');
+        const appUserId = item.getAttribute('data-app-user-id');
+        const memberName = item.getAttribute('data-member-name');
+        const isUnread = item.classList.contains('app-activity-log-item-unread');
+        
+        console.log('[로그 클릭]', { logId, appUserId, memberName, isUnread });
+        
+        if (!logId) {
+            console.log('[로그 클릭] logId 없음');
+            return;
+        }
+        
+        if (!isUnread) {
+            console.log('[로그 클릭] 이미 읽음 처리된 로그');
+            return;
+        }
+        
+        const trainerUsername = currentUser?.username;
+        if (!trainerUsername) {
+            console.log('[로그 클릭] trainerUsername 없음');
+            return;
+        }
+        
+        console.log('[로그 클릭] 읽음 처리 시작');
+        
+        try {
+                // 1. 읽음 처리 (기존 로직)
                 await markActivityLogAsRead(logId, trainerUsername);
                 
                 // UI 업데이트
@@ -1878,12 +2010,85 @@ function setupActivityLogEvents() {
                 if (log) {
                     log.is_read = true;
                 }
+                
+                // 2. app_user_id 확인 및 회원 연결 로직
+                // app_user_id가 유효하고 memberName이 있는 경우에만 연결 옵션 제공
+                // 기존 로그는 app_user_id가 null일 수 있으므로 안전하게 처리
+                const hasValidAppUserId = appUserId && appUserId !== 'null' && appUserId !== '' && appUserId !== 'undefined';
+                const hasValidMemberName = memberName && memberName !== '' && memberName !== 'undefined';
+                
+                if (hasValidAppUserId && hasValidMemberName) {
+                    const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                    
+                    // 상황 1-2-1: 이미 연결된 회원의 로그
+                    if (connectedAppUserId === appUserId) {
+                        // 연결 확인 없이 읽음 처리만 완료
+                        return;
+                    }
+                    
+                    // 상황 1-1, 1-2-2: 연결되지 않은 회원의 로그
+                    if (connectedAppUserId) {
+                        // 상황 1-2-2: 다른 회원이 연결되어 있음
+                        if (confirm(`현재 연결된 회원과의 연결을 해제하고 "${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
+                            await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                        }
+                    } else {
+                        // 상황 1-1: 연결된 회원이 없음
+                        if (confirm(`"${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
+                            await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                        }
+                    }
+                }
+                // 상황 2: app_user_id가 없거나 memberName이 없으면 연결 옵션 제공 안 함
             } catch (error) {
                 console.error('로그 읽음 처리 오류:', error);
-                alert('로그 읽음 처리 중 오류가 발생했습니다.');
+                console.error('오류 상세:', {
+                    message: error.message,
+                    stack: error.stack,
+                    logId,
+                    appUserId,
+                    memberName,
+                    trainerUsername
+                });
+                alert(`로그 읽음 처리 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+            }
+    };
+    
+    // 로그 아이템에 이벤트 리스너 등록 함수
+    const setupLogItemEvents = (item) => {
+        if (!item || item._logClickSetup) return;
+        
+        // click 이벤트
+        item.addEventListener('click', () => handleLogClick(item));
+        
+        // PWA 환경 대비: touchstart 이벤트에서 직접 처리
+        item.addEventListener('touchstart', async (e) => {
+            const isUnread = item.classList.contains('app-activity-log-item-unread');
+            if (!isUnread) return;
+            e.preventDefault(); // 기본 동작 방지
+            e.stopPropagation();
+            await handleLogClick(item);
+        }, { passive: false });
+        
+        item._logClickSetup = true;
+    };
+    
+    // 현재 존재하는 로그 아이템에 이벤트 리스너 등록
+    logItems.forEach(item => {
+        setupLogItemEvents(item);
+    });
+    
+    // 로그 아이템이 나중에 생성될 수 있으므로 MutationObserver 사용
+    const logObserver = new MutationObserver((mutations) => {
+        const newLogItems = container.querySelectorAll('.app-activity-log-item');
+        newLogItems.forEach(item => {
+            if (!item._logClickSetup) {
+                setupLogItemEvents(item);
             }
         });
     });
+    logObserver.observe(container, { childList: true, subtree: true });
+    container._logItemsObserver = logObserver;
     
     // 전체 읽음 처리 버튼 클릭 이벤트 핸들러
     const handleMarkAllRead = async (btn) => {

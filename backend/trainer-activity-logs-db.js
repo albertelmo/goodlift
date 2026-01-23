@@ -22,6 +22,7 @@ const createTrainerActivityLogsTable = async () => {
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           trainer_username VARCHAR(50) NOT NULL,
           member_name VARCHAR(100) NOT NULL,
+          app_user_id UUID,
           activity_type VARCHAR(20) NOT NULL CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'diet_comment_added', 'workout_recorded', 'workout_edited', 'workout_deleted')),
           activity_message TEXT NOT NULL,
           related_record_id UUID,
@@ -48,7 +49,7 @@ const createTrainerActivityLogsTable = async () => {
   }
 };
 
-// 기존 테이블 마이그레이션 (record_date 컬럼 추가, activity_type에 diet_comment_added 추가)
+// 기존 테이블 마이그레이션 (record_date 컬럼 추가, activity_type에 diet_comment_added 추가, app_user_id 컬럼 추가)
 const migrateTrainerActivityLogsTable = async () => {
   try {
     // record_date 컬럼 확인 및 추가
@@ -64,6 +65,23 @@ const migrateTrainerActivityLogsTable = async () => {
     if (checkResult.rows.length === 0) {
       await pool.query(`ALTER TABLE trainer_activity_logs ADD COLUMN record_date DATE`);
       console.log('[PostgreSQL] record_date 컬럼이 추가되었습니다.');
+    }
+    
+    // app_user_id 컬럼 확인 및 추가
+    let appUserIdColumnAdded = false;
+    const checkAppUserIdQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = 'trainer_activity_logs' 
+        AND column_name = 'app_user_id'
+    `;
+    const checkAppUserIdResult = await pool.query(checkAppUserIdQuery);
+    
+    if (checkAppUserIdResult.rows.length === 0) {
+      await pool.query(`ALTER TABLE trainer_activity_logs ADD COLUMN app_user_id UUID`);
+      console.log('[PostgreSQL] app_user_id 컬럼이 추가되었습니다.');
+      appUserIdColumnAdded = true;
     }
     
     // activity_type CHECK 제약조건 확인 및 업데이트 (diet_comment_added 추가)
@@ -108,9 +126,75 @@ const migrateTrainerActivityLogsTable = async () => {
       // 제약조건이 없거나 이미 업데이트된 경우 무시
       console.log('[PostgreSQL] activity_type 제약조건 확인/업데이트:', constraintError.message);
     }
+    
+    // app_user_id 컬럼이 방금 추가된 경우에만 마이그레이션 실행
+    if (appUserIdColumnAdded) {
+      await migrateAppUserIdForExistingLogs();
+    }
   } catch (error) {
     console.error('[PostgreSQL] trainer_activity_logs 테이블 마이그레이션 오류:', error);
     throw error;
+  }
+};
+
+// 기존 로그의 app_user_id 마이그레이션 (member_name으로 app_user_id 조회 후 업데이트)
+const migrateAppUserIdForExistingLogs = async () => {
+  try {
+    // app_user_id가 NULL인 로그 조회
+    const logsQuery = `
+      SELECT DISTINCT member_name, trainer_username
+      FROM trainer_activity_logs
+      WHERE app_user_id IS NULL
+    `;
+    const logsResult = await pool.query(logsQuery);
+    
+    if (logsResult.rows.length === 0) {
+      console.log('[PostgreSQL] 마이그레이션할 로그가 없습니다.');
+      return;
+    }
+    
+    let updatedCount = 0;
+    
+    for (const row of logsResult.rows) {
+      const { member_name, trainer_username } = row;
+      
+      // member_name (appUser.name)으로 app_users 테이블에서 조회
+      // trainer_username과 매칭되는 회원 찾기
+      const appUserQuery = `
+        SELECT au.id
+        FROM app_users au
+        INNER JOIN members m ON au.member_name = m.name
+        WHERE au.name = $1
+          AND m.trainer = $2
+          AND au.member_name IS NOT NULL
+        LIMIT 1
+      `;
+      const appUserResult = await pool.query(appUserQuery, [member_name, trainer_username]);
+      
+      if (appUserResult.rows.length > 0) {
+        const appUserId = appUserResult.rows[0].id;
+        
+        // 해당 member_name과 trainer_username을 가진 모든 로그 업데이트
+        const updateQuery = `
+          UPDATE trainer_activity_logs
+          SET app_user_id = $1
+          WHERE member_name = $2
+            AND trainer_username = $3
+            AND app_user_id IS NULL
+        `;
+        const updateResult = await pool.query(updateQuery, [appUserId, member_name, trainer_username]);
+        updatedCount += updateResult.rowCount || 0;
+      }
+    }
+    
+    if (updatedCount > 0) {
+      console.log(`[PostgreSQL] ${updatedCount}개의 기존 로그에 app_user_id가 추가되었습니다.`);
+    } else {
+      console.log('[PostgreSQL] 마이그레이션할 로그가 없거나 매칭되는 회원을 찾을 수 없습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 기존 로그 app_user_id 마이그레이션 오류:', error);
+    // 마이그레이션 실패해도 계속 진행
   }
 };
 
@@ -144,20 +228,22 @@ const addActivityLog = async (logData) => {
       INSERT INTO trainer_activity_logs (
         trainer_username,
         member_name,
+        app_user_id,
         activity_type,
         activity_message,
         related_record_id,
         record_date,
         is_read,
         created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() AT TIME ZONE 'Asia/Seoul')
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW() AT TIME ZONE 'Asia/Seoul')
       RETURNING 
-        id, trainer_username, member_name, activity_type, activity_message, 
+        id, trainer_username, member_name, app_user_id, activity_type, activity_message, 
         related_record_id, record_date, is_read, created_at
     `;
     const values = [
       logData.trainer_username,
       logData.member_name,
+      logData.app_user_id || null,
       logData.activity_type,
       logData.activity_message,
       logData.related_record_id || null,
@@ -180,6 +266,7 @@ const getActivityLogs = async (trainerUsername, filters = {}) => {
         id,
         trainer_username,
         member_name,
+        app_user_id,
         activity_type,
         activity_message,
         related_record_id,
