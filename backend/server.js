@@ -348,6 +348,7 @@ const getUploadsDir = () => {
 
 const UPLOADS_DIR = getUploadsDir();
 const DIET_IMAGES_DIR = path.join(UPLOADS_DIR, 'diet-images');
+const CONSULTATION_VIDEOS_DIR = path.join(UPLOADS_DIR, 'consultation-videos');
 
 // 디렉토리 자동 생성
 const ensureDirectories = () => {
@@ -359,6 +360,10 @@ const ensureDirectories = () => {
     if (!fs.existsSync(DIET_IMAGES_DIR)) {
       fs.mkdirSync(DIET_IMAGES_DIR, { recursive: true });
       console.log(`[Diet Records] 식단 이미지 디렉토리 생성: ${DIET_IMAGES_DIR}`);
+    }
+    if (!fs.existsSync(CONSULTATION_VIDEOS_DIR)) {
+      fs.mkdirSync(CONSULTATION_VIDEOS_DIR, { recursive: true });
+      console.log(`[Consultation] 상담기록 동영상 디렉토리 생성: ${CONSULTATION_VIDEOS_DIR}`);
     }
   } catch (error) {
     console.error(`[Diet Records] 디렉토리 생성 오류: ${error.message}`);
@@ -756,6 +761,24 @@ const imageUpload = multer({
     }
 });
 
+// 동영상 업로드 설정
+const videoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: parseInt(process.env.CONSULTATION_VIDEO_MAX_SIZE || '104857600', 10) // 기본 100MB
+    },
+    fileFilter: (req, file, cb) => {
+        // 동영상 파일만 허용
+        const allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+        if (allowedMimes.includes(file.mimetype) || 
+            file.originalname.match(/\.(mp4|mov|avi|webm)$/i)) {
+            cb(null, true);
+        } else {
+            cb(new Error('동영상 파일만 업로드 가능합니다. (mp4, mov, avi, webm)'), false);
+        }
+    }
+});
+
 app.use(cors());
 app.use(express.json());
 
@@ -779,8 +802,24 @@ app.get('/consultation/view/:token', (req, res) => {
 
 app.use(express.static(path.join(__dirname, '../public')));
 
-// uploads 폴더를 정적 파일로 서빙 (이미지 접근)
-app.use('/uploads', express.static(UPLOADS_DIR));
+// uploads 폴더를 정적 파일로 서빙 (이미지 및 동영상 접근)
+app.use('/uploads', express.static(UPLOADS_DIR, {
+    setHeaders: (res, filePath) => {
+        // 동영상 파일의 경우 적절한 MIME type 설정
+        if (filePath.match(/\.(mp4|mov|avi|webm)$/i)) {
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeTypes = {
+                '.mp4': 'video/mp4',
+                '.mov': 'video/quicktime',
+                '.avi': 'video/x-msvideo',
+                '.webm': 'video/webm'
+            };
+            if (mimeTypes[ext]) {
+                res.setHeader('Content-Type', mimeTypes[ext]);
+            }
+        }
+    }
+}));
 
 // 아이디 중복 체크 API
 app.get('/api/check-username', async (req, res) => {
@@ -6043,6 +6082,27 @@ app.delete('/api/consultation-records/:id', async (req, res) => {
             return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
         }
         
+        // 삭제 전에 동영상 파일도 삭제
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (consultation && consultation.video_urls) {
+            const videos = Array.isArray(consultation.video_urls) 
+                ? consultation.video_urls 
+                : (typeof consultation.video_urls === 'string' ? JSON.parse(consultation.video_urls) : []);
+            
+            for (const video of videos) {
+                try {
+                    // URL이 /uploads/... 형식이므로 UPLOADS_DIR 기준으로 경로 변환
+                    const urlPath = video.url.replace(/^\/uploads\//, '');
+                    const filePath = path.join(UPLOADS_DIR, urlPath);
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                    }
+                } catch (fileError) {
+                    console.error('[API] 동영상 파일 삭제 오류:', fileError);
+                }
+            }
+        }
+        
         const deleted = await consultationRecordsDB.deleteConsultationRecord(id);
         
         if (!deleted) {
@@ -6053,6 +6113,170 @@ app.delete('/api/consultation-records/:id', async (req, res) => {
     } catch (error) {
         console.error('[API] 상담기록 삭제 오류:', error);
         res.status(500).json({ message: '상담기록 삭제에 실패했습니다.' });
+    }
+});
+
+// 상담기록 동영상 업로드
+app.post('/api/consultation-records/:id/videos', videoUpload.single('file'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.body;
+        
+        if (!req.file) {
+            return res.status(400).json({ message: '동영상 파일을 선택해주세요.' });
+        }
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 기존 동영상 개수 확인 (최대 5개)
+        const maxVideos = parseInt(process.env.CONSULTATION_VIDEO_MAX_COUNT || '5', 10);
+        const existingVideos = consultation.video_urls ? (Array.isArray(consultation.video_urls) ? consultation.video_urls : JSON.parse(consultation.video_urls)) : [];
+        
+        if (existingVideos.length >= maxVideos) {
+            return res.status(400).json({ message: `동영상은 최대 ${maxVideos}개까지 업로드 가능합니다.` });
+        }
+        
+        // 파일 저장 경로 생성
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const videoId = uuidv4();
+        const fileExt = path.extname(req.file.originalname);
+        const videoDir = path.join(CONSULTATION_VIDEOS_DIR, String(year), month, id);
+        const videoFileName = `${videoId}${fileExt}`;
+        const videoPath = path.join(videoDir, videoFileName);
+        
+        // 디렉토리 생성
+        if (!fs.existsSync(videoDir)) {
+            fs.mkdirSync(videoDir, { recursive: true });
+        }
+        
+        // 파일 저장
+        fs.writeFileSync(videoPath, req.file.buffer);
+        
+        // 상대 경로 생성 (URL용) - /uploads/... 형식
+        const relativePath = path.join('uploads', 'consultation-videos', String(year), month, id, videoFileName).replace(/\\/g, '/');
+        
+        // 동영상 메타데이터 생성
+        const videoMetadata = {
+            id: videoId,
+            url: `/${relativePath}`,
+            filename: req.file.originalname,
+            file_size: req.file.size,
+            mime_type: req.file.mimetype,
+            uploaded_at: new Date().toISOString(),
+            uploaded_by: currentUser
+        };
+        
+        // 기존 동영상 배열에 추가
+        existingVideos.push(videoMetadata);
+        
+        // 상담기록 업데이트
+        const updated = await consultationRecordsDB.updateConsultationRecord(id, {
+            video_urls: existingVideos
+        });
+        
+        res.json({
+            video: videoMetadata
+        });
+    } catch (error) {
+        console.error('[API] 동영상 업로드 오류:', error);
+        res.status(500).json({ message: '동영상 업로드에 실패했습니다.' });
+    }
+});
+
+// 상담기록 동영상 삭제
+app.delete('/api/consultation-records/:id/videos/:videoId', async (req, res) => {
+    try {
+        const { id, videoId } = req.params;
+        const { currentUser } = req.body;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 동영상 배열 파싱
+        let videos = consultation.video_urls ? (Array.isArray(consultation.video_urls) ? consultation.video_urls : JSON.parse(consultation.video_urls)) : [];
+        
+        // 삭제할 동영상 찾기
+        const videoIndex = videos.findIndex(v => v.id === videoId);
+        if (videoIndex === -1) {
+            return res.status(404).json({ message: '동영상을 찾을 수 없습니다.' });
+        }
+        
+        const videoToDelete = videos[videoIndex];
+        
+        // 파일 시스템에서 삭제
+        try {
+            // URL이 /uploads/... 형식이므로 UPLOADS_DIR 기준으로 경로 변환
+            const urlPath = videoToDelete.url.replace(/^\/uploads\//, '');
+            const filePath = path.join(UPLOADS_DIR, urlPath);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        } catch (fileError) {
+            console.error('[API] 동영상 파일 삭제 오류:', fileError);
+            // 파일 삭제 실패해도 DB에서는 제거
+        }
+        
+        // 배열에서 제거
+        videos.splice(videoIndex, 1);
+        
+        // 상담기록 업데이트
+        await consultationRecordsDB.updateConsultationRecord(id, {
+            video_urls: videos
+        });
+        
+        res.json({ message: '동영상이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 동영상 삭제 오류:', error);
+        res.status(500).json({ message: '동영상 삭제에 실패했습니다.' });
     }
 });
 

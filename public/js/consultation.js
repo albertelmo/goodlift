@@ -512,6 +512,13 @@ async function openConsultationEditModal(recordId) {
         document.getElementById('consultation-summary').value = record.summary || '';
         document.getElementById('consultation-requirements').value = record.requirements || '';
         
+        // 동영상 섹션 표시 및 동영상 목록 로드
+        const videoSection = document.getElementById('consultation-video-section');
+        if (videoSection) {
+            videoSection.style.display = 'block';
+            loadConsultationVideos(recordId);
+        }
+        
         // 결과 메시지 초기화
         document.getElementById('consultationResult').textContent = '';
         
@@ -534,6 +541,8 @@ async function openConsultationEditModal(recordId) {
         if (createShareBtn) {
             createShareBtn.style.display = 'block';
         }
+        
+        // 동영상 섹션은 이미 위에서 표시했으므로 여기서는 처리하지 않음
     } catch (error) {
         console.error('상담기록 로드 오류:', error);
         alert('상담기록을 불러오는 중 오류가 발생했습니다.');
@@ -794,4 +803,147 @@ document.addEventListener('DOMContentLoaded', function() {
     if (form) {
         form.addEventListener('submit', handleConsultationSubmit);
     }
+    
+    // 동영상 선택 버튼 이벤트
+    const videoSelectBtn = document.getElementById('consultation-video-select-btn');
+    const videoUploadInput = document.getElementById('consultation-video-upload');
+    if (videoSelectBtn && videoUploadInput) {
+        videoSelectBtn.addEventListener('click', () => {
+            videoUploadInput.click();
+        });
+        videoUploadInput.addEventListener('change', handleVideoUpload);
+    }
 });
+
+// 동영상 업로드 처리
+async function handleVideoUpload(e) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    if (!currentEditRecordId) {
+        alert('상담기록을 먼저 저장해주세요.');
+        return;
+    }
+    
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) {
+        alert('로그인이 필요합니다.');
+        return;
+    }
+    
+    for (const file of files) {
+        // 파일 크기 확인 (100MB)
+        const maxSize = 100 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert(`${file.name}: 파일 크기가 너무 큽니다. (최대 100MB)`);
+            continue;
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('currentUser', currentUser);
+            
+            const response = await fetch(`/api/consultation-records/${currentEditRecordId}/videos`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: '동영상 업로드에 실패했습니다.' }));
+                throw new Error(errorData.message || '동영상 업로드에 실패했습니다.');
+            }
+            
+            // 동영상 목록 새로고침
+            await loadConsultationVideos(currentEditRecordId);
+        } catch (error) {
+            console.error('동영상 업로드 오류:', error);
+            alert(`${file.name} 업로드 실패: ${error.message}`);
+        }
+    }
+    
+    // input 초기화
+    e.target.value = '';
+}
+
+// 동영상 목록 로드
+async function loadConsultationVideos(consultationId) {
+    const videoList = document.getElementById('consultation-video-list');
+    if (!videoList) return;
+    
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) return;
+        
+        const response = await fetch(`/api/consultation-records/${consultationId}?currentUser=${encodeURIComponent(currentUser)}`);
+        if (!response.ok) return;
+        
+        const record = await response.json();
+        const videos = record.video_urls || [];
+        
+        if (videos.length === 0) {
+            videoList.innerHTML = '<div style="color: #999; font-size: 12px;">업로드된 동영상이 없습니다.</div>';
+            return;
+        }
+        
+        videoList.innerHTML = videos.map(video => {
+            const fileSizeMB = (video.file_size / (1024 * 1024)).toFixed(2);
+            const uploadDate = new Date(video.uploaded_at).toLocaleDateString('ko-KR');
+            return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 8px; background: #f9f9f9;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; font-size: 13px;">📹 ${escapeHtml(video.filename)}</div>
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                            ${fileSizeMB}MB · ${uploadDate}
+                        </div>
+                    </div>
+                    <button type="button" class="tmc-btn-danger" onclick="deleteConsultationVideo('${consultationId}', '${video.id}')" style="padding: 4px 12px; font-size: 11px;">삭제</button>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('동영상 목록 로드 오류:', error);
+    }
+}
+
+// 동영상 삭제
+async function deleteConsultationVideo(consultationId, videoId) {
+    if (!confirm('이 동영상을 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+        
+        const response = await fetch(`/api/consultation-records/${consultationId}/videos/${videoId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ currentUser: currentUser })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '동영상 삭제에 실패했습니다.' }));
+            throw new Error(errorData.message || '동영상 삭제에 실패했습니다.');
+        }
+        
+        // 동영상 목록 새로고침
+        await loadConsultationVideos(consultationId);
+    } catch (error) {
+        console.error('동영상 삭제 오류:', error);
+        alert('동영상 삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+// HTML 이스케이프
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

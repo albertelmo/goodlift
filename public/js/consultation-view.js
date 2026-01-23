@@ -177,6 +177,33 @@ function formatConsultationData(data) {
         html += '</div>';
     }
     
+    // 동영상
+    if (consultation.video_urls && Array.isArray(consultation.video_urls) && consultation.video_urls.length > 0) {
+        html += '<div class="consultation-view-section">';
+        html += '<div class="consultation-view-section-title">동영상</div>';
+        
+        consultation.video_urls.forEach((video, index) => {
+            const videoUrl = escapeHtml(video.url);
+            const mimeType = escapeHtml(video.mime_type || 'video/mp4');
+            const fileSize = video.file_size ? (video.file_size / (1024 * 1024)).toFixed(2) : '알 수 없음';
+            
+            html += `<div class="consultation-view-field" style="margin-bottom: 20px;">`;
+            html += `<div class="consultation-view-field-label">${escapeHtml(video.filename || `동영상 ${index + 1}`)}</div>`;
+            html += `<video controls preload="metadata" style="width: 100%; max-width: 800px; border-radius: 4px; margin-top: 8px;" `;
+            html += `onerror="console.error('[동영상 ${index + 1}] 로드 실패:', this.currentSrc || this.src, '에러:', this.error); const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='block';" `;
+            html += `onloadedmetadata="const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none';" `;
+            html += `src="${videoUrl}" `;
+            html += `type="${mimeType}">`;
+            html += `브라우저가 동영상 재생을 지원하지 않습니다.`;
+            html += `</video>`;
+            html += `<div style="font-size: 11px; color: #e74c3c; margin-top: 4px; display:none;" class="video-error-message">동영상을 불러올 수 없습니다. (URL: ${videoUrl})</div>`;
+            html += `<div style="font-size: 11px; color: #999; margin-top: 4px;">파일 크기: ${fileSize}MB</div>`;
+            html += `</div>`;
+        });
+        
+        html += '</div>';
+    }
+    
     return html;
 }
 

@@ -71,11 +71,16 @@ function render(container) {
   if (consultationListBtn) {
     consultationListBtn.addEventListener('click', () => {
       // 이미 구현된 상담목록 모달 열기 함수 호출
-      if (typeof window.openConsultationListModal === 'function') {
-        window.openConsultationListModal();
-      } else {
-        console.error('openConsultationListModal 함수를 찾을 수 없습니다.');
-      }
+      // 함수가 로드될 때까지 대기
+      const tryOpen = () => {
+        if (typeof window.openConsultationListModal === 'function') {
+          window.openConsultationListModal();
+        } else {
+          // 함수가 아직 로드되지 않았으면 잠시 후 다시 시도
+          setTimeout(tryOpen, 100);
+        }
+      };
+      tryOpen();
     });
   }
   
