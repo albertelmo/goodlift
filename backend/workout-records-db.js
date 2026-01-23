@@ -329,7 +329,66 @@ const migrateWorkoutRecordsTable = async () => {
       }
     }
     
-    // 4. calories_burned 컬럼 제거 (있으면)
+    // 4. display_order 컬럼 추가 (없으면)
+    if (!existingColumns.includes('display_order')) {
+      await pool.query(`
+        ALTER TABLE workout_records 
+        ADD COLUMN display_order INTEGER
+      `);
+      console.log('[PostgreSQL] display_order 컬럼이 추가되었습니다.');
+      
+      // 기존 데이터 순서 초기화 (같은 날짜 내 created_at 기준 오름차순)
+      await pool.query(`
+        UPDATE workout_records wr1
+        SET display_order = sub.row_num
+        FROM (
+          SELECT 
+            id,
+            ROW_NUMBER() OVER (
+              PARTITION BY workout_date, app_user_id 
+              ORDER BY created_at ASC
+            ) as row_num
+          FROM workout_records
+        ) sub
+        WHERE wr1.id = sub.id
+      `);
+      console.log('[PostgreSQL] 기존 데이터의 display_order가 초기화되었습니다.');
+    } else {
+      // display_order 컬럼이 이미 있는 경우, NULL인 레코드만 보완
+      const nullCountResult = await pool.query(`
+        SELECT COUNT(*) as count 
+        FROM workout_records 
+        WHERE display_order IS NULL
+      `);
+      const nullCount = parseInt(nullCountResult.rows[0].count);
+      
+      if (nullCount > 0) {
+        console.log(`[PostgreSQL] display_order가 NULL인 레코드 ${nullCount}개 발견. 보완 중...`);
+        
+        // NULL인 레코드들에 대해 순서 할당
+        await pool.query(`
+          UPDATE workout_records wr1
+          SET display_order = sub.row_num
+          FROM (
+            SELECT 
+              id,
+              workout_date,
+              app_user_id,
+              ROW_NUMBER() OVER (
+                PARTITION BY workout_date, app_user_id 
+                ORDER BY COALESCE(display_order, 999999) ASC, created_at ASC
+              ) as row_num
+            FROM workout_records
+            WHERE display_order IS NULL
+          ) sub
+          WHERE wr1.id = sub.id AND wr1.display_order IS NULL
+        `);
+        
+        console.log(`[PostgreSQL] display_order NULL 레코드 ${nullCount}개 보완 완료.`);
+      }
+    }
+    
+    // 5. calories_burned 컬럼 제거 (있으면)
     if (existingColumns.includes('calories_burned')) {
       await pool.query(`
         ALTER TABLE workout_records 
@@ -444,6 +503,7 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
         wr.duration_minutes,
         wr.notes,
         wr.is_completed,
+        wr.display_order,
         wr.created_at,
         wr.updated_at
       FROM workout_records wr
@@ -462,9 +522,11 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
       params.push(filters.endDate);
     }
     
-    // 정렬 (최신순)
+    // 정렬: 날짜 내림차순, 같은 날짜 내에서는 display_order 우선 (없으면 created_at)
     // 인덱스 (app_user_id, workout_date DESC)를 활용하여 정렬 비용 최소화
-    query += ` ORDER BY wr.workout_date DESC, wr.created_at DESC`;
+    query += ` ORDER BY wr.workout_date DESC, 
+                     COALESCE(wr.display_order, 999999) ASC, 
+                     wr.created_at ASC`;
     
     const result = await pool.query(query, params);
     
@@ -548,6 +610,7 @@ const getWorkoutRecordById = async (id, appUserId) => {
         wr.duration_minutes,
         wr.notes,
         wr.is_completed,
+        wr.display_order,
         wr.created_at,
         wr.updated_at
       FROM workout_records wr
@@ -578,11 +641,30 @@ const getWorkoutRecordById = async (id, appUserId) => {
   }
 };
 
+// 같은 날짜의 마지막 순서 조회
+const getNextDisplayOrder = async (appUserId, workoutDate) => {
+  try {
+    const result = await pool.query(
+      `SELECT COALESCE(MAX(display_order), 0) + 1 as next_order
+       FROM workout_records 
+       WHERE app_user_id = $1 AND workout_date = $2`,
+      [appUserId, workoutDate]
+    );
+    return result.rows[0].next_order;
+  } catch (error) {
+    console.error('[PostgreSQL] 다음 display_order 조회 오류:', error);
+    return 1; // 에러 시 기본값 1
+  }
+};
+
 // 운동기록 추가
 const addWorkoutRecord = async (workoutData) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    
+    // 같은 날짜의 마지막 순서 + 1 계산
+    const displayOrder = await getNextDisplayOrder(workoutData.app_user_id, workoutData.workout_date);
     
     // 운동기록 추가
     const insertQuery = `
@@ -591,8 +673,9 @@ const addWorkoutRecord = async (workoutData) => {
         workout_date,
         workout_type_id,
         duration_minutes,
-        notes
-      ) VALUES ($1, $2, $3, $4, $5)
+        notes,
+        display_order
+      ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
     const insertValues = [
@@ -600,7 +683,8 @@ const addWorkoutRecord = async (workoutData) => {
       workoutData.workout_date,
       workoutData.workout_type_id || null,
       workoutData.duration_minutes || null,
-      workoutData.notes || null
+      workoutData.notes || null,
+      displayOrder
     ];
     const insertResult = await client.query(insertQuery, insertValues);
     const workoutRecord = insertResult.rows[0];
@@ -665,7 +749,24 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
     
     const addedRecords = [];
     
+    // 같은 날짜별로 그룹화하여 순서 계산
+    const dateOrderMap = new Map();
+    
     for (const workoutData of workoutDataArray) {
+      const dateKey = `${workoutData.app_user_id}_${workoutData.workout_date}`;
+      if (!dateOrderMap.has(dateKey)) {
+        // 해당 날짜의 마지막 순서 조회
+        const result = await client.query(
+          `SELECT COALESCE(MAX(display_order), 0) as max_order
+           FROM workout_records 
+           WHERE app_user_id = $1 AND workout_date = $2`,
+          [workoutData.app_user_id, workoutData.workout_date]
+        );
+        dateOrderMap.set(dateKey, result.rows[0].max_order || 0);
+      }
+      const currentOrder = dateOrderMap.get(dateKey) + 1;
+      dateOrderMap.set(dateKey, currentOrder);
+      
       // 운동기록 추가
       const insertQuery = `
         INSERT INTO workout_records (
@@ -673,8 +774,9 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
           workout_date,
           workout_type_id,
           duration_minutes,
-          notes
-        ) VALUES ($1, $2, $3, $4, $5)
+          notes,
+          display_order
+        ) VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *
       `;
       const insertValues = [
@@ -682,7 +784,8 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
         workoutData.workout_date,
         workoutData.workout_type_id || null,
         workoutData.duration_minutes || null,
-        workoutData.notes || null
+        workoutData.notes || null,
+        currentOrder
       ];
       const insertResult = await client.query(insertQuery, insertValues);
       const workoutRecord = insertResult.rows[0];
@@ -761,6 +864,31 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
   try {
     await client.query('BEGIN');
     
+    // 기존 레코드 조회 (날짜 변경 확인용)
+    const existingRecord = await client.query(
+      `SELECT workout_date FROM workout_records WHERE id = $1 AND app_user_id = $2`,
+      [id, appUserId]
+    );
+    
+    if (existingRecord.rows.length === 0) {
+      throw new Error('운동기록을 찾을 수 없습니다.');
+    }
+    
+    const oldDate = existingRecord.rows[0].workout_date;
+    const newDate = updates.workout_date;
+    
+    // 날짜가 변경되는 경우 순서 재할당
+    if (newDate && newDate !== oldDate) {
+      // 새 날짜의 마지막 순서 + 1로 할당
+      const orderResult = await client.query(
+        `SELECT COALESCE(MAX(display_order), 0) + 1 as next_order
+         FROM workout_records 
+         WHERE app_user_id = $1 AND workout_date = $2`,
+        [appUserId, newDate]
+      );
+      updates.display_order = orderResult.rows[0].next_order;
+    }
+    
     const fields = [];
     const values = [];
     let paramIndex = 1;
@@ -768,6 +896,10 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
     if (updates.workout_date !== undefined) {
       fields.push(`workout_date = $${paramIndex++}`);
       values.push(updates.workout_date);
+    }
+    if (updates.display_order !== undefined) {
+      fields.push(`display_order = $${paramIndex++}`);
+      values.push(updates.display_order);
     }
     if (updates.workout_type_id !== undefined) {
       fields.push(`workout_type_id = $${paramIndex++}`);
@@ -1052,6 +1184,124 @@ const initializeDatabase = async () => {
   // migrateWorkoutRecordsTable에서 createWorkoutRecordSetsTable 호출됨
 };
 
+// 운동기록 순서 변경
+const reorderWorkoutRecords = async (appUserId, workoutDate, order) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // 같은 날짜 내 모든 순서 업데이트
+    for (const item of order) {
+      // UUID 형식 검증
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(item.id)) {
+        throw new Error(`Invalid UUID format for id: ${item.id}`);
+      }
+      if (!uuidRegex.test(appUserId)) {
+        throw new Error(`Invalid UUID format for appUserId: ${appUserId}`);
+      }
+      
+      // 날짜 형식 검증
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      if (!dateRegex.test(workoutDate)) {
+        throw new Error(`Invalid date format: ${workoutDate}`);
+      }
+      
+      const updateResult = await client.query(
+        `UPDATE workout_records 
+         SET display_order = $1, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = $2 AND app_user_id = $3 AND workout_date = $4`,
+        [item.order, item.id, appUserId, workoutDate]
+      );
+      
+      // 업데이트된 행 수 확인
+      if (updateResult.rowCount === 0) {
+        console.error('[PostgreSQL] 순서 업데이트 실패 - 레코드를 찾을 수 없음:', {
+          order: item.order,
+          id: item.id,
+          appUserId,
+          workoutDate
+        });
+        throw new Error(`운동기록을 찾을 수 없습니다. (id: ${item.id}, app_user_id: ${appUserId}, workout_date: ${workoutDate})`);
+      }
+      
+      if (updateResult.rowCount > 1) {
+        console.warn('[PostgreSQL] 순서 업데이트 경고 - 여러 행이 업데이트됨:', {
+          rowCount: updateResult.rowCount,
+          order: item.order,
+          id: item.id,
+          appUserId,
+          workoutDate
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // 저장 확인: 실제로 올바른 순서 값이 저장되었는지 확인
+    const verifyResult = await pool.query(
+      `SELECT id, display_order 
+       FROM workout_records 
+       WHERE app_user_id = $1 AND workout_date = $2 
+       AND id = ANY($3::uuid[])
+       ORDER BY display_order ASC`,
+      [appUserId, workoutDate, order.map(item => item.id)]
+    );
+    
+    // 요청한 순서와 실제 저장된 순서 비교
+    const expectedOrder = new Map(order.map(item => [item.id, item.order]));
+    const actualOrder = new Map(verifyResult.rows.map(row => [row.id, row.display_order]));
+    
+    const mismatches = [];
+    for (const [id, expectedOrderValue] of expectedOrder.entries()) {
+      const actualOrderValue = actualOrder.get(id);
+      if (actualOrderValue !== expectedOrderValue) {
+        mismatches.push({
+          id,
+          expected: expectedOrderValue,
+          actual: actualOrderValue
+        });
+      }
+    }
+    
+    if (mismatches.length > 0) {
+      console.error('[PostgreSQL] 순서 변경 검증 실패 - 순서 불일치:', {
+        mismatches,
+        appUserId,
+        workoutDate,
+        requestedOrder: order,
+        actualOrder: verifyResult.rows.map(row => ({ id: row.id, display_order: row.display_order }))
+      });
+      throw new Error(`순서 변경 검증 실패: ${mismatches.length}개의 레코드가 올바른 순서로 저장되지 않았습니다.`);
+    }
+    
+    if (verifyResult.rows.length !== order.length) {
+      console.error('[PostgreSQL] 순서 변경 검증 실패 - 레코드 수 불일치:', {
+        requestedCount: order.length,
+        actualCount: verifyResult.rows.length,
+        appUserId,
+        workoutDate
+      });
+      throw new Error(`순서 변경 검증 실패: 요청한 ${order.length}개 중 ${verifyResult.rows.length}개만 저장되었습니다.`);
+    }
+    
+    return { success: true, count: order.length };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[PostgreSQL] 운동기록 순서 변경 오류:', error);
+    console.error('[PostgreSQL] 에러 상세:', {
+      message: error.message,
+      stack: error.stack,
+      appUserId,
+      workoutDate,
+      order: JSON.stringify(order, null, 2)
+    });
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   initializeDatabase,
   getWorkoutRecords,
@@ -1063,5 +1313,6 @@ module.exports = {
   getWorkoutStats,
   updateWorkoutRecordCompleted,
   updateWorkoutSetCompleted,
-  getWorkoutRecordsForCalendar
+  getWorkoutRecordsForCalendar,
+  reorderWorkoutRecords
 };

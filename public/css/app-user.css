@@ -1667,6 +1667,31 @@ body.app-user-active {
     font-size: 11px;
 }
 
+/* 드래그 앤 드롭 스타일 */
+.sortable-ghost {
+    opacity: 0.4;
+    background: #f0f0f0;
+}
+
+.sortable-chosen {
+    cursor: grabbing !important;
+}
+
+.sortable-drag {
+    opacity: 0.8;
+}
+
+.app-workout-item-drag-handle {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+.app-workout-item-drag-handle:active {
+    cursor: grabbing !important;
+}
+
 .app-workout-items {
     display: flex;
     flex-direction: column;

@@ -756,6 +756,8 @@ const imageUpload = multer({
 app.use(cors());
 app.use(express.json());
 
+// API 요청 로깅 미들웨어 (디버깅용)
+
 // 권한 체크 헬퍼 함수 (SU 역할 추가)
 function isAdminOrSu(userAccount) {
     return userAccount && (userAccount.role === 'admin' || userAccount.role === 'su');
@@ -1247,6 +1249,7 @@ app.get('/api/workout-records', async (req, res) => {
         if (end_date) filters.endDate = end_date;
         
         const records = await workoutRecordsDB.getWorkoutRecords(app_user_id, filters);
+        
         res.json(records);
     } catch (error) {
         console.error('[API] 운동기록 조회 오류:', error);
@@ -1472,6 +1475,45 @@ app.post('/api/workout-records', async (req, res) => {
         console.error('[API] 운동기록 추가 오류:', error);
         res.status(500).json({ message: '운동기록 추가 중 오류가 발생했습니다.' });
     }
+});
+
+// 운동기록 순서 변경 (더 구체적인 라우트를 먼저 등록해야 함)
+app.patch('/api/workout-records/reorder', async (req, res) => {
+  try {
+    const { app_user_id, workout_date, order } = req.body;
+    
+    if (!app_user_id || !workout_date || !Array.isArray(order) || order.length === 0) {
+      console.error('[API] 운동기록 순서 변경: 필수 파라미터 누락', { app_user_id, workout_date, order });
+      return res.status(400).json({ 
+        error: 'app_user_id, workout_date, order 배열이 필요합니다.' 
+      });
+    }
+    
+    // 세션 확인 (다른 운동기록 API와 동일하게 app_user_id만 확인)
+    // 세션 쿠키가 없어도 app_user_id로 권한 확인
+    // 트레이너 전환 모드인 경우 에러 반환
+    if (app_user_id.startsWith('trainer-')) {
+      console.error('[API] 운동기록 순서 변경: 트레이너 모드 불가');
+      return res.status(403).json({ error: '트레이너 모드에서는 순서를 변경할 수 없습니다.' });
+    }
+    
+    // 순서 변경 실행
+    const result = await workoutRecordsDB.reorderWorkoutRecords(
+      app_user_id,
+      workout_date,
+      order
+    );
+    
+    res.json(result);
+  } catch (error) {
+    console.error('[API] 운동기록 순서 변경 오류:', error);
+    console.error('[API] 운동기록 순서 변경 오류 상세:', {
+      message: error.message,
+      stack: error.stack,
+      body: req.body
+    });
+    res.status(500).json({ error: '운동기록 순서 변경 중 오류가 발생했습니다.' });
+  }
 });
 
 // 운동기록 수정
@@ -1985,48 +2027,25 @@ app.get('/api/trainer-activity-logs', async (req, res) => {
     }
 });
 
-// 로그 읽음 처리
-app.patch('/api/trainer-activity-logs/:id/read', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { trainer_username } = req.body;
-        
-        if (!trainer_username) {
-            return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
-        }
-        
-        const result = await activityLogsDB.markAsRead(id, trainer_username);
-        
-        if (!result) {
-            return res.status(404).json({ message: '로그를 찾을 수 없습니다.' });
-        }
-        
-        res.json({ message: '로그가 읽음 처리되었습니다.', log: result });
-    } catch (error) {
-        console.error('[API] 로그 읽음 처리 오류:', error);
-        res.status(500).json({ message: '로그 읽음 처리 중 오류가 발생했습니다.' });
-    }
-});
-
-// 전체 로그 읽음 처리
+// 전체 로그 읽음 처리 (더 구체적인 라우트를 먼저 등록)
 app.patch('/api/trainer-activity-logs/read-all', async (req, res) => {
-    try {
-        const { trainer_username } = req.body;
-        
-        if (!trainer_username) {
-            return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
-        }
-        
-        const result = await activityLogsDB.markAllAsRead(trainer_username);
-        
-        res.json({ 
-            message: '모든 로그가 읽음 처리되었습니다.', 
-            readCount: result.count 
-        });
-    } catch (error) {
-        console.error('[API] 전체 로그 읽음 처리 오류:', error);
-        res.status(500).json({ message: '전체 로그 읽음 처리 중 오류가 발생했습니다.' });
+  try {
+    const { trainer_username } = req.body;
+    
+    if (!trainer_username) {
+      return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
     }
+    
+    const result = await activityLogsDB.markAllAsRead(trainer_username);
+    
+    res.json({ 
+      message: '모든 로그가 읽음 처리되었습니다.', 
+      readCount: result.count 
+    });
+  } catch (error) {
+    console.error('[API] 전체 로그 읽음 처리 오류:', error);
+    res.status(500).json({ message: '전체 로그 읽음 처리 중 오류가 발생했습니다.' });
+  }
 });
 
 // 식단 코멘트 추가

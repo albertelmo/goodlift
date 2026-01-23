@@ -115,6 +115,7 @@ async function request(endpoint, options = {}) {
     
     const config = {
         headers,
+        credentials: 'include', // 쿠키 포함
         ...options
     };
 
@@ -125,7 +126,23 @@ async function request(endpoint, options = {}) {
 
     try {
         const response = await fetch(url, config);
-        const data = await response.json();
+        
+        // 응답 본문을 텍스트로 먼저 읽어서 확인
+        const text = await response.text();
+        let data;
+        
+        try {
+            data = JSON.parse(text);
+        } catch (parseError) {
+            console.error('[API] JSON 파싱 실패:', {
+                url,
+                status: response.status,
+                statusText: response.statusText,
+                responseText: text,
+                parseError: parseError.message
+            });
+            throw new Error(`서버 응답 파싱 실패: ${text.substring(0, 100)}`);
+        }
         
         if (!response.ok) {
             throw new Error(data.error || data.message || '요청 처리 중 오류가 발생했습니다.');
@@ -818,11 +835,14 @@ export async function markActivityLogAsRead(logId, trainerUsername) {
  * 전체 로그 읽음 처리
  */
 export async function markAllActivityLogsAsRead(trainerUsername) {
-    // 서버로 전송되는 요청 정보를 로그로 남기기 위해
-    // 실제 요청은 patch 함수에서 처리되므로, 여기서는 요청 파라미터만 확인
-    const requestData = {
-        trainer_username: trainerUsername
-    };
-    
-    return patch('/trainer-activity-logs/read-all', requestData);
+    return await patch('/trainer-activity-logs/read-all', { trainer_username: trainerUsername });
+}
+
+// 운동기록 순서 변경
+export async function reorderWorkoutRecords(appUserId, workoutDate, order) {
+    return await patch('/workout-records/reorder', {
+        app_user_id: appUserId,
+        workout_date: workoutDate,
+        order: order
+    });
 }

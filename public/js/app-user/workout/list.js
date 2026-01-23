@@ -1,7 +1,7 @@
 // 운동기록 목록 렌더링
 
 import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText } from '../utils.js';
-import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers } from '../api.js';
+import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
 
 let currentAppUserId = null;
 let currentRecords = [];
@@ -89,7 +89,12 @@ async function loadRecords(filters = {}) {
     showLoading(container);
     
     try {
-        const records = await getWorkoutRecords(currentAppUserId, filters);
+        // 트레이너 모드인 경우 실제 회원의 app_user_id 사용
+        const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+        const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+        
+        const records = await getWorkoutRecords(targetAppUserId, filters);
+        
         currentRecords = records;
         await render(records);
     } catch (error) {
@@ -138,13 +143,14 @@ async function render(records) {
     
     records = filteredRecords;
     
-    // 날짜별 그룹화
+    // 날짜별 그룹화 (서버에서 이미 display_order로 정렬되어 있으므로 순서 유지)
     const groupedByDate = {};
     records.forEach(record => {
         const date = record.workout_date;
         if (!groupedByDate[date]) {
             groupedByDate[date] = [];
         }
+        // 서버에서 정렬된 순서대로 push (순서 유지)
         groupedByDate[date].push(record);
     });
     
@@ -198,12 +204,21 @@ async function render(records) {
     
     sortedDates.forEach(date => {
         let dateRecords = groupedByDate[date];
-        // 각 날짜 내에서 created_at 기준 오름차순 정렬 (최근 추가된 것이 아래로)
+        // display_order 기준으로 정렬 (서버와 동일한 로직)
         dateRecords = dateRecords.sort((a, b) => {
+            // display_order가 있으면 display_order로 정렬 (null이면 999999로 처리, 서버와 동일)
+            const orderA = (a.display_order !== null && a.display_order !== undefined) ? a.display_order : 999999;
+            const orderB = (b.display_order !== null && b.display_order !== undefined) ? b.display_order : 999999;
+            
+            if (orderA !== orderB) {
+                return orderA - orderB; // 오름차순
+            }
+            // display_order가 같거나 둘 다 null인 경우 created_at으로 정렬 (서버와 동일)
             const dateA = a.created_at ? new Date(a.created_at) : new Date(0);
             const dateB = b.created_at ? new Date(b.created_at) : new Date(0);
             return dateA - dateB; // 오름차순
         });
+        
         const dateObj = new Date(date);
         
         html += `
@@ -255,6 +270,11 @@ async function render(records) {
     
     // 클릭 이벤트 리스너 추가
     setupClickListeners();
+    
+    // 드래그 앤 드롭 초기화
+    if (!isReadOnly) {
+        initializeSortable();
+    }
 }
 
 /**
@@ -337,8 +357,18 @@ function renderWorkoutItem(record) {
     }
     
     return `
-        <div class="${cardClass}" data-record-id="${record.id}">
-            <div class="app-workout-item-main">
+        <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
+            <div class="app-workout-item-drag-handle" style="position: absolute; left: 4px; top: 50%; transform: translateY(-50%); cursor: grab; padding: 8px; opacity: 0.5; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="9" cy="5" r="1"></circle>
+                    <circle cx="9" cy="12" r="1"></circle>
+                    <circle cx="9" cy="19" r="1"></circle>
+                    <circle cx="15" cy="5" r="1"></circle>
+                    <circle cx="15" cy="12" r="1"></circle>
+                    <circle cx="15" cy="19" r="1"></circle>
+                </svg>
+            </div>
+            <div class="app-workout-item-main" style="margin-left: 32px;">
                 <div class="app-workout-item-type-container">
                     <div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>
                     <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정">
@@ -1797,4 +1827,221 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
     });
     
     await Promise.all(copyPromises);
+}
+
+/**
+ * SortableJS 초기화 - 드래그 앤 드롭으로 운동 카드 순서 변경
+ */
+let sortableInstances = [];
+let reorderInProgress = new Map(); // 날짜별로 순서 변경 진행 중 플래그
+
+function initializeSortable() {
+    // 기존 인스턴스 정리
+    sortableInstances.forEach(instance => {
+        if (instance && instance.destroy) {
+            instance.destroy();
+        }
+    });
+    sortableInstances = [];
+    reorderInProgress.clear();
+    
+    // 각 날짜별로 Sortable 인스턴스 생성
+    const dateSections = document.querySelectorAll('.app-workout-date-section');
+    
+    dateSections.forEach(section => {
+        const itemsContainer = section.querySelector('.app-workout-items');
+        if (!itemsContainer) return;
+        
+        // 날짜 추출
+        const workoutItems = itemsContainer.querySelectorAll('.app-workout-item');
+        if (workoutItems.length === 0) return;
+        
+        const firstItem = workoutItems[0];
+        const workoutDate = firstItem.getAttribute('data-workout-date');
+        if (!workoutDate) return;
+        
+        // 트레이너 모드인 경우 실제 회원의 app_user_id 사용
+        const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+        const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+        
+        // 원래 위치 저장용 맵 (아이템별로 저장)
+        const originalPositions = new Map();
+        // 드래그 시작 시점의 원래 순서 저장
+        let originalOrder = null;
+        
+        const sortable = new Sortable(itemsContainer, {
+            handle: '.app-workout-item-drag-handle',
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            chosenClass: 'sortable-chosen',
+            dragClass: 'sortable-drag',
+            onStart: function(evt) {
+                // 드래그 시작 시 원래 위치 저장
+                const item = evt.item;
+                const itemId = item.getAttribute('data-record-id');
+                // itemsContainer의 직접 자식 요소만 읽기 (중복 방지)
+                const allItems = Array.from(itemsContainer.children).filter(el => el.classList.contains('app-workout-item'));
+                const originalIndex = allItems.indexOf(item);
+                
+                // 원래 위치의 다음 형제 요소 저장 (복원용)
+                originalPositions.set(itemId, {
+                    nextSibling: item.nextElementSibling,
+                    parent: item.parentNode
+                });
+                
+                // 드래그 시작 시점의 원래 순서 저장 (oldIndex/newIndex 계산용)
+                // 중복 제거: Set을 사용하여 고유한 ID만 저장
+                const allIds = allItems.map(el => el.getAttribute('data-record-id')).filter(id => id);
+                const uniqueIds = [];
+                const seenIds = new Set();
+                for (const id of allIds) {
+                    if (!seenIds.has(id)) {
+                        seenIds.add(id);
+                        uniqueIds.push(id);
+                    }
+                }
+                originalOrder = uniqueIds;
+            },
+            onUpdate: async function(evt) {
+                // onUpdate는 DOM이 실제로 변경된 후에 발생하므로 더 정확함
+                const { oldIndex, newIndex, item } = evt;
+                
+                // 위치가 변경되지 않았으면 무시
+                if (oldIndex === newIndex || oldIndex === -1 || newIndex === -1) {
+                    return;
+                }
+                
+                // 이미 순서 변경이 진행 중이면 무시 (중복 요청 방지)
+                const progressKey = `${targetAppUserId}_${workoutDate}`;
+                if (reorderInProgress.has(progressKey)) {
+                    return;
+                }
+                
+                // 순서 변경 진행 중 플래그 설정
+                reorderInProgress.set(progressKey, true);
+                
+                // oldIndex와 newIndex를 사용하여 원래 순서에서 새로운 순서 계산
+                // originalOrder는 onStart에서 저장된 드래그 시작 시점의 순서
+                if (!originalOrder || originalOrder.length === 0) {
+                    console.error('[Workout Reorder] 원래 순서가 저장되지 않았습니다.', { originalOrder, oldIndex, newIndex });
+                    reorderInProgress.delete(progressKey);
+                    return;
+                }
+                
+                // 원래 순서를 복사하여 새로운 순서 생성
+                const reorderedIds = [...originalOrder];
+                const [movedId] = reorderedIds.splice(oldIndex, 1);
+                reorderedIds.splice(newIndex, 0, movedId);
+                
+                // 순서 배열 생성
+                const order = reorderedIds.map((id, index) => ({
+                    id: id,
+                    order: index + 1
+                }));
+                
+                if (order.length !== originalOrder.length) {
+                    console.error('[Workout Reorder] 순서 계산 오류 - 일부 항목의 ID가 없습니다:', {
+                        originalCount: originalOrder.length,
+                        orderCount: order.length
+                    });
+                }
+                
+                // 원래 위치 정보 가져오기
+                const itemId = item.getAttribute('data-record-id');
+                const originalPos = originalPositions.get(itemId);
+                
+                try {
+                    const result = await reorderWorkoutRecords(targetAppUserId, workoutDate, order);
+                    
+                    // API 응답 확인
+                    if (!result || !result.success) {
+                        throw new Error('순서 변경 API 응답이 올바르지 않습니다.');
+                    }
+                    
+                    // 성공 시 원래 위치 정보 삭제 및 캐시 무효화
+                    originalPositions.delete(itemId);
+                    const { invalidateWorkoutRecordsCache } = await import('../api.js');
+                    invalidateWorkoutRecordsCache(targetAppUserId);
+                    
+                    // 저장 확인: 캐시 무효화 후 즉시 재조회하여 실제 저장된 순서 확인 (캐시 우회)
+                    try {
+                        // 캐시를 우회하여 직접 API 호출
+                        const params = new URLSearchParams({ 
+                            app_user_id: targetAppUserId,
+                            start_date: workoutDate,
+                            end_date: workoutDate
+                        });
+                        const verifyResponse = await fetch(`/api/workout-records?${params.toString()}`, {
+                            method: 'GET',
+                            credentials: 'include',
+                            headers: { 'Content-Type': 'application/json' }
+                        });
+                        const verifyRecords = await verifyResponse.json();
+                        
+                        const verifyOrder = verifyRecords
+                            .filter(r => r.workout_date === workoutDate)
+                            .map(r => ({ id: r.id, display_order: r.display_order }));
+                        
+                        // 순서가 일치하는지 확인
+                        const orderMap = new Map(order.map(item => [item.id, item.order]));
+                        const verifyMap = new Map(verifyOrder.map(item => [item.id, item.display_order]));
+                        
+                        const mismatches = [];
+                        for (const [id, expectedOrder] of orderMap.entries()) {
+                            const actualOrder = verifyMap.get(id);
+                            if (actualOrder !== expectedOrder) {
+                                mismatches.push({ id, expected: expectedOrder, actual: actualOrder });
+                            }
+                        }
+                        
+                        if (mismatches.length > 0) {
+                            console.error('[Workout Reorder] 저장 확인 실패 - 순서 불일치:', mismatches);
+                        }
+                    } catch (verifyError) {
+                        console.error('[Workout Reorder] 저장 확인 중 오류:', verifyError);
+                    }
+                } catch (error) {
+                    console.error('[Workout Reorder] 순서 변경 실패:', error);
+                    console.error('[Workout Reorder] 에러 상세:', {
+                        message: error.message,
+                        stack: error.stack,
+                        response: error.response,
+                        appUserId: currentAppUserId,
+                        workoutDate,
+                        order,
+                        oldIndex,
+                        newIndex
+                    });
+                    
+                    // 실패 시 원래 위치로 정확히 복원
+                    if (originalPos) {
+                        if (originalPos.nextSibling) {
+                            originalPos.parent.insertBefore(item, originalPos.nextSibling);
+                        } else {
+                            originalPos.parent.appendChild(item);
+                        }
+                        originalPositions.delete(itemId);
+                    }
+                    showError('순서 변경에 실패했습니다.');
+                } finally {
+                    // 순서 변경 완료 후 플래그 해제
+                    reorderInProgress.delete(progressKey);
+                }
+            },
+            onEnd: function(evt) {
+                // onEnd는 드래그가 끝났을 때 발생 (원래 위치 복원용)
+                const { oldIndex, newIndex, item } = evt;
+                
+                // 다음 드래그를 위해 원래 순서 초기화
+                originalOrder = null;
+                
+                // 위치가 변경되지 않았으면 원래 위치 정보 삭제
+                if (oldIndex === newIndex || oldIndex === -1 || newIndex === -1) {
+                    originalPositions.delete(item.getAttribute('data-record-id'));
+                }
+            }
+        });
+        
+        sortableInstances.push(sortable);
+    });
 }

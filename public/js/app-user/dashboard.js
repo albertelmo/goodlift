@@ -1805,7 +1805,12 @@ function setupActivityLogEvents() {
                     alert(`${result.readCount || 0}개의 로그가 읽음 처리되었습니다.`);
                 } catch (error) {
                     console.error('전체 로그 읽음 처리 오류:', error);
-                    alert('전체 로그 읽음 처리 중 오류가 발생했습니다.');
+                    console.error('전체 로그 읽음 처리 오류 상세:', {
+                        message: error.message,
+                        stack: error.stack,
+                        trainerUsername
+                    });
+                    alert(`전체 로그 읽음 처리 중 오류가 발생했습니다: ${error.message}`);
                     btn.disabled = false;
                 }
             };
@@ -1926,7 +1931,12 @@ function setupActivityLogEvents() {
             alert(`${result.readCount || 0}개의 로그가 읽음 처리되었습니다.`);
         } catch (error) {
             console.error('전체 로그 읽음 처리 오류:', error);
-            alert('전체 로그 읽음 처리 중 오류가 발생했습니다.');
+            console.error('전체 로그 읽음 처리 오류 상세:', {
+                message: error.message,
+                stack: error.stack,
+                trainerUsername
+            });
+            alert(`전체 로그 읽음 처리 중 오류가 발생했습니다: ${error.message}`);
             btn.disabled = false; // 에러 시 버튼 다시 활성화
         }
     };
