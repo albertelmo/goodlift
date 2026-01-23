@@ -1764,80 +1764,130 @@ function setupActivityLogEvents() {
     const container = document.getElementById('app-user-content');
     if (!container) return;
     
+    // 기존 MutationObserver 정리
+    if (container._markAllReadObserver) {
+        container._markAllReadObserver.disconnect();
+        container._markAllReadObserver = null;
+    }
+    
     // 중복 이벤트 리스너 방지: 이미 설정되어 있으면 스킵
     if (container._activityLogEventsSetup) {
+        // 버튼이 나중에 생성되었을 수 있으므로 버튼만 다시 확인
+        const markAllBtn = document.getElementById('mark-all-read-btn');
+        if (markAllBtn && !markAllBtn._markAllReadSetup) {
+            // handleMarkAllRead와 setupMarkAllReadButton 함수는 아래에 정의되어 있으므로
+            // 여기서는 직접 등록
+            const handleMarkAllRead = async (btn) => {
+                const trainerUsername = currentUser?.username;
+                if (!trainerUsername) return;
+                if (btn.disabled) return;
+                btn.disabled = true;
+                
+                try {
+                    const result = await markAllActivityLogsAsRead(trainerUsername);
+                    const logItems = container.querySelectorAll('.app-activity-log-item-unread');
+                    logItems.forEach(item => {
+                        item.classList.remove('app-activity-log-item-unread');
+                        item.classList.add('app-activity-log-item-read');
+                        const indicator = item.querySelector('.app-activity-log-indicator');
+                        if (indicator) indicator.remove();
+                    });
+                    activityLogsUnreadCount = 0;
+                    const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                    if (sectionTitle) {
+                        const badge = sectionTitle.querySelector('span');
+                        if (badge) badge.remove();
+                    }
+                    if (btn) btn.style.display = 'none';
+                    if (activityLogs) {
+                        activityLogs.forEach(log => { log.is_read = true; });
+                    }
+                    alert(`${result.readCount || 0}개의 로그가 읽음 처리되었습니다.`);
+                } catch (error) {
+                    console.error('전체 로그 읽음 처리 오류:', error);
+                    alert('전체 로그 읽음 처리 중 오류가 발생했습니다.');
+                    btn.disabled = false;
+                }
+            };
+            
+            markAllBtn.addEventListener('click', () => handleMarkAllRead(markAllBtn));
+            markAllBtn.addEventListener('touchstart', async (e) => {
+                if (markAllBtn.disabled) return;
+                e.preventDefault();
+                e.stopPropagation();
+                await handleMarkAllRead(markAllBtn);
+            }, { passive: false });
+            markAllBtn._markAllReadSetup = true;
+        }
         return;
     }
     
-    // 로그 카드 클릭 이벤트 (읽음 처리) - 이벤트 위임 사용
-    container.addEventListener('click', async (e) => {
-        const item = e.target.closest('.app-activity-log-item');
-        if (!item) return;
-        
-        const logId = item.getAttribute('data-log-id');
-        const isUnread = item.classList.contains('app-activity-log-item-unread');
-        
-        if (!logId || !isUnread) return;
-        
-        const trainerUsername = currentUser?.username;
-        if (!trainerUsername) return;
-        
-        try {
-            await markActivityLogAsRead(logId, trainerUsername);
+    // 로그 카드 클릭 이벤트 (읽음 처리)
+    const logItems = container.querySelectorAll('.app-activity-log-item');
+    logItems.forEach(item => {
+        item.addEventListener('click', async () => {
+            const logId = item.getAttribute('data-log-id');
+            const isUnread = item.classList.contains('app-activity-log-item-unread');
             
-            // UI 업데이트
-            item.classList.remove('app-activity-log-item-unread');
-            item.classList.add('app-activity-log-item-read');
+            if (!logId || !isUnread) return;
             
-            // 읽음 표시 제거
-            const indicator = item.querySelector('.app-activity-log-indicator');
-            if (indicator) {
-                indicator.remove();
-            }
+            const trainerUsername = currentUser?.username;
+            if (!trainerUsername) return;
             
-            // 읽지 않은 개수 업데이트
-            activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
-            
-            // 헤더의 읽지 않은 개수 업데이트
-            const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-            if (sectionTitle) {
-                const badge = sectionTitle.querySelector('span');
-                if (activityLogsUnreadCount > 0) {
-                    if (badge) {
-                        badge.textContent = activityLogsUnreadCount;
-                    } else {
-                        sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
-                    }
-                } else {
-                    if (badge) badge.remove();
-                    // 전체 읽음 처리 버튼도 제거
-                    const markAllBtn = document.getElementById('mark-all-read-btn');
-                    if (markAllBtn) markAllBtn.parentElement.remove();
+            try {
+                await markActivityLogAsRead(logId, trainerUsername);
+                
+                // UI 업데이트
+                item.classList.remove('app-activity-log-item-unread');
+                item.classList.add('app-activity-log-item-read');
+                
+                // 읽음 표시 제거
+                const indicator = item.querySelector('.app-activity-log-indicator');
+                if (indicator) {
+                    indicator.remove();
                 }
+                
+                // 읽지 않은 개수 업데이트
+                activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
+                
+                // 헤더의 읽지 않은 개수 업데이트
+                const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                if (sectionTitle) {
+                    const badge = sectionTitle.querySelector('span');
+                    if (activityLogsUnreadCount > 0) {
+                        if (badge) {
+                            badge.textContent = activityLogsUnreadCount;
+                        } else {
+                            sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
+                        }
+                    } else {
+                        if (badge) badge.remove();
+                        // 전체 읽음 처리 버튼도 제거
+                        const markAllBtn = document.getElementById('mark-all-read-btn');
+                        if (markAllBtn) markAllBtn.parentElement.remove();
+                    }
+                }
+                
+                // 로그 데이터 업데이트
+                const log = activityLogs.find(l => l.id === logId);
+                if (log) {
+                    log.is_read = true;
+                }
+            } catch (error) {
+                console.error('로그 읽음 처리 오류:', error);
+                alert('로그 읽음 처리 중 오류가 발생했습니다.');
             }
-            
-            // 로그 데이터 업데이트
-            const log = activityLogs.find(l => l.id === logId);
-            if (log) {
-                log.is_read = true;
-            }
-        } catch (error) {
-            console.error('로그 읽음 처리 오류:', error);
-            alert('로그 읽음 처리 중 오류가 발생했습니다.');
-        }
+        });
     });
     
-    // 전체 읽음 처리 버튼 클릭 이벤트 - 이벤트 위임 사용
-    container.addEventListener('click', async (e) => {
-        const markAllBtn = e.target.closest('#mark-all-read-btn');
-        if (!markAllBtn) return;
-        
+    // 전체 읽음 처리 버튼 클릭 이벤트 핸들러
+    const handleMarkAllRead = async (btn) => {
         const trainerUsername = currentUser?.username;
         if (!trainerUsername) return;
         
         // 중복 클릭 방지
-        if (markAllBtn.disabled) return;
-        markAllBtn.disabled = true;
+        if (btn.disabled) return;
+        btn.disabled = true;
         
         try {
             const result = await markAllActivityLogsAsRead(trainerUsername);
@@ -1862,8 +1912,8 @@ function setupActivityLogEvents() {
             }
             
             // 버튼 비활성화 (제거하지 않고 숨김 처리)
-            if (markAllBtn) {
-                markAllBtn.style.display = 'none';
+            if (btn) {
+                btn.style.display = 'none';
             }
             
             // 로그 데이터 업데이트
@@ -1877,9 +1927,43 @@ function setupActivityLogEvents() {
         } catch (error) {
             console.error('전체 로그 읽음 처리 오류:', error);
             alert('전체 로그 읽음 처리 중 오류가 발생했습니다.');
-            markAllBtn.disabled = false; // 에러 시 버튼 다시 활성화
+            btn.disabled = false; // 에러 시 버튼 다시 활성화
+        }
+    };
+    
+    // 버튼에 이벤트 리스너 등록 함수
+    const setupMarkAllReadButton = (btn) => {
+        if (!btn || btn._markAllReadSetup) return;
+        
+        // click 이벤트
+        btn.addEventListener('click', () => handleMarkAllRead(btn));
+        
+        // PWA 환경 대비: touchstart 이벤트에서 직접 처리
+        btn.addEventListener('touchstart', async (e) => {
+            if (btn.disabled) return;
+            e.preventDefault(); // 기본 동작 방지
+            e.stopPropagation();
+            await handleMarkAllRead(btn);
+        }, { passive: false });
+        
+        btn._markAllReadSetup = true;
+    };
+    
+    // 현재 존재하는 버튼에 이벤트 리스너 등록
+    const markAllBtn = document.getElementById('mark-all-read-btn');
+    if (markAllBtn) {
+        setupMarkAllReadButton(markAllBtn);
+    }
+    
+    // 버튼이 나중에 생성될 수 있으므로 MutationObserver 사용
+    const observer = new MutationObserver((mutations) => {
+        const btn = document.getElementById('mark-all-read-btn');
+        if (btn && !btn._markAllReadSetup) {
+            setupMarkAllReadButton(btn);
         }
     });
+    observer.observe(container, { childList: true, subtree: true });
+    container._markAllReadObserver = observer;
     
     // 설정 완료 플래그 설정
     container._activityLogEventsSetup = true;

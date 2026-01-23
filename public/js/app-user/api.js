@@ -818,7 +818,11 @@ export async function markActivityLogAsRead(logId, trainerUsername) {
  * 전체 로그 읽음 처리
  */
 export async function markAllActivityLogsAsRead(trainerUsername) {
-    return patch('/trainer-activity-logs/read-all', {
+    // 서버로 전송되는 요청 정보를 로그로 남기기 위해
+    // 실제 요청은 patch 함수에서 처리되므로, 여기서는 요청 파라미터만 확인
+    const requestData = {
         trainer_username: trainerUsername
-    });
+    };
+    
+    return patch('/trainer-activity-logs/read-all', requestData);
 }
