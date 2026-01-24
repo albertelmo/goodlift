@@ -99,88 +99,94 @@ function formatConsultationData(data) {
     
     let html = '';
     
-    // 기본 정보
-    html += '<div class="consultation-view-section">';
-    html += '<div class="consultation-view-section-title">기본 정보</div>';
-    html += '<div class="consultation-view-grid">';
+    // 운동모습 (동영상 + 사진)
+    const hasVideos = consultation.video_urls && Array.isArray(consultation.video_urls) && consultation.video_urls.length > 0;
+    const hasImages = consultation.image_urls && Array.isArray(consultation.image_urls) && consultation.image_urls.length > 0;
     
-    if (consultation.created_at) {
-        const date = new Date(consultation.created_at);
-        const dateStr = `${date.getFullYear()}년 ${date.getMonth() + 1}월 ${date.getDate()}일 ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">상담일시</div><div class="consultation-view-field-value">${dateStr}</div></div>`;
+    if (hasVideos || hasImages) {
+        html += '<div class="consultation-view-section">';
+        html += '<div class="consultation-view-section-title">운동모습</div>';
+        
+        // 동영상
+        if (hasVideos) {
+            html += '<div style="margin-bottom: 20px;">';
+            consultation.video_urls.forEach((video, index) => {
+                const videoUrl = escapeHtml(video.url);
+                const mimeType = escapeHtml(video.mime_type || 'video/mp4');
+                
+                html += `<div class="consultation-view-field" style="margin-bottom: 16px;">`;
+                html += `<div class="consultation-view-field-label">${escapeHtml(video.filename || `동영상 ${index + 1}`)}</div>`;
+                html += `<video controls preload="metadata" style="width: 100%; max-width: 200px; border-radius: 4px; margin-top: 8px;" `;
+                html += `onerror="console.error('[동영상 ${index + 1}] 로드 실패:', this.currentSrc || this.src, '에러:', this.error); const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='block';" `;
+                html += `onloadedmetadata="const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none';" `;
+                html += `src="${videoUrl}" `;
+                html += `type="${mimeType}">`;
+                html += `브라우저가 동영상 재생을 지원하지 않습니다.`;
+                html += `</video>`;
+                html += `<div style="font-size: 11px; color: #e74c3c; margin-top: 4px; display:none;" class="video-error-message">동영상을 불러올 수 없습니다. (URL: ${videoUrl})</div>`;
+                html += `</div>`;
+            });
+            html += '</div>';
+        }
+        
+        // 사진
+        if (hasImages) {
+            html += '<div>';
+            html += '<div class="consultation-view-image-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;">';
+            
+            consultation.image_urls.forEach((image, index) => {
+                const imageUrl = escapeHtml(image.url);
+                const imageFilename = escapeHtml(image.filename || `사진 ${index + 1}`);
+                
+                html += `<div class="consultation-view-field" style="margin-bottom: 0;">`;
+                html += `<div class="consultation-view-field-label" style="margin-bottom: 8px;">${imageFilename}</div>`;
+                html += `<div style="position: relative; cursor: pointer;" onclick="window.open('${imageUrl}', '_blank');">`;
+                html += `<img src="${imageUrl}" alt="${imageFilename}" style="width: 100%; height: auto; border-radius: 4px; border: 1px solid #ddd; object-fit: cover; aspect-ratio: 1;" `;
+                html += `onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" `;
+                html += `/>`;
+                html += `<div style="display: none; padding: 20px; text-align: center; color: #999; border: 1px solid #ddd; border-radius: 4px;">이미지를 불러올 수 없습니다.</div>`;
+                html += `</div>`;
+                html += `</div>`;
+            });
+            
+            html += '</div>';
+            html += '</div>';
+        }
+        
+        html += '</div>';
     }
+    
+    // 기본정보
+    html += '<div class="consultation-view-section">';
+    html += '<div class="consultation-view-section-title">기본정보</div>';
+    html += '<div class="consultation-view-grid consultation-view-basic-info">';
     
     if (consultation.center) {
         html += `<div class="consultation-view-field"><div class="consultation-view-field-label">센터</div><div class="consultation-view-field-value">${escapeHtml(consultation.center)}</div></div>`;
     }
     
-    if (consultation.trainer_username) {
-        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">담당 트레이너</div><div class="consultation-view-field-value">${escapeHtml(consultation.trainer_username)}</div></div>`;
+    if (consultation.trainer_name || consultation.trainer_username) {
+        const trainerName = consultation.trainer_name || consultation.trainer_username;
+        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">담당 트레이너</div><div class="consultation-view-field-value">${escapeHtml(trainerName)}</div></div>`;
     }
     
-    if (consultation.name) {
-        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">이름</div><div class="consultation-view-field-value">${escapeHtml(consultation.name)}</div></div>`;
+    if (consultation.preferred_time) {
+        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">희망시간대</div><div class="consultation-view-field-value">${escapeHtml(consultation.preferred_time)}</div></div>`;
     }
     
-    if (consultation.phone) {
-        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">연락처</div><div class="consultation-view-field-value">${escapeHtml(consultation.phone)}</div></div>`;
+    if (consultation.purpose) {
+        let purposeText = escapeHtml(consultation.purpose);
+        if (consultation.purpose === '기타' && consultation.purpose_other) {
+            purposeText += ` (${escapeHtml(consultation.purpose_other)})`;
+        }
+        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">상담목적</div><div class="consultation-view-field-value">${purposeText}</div></div>`;
     }
     
-    if (consultation.gender) {
-        const genderText = consultation.gender === 'M' ? '남성' : consultation.gender === 'F' ? '여성' : consultation.gender;
-        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">성별</div><div class="consultation-view-field-value">${escapeHtml(genderText)}</div></div>`;
-    }
-    
-    if (consultation.age_range) {
-        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">연령대</div><div class="consultation-view-field-value">${escapeHtml(consultation.age_range)}</div></div>`;
+    if (consultation.requirements) {
+        html += `<div class="consultation-view-field"><div class="consultation-view-field-label">요구사항</div><div class="consultation-view-field-value">${escapeHtml(consultation.requirements)}</div></div>`;
     }
     
     html += '</div></div>';
-    
-    // 방문 정보
-    if (consultation.visit_source || consultation.visit_reason || consultation.referrer || consultation.preferred_time) {
-        html += '<div class="consultation-view-section">';
-        html += '<div class="consultation-view-section-title">방문 정보</div>';
-        html += '<div class="consultation-view-grid">';
-        
-        if (consultation.visit_source) {
-            html += `<div class="consultation-view-field"><div class="consultation-view-field-label">방문경로</div><div class="consultation-view-field-value">${escapeHtml(consultation.visit_source)}</div></div>`;
-        }
-        
-        if (consultation.visit_reason) {
-            html += `<div class="consultation-view-field"><div class="consultation-view-field-label">방문이유</div><div class="consultation-view-field-value">${escapeHtml(consultation.visit_reason)}</div></div>`;
-        }
-        
-        if (consultation.referrer) {
-            html += `<div class="consultation-view-field"><div class="consultation-view-field-label">추천인</div><div class="consultation-view-field-value">${escapeHtml(consultation.referrer)}</div></div>`;
-        }
-        
-        if (consultation.preferred_time) {
-            html += `<div class="consultation-view-field"><div class="consultation-view-field-label">희망시간대</div><div class="consultation-view-field-value">${escapeHtml(consultation.preferred_time)}</div></div>`;
-        }
-        
-        html += '</div></div>';
-    }
-    
-    // 상담목적
-    if (consultation.purpose || consultation.purpose_other || consultation.requirements) {
-        html += '<div class="consultation-view-section">';
-        html += '<div class="consultation-view-section-title">상담목적</div>';
-        
-        if (consultation.purpose) {
-            let purposeText = escapeHtml(consultation.purpose);
-            if (consultation.purpose === '기타' && consultation.purpose_other) {
-                purposeText += ` (${escapeHtml(consultation.purpose_other)})`;
-            }
-            html += `<div class="consultation-view-field"><div class="consultation-view-field-label">상담목적</div><div class="consultation-view-field-value">${purposeText}</div></div>`;
-        }
-        
-        if (consultation.requirements) {
-            html += `<div class="consultation-view-field"><div class="consultation-view-field-label">요구사항</div><div class="consultation-view-field-value">${escapeHtml(consultation.requirements)}</div></div>`;
-        }
-        
-        html += '</div>';
-    }
     
     // 운동이력/병력
     if (consultation.exercise_history || consultation.medical_history) {
@@ -258,32 +264,8 @@ function formatConsultationData(data) {
         html += '</div>';
     }
     
-    // 동영상
-    if (consultation.video_urls && Array.isArray(consultation.video_urls) && consultation.video_urls.length > 0) {
-        html += '<div class="consultation-view-section">';
-        html += '<div class="consultation-view-section-title">동영상</div>';
-        
-        consultation.video_urls.forEach((video, index) => {
-            const videoUrl = escapeHtml(video.url);
-            const mimeType = escapeHtml(video.mime_type || 'video/mp4');
-            const fileSize = video.file_size ? (video.file_size / (1024 * 1024)).toFixed(2) : '알 수 없음';
-            
-            html += `<div class="consultation-view-field" style="margin-bottom: 20px;">`;
-            html += `<div class="consultation-view-field-label">${escapeHtml(video.filename || `동영상 ${index + 1}`)}</div>`;
-            html += `<video controls preload="metadata" style="width: 100%; max-width: 800px; border-radius: 4px; margin-top: 8px;" `;
-            html += `onerror="console.error('[동영상 ${index + 1}] 로드 실패:', this.currentSrc || this.src, '에러:', this.error); const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='block';" `;
-            html += `onloadedmetadata="const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none';" `;
-            html += `src="${videoUrl}" `;
-            html += `type="${mimeType}">`;
-            html += `브라우저가 동영상 재생을 지원하지 않습니다.`;
-            html += `</video>`;
-            html += `<div style="font-size: 11px; color: #e74c3c; margin-top: 4px; display:none;" class="video-error-message">동영상을 불러올 수 없습니다. (URL: ${videoUrl})</div>`;
-            html += `<div style="font-size: 11px; color: #999; margin-top: 4px;">파일 크기: ${fileSize}MB</div>`;
-            html += `</div>`;
-        });
-        
-        html += '</div>';
-    }
+    // 하단 문구
+    html += '<div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; color: #666; font-size: 14px; font-weight: 500;">Good Lift Good Life!</div>';
     
     return html;
 }
@@ -337,6 +319,13 @@ async function loadConsultation() {
         loadingDiv.style.display = 'none';
         contentDiv.style.display = 'block';
         dataDiv.innerHTML = html;
+        
+        // 제목 업데이트
+        const consultation = data.consultation;
+        const titleElement = document.querySelector('.consultation-view-header h1');
+        if (titleElement && consultation && consultation.name) {
+            titleElement.textContent = `${consultation.name}님의 상담기록`;
+        }
         
     } catch (error) {
         console.error('상담기록 로드 오류:', error);

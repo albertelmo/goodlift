@@ -350,6 +350,7 @@ const getUploadsDir = () => {
 const UPLOADS_DIR = getUploadsDir();
 const DIET_IMAGES_DIR = path.join(UPLOADS_DIR, 'diet-images');
 const CONSULTATION_VIDEOS_DIR = path.join(UPLOADS_DIR, 'consultation-videos');
+const CONSULTATION_IMAGES_DIR = path.join(UPLOADS_DIR, 'consultation-images');
 
 // 디렉토리 자동 생성
 const ensureDirectories = () => {
@@ -365,6 +366,10 @@ const ensureDirectories = () => {
     if (!fs.existsSync(CONSULTATION_VIDEOS_DIR)) {
       fs.mkdirSync(CONSULTATION_VIDEOS_DIR, { recursive: true });
       console.log(`[Consultation] 상담기록 동영상 디렉토리 생성: ${CONSULTATION_VIDEOS_DIR}`);
+    }
+    if (!fs.existsSync(CONSULTATION_IMAGES_DIR)) {
+      fs.mkdirSync(CONSULTATION_IMAGES_DIR, { recursive: true });
+      console.log(`[Consultation] 상담기록 사진 디렉토리 생성: ${CONSULTATION_IMAGES_DIR}`);
     }
   } catch (error) {
     console.error(`[Diet Records] 디렉토리 생성 오류: ${error.message}`);
@@ -776,6 +781,24 @@ const videoUpload = multer({
             cb(null, true);
         } else {
             cb(new Error('동영상 파일만 업로드 가능합니다. (mp4, mov, avi, webm)'), false);
+        }
+    }
+});
+
+// 상담기록 사진 업로드 설정
+const consultationImageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: parseInt(process.env.CONSULTATION_IMAGE_MAX_SIZE || '10485760', 10) // 기본 10MB
+    },
+    fileFilter: (req, file, cb) => {
+        // 이미지 파일만 허용
+        const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowedMimes.includes(file.mimetype) || 
+            file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            cb(null, true);
+        } else {
+            cb(new Error('이미지 파일만 업로드 가능합니다. (jpg, jpeg, png, gif, webp)'), false);
         }
     }
 });
@@ -6231,6 +6254,67 @@ app.post('/api/consultation-records/:id/videos', videoUpload.single('file'), asy
     }
 });
 
+// 상담기록 동영상 이름 수정
+app.patch('/api/consultation-records/:id/videos/:videoId', async (req, res) => {
+    try {
+        const { id, videoId } = req.params;
+        const { currentUser, filename } = req.body;
+        
+        if (!filename || typeof filename !== 'string' || !filename.trim()) {
+            return res.status(400).json({ message: '동영상 이름을 입력해주세요.' });
+        }
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 동영상 목록 가져오기
+        const videos = consultation.video_urls ? (Array.isArray(consultation.video_urls) ? consultation.video_urls : JSON.parse(consultation.video_urls)) : [];
+        const videoIndex = videos.findIndex(v => v.id === videoId);
+        
+        if (videoIndex === -1) {
+            return res.status(404).json({ message: '동영상을 찾을 수 없습니다.' });
+        }
+        
+        // 동영상 이름 업데이트
+        videos[videoIndex].filename = filename.trim();
+        
+        // 상담기록 업데이트
+        await consultationRecordsDB.updateConsultationRecord(id, {
+            video_urls: videos
+        });
+        
+        res.json({
+            video: videos[videoIndex]
+        });
+    } catch (error) {
+        console.error('[API] 동영상 이름 수정 오류:', error);
+        res.status(500).json({ message: '동영상 이름 수정에 실패했습니다.' });
+    }
+});
+
 // 상담기록 동영상 삭제
 app.delete('/api/consultation-records/:id/videos/:videoId', async (req, res) => {
     try {
@@ -6299,6 +6383,233 @@ app.delete('/api/consultation-records/:id/videos/:videoId', async (req, res) => 
     } catch (error) {
         console.error('[API] 동영상 삭제 오류:', error);
         res.status(500).json({ message: '동영상 삭제에 실패했습니다.' });
+    }
+});
+
+// 상담기록 사진 업로드
+app.post('/api/consultation-records/:id/images', consultationImageUpload.single('file'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.body;
+        
+        if (!req.file) {
+            return res.status(400).json({ message: '사진 파일을 선택해주세요.' });
+        }
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 기존 사진 개수 확인 (최대 4개)
+        const maxImages = parseInt(process.env.CONSULTATION_IMAGE_MAX_COUNT || '4', 10);
+        const existingImages = consultation.image_urls ? (Array.isArray(consultation.image_urls) ? consultation.image_urls : JSON.parse(consultation.image_urls)) : [];
+        
+        if (existingImages.length >= maxImages) {
+            return res.status(400).json({ message: `사진은 최대 ${maxImages}개까지 업로드 가능합니다.` });
+        }
+        
+        // 파일 저장 경로 생성
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const imageId = uuidv4();
+        const fileExt = path.extname(req.file.originalname);
+        const imageDir = path.join(CONSULTATION_IMAGES_DIR, String(year), month, id);
+        const imageFileName = `${imageId}${fileExt}`;
+        const imagePath = path.join(imageDir, imageFileName);
+        
+        // 디렉토리 생성
+        if (!fs.existsSync(imageDir)) {
+            fs.mkdirSync(imageDir, { recursive: true });
+        }
+        
+        // 파일 저장
+        fs.writeFileSync(imagePath, req.file.buffer);
+        
+        // 상대 경로 생성 (URL용) - /uploads/... 형식
+        const relativePath = path.join('uploads', 'consultation-images', String(year), month, id, imageFileName).replace(/\\/g, '/');
+        
+        // 사진 메타데이터 생성
+        const imageMetadata = {
+            id: imageId,
+            url: `/${relativePath}`,
+            filename: req.file.originalname,
+            file_size: req.file.size,
+            mime_type: req.file.mimetype,
+            uploaded_at: new Date().toISOString(),
+            uploaded_by: currentUser
+        };
+        
+        // 기존 사진 배열에 추가
+        existingImages.push(imageMetadata);
+        
+        // 상담기록 업데이트
+        const updated = await consultationRecordsDB.updateConsultationRecord(id, {
+            image_urls: existingImages
+        });
+        
+        res.json({
+            image: imageMetadata
+        });
+    } catch (error) {
+        console.error('[API] 사진 업로드 오류:', error);
+        res.status(500).json({ message: '사진 업로드에 실패했습니다.' });
+    }
+});
+
+// 상담기록 사진 이름 수정
+app.patch('/api/consultation-records/:id/images/:imageId', async (req, res) => {
+    try {
+        const { id, imageId } = req.params;
+        const { currentUser, filename } = req.body;
+        
+        if (!filename || typeof filename !== 'string' || !filename.trim()) {
+            return res.status(400).json({ message: '사진 이름을 입력해주세요.' });
+        }
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 사진 목록 가져오기
+        const images = consultation.image_urls ? (Array.isArray(consultation.image_urls) ? consultation.image_urls : JSON.parse(consultation.image_urls)) : [];
+        const imageIndex = images.findIndex(img => img.id === imageId);
+        
+        if (imageIndex === -1) {
+            return res.status(404).json({ message: '사진을 찾을 수 없습니다.' });
+        }
+        
+        // 사진 이름 업데이트
+        images[imageIndex].filename = filename.trim();
+        images[imageIndex].updated_at = new Date().toISOString();
+        
+        // 상담기록 업데이트
+        await consultationRecordsDB.updateConsultationRecord(id, {
+            image_urls: images
+        });
+        
+        res.json({
+            message: '사진 이름이 업데이트되었습니다.',
+            image: images[imageIndex]
+        });
+    } catch (error) {
+        console.error('[API] 사진 이름 수정 오류:', error);
+        res.status(500).json({ message: '사진 이름 수정에 실패했습니다.' });
+    }
+});
+
+// 상담기록 사진 삭제
+app.delete('/api/consultation-records/:id/images/:imageId', async (req, res) => {
+    try {
+        const { id, imageId } = req.params;
+        const { currentUser } = req.body;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        const isAdminOrSu = userAccount.role === 'admin' || userAccount.role === 'su';
+        const isTrainer = userAccount.role === 'trainer';
+        
+        // 상담기록 조회
+        const consultation = await consultationRecordsDB.getConsultationRecordById(id);
+        if (!consultation) {
+            return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인
+        if (!isAdminOrSu && (isTrainer && consultation.trainer_username !== currentUser)) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 사진 배열 파싱
+        let images = consultation.image_urls ? (Array.isArray(consultation.image_urls) ? consultation.image_urls : JSON.parse(consultation.image_urls)) : [];
+        
+        // 삭제할 사진 찾기
+        const imageIndex = images.findIndex(img => img.id === imageId);
+        if (imageIndex === -1) {
+            return res.status(404).json({ message: '사진을 찾을 수 없습니다.' });
+        }
+        
+        const imageToDelete = images[imageIndex];
+        
+        // 파일 시스템에서 삭제
+        try {
+            // URL이 /uploads/... 형식이므로 UPLOADS_DIR 기준으로 경로 변환
+            const urlPath = imageToDelete.url.replace(/^\/uploads\//, '');
+            const filePath = path.join(UPLOADS_DIR, urlPath);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        } catch (fileError) {
+            console.error('[API] 사진 파일 삭제 오류:', fileError);
+            // 파일 삭제 실패해도 DB에서 제거는 진행
+        }
+        
+        // 배열에서 제거
+        images.splice(imageIndex, 1);
+        
+        // 상담기록 업데이트
+        await consultationRecordsDB.updateConsultationRecord(id, {
+            image_urls: images
+        });
+        
+        res.json({ message: '사진이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 사진 삭제 오류:', error);
+        res.status(500).json({ message: '사진 삭제에 실패했습니다.' });
     }
 });
 
@@ -6415,6 +6726,27 @@ app.get('/api/public/consultation/:token', async (req, res) => {
             return res.status(404).json({ error: 'NOT_FOUND', message: '상담기록을 찾을 수 없습니다.' });
         }
         
+        // 트레이너 이름 조회
+        if (consultation.trainer_username) {
+            try {
+                let accounts = [];
+                if (fs.existsSync(DATA_PATH)) {
+                    const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+                    if (raw) accounts = JSON.parse(raw);
+                }
+                const trainer = accounts.find(acc => acc.role === 'trainer' && acc.username === consultation.trainer_username);
+                if (trainer) {
+                    // trainer.name이 있으면 사용, 없으면 username 사용
+                    consultation.trainer_name = (trainer.name && trainer.name.trim()) ? trainer.name : consultation.trainer_username;
+                } else {
+                    consultation.trainer_name = consultation.trainer_username;
+                }
+            } catch (error) {
+                console.error('[API] 트레이너 이름 조회 오류:', error);
+                consultation.trainer_name = consultation.trainer_username;
+            }
+        }
+        
         // 접근 횟수 증가
         await consultationSharesDB.incrementAccessCount(token);
         
@@ -6470,6 +6802,62 @@ app.get('/api/consultation-records/:id/shares', async (req, res) => {
     } catch (error) {
         console.error('[API] 공유 링크 목록 조회 오류:', error);
         res.status(500).json({ message: '공유 링크 목록 조회에 실패했습니다.' });
+    }
+});
+
+// 모든 활성 공개상담 목록 조회
+app.get('/api/consultation-shares/active', async (req, res) => {
+    try {
+        const { currentUser } = req.query;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        if (!isAdminOrSu(userAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        
+        // 활성 공개상담 목록 조회
+        const shares = await consultationSharesDB.getAllActiveShareTokens();
+        
+        // 트레이너 이름 매핑
+        const trainerUsernameSet = new Set();
+        shares.forEach(share => {
+            if (share.trainer_username) {
+                trainerUsernameSet.add(share.trainer_username);
+            }
+        });
+        
+        // 트레이너 목록 조회
+        const trainerNameMap = {};
+        if (trainerUsernameSet.size > 0) {
+            accounts.forEach(acc => {
+                if (acc.role === 'trainer' && trainerUsernameSet.has(acc.username)) {
+                    trainerNameMap[acc.username] = (acc.name && acc.name.trim()) ? acc.name : acc.username;
+                }
+            });
+        }
+        
+        // 각 share에 trainer_name 추가
+        shares.forEach(share => {
+            if (share.trainer_username) {
+                share.trainer_name = trainerNameMap[share.trainer_username] || share.trainer_username;
+            }
+        });
+        
+        res.json({ shares: shares });
+    } catch (error) {
+        console.error('[API] 활성 공개상담 목록 조회 오류:', error);
+        res.status(500).json({ message: '활성 공개상담 목록 조회에 실패했습니다.' });
     }
 });
 

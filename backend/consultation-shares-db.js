@@ -308,6 +308,83 @@ const deleteShareToken = async (shareId) => {
   }
 };
 
+// 모든 활성 공유 토큰 조회 (상담기록 정보 포함)
+const getAllActiveShareTokens = async () => {
+  try {
+    const query = `
+      SELECT 
+        st.id,
+        st.consultation_record_id,
+        st.token,
+        st.name,
+        st.phone,
+        st.expires_at AT TIME ZONE 'Asia/Seoul' as expires_at,
+        st.access_count,
+        st.last_accessed_at AT TIME ZONE 'Asia/Seoul' as last_accessed_at,
+        st.created_at AT TIME ZONE 'Asia/Seoul' as created_at,
+        st.created_by,
+        st.is_active,
+        cr.name as consultation_name,
+        cr.center,
+        cr.trainer_username,
+        cr.created_at AT TIME ZONE 'Asia/Seoul' as consultation_created_at
+      FROM consultation_share_tokens st
+      INNER JOIN consultation_records cr ON st.consultation_record_id = cr.id
+      WHERE st.is_active = true
+      ORDER BY st.created_at DESC
+    `;
+    
+    const result = await pool.query(query);
+    
+    // 타임스탬프 변환
+    return result.rows.map(row => {
+      if (row.expires_at) {
+        const date = row.expires_at instanceof Date ? row.expires_at : new Date(row.expires_at);
+        if (!isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          row.expires_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
+        }
+      }
+      
+      if (row.created_at) {
+        const date = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
+        if (!isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          row.created_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
+        }
+      }
+      
+      if (row.consultation_created_at) {
+        const date = row.consultation_created_at instanceof Date ? row.consultation_created_at : new Date(row.consultation_created_at);
+        if (!isNaN(date.getTime())) {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          const seconds = String(date.getSeconds()).padStart(2, '0');
+          row.consultation_created_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
+        }
+      }
+      
+      return row;
+    });
+  } catch (error) {
+    console.error('[PostgreSQL] 활성 공유 토큰 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -325,5 +402,6 @@ module.exports = {
   incrementAccessCount,
   getShareTokensByConsultationId,
   updateShareToken,
-  deleteShareToken
+  deleteShareToken,
+  getAllActiveShareTokens
 };

@@ -51,7 +51,8 @@ const createConsultationRecordsTable = async () => {
           exercise_performed TEXT,
           summary TEXT,
           requirements TEXT,
-          video_urls JSONB
+          video_urls JSONB,
+          image_urls JSONB
         )
       `;
       await pool.query(createQuery);
@@ -114,7 +115,8 @@ const migrateConsultationRecordsTable = async () => {
       'exercise_performed': 'TEXT',
       'summary': 'TEXT',
       'requirements': 'TEXT',
-      'video_urls': 'JSONB'
+      'video_urls': 'JSONB',
+      'image_urls': 'JSONB'
     };
     
     // 누락된 컬럼 추가 (id는 제외 - 이미 존재해야 함)
@@ -229,15 +231,15 @@ const addConsultationRecord = async (recordData) => {
         center, trainer_username, name, phone, gender, age_range, exercise_history,
         medical_history, preferred_time, visit_source, visit_reason, referrer, purpose,
         purpose_other, inbody, overhead_squat, slr_test, empty_can_test,
-        rom, flexibility, static_posture, exercise_performed, summary, requirements,
+        rom, flexibility, static_posture, exercise_performed, summary, requirements, video_urls,
         created_at, updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW() AT TIME ZONE 'Asia/Seoul', NOW() AT TIME ZONE 'Asia/Seoul')
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, NOW() AT TIME ZONE 'Asia/Seoul', NOW() AT TIME ZONE 'Asia/Seoul')
       RETURNING 
         id, center, trainer_username, name, phone, gender, age_range, exercise_history,
         medical_history, preferred_time, visit_source, visit_reason, referrer, purpose,
         purpose_other, inbody, overhead_squat, slr_test, empty_can_test,
-        rom, flexibility, static_posture, exercise_performed, summary, requirements,
+        rom, flexibility, static_posture, exercise_performed, summary, requirements, video_urls,
         created_at AT TIME ZONE 'Asia/Seoul' as created_at,
         updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
     `;
@@ -324,7 +326,7 @@ const getConsultationRecords = async (filters = {}) => {
         id, center, trainer_username, name, phone, gender, age_range, exercise_history,
         medical_history, preferred_time, visit_source, visit_reason, referrer, purpose,
         purpose_other, inbody, overhead_squat, slr_test, empty_can_test,
-        rom, flexibility, static_posture, exercise_performed, summary, requirements, video_urls,
+        rom, flexibility, static_posture, exercise_performed, summary, requirements, video_urls, image_urls,
         created_at AT TIME ZONE 'Asia/Seoul' as created_at,
         updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
       FROM consultation_records
@@ -415,7 +417,7 @@ const getConsultationRecordById = async (id) => {
         id, center, trainer_username, name, phone, gender, age_range, exercise_history,
         medical_history, preferred_time, visit_source, visit_reason, referrer, purpose,
         purpose_other, inbody, overhead_squat, slr_test, empty_can_test,
-        rom, flexibility, static_posture, exercise_performed, summary, requirements, video_urls,
+        rom, flexibility, static_posture, exercise_performed, summary, requirements, video_urls, image_urls,
         created_at AT TIME ZONE 'Asia/Seoul' as created_at,
         updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
       FROM consultation_records
@@ -435,6 +437,17 @@ const getConsultationRecordById = async (id) => {
           : row.video_urls;
       } catch (e) {
         row.video_urls = null;
+      }
+    }
+    
+    // image_urls JSONB 파싱
+    if (row.image_urls) {
+      try {
+        row.image_urls = typeof row.image_urls === 'string' 
+          ? JSON.parse(row.image_urls) 
+          : row.image_urls;
+      } catch (e) {
+        row.image_urls = null;
       }
     }
     
@@ -487,7 +500,7 @@ const updateConsultationRecord = async (id, updates) => {
       'exercise_history', 'medical_history', 'preferred_time', 'visit_source', 'visit_reason',
       'referrer', 'purpose', 'purpose_other', 'inbody', 'overhead_squat',
       'slr_test', 'empty_can_test', 'rom', 'flexibility', 'static_posture',
-      'exercise_performed', 'summary', 'requirements', 'video_urls'
+      'exercise_performed', 'summary', 'requirements', 'video_urls', 'image_urls'
     ];
     
     const updateFields = [];
@@ -497,8 +510,8 @@ const updateConsultationRecord = async (id, updates) => {
     for (const [key, value] of Object.entries(updates)) {
       if (allowedFields.includes(key)) {
         updateFields.push(`${key} = $${paramIndex}`);
-        // video_urls는 JSONB이므로 JSON 문자열로 변환
-        if (key === 'video_urls' && value !== undefined && value !== null) {
+        // video_urls와 image_urls는 JSONB이므로 JSON 문자열로 변환
+        if ((key === 'video_urls' || key === 'image_urls') && value !== undefined && value !== null) {
           values.push(JSON.stringify(value));
         } else {
           values.push(value !== undefined ? value : null);

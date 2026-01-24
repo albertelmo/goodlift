@@ -36,6 +36,7 @@ function render(container) {
         <div style="display:flex;align-items:center;gap:12px;">
           <h3 id="trial-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">신규 상담 현황</h3>
           <button id="trial-consultation-list-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">상담목록</button>
+          <button id="trial-public-consultation-list-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">공개상담 목록</button>
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button id="trial-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">추가</button>
@@ -81,6 +82,13 @@ function render(container) {
         }
       };
       tryOpen();
+    });
+  }
+  
+  const publicConsultationListBtn = container.querySelector('#trial-public-consultation-list-btn');
+  if (publicConsultationListBtn) {
+    publicConsultationListBtn.addEventListener('click', () => {
+      showPublicConsultationListModal();
     });
   }
   
@@ -819,3 +827,195 @@ async function createConsultationFromTrial() {
   }
 }
 
+// 공개상담 목록 모달 표시
+async function showPublicConsultationListModal() {
+  try {
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+    
+    // 기존 모달이 있으면 제거
+    const existingOverlay = document.querySelector('.public-consultation-list-modal-overlay');
+    const existingModal = document.querySelector('.public-consultation-list-modal');
+    if (existingOverlay) existingOverlay.remove();
+    if (existingModal) existingModal.remove();
+    
+    // 모달 HTML 생성
+    const modalHTML = `
+      <div class="public-consultation-list-modal-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;">
+        <div class="public-consultation-list-modal" style="background:#fff;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid #eee;">
+            <h2 style="margin:0;color:#333;font-size:1.2rem;">공개상담 목록</h2>
+            <button id="public-consultation-list-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+          </div>
+          <div id="public-consultation-list-content" style="flex:1;overflow-y:auto;padding:16px;">
+            <div style="text-align:center;padding:40px;color:#888;">불러오는 중...</div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 모달 닫기 이벤트
+    const closeBtn = document.getElementById('public-consultation-list-modal-close');
+    const overlay = document.querySelector('.public-consultation-list-modal-overlay');
+    
+    const closeModal = () => {
+      if (overlay) overlay.remove();
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+    
+    // 공개상담 목록 로드
+    await loadPublicConsultationList();
+    
+  } catch (error) {
+    console.error('공개상담 목록 모달 표시 오류:', error);
+    alert('공개상담 목록을 불러오는 중 오류가 발생했습니다.');
+  }
+}
+
+// 링크 복사 모달 표시
+function showLinkCopyModal(url) {
+  // 기존 모달이 있으면 제거
+  const existingModal = document.querySelector('.link-copy-modal-overlay');
+  if (existingModal) {
+    existingModal.remove();
+  }
+  
+  // URL 이스케이프 처리
+  const escapedUrl = url.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  
+  const modalHTML = `
+    <div class="link-copy-modal-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px;">
+      <div class="link-copy-modal" style="background:#fff;border-radius:8px;max-width:500px;width:100%;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <h3 style="margin:0 0 16px 0;color:#333;font-size:1.1rem;">링크 복사</h3>
+        <p style="margin:0 0 12px 0;color:#666;font-size:0.9rem;">아래 링크를 선택하여 복사하세요:</p>
+        <input type="text" id="link-copy-input" value="${escapedUrl}" readonly style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:0.9rem;background:#f5f5f5;user-select:all;-webkit-user-select:all;" onclick="this.select();this.setSelectionRange(0,99999);">
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+          <button id="link-copy-close-btn" style="background:#eee;color:#333;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;">닫기</button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  const overlay = document.querySelector('.link-copy-modal-overlay');
+  const input = document.getElementById('link-copy-input');
+  const closeBtn = document.getElementById('link-copy-close-btn');
+  
+  // 입력 필드 자동 선택
+  setTimeout(() => {
+    if (input) {
+      input.select();
+      input.setSelectionRange(0, 99999);
+    }
+  }, 100);
+  
+  const closeModal = () => {
+    if (overlay) overlay.remove();
+  };
+  
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeModal);
+  }
+  
+  if (overlay) {
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) closeModal();
+    });
+  }
+}
+
+// 공개상담 목록 로드
+async function loadPublicConsultationList() {
+  try {
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) return;
+    
+    const response = await fetch(`/api/consultation-shares/active?currentUser=${encodeURIComponent(currentUser)}`);
+    
+    if (!response.ok) {
+      throw new Error('공개상담 목록을 불러오는데 실패했습니다.');
+    }
+    
+    const data = await response.json();
+    const shares = data.shares || [];
+    
+    const contentDiv = document.getElementById('public-consultation-list-content');
+    
+    if (shares.length === 0) {
+      contentDiv.innerHTML = '<div style="text-align:center;padding:40px;color:#888;">공개상담이 없습니다.</div>';
+      return;
+    }
+    
+    // 목록 HTML 생성
+    let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+    
+    shares.forEach(share => {
+      const createdDate = share.created_at ? new Date(share.created_at).toLocaleDateString('ko-KR') : '-';
+      const expiresDate = share.expires_at ? new Date(share.expires_at).toLocaleDateString('ko-KR') : '만료일 없음';
+      const accessCount = share.access_count || 0;
+      
+      // baseUrl 생성
+      const protocol = window.location.protocol;
+      const host = window.location.host;
+      const baseUrl = `${protocol}//${host}`;
+      const shareUrl = `${baseUrl}/consultation/view/${share.token}`;
+      
+      html += `
+        <div style="border:1px solid #ddd;border-radius:6px;padding:16px;background:#fff;">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:8px;">
+            <div style="flex:1;">
+              <div style="font-weight:600;color:#333;margin-bottom:4px;">${share.consultation_name || '이름 없음'}</div>
+              <div style="font-size:0.85rem;color:#666;margin-bottom:4px;">센터: ${share.center || '-'} | 트레이너: ${share.trainer_name || share.trainer_username || '-'}</div>
+              <div style="font-size:0.85rem;color:#666;margin-bottom:4px;">수신자: ${share.name || '-'} ${share.phone ? `(${share.phone})` : ''}</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <button class="copy-share-url-btn" data-url="${shareUrl}" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">링크 복사</button>
+              <button class="open-share-url-btn" data-url="${shareUrl}" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">열기</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:16px;font-size:0.8rem;color:#888;padding-top:8px;border-top:1px solid #eee;">
+            <span>생성일: ${createdDate}</span>
+            <span>만료일: ${expiresDate}</span>
+            <span>조회수: ${accessCount}회</span>
+          </div>
+        </div>
+      `;
+    });
+    
+    html += '</div>';
+    contentDiv.innerHTML = html;
+    
+    contentDiv.querySelectorAll('.copy-share-url-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const url = btn.getAttribute('data-url');
+        showLinkCopyModal(url);
+      });
+    });
+    
+    
+    // 링크 열기 버튼 이벤트
+    contentDiv.querySelectorAll('.open-share-url-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const url = btn.getAttribute('data-url');
+        window.open(url, '_blank');
+      });
+    });
+    
+  } catch (error) {
+    console.error('공개상담 목록 로드 오류:', error);
+    const contentDiv = document.getElementById('public-consultation-list-content');
+    if (contentDiv) {
+      contentDiv.innerHTML = '<div style="text-align:center;padding:40px;color:#d32f2f;">공개상담 목록을 불러오는 중 오류가 발생했습니다.</div>';
+    }
+  }
+}

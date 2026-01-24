@@ -519,6 +519,12 @@ async function openConsultationEditModal(recordId) {
             loadConsultationVideos(recordId);
         }
         
+        const imageSection = document.getElementById('consultation-image-section');
+        if (imageSection) {
+            imageSection.style.display = 'block';
+            loadConsultationImages(recordId);
+        }
+        
         // 결과 메시지 초기화
         document.getElementById('consultationResult').textContent = '';
         
@@ -871,6 +877,16 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         videoUploadInput.addEventListener('change', handleVideoUpload);
     }
+    
+    // 사진 선택 버튼 이벤트
+    const imageSelectBtn = document.getElementById('consultation-image-select-btn');
+    const imageUploadInput = document.getElementById('consultation-image-upload');
+    if (imageSelectBtn && imageUploadInput) {
+        imageSelectBtn.addEventListener('click', () => {
+            imageUploadInput.click();
+        });
+        imageUploadInput.addEventListener('change', handleImageUpload);
+    }
 });
 
 // 동영상 업로드 처리
@@ -947,25 +963,76 @@ async function loadConsultationVideos(consultationId) {
         videoList.innerHTML = videos.map(video => {
             const fileSizeMB = (video.file_size / (1024 * 1024)).toFixed(2);
             const uploadDate = new Date(video.uploaded_at).toLocaleDateString('ko-KR');
+            const escapedFilename = escapeHtml(video.filename);
             return `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 8px; background: #f9f9f9;">
                     <div style="flex: 1;">
-                        <div style="font-weight: 600; font-size: 13px;">📹 ${escapeHtml(video.filename)}</div>
+                        <div style="font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+                            <span>📹</span>
+                            <span class="consultation-video-name" data-consultation-id="${consultationId}" data-video-id="${video.id}" data-original-name="${escapedFilename}" style="cursor: pointer; padding: 2px 4px; border-radius: 2px; transition: background 0.2s;" onmouseover="this.style.background='#e0e0e0'" onmouseout="this.style.background='transparent'">${escapedFilename}</span>
+                        </div>
                         <div style="font-size: 11px; color: #666; margin-top: 4px;">
                             ${fileSizeMB}MB · ${uploadDate}
                         </div>
                     </div>
-                    <button type="button" class="tmc-btn-danger" onclick="deleteConsultationVideo('${consultationId}', '${video.id}')" style="padding: 4px 12px; font-size: 11px;">삭제</button>
+                    <button type="button" class="tmc-btn-danger" onclick="deleteConsultationVideo('${consultationId}', '${video.id}')" style="padding: 4px 8px; font-size: 11px; white-space: nowrap; width: auto;">삭제</button>
                 </div>
             `;
         }).join('');
+        
+        // 동영상 이름 클릭 이벤트 추가
+        videoList.querySelectorAll('.consultation-video-name').forEach(nameElement => {
+            nameElement.addEventListener('click', function() {
+                const consultationId = this.getAttribute('data-consultation-id');
+                const videoId = this.getAttribute('data-video-id');
+                const originalName = this.getAttribute('data-original-name');
+                
+                const newName = prompt('동영상 이름을 입력하세요:', originalName);
+                if (newName !== null && newName.trim() !== '' && newName !== originalName) {
+                    updateConsultationVideoName(consultationId, videoId, newName.trim());
+                }
+            });
+        });
     } catch (error) {
         console.error('동영상 목록 로드 오류:', error);
     }
 }
 
-// 동영상 삭제
-async function deleteConsultationVideo(consultationId, videoId) {
+// 동영상 이름 수정
+async function updateConsultationVideoName(consultationId, videoId, newName) {
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+        
+        const response = await fetch(`/api/consultation-records/${consultationId}/videos/${videoId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                currentUser: currentUser,
+                filename: newName
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '동영상 이름 수정에 실패했습니다.' }));
+            throw new Error(errorData.message || '동영상 이름 수정에 실패했습니다.');
+        }
+        
+        // 동영상 목록 새로고침
+        await loadConsultationVideos(consultationId);
+    } catch (error) {
+        console.error('동영상 이름 수정 오류:', error);
+        alert('동영상 이름 수정 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+// 동영상 삭제 (전역 함수로 등록)
+window.deleteConsultationVideo = async function(consultationId, videoId) {
     if (!confirm('이 동영상을 삭제하시겠습니까?')) {
         return;
     }
@@ -995,6 +1062,185 @@ async function deleteConsultationVideo(consultationId, videoId) {
     } catch (error) {
         console.error('동영상 삭제 오류:', error);
         alert('동영상 삭제 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+// 사진 업로드 처리
+async function handleImageUpload(e) {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    if (!currentEditRecordId) {
+        alert('상담기록을 먼저 저장해주세요.');
+        return;
+    }
+    
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) {
+        alert('로그인이 필요합니다.');
+        return;
+    }
+    
+    for (const file of files) {
+        // 파일 크기 확인 (10MB)
+        const maxSize = 10 * 1024 * 1024;
+        if (file.size > maxSize) {
+            alert(`${file.name}: 파일 크기가 너무 큽니다. (최대 10MB)`);
+            continue;
+        }
+        
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('currentUser', currentUser);
+            
+            const response = await fetch(`/api/consultation-records/${currentEditRecordId}/images`, {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ message: '사진 업로드에 실패했습니다.' }));
+                throw new Error(errorData.message || '사진 업로드에 실패했습니다.');
+            }
+            
+            // 사진 목록 새로고침
+            await loadConsultationImages(currentEditRecordId);
+        } catch (error) {
+            console.error('사진 업로드 오류:', error);
+            alert(`${file.name} 업로드 실패: ${error.message}`);
+        }
+    }
+    
+    // input 초기화
+    e.target.value = '';
+}
+
+// 사진 목록 로드
+async function loadConsultationImages(consultationId) {
+    const imageList = document.getElementById('consultation-image-list');
+    if (!imageList) return;
+    
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) return;
+        
+        const response = await fetch(`/api/consultation-records/${consultationId}?currentUser=${encodeURIComponent(currentUser)}`);
+        if (!response.ok) return;
+        
+        const record = await response.json();
+        const images = record.image_urls || [];
+        
+        if (images.length === 0) {
+            imageList.innerHTML = '<div style="color: #999; font-size: 12px;">업로드된 사진이 없습니다.</div>';
+            return;
+        }
+        
+        imageList.innerHTML = images.map(image => {
+            const fileSizeMB = (image.file_size / (1024 * 1024)).toFixed(2);
+            const uploadDate = new Date(image.uploaded_at).toLocaleDateString('ko-KR');
+            const escapedFilename = escapeHtml(image.filename);
+            return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 8px; background: #f9f9f9;">
+                    <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
+                        <img src="${image.url}" alt="${escapedFilename}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;">
+                                <span>📷</span>
+                                <span class="consultation-image-name" data-consultation-id="${consultationId}" data-image-id="${image.id}" data-original-name="${escapedFilename}" style="cursor: pointer; padding: 2px 4px; border-radius: 2px; transition: background 0.2s;" onmouseover="this.style.background='#e0e0e0'" onmouseout="this.style.background='transparent'">${escapedFilename}</span>
+                            </div>
+                            <div style="font-size: 11px; color: #666; margin-top: 4px;">
+                                ${fileSizeMB}MB · ${uploadDate}
+                            </div>
+                        </div>
+                    </div>
+                    <button type="button" class="tmc-btn-danger" onclick="deleteConsultationImage('${consultationId}', '${image.id}')" style="padding: 4px 8px; font-size: 11px; white-space: nowrap; width: auto;">삭제</button>
+                </div>
+            `;
+        }).join('');
+        
+        // 사진 이름 클릭 이벤트 추가
+        imageList.querySelectorAll('.consultation-image-name').forEach(nameElement => {
+            nameElement.addEventListener('click', function() {
+                const consultationId = this.getAttribute('data-consultation-id');
+                const imageId = this.getAttribute('data-image-id');
+                const originalName = this.getAttribute('data-original-name');
+                
+                const newName = prompt('사진 이름을 입력하세요:', originalName);
+                if (newName !== null && newName.trim() !== '' && newName !== originalName) {
+                    updateConsultationImageName(consultationId, imageId, newName.trim());
+                }
+            });
+        });
+    } catch (error) {
+        console.error('사진 목록 로드 오류:', error);
+    }
+}
+
+// 사진 이름 수정
+async function updateConsultationImageName(consultationId, imageId, newName) {
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+        
+        const response = await fetch(`/api/consultation-records/${consultationId}/images/${imageId}`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                currentUser: currentUser,
+                filename: newName
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '사진 이름 수정에 실패했습니다.' }));
+            throw new Error(errorData.message || '사진 이름 수정에 실패했습니다.');
+        }
+        
+        // 사진 목록 새로고침
+        await loadConsultationImages(consultationId);
+    } catch (error) {
+        console.error('사진 이름 수정 오류:', error);
+        alert('사진 이름 수정 중 오류가 발생했습니다: ' + error.message);
+    }
+}
+
+// 사진 삭제 (전역 함수로 등록)
+window.deleteConsultationImage = async function(consultationId, imageId) {
+    if (!confirm('이 사진을 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    try {
+        const currentUser = localStorage.getItem('username');
+        if (!currentUser) {
+            alert('로그인이 필요합니다.');
+            return;
+        }
+        
+        const response = await fetch(`/api/consultation-records/${consultationId}/images/${imageId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ currentUser: currentUser })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: '사진 삭제에 실패했습니다.' }));
+            throw new Error(errorData.message || '사진 삭제에 실패했습니다.');
+        }
+        
+        // 사진 목록 새로고침
+        await loadConsultationImages(consultationId);
+    } catch (error) {
+        console.error('사진 삭제 오류:', error);
+        alert('사진 삭제 중 오류가 발생했습니다: ' + error.message);
     }
 }
 
