@@ -137,6 +137,16 @@ function closeConsultationListModal() {
 function openConsultationModal() {
     currentEditRecordId = null; // 새로 추가 모드
     
+    // 동영상 및 사진 목록 초기화
+    const videoList = document.getElementById('consultation-video-list');
+    const imageList = document.getElementById('consultation-image-list');
+    if (videoList) {
+        videoList.innerHTML = '<div style="color: #999; font-size: 12px;">업로드된 동영상이 없습니다.</div>';
+    }
+    if (imageList) {
+        imageList.innerHTML = '<div style="color: #999; font-size: 12px;">업로드된 사진이 없습니다.</div>';
+    }
+    
     const modal = document.getElementById('consultationModal');
     const modalBg = document.getElementById('consultationModalBg');
     
@@ -450,6 +460,16 @@ async function openConsultationEditModal(recordId) {
     // 모달 열기
     modal.style.display = 'block';
     modalBg.style.display = 'block';
+    
+    // 동영상 및 사진 목록 초기화 (다른 상담기록의 데이터가 남아있지 않도록)
+    const videoList = document.getElementById('consultation-video-list');
+    const imageList = document.getElementById('consultation-image-list');
+    if (videoList) {
+        videoList.innerHTML = '<div style="color: #999; font-size: 12px;">로딩 중...</div>';
+    }
+    if (imageList) {
+        imageList.innerHTML = '<div style="color: #999; font-size: 12px;">로딩 중...</div>';
+    }
     
     // 센터 및 트레이너 목록 로드
     await loadCenters();

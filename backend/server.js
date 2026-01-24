@@ -6197,8 +6197,8 @@ app.post('/api/consultation-records/:id/videos', videoUpload.single('file'), asy
             return res.status(403).json({ message: '권한이 없습니다.' });
         }
         
-        // 기존 동영상 개수 확인 (최대 5개)
-        const maxVideos = parseInt(process.env.CONSULTATION_VIDEO_MAX_COUNT || '5', 10);
+        // 기존 동영상 개수 확인 (최대 4개)
+        const maxVideos = parseInt(process.env.CONSULTATION_VIDEO_MAX_COUNT || '4', 10);
         const existingVideos = consultation.video_urls ? (Array.isArray(consultation.video_urls) ? consultation.video_urls : JSON.parse(consultation.video_urls)) : [];
         
         if (existingVideos.length >= maxVideos) {
@@ -6650,6 +6650,27 @@ app.post('/api/consultation-records/:id/share', async (req, res) => {
             return res.status(400).json({ message: '회원 이름은 필수입니다.' });
         }
         
+        // 기존 활성 공개상담지 확인
+        const existingShares = await consultationSharesDB.getShareTokensByConsultationId(id);
+        const now = new Date();
+        
+        // 활성 토큰 찾기 (is_active = true이고 만료되지 않은 토큰)
+        const activeShare = existingShares.find(share => {
+            if (!share.is_active) return false;
+            if (!share.expires_at) return true; // 만료일이 없으면 활성
+            const expiresAt = new Date(share.expires_at);
+            return expiresAt > now;
+        });
+        
+        // 기존 활성 공개상담지가 있으면 에러 반환
+        if (activeShare) {
+            return res.status(409).json({ 
+                message: '이미 활성화된 공개상담지가 존재합니다. 기존 상담지를 사용하거나 비활성화 후 다시 시도해주세요.',
+                existingToken: activeShare.token
+            });
+        }
+        
+        // 활성 토큰이 없으면 새로 생성
         // 만료일 계산 (기본 90일)
         const expiresIn = expiresInDays || 90;
         const expiresAt = new Date();
