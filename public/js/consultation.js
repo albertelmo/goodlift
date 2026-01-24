@@ -169,7 +169,7 @@ function openConsultationModal() {
             deleteBtn.style.display = 'none';
         }
         
-        // 상담지 제작 버튼 숨김
+        // 상담지 링크 생성 버튼 숨김
         const createShareBtn = document.getElementById('consultationCreateShareBtn');
         if (createShareBtn) {
             createShareBtn.style.display = 'none';
@@ -207,7 +207,7 @@ function closeConsultationModal() {
             deleteBtn.style.display = 'none';
         }
         
-        // 상담지 제작 버튼 숨김
+        // 상담지 링크 생성 버튼 숨김
         const createShareBtn = document.getElementById('consultationCreateShareBtn');
         if (createShareBtn) {
             createShareBtn.style.display = 'none';
@@ -562,7 +562,7 @@ async function openConsultationEditModal(recordId) {
             deleteBtn.textContent = '삭제';
         }
         
-        // 상담지 제작 버튼 표시
+        // 상담지 링크 생성 버튼 표시
         const createShareBtn = document.getElementById('consultationCreateShareBtn');
         if (createShareBtn) {
             createShareBtn.style.display = 'block';
@@ -576,7 +576,7 @@ async function openConsultationEditModal(recordId) {
     }
 }
 
-// 상담지 제작 (공유 링크 생성)
+// 상담지 링크 생성 (공유 링크 생성)
 async function handleCreateConsultationShare() {
     if (!currentEditRecordId) {
         alert('상담기록이 없습니다.');
@@ -735,7 +735,7 @@ async function handleCreateConsultationShare() {
         const createShareBtn = document.getElementById('consultationCreateShareBtn');
         if (createShareBtn) {
             createShareBtn.disabled = false;
-            createShareBtn.textContent = '상담지 제작';
+            createShareBtn.textContent = '상담지 링크 생성';
         }
     }
 }
@@ -873,7 +873,7 @@ document.addEventListener('DOMContentLoaded', function() {
         deleteBtn.addEventListener('click', handleConsultationDelete);
     }
     
-    // 상담지 제작 버튼 이벤트
+    // 상담지 링크 생성 버튼 이벤트
     const createShareBtn = document.getElementById('consultationCreateShareBtn');
     if (createShareBtn) {
         createShareBtn.addEventListener('click', handleCreateConsultationShare);
