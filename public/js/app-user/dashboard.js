@@ -1386,7 +1386,7 @@ async function showConnectUserModal() {
                 <input 
                     type="text" 
                     id="user-search-input" 
-                    placeholder="이름, 전화번호, 아이디로 검색"
+                    placeholder="이름으로 검색"
                     style="width: 100%; padding: 10px 12px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; box-sizing: border-box;"
                     autocomplete="off"
                 >
@@ -1441,17 +1441,28 @@ async function showConnectUserModal() {
                 // 모든 유저앱 회원 검색 가능 (PT 회원 연결 여부와 관계없이)
                 // 필터링 제거 - 모든 회원 검색 가능
                 
-                // 검색어로 필터링 (이름, 전화번호, 아이디로 검색)
-                const queryLower = query.toLowerCase();
+                // 검색어로 필터링 (이름만 검색)
+                const queryLower = query.toLowerCase().trim();
+                
+                // 검색어가 실제로 있는지 확인 (공백만 있으면 필터링 안함)
+                if (queryLower.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <div style="padding: 40px 20px; text-align: center; color: var(--app-text-muted);">
+                            검색어를 입력하세요
+                        </div>
+                    `;
+                    return;
+                }
+                
                 const filteredUsers = appUsers.filter(user => {
                     const name = (user.name || '').toLowerCase();
-                    const phone = (user.phone || '').replace(/[^0-9]/g, '');
-                    const username = (user.username || '').toLowerCase();
-                    const queryNoHyphen = query.replace(/[^0-9]/g, '');
                     
-                    return name.includes(queryLower) || 
-                           phone.includes(queryNoHyphen) || 
-                           username.includes(queryLower);
+                    // 이름으로만 검색
+                    if (name && name.includes(queryLower)) {
+                        return true;
+                    }
+                    
+                    return false;
                 });
                 
                 if (filteredUsers.length === 0) {
