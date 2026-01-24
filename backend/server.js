@@ -6882,6 +6882,42 @@ app.get('/api/consultation-shares/active', async (req, res) => {
     }
 });
 
+// 공개상담 삭제
+app.delete('/api/consultation-shares/:shareId', async (req, res) => {
+    try {
+        const { shareId } = req.params;
+        const { currentUser } = req.query;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount) {
+            return res.status(401).json({ message: '인증이 필요합니다.' });
+        }
+        
+        if (!isAdminOrSu(userAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        
+        // 공개상담 삭제
+        const deleted = await consultationSharesDB.deleteShareToken(shareId);
+        
+        if (!deleted) {
+            return res.status(404).json({ message: '공개상담을 찾을 수 없습니다.' });
+        }
+        
+        res.json({ message: '공개상담이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 공개상담 삭제 오류:', error);
+        res.status(500).json({ message: '공개상담 삭제에 실패했습니다.' });
+    }
+});
+
 // Metrics (지표) API
 // Metrics 목록 조회
 app.get('/api/metrics', async (req, res) => {

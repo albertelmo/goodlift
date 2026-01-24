@@ -35,8 +35,8 @@ function render(container) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <div style="display:flex;align-items:center;gap:12px;">
           <h3 id="trial-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">신규 상담 현황</h3>
-          <button id="trial-consultation-list-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">상담목록</button>
-          <button id="trial-public-consultation-list-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">공개상담 목록</button>
+          <button id="trial-consultation-list-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">상세상담 목록</button>
+          <button id="trial-public-consultation-list-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">공개상담 링크 목록</button>
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button id="trial-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">추가</button>
@@ -847,7 +847,7 @@ async function showPublicConsultationListModal() {
       <div class="public-consultation-list-modal-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;">
         <div class="public-consultation-list-modal" style="background:#fff;border-radius:8px;max-width:900px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
           <div style="display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid #eee;">
-            <h2 style="margin:0;color:#333;font-size:1.2rem;">공개상담 목록</h2>
+            <h2 style="margin:0;color:#333;font-size:1.2rem;">공개상담 링크 목록</h2>
             <button id="public-consultation-list-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
           </div>
           <div id="public-consultation-list-content" style="flex:1;overflow-y:auto;padding:16px;">
@@ -981,6 +981,7 @@ async function loadPublicConsultationList() {
             <div style="display:flex;gap:8px;align-items:center;">
               <button class="copy-share-url-btn" data-url="${shareUrl}" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">링크 복사</button>
               <button class="open-share-url-btn" data-url="${shareUrl}" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">열기</button>
+              <button class="delete-share-btn" data-share-id="${share.id}" style="background:#d32f2f;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">삭제</button>
             </div>
           </div>
           <div style="display:flex;gap:16px;font-size:0.8rem;color:#888;padding-top:8px;border-top:1px solid #eee;">
@@ -1008,6 +1009,46 @@ async function loadPublicConsultationList() {
       btn.addEventListener('click', () => {
         const url = btn.getAttribute('data-url');
         window.open(url, '_blank');
+      });
+    });
+    
+    // 삭제 버튼 이벤트
+    contentDiv.querySelectorAll('.delete-share-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const shareId = btn.getAttribute('data-share-id');
+        
+        if (!confirm('정말로 이 공개상담을 삭제하시겠습니까?')) {
+          return;
+        }
+        
+        // 버튼 비활성화 및 로딩 표시
+        btn.disabled = true;
+        const originalText = btn.textContent;
+        btn.textContent = '삭제 중...';
+        
+        try {
+          const currentUser = localStorage.getItem('username');
+          if (!currentUser) {
+            throw new Error('로그인이 필요합니다.');
+          }
+          
+          const response = await fetch(`/api/consultation-shares/${shareId}?currentUser=${encodeURIComponent(currentUser)}`, {
+            method: 'DELETE'
+          });
+          
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || '삭제에 실패했습니다.');
+          }
+          
+          // 목록 다시 로드
+          await loadPublicConsultationList();
+        } catch (error) {
+          console.error('공개상담 삭제 오류:', error);
+          alert('삭제에 실패했습니다: ' + error.message);
+          btn.disabled = false;
+          btn.textContent = originalText;
+        }
       });
     });
     
