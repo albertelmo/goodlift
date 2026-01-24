@@ -142,19 +142,8 @@ async function createActivityLogForMember(appUserId, activityType, message, reco
     // app_user_id로 회원 정보 조회
     const appUser = await appUsersDB.getAppUserById(appUserId);
     
-    if (!appUser || !appUser.member_name) {
-      // 회원과 연결되지 않은 앱 유저는 로그 생성 안함
-      return;
-    }
-    
-    // 회원 정보로 트레이너 확인 (trainerUsername과 일치하는지 검증)
-    const member = await membersDB.getMemberByName(appUser.member_name);
-    
-    if (!member || !member.trainer) {
-      return;
-    }
-    
-    if (member.trainer !== trainerUsername) {
+    if (!appUser) {
+      // 앱 유저가 없으면 로그 생성 안함
       return;
     }
     

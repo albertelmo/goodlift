@@ -821,40 +821,80 @@ function render() {
                     <h2 class="app-section-title" style="margin: 0;">
                         👥 ${trainerMembers && trainerMembers.length > 0 ? `나의 회원 (${trainerMembers.length}명)` : '나의 회원'}
                     </h2>
-                    ${(() => {
-                        const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
-                        if (connectedAppUserId && trainerMembers) {
-                            const connectedMember = trainerMembers.find(m => m.app_user_id === connectedAppUserId);
-                            if (connectedMember && connectedMember.name) {
-                                return `<span style="font-size: 0.875rem; color: var(--app-primary); font-weight: 500;">${escapeHtml(connectedMember.name)} 회원과 연결중</span>`;
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        ${(() => {
+                            const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                            if (connectedAppUserId && connectedAppUserInfo) {
+                                return `<span style="font-size: 0.875rem; color: var(--app-primary); font-weight: 500;">${escapeHtml(connectedAppUserInfo.name || '회원')} 회원과 연결중</span>`;
                             }
-                        }
-                        return '';
-                    })()}
+                            return '';
+                        })()}
+                        <button id="search-member-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
+                            🔍 회원 검색
+                        </button>
+                    </div>
                 </div>
                 <div class="app-member-list">
-                    ${trainerMembers && trainerMembers.length > 0 ? trainerMembers.map(member => {
+                    ${(() => {
                         const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
-                        const isConnected = connectedAppUserId === member.app_user_id;
-                        return `
-                        <div class="app-member-item ${isConnected ? 'app-member-item-connected' : ''}" 
-                             data-app-user-id="${member.app_user_id}" 
-                             data-member-name="${member.member_name ? escapeHtml(member.member_name) : ''}"
-                             style="cursor:pointer;">
-                            <div class="app-member-info">
-                                <div style="display:flex;align-items:center;gap:8px;">
-                                    <p class="app-member-name">${escapeHtml(member.name)}</p>
-                                    ${isConnected ? '<span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>' : ''}
-                                    <span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>
+                        let html = '';
+                        
+                        // 연결된 회원이 내 회원 목록에 없으면 맨 위에 표시
+                        if (connectedAppUserId && connectedAppUserInfo) {
+                            const isInMyMembers = trainerMembers && trainerMembers.some(m => m.app_user_id === connectedAppUserId);
+                            
+                            if (!isInMyMembers) {
+                                // 연결된 회원이 내 회원 목록에 없으면 맨 위에 표시
+                                html += `
+                                <div class="app-member-item app-member-item-connected" 
+                                     data-app-user-id="${connectedAppUserInfo.id}" 
+                                     data-member-name="${connectedAppUserInfo.member_name ? escapeHtml(connectedAppUserInfo.member_name) : ''}"
+                                     style="cursor:pointer;">
+                                    <div class="app-member-info">
+                                        <div style="display:flex;align-items:center;gap:8px;">
+                                            <p class="app-member-name">${escapeHtml(connectedAppUserInfo.name || '회원')}</p>
+                                            <span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>
+                                            ${connectedAppUserInfo.member_name ? '<span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>' : ''}
+                                        </div>
+                                        <p class="app-member-details">
+                                            ${escapeHtml(connectedAppUserInfo.phone || '-')} | 아이디: ${escapeHtml(connectedAppUserInfo.username || '-')}
+                                        </p>
+                                    </div>
                                 </div>
-                                <p class="app-member-details">
-                                    ${escapeHtml(member.phone || '-')} | 아이디: ${escapeHtml(member.username)}
-                                    ${member.remainSessions !== undefined && member.remainSessions > 0 ? ` | 남은 세션: ${member.remainSessions}회` : ''}
-                                </p>
-                            </div>
-                        </div>
-                    `;
-                    }).join('') : '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">연결된 회원이 없습니다</div>'}
+                                `;
+                            }
+                        }
+                        
+                        // 내 회원 목록 표시
+                        if (trainerMembers && trainerMembers.length > 0) {
+                            html += trainerMembers.map(member => {
+                                const isConnected = connectedAppUserId === member.app_user_id;
+                                return `
+                                <div class="app-member-item ${isConnected ? 'app-member-item-connected' : ''}" 
+                                     data-app-user-id="${member.app_user_id}" 
+                                     data-member-name="${member.member_name ? escapeHtml(member.member_name) : ''}"
+                                     style="cursor:pointer;">
+                                    <div class="app-member-info">
+                                        <div style="display:flex;align-items:center;gap:8px;">
+                                            <p class="app-member-name">${escapeHtml(member.name)}</p>
+                                            ${isConnected ? '<span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>' : ''}
+                                            <span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>
+                                        </div>
+                                        <p class="app-member-details">
+                                            ${escapeHtml(member.phone || '-')} | 아이디: ${escapeHtml(member.username)}
+                                            ${member.remainSessions !== undefined && member.remainSessions > 0 ? ` | 남은 세션: ${member.remainSessions}회` : ''}
+                                        </p>
+                                    </div>
+                                </div>
+                            `;
+                            }).join('');
+                        } else if (!connectedAppUserId || !connectedAppUserInfo) {
+                            // 연결된 회원도 없고 내 회원도 없으면
+                            html += '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">연결된 회원이 없습니다</div>';
+                        }
+                        
+                        return html;
+                    })()}
                 </div>
             </div>
             ` : ''}
@@ -886,6 +926,11 @@ function render() {
     
     // 트레이너 목록 클릭 이벤트 설정
     setupTrainerClickEvents();
+    
+    // 회원 검색 버튼 클릭 이벤트 설정
+    if (isTrainer) {
+        setupSearchMemberButton();
+    }
     
     // 일반 회원만 카드 클릭 이벤트 설정
     if (!isTrainer) {
@@ -1268,6 +1313,55 @@ function setupConnectUserButton() {
 }
 
 /**
+ * 회원 검색 버튼 클릭 이벤트 설정
+ */
+function setupSearchMemberButton() {
+    const container = document.getElementById('app-user-content');
+    if (!container) return;
+    
+    // 버튼 설정 함수
+    const setupSearchButton = (btn) => {
+        if (!btn || btn._searchButtonSetup) return;
+        
+        // click 이벤트
+        btn.addEventListener('click', () => {
+            showConnectUserModal();
+        });
+        
+        // PWA 환경 대비: touchstart 이벤트에서 직접 처리
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // 기본 동작 방지
+            e.stopPropagation();
+            showConnectUserModal();
+        }, { passive: false });
+        
+        btn._searchButtonSetup = true;
+    };
+    
+    // 현재 존재하는 버튼에 이벤트 리스너 등록
+    const searchBtn = document.getElementById('search-member-btn');
+    if (searchBtn) {
+        setupSearchButton(searchBtn);
+    }
+    
+    // 버튼이 나중에 생성될 수 있으므로 MutationObserver 사용
+    // 기존 observer가 있으면 정리
+    if (container._searchButtonObserver) {
+        container._searchButtonObserver.disconnect();
+        container._searchButtonObserver = null;
+    }
+    
+    const observer = new MutationObserver((mutations) => {
+        const btn = document.getElementById('search-member-btn');
+        if (btn && !btn._searchButtonSetup) {
+            setupSearchButton(btn);
+        }
+    });
+    observer.observe(container, { childList: true, subtree: true });
+    container._searchButtonObserver = observer;
+}
+
+/**
  * 회원 연결 모달 표시
  */
 async function showConnectUserModal() {
@@ -1344,14 +1438,12 @@ async function showConnectUserModal() {
                 // 유저앱 전체 회원 조회 (캐싱 사용)
                 const appUsers = await getAppUsers();
                 
-                // PT 회원과 연결된 유저앱 회원만 필터링 (member_name이 있는 회원)
-                const appUsersWithMemberName = appUsers.filter(user => 
-                    user.member_name && user.member_name.trim() !== ''
-                );
+                // 모든 유저앱 회원 검색 가능 (PT 회원 연결 여부와 관계없이)
+                // 필터링 제거 - 모든 회원 검색 가능
                 
                 // 검색어로 필터링 (이름, 전화번호, 아이디로 검색)
                 const queryLower = query.toLowerCase();
-                const filteredUsers = appUsersWithMemberName.filter(user => {
+                const filteredUsers = appUsers.filter(user => {
                     const name = (user.name || '').toLowerCase();
                     const phone = (user.phone || '').replace(/[^0-9]/g, '');
                     const username = (user.username || '').toLowerCase();
@@ -1375,6 +1467,9 @@ async function showConnectUserModal() {
                 const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
                 const resultsHTML = filteredUsers.map(user => {
                     const isConnected = connectedAppUserId === user.id;
+                    const isMyMember = trainerMembers && trainerMembers.some(m => m.app_user_id === user.id);
+                    const isPTMember = user.member_name && user.member_name.trim() !== '';
+                    
                     return `
                         <div 
                             class="app-member-item ${isConnected ? 'app-member-item-connected' : ''}" 
@@ -1386,11 +1481,12 @@ async function showConnectUserModal() {
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <p class="app-member-name">${escapeHtml(user.name)}</p>
                                     ${isConnected ? '<span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>' : ''}
-                                    ${user.member_name ? '<span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>' : ''}
+                                    ${isMyMember ? '<span style="color:#1976d2;font-size:0.75rem;font-weight:600;">(내 회원)</span>' : ''}
+                                    ${isPTMember ? '<span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>' : ''}
                                 </div>
                                 <p class="app-member-details">
                                     ${escapeHtml(user.phone || '-')} | 아이디: ${escapeHtml(user.username)}
-                                    ${user.member_name ? ` | PT: ${escapeHtml(user.member_name)}` : ''}
+                                    ${isPTMember ? ` | PT: ${escapeHtml(user.member_name)}` : ''}
                                 </p>
                             </div>
                         </div>
@@ -1663,6 +1759,13 @@ export async function refresh() {
  */
 export function cleanup() {
     stopActivityLogsAutoUpdate();
+    
+    // 회원 검색 버튼 observer 정리
+    const container = document.getElementById('app-user-content');
+    if (container && container._searchButtonObserver) {
+        container._searchButtonObserver.disconnect();
+        container._searchButtonObserver = null;
+    }
 }
 
 /**
