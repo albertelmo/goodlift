@@ -276,6 +276,11 @@ function checkAllWorkoutsCompleted(records) {
     if (!records || records.length === 0) return false;
     
     return records.every(record => {
+        // 텍스트 기록의 경우
+        if (record.is_text_record === true) {
+            return record.is_completed === true;
+        }
+        
         const workoutTypeType = record.workout_type_type || null;
         
         // 시간 운동의 경우

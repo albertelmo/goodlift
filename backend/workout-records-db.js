@@ -417,7 +417,24 @@ const migrateWorkoutRecordsTable = async () => {
       }
     }
     
-    // 6. 인덱스 업데이트 (createWorkoutRecordsIndexes에서 처리하므로 여기서는 제거)
+    // 6. 텍스트 기록 컬럼 추가 (is_text_record, text_content)
+    if (!existingColumns.includes('is_text_record')) {
+      await pool.query(`
+        ALTER TABLE workout_records 
+        ADD COLUMN is_text_record BOOLEAN DEFAULT FALSE
+      `);
+      console.log('[PostgreSQL] is_text_record 컬럼이 추가되었습니다.');
+    }
+    
+    if (!existingColumns.includes('text_content')) {
+      await pool.query(`
+        ALTER TABLE workout_records 
+        ADD COLUMN text_content TEXT
+      `);
+      console.log('[PostgreSQL] text_content 컬럼이 추가되었습니다.');
+    }
+    
+    // 7. 인덱스 업데이트 (createWorkoutRecordsIndexes에서 처리하므로 여기서는 제거)
     // 인덱스는 createWorkoutRecordsIndexes()에서 일괄 생성됨
   } catch (error) {
     console.error('[PostgreSQL] workout_records 테이블 마이그레이션 오류:', error);
@@ -435,6 +452,13 @@ const createWorkoutRecordsIndexes = async () => {
     `);
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_workout_records_date ON workout_records(workout_date)
+    `);
+    
+    // 텍스트 기록 인덱스 (부분 인덱스)
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_workout_records_is_text_record 
+      ON workout_records(is_text_record) 
+      WHERE is_text_record = TRUE
     `);
     
     // 기존 ASC 인덱스가 있으면 제거 (DESC로 재생성하기 위해)
@@ -504,6 +528,8 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
         wr.notes,
         wr.is_completed,
         wr.display_order,
+        wr.is_text_record,
+        wr.text_content,
         wr.created_at,
         wr.updated_at
       FROM workout_records wr
@@ -611,6 +637,8 @@ const getWorkoutRecordById = async (id, appUserId) => {
         wr.notes,
         wr.is_completed,
         wr.display_order,
+        wr.is_text_record,
+        wr.text_content,
         wr.created_at,
         wr.updated_at
       FROM workout_records wr
@@ -625,7 +653,19 @@ const getWorkoutRecordById = async (id, appUserId) => {
     
     const record = result.rows[0];
     
-    // 세트 정보 조회
+    // 날짜 정규화 (YYYY-MM-DD 형식으로 변환)
+    if (record.workout_date) {
+      if (record.workout_date instanceof Date) {
+        const year = record.workout_date.getFullYear();
+        const month = String(record.workout_date.getMonth() + 1).padStart(2, '0');
+        const day = String(record.workout_date.getDate()).padStart(2, '0');
+        record.workout_date = `${year}-${month}-${day}`;
+      } else if (typeof record.workout_date === 'string') {
+        record.workout_date = record.workout_date.split('T')[0];
+      }
+    }
+    
+    // 세트 정보 조회 (텍스트 기록이 아닌 경우만, 하지만 항상 조회)
     const sets = await pool.query(`
       SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
       FROM workout_record_sets
@@ -633,6 +673,37 @@ const getWorkoutRecordById = async (id, appUserId) => {
       ORDER BY set_number ASC
     `, [id]);
     record.sets = sets.rows;
+    
+    // null 값 정리 (JSON 직렬화를 위해)
+    if (record.workout_type_id === null) {
+      record.workout_type_name = null;
+      record.workout_type_type = null;
+    }
+    
+    // boolean 값 명시적 변환
+    record.is_text_record = record.is_text_record === true || record.is_text_record === 'true';
+    record.is_completed = record.is_completed === true || record.is_completed === 'true';
+    
+    // Date 필드를 ISO 문자열로 변환 (JSON 직렬화를 위해)
+    if (record.created_at instanceof Date) {
+      record.created_at = record.created_at.toISOString();
+    }
+    if (record.updated_at instanceof Date) {
+      record.updated_at = record.updated_at.toISOString();
+    }
+    
+    // sets 배열의 Date 필드도 변환
+    if (Array.isArray(record.sets)) {
+      record.sets = record.sets.map(set => {
+        if (set.created_at instanceof Date) {
+          set.created_at = set.created_at.toISOString();
+        }
+        if (set.updated_at instanceof Date) {
+          set.updated_at = set.updated_at.toISOString();
+        }
+        return set;
+      });
+    }
     
     return record;
   } catch (error) {
@@ -657,10 +728,36 @@ const getNextDisplayOrder = async (appUserId, workoutDate) => {
   }
 };
 
+// 운동기록 검증
+const validateWorkoutRecord = (workoutData) => {
+  const { is_text_record, text_content, workout_type_id } = workoutData;
+  
+  // 텍스트 기록인 경우
+  if (is_text_record === true) {
+    if (!text_content || text_content.trim() === '') {
+      throw new Error('텍스트 기록은 내용이 필수입니다.');
+    }
+    if (workout_type_id !== null && workout_type_id !== undefined) {
+      throw new Error('텍스트 기록은 운동 종류를 가질 수 없습니다.');
+    }
+  } else {
+    // 일반 기록인 경우
+    if (!workout_type_id) {
+      throw new Error('운동 종류는 필수입니다.');
+    }
+    if (text_content) {
+      throw new Error('일반 기록은 텍스트 내용을 가질 수 없습니다.');
+    }
+  }
+};
+
 // 운동기록 추가
 const addWorkoutRecord = async (workoutData) => {
   const client = await pool.connect();
   try {
+    // 검증
+    validateWorkoutRecord(workoutData);
+    
     await client.query('BEGIN');
     
     // 같은 날짜의 마지막 순서 + 1 계산
@@ -674,17 +771,21 @@ const addWorkoutRecord = async (workoutData) => {
         workout_type_id,
         duration_minutes,
         notes,
-        display_order
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        display_order,
+        is_text_record,
+        text_content
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
     `;
     const insertValues = [
       workoutData.app_user_id,
       workoutData.workout_date,
-      workoutData.workout_type_id || null,
+      workoutData.is_text_record ? null : (workoutData.workout_type_id || null),
       workoutData.duration_minutes || null,
       workoutData.notes || null,
-      displayOrder
+      displayOrder,
+      workoutData.is_text_record || false,
+      workoutData.is_text_record ? (workoutData.text_content || null) : null
     ];
     const insertResult = await client.query(insertQuery, insertValues);
     const workoutRecord = insertResult.rows[0];
@@ -720,7 +821,19 @@ const addWorkoutRecord = async (workoutData) => {
     
     workoutRecord.sets = setsResult.rows;
     
-    // workout_type 정보도 조회
+    // 날짜 정규화 (YYYY-MM-DD 형식으로 변환)
+    if (workoutRecord.workout_date) {
+      if (workoutRecord.workout_date instanceof Date) {
+        const year = workoutRecord.workout_date.getFullYear();
+        const month = String(workoutRecord.workout_date.getMonth() + 1).padStart(2, '0');
+        const day = String(workoutRecord.workout_date.getDate()).padStart(2, '0');
+        workoutRecord.workout_date = `${year}-${month}-${day}`;
+      } else if (typeof workoutRecord.workout_date === 'string') {
+        workoutRecord.workout_date = workoutRecord.workout_date.split('T')[0];
+      }
+    }
+    
+    // workout_type 정보도 조회 (텍스트 기록이 아닌 경우만)
     if (workoutRecord.workout_type_id) {
       const typeResult = await pool.query(`
         SELECT name, type FROM workout_types WHERE id = $1
@@ -767,6 +880,9 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
       const currentOrder = dateOrderMap.get(dateKey) + 1;
       dateOrderMap.set(dateKey, currentOrder);
       
+      // 검증
+      validateWorkoutRecord(workoutData);
+      
       // 운동기록 추가
       const insertQuery = `
         INSERT INTO workout_records (
@@ -775,17 +891,21 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
           workout_type_id,
           duration_minutes,
           notes,
-          display_order
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          display_order,
+          is_text_record,
+          text_content
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *
       `;
       const insertValues = [
         workoutData.app_user_id,
         workoutData.workout_date,
-        workoutData.workout_type_id || null,
+        workoutData.is_text_record ? null : (workoutData.workout_type_id || null),
         workoutData.duration_minutes || null,
         workoutData.notes || null,
-        currentOrder
+        currentOrder,
+        workoutData.is_text_record || false,
+        workoutData.is_text_record ? (workoutData.text_content || null) : null
       ];
       const insertResult = await client.query(insertQuery, insertValues);
       const workoutRecord = insertResult.rows[0];
@@ -866,7 +986,7 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
     
     // 기존 레코드 조회 (날짜 변경 확인용)
     const existingRecord = await client.query(
-      `SELECT workout_date FROM workout_records WHERE id = $1 AND app_user_id = $2`,
+      `SELECT workout_date, display_order FROM workout_records WHERE id = $1 AND app_user_id = $2`,
       [id, appUserId]
     );
     
@@ -874,19 +994,46 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
       throw new Error('운동기록을 찾을 수 없습니다.');
     }
     
-    const oldDate = existingRecord.rows[0].workout_date;
+    const oldDateRaw = existingRecord.rows[0].workout_date;
+    const existingDisplayOrder = existingRecord.rows[0].display_order;
     const newDate = updates.workout_date;
     
-    // 날짜가 변경되는 경우 순서 재할당
-    if (newDate && newDate !== oldDate) {
+    // 날짜를 YYYY-MM-DD 형식의 문자열로 정규화하여 비교
+    const normalizeDate = (date) => {
+      if (!date) return null;
+      if (date instanceof Date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      if (typeof date === 'string') {
+        // ISO 형식 문자열인 경우 날짜 부분만 추출
+        return date.split('T')[0];
+      }
+      return date;
+    };
+    
+    const oldDateNormalized = normalizeDate(oldDateRaw);
+    const newDateNormalized = normalizeDate(newDate);
+    
+    // 날짜가 실제로 변경되는 경우에만 순서 재할당
+    if (newDateNormalized && newDateNormalized !== oldDateNormalized) {
       // 새 날짜의 마지막 순서 + 1로 할당
       const orderResult = await client.query(
         `SELECT COALESCE(MAX(display_order), 0) + 1 as next_order
          FROM workout_records 
          WHERE app_user_id = $1 AND workout_date = $2`,
-        [appUserId, newDate]
+        [appUserId, newDateNormalized]
       );
       updates.display_order = orderResult.rows[0].next_order;
+    } else if (newDateNormalized && newDateNormalized === oldDateNormalized) {
+      // 날짜가 변경되지 않았으면 기존 display_order 유지
+      // display_order가 updates에 명시적으로 포함되지 않은 경우에만
+      if (updates.display_order === undefined) {
+        // 기존 display_order를 유지하기 위해 명시적으로 설정하지 않음
+        // (업데이트 쿼리에서 display_order 필드를 포함하지 않으면 기존 값이 유지됨)
+      }
     }
     
     const fields = [];
@@ -912,6 +1059,32 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
     if (updates.notes !== undefined) {
       fields.push(`notes = $${paramIndex++}`);
       values.push(updates.notes || null);
+    }
+    if (updates.is_text_record !== undefined) {
+      fields.push(`is_text_record = $${paramIndex++}`);
+      values.push(updates.is_text_record || false);
+    }
+    if (updates.text_content !== undefined) {
+      fields.push(`text_content = $${paramIndex++}`);
+      values.push(updates.text_content || null);
+    }
+    
+    // 검증 (업데이트 시)
+    if (updates.is_text_record !== undefined || updates.text_content !== undefined || updates.workout_type_id !== undefined) {
+      // 기존 레코드 조회하여 검증
+      const existingRecord = await client.query(
+        `SELECT is_text_record, text_content, workout_type_id FROM workout_records WHERE id = $1 AND app_user_id = $2`,
+        [id, appUserId]
+      );
+      if (existingRecord.rows.length > 0) {
+        const existing = existingRecord.rows[0];
+        const mergedData = {
+          is_text_record: updates.is_text_record !== undefined ? updates.is_text_record : existing.is_text_record,
+          text_content: updates.text_content !== undefined ? updates.text_content : existing.text_content,
+          workout_type_id: updates.workout_type_id !== undefined ? updates.workout_type_id : existing.workout_type_id
+        };
+        validateWorkoutRecord(mergedData);
+      }
     }
     
     if (fields.length > 0) {
@@ -1061,6 +1234,7 @@ const getWorkoutRecordsForCalendar = async (appUserId, startDate = null, endDate
         wr.workout_type_id,
         wt.type as workout_type_type,
         wr.is_completed,
+        wr.is_text_record,
         wr.id as workout_record_id
       FROM workout_records wr
       LEFT JOIN workout_types wt ON wr.workout_type_id = wt.id
@@ -1108,7 +1282,8 @@ const getWorkoutRecordsForCalendar = async (appUserId, startDate = null, endDate
       recordsByDate[dateStr].push({
         workout_record_id: record.workout_record_id,
         workout_type_type: record.workout_type_type,
-        is_completed: record.is_completed
+        is_completed: record.is_completed,
+        is_text_record: record.is_text_record
       });
       
       recordIds.push(record.workout_record_id);
@@ -1157,9 +1332,16 @@ const getWorkoutRecordsForCalendar = async (appUserId, startDate = null, endDate
       
       // 모든 운동이 완료되었는지 확인
       const allCompleted = records.every(record => {
+        // 텍스트 기록의 경우
+        if (record.is_text_record === true) {
+          return record.is_completed === true;
+        }
+        // 시간 운동의 경우
         if (record.workout_type_type === '시간') {
           return record.is_completed === true;
-        } else if (record.workout_type_type === '세트') {
+        } 
+        // 세트 운동의 경우
+        else if (record.workout_type_type === '세트') {
           return record.allSetsCompleted === true;
         }
         return false;

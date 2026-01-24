@@ -1,7 +1,7 @@
 // 운동기록 메인 화면
 
 import { init as initList } from './list.js';
-import { showWorkoutSelectModal } from './add.js';
+import { showWorkoutSelectModal, showTextRecordModal } from './add.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
 
 let currentAppUserId = null;
@@ -266,6 +266,40 @@ function setupButtonEventListeners() {
             }
             return;
         }
+        
+        // 텍스트로 기록 버튼 클릭
+        if (btnId === 'workout-text-add-btn' && !isReadOnly) {
+            // 중복 클릭 방지: touchstart는 건너뛰고, 다른 이벤트는 throttle 체크
+            if (eventType === 'touchstart') {
+                return; // touchstart는 무시 (touchend에서만 처리)
+            }
+            
+            // 짧은 시간 내 중복 실행 방지
+            const now = Date.now();
+            if (now - lastButtonClickTime < BUTTON_CLICK_THROTTLE) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            lastButtonClickTime = now;
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                const selectedDateStr = getSelectedDate();
+                showTextRecordModal(currentAppUserId, selectedDateStr, () => {
+                    import('./list.js').then(module => {
+                        module.refresh();
+                    });
+                });
+            } catch (error) {
+                console.error('[Workout] 텍스트 기록 버튼 클릭 오류:', error);
+            }
+            return;
+        }
     };
     
     // 여러 이벤트 타입 처리 (스와이프 직후 click 이벤트가 발생하지 않을 수 있음)
@@ -343,13 +377,18 @@ async function render() {
             ${backButton}
             ${!isReadOnly ? `
             <div class="app-workout-add-section">
-                <button class="app-btn-primary app-btn-full" id="workout-add-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    운동 추가하기
-                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="app-btn-primary app-btn-full" id="workout-add-btn" style="flex: 1;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        운동 선택하기
+                    </button>
+                    <button class="app-btn-secondary app-btn-full" id="workout-text-add-btn" style="flex: 1; white-space: nowrap;">
+                        📝 직접 기록하기
+                    </button>
+                </div>
             </div>
             ` : ''}
             <div id="workout-list-wrapper"></div>

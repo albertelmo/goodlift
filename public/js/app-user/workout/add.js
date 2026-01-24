@@ -1567,6 +1567,126 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
 }
 
 /**
+ * 텍스트 기록 모달 표시
+ */
+export async function showTextRecordModal(appUserId, selectedDate = null, onSuccess) {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    
+    // 선택된 날짜가 있으면 사용, 없으면 오늘 날짜
+    const defaultDate = selectedDate || getToday();
+    
+    // 날짜를 "YY.M.D" 형식으로 변환
+    const dateObj = new Date(defaultDate);
+    const year = dateObj.getFullYear().toString().slice(-2);
+    const month = dateObj.getMonth() + 1;
+    const day = dateObj.getDate();
+    const dateDisplay = `${year}.${month}.${day}`;
+    
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>텍스트로 운동 기록 (${dateDisplay})</h2>
+            <button class="app-modal-close" aria-label="닫기" tabindex="-1">×</button>
+        </div>
+        <form class="app-modal-form" id="text-record-form">
+            <input type="hidden" id="text-record-date" value="${defaultDate}">
+            <div class="app-form-group">
+                <label for="text-record-content">운동 내용</label>
+                <textarea 
+                    id="text-record-content" 
+                    placeholder="예: 조깅 30분, 스트레칭 10분" 
+                    rows="10" 
+                    maxlength="500"
+                    style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; font-family: inherit; resize: vertical; box-sizing: border-box;"
+                ></textarea>
+                <div style="text-align: right; margin-top: 4px; font-size: 12px; color: var(--app-text-muted);">
+                    <span id="text-record-char-count">0</span>/500
+                </div>
+            </div>
+        </form>
+        <div class="app-modal-actions" style="justify-content: flex-end;">
+            <button type="button" class="app-btn-secondary" id="text-record-cancel" tabindex="-1">취소</button>
+            <button type="submit" form="text-record-form" class="app-btn-primary" tabindex="-1">등록</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modalBg);
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 이벤트 리스너
+    const closeBtn = modal.querySelector('.app-modal-close');
+    const cancelBtn = modal.querySelector('#text-record-cancel');
+    const form = modal.querySelector('#text-record-form');
+    const contentTextarea = modal.querySelector('#text-record-content');
+    const charCount = modal.querySelector('#text-record-char-count');
+    
+    // 글자 수 카운터
+    contentTextarea.addEventListener('input', (e) => {
+        const length = e.target.value.length;
+        charCount.textContent = length;
+    });
+    
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+    
+    // 폼 제출
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const workoutDate = document.getElementById('text-record-date').value;
+        const textContent = contentTextarea.value.trim();
+        
+        if (!textContent) {
+            alert('운동 내용을 입력해주세요.');
+            return;
+        }
+        
+        const workoutData = {
+            app_user_id: appUserId,
+            workout_date: workoutDate,
+            is_text_record: true,
+            text_content: textContent,
+            workout_type_id: null,
+            duration_minutes: null,
+            sets: [],
+            notes: null
+        };
+        
+        try {
+            await addWorkoutRecord(workoutData);
+            closeModal();
+            if (onSuccess) onSuccess();
+        } catch (error) {
+            console.error('텍스트 기록 추가 오류:', error);
+            alert(error.message || '텍스트 기록 추가 중 오류가 발생했습니다.');
+        }
+    });
+    
+    // 포커스
+    setTimeout(() => {
+        contentTextarea.focus();
+    }, 100);
+}
+
+/**
  * 모달 생성
  */
 function createModal() {

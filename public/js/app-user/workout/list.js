@@ -281,6 +281,45 @@ async function render(records) {
  * 운동기록 아이템 렌더링
  */
 function renderWorkoutItem(record) {
+    // 텍스트 기록인 경우
+    if (record.is_text_record) {
+        const textContent = record.text_content ? escapeHtml(record.text_content) : '';
+        const isCompleted = record.is_completed || false;
+        const cardClass = isCompleted ? 'app-workout-item app-workout-item-all-completed app-workout-item-text' : 'app-workout-item app-workout-item-text';
+        const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
+        const checked = isCompleted ? 'checked' : '';
+        
+        return `
+            <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
+                <div class="app-workout-item-main app-workout-item-main-text">
+                    <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: row; align-items: flex-start; gap: 8px; flex: 1;">
+                        <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0; margin-top: 2px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="4" y1="7" x2="20" y2="7"></line>
+                                <line x1="4" y1="12" x2="20" y2="12"></line>
+                                <line x1="4" y1="17" x2="20" y2="17"></line>
+                            </svg>
+                        </div>
+                        <div class="app-workout-item-type" style="flex: 1; min-width: 0; white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
+                        <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                        </button>
+                        <div class="app-workout-item-duration-container" style="flex-shrink: 0;">
+                            <input type="checkbox" class="app-workout-item-checkbox" 
+                                   data-record-id="${record.id}" 
+                                   data-type="record" 
+                                   ${checked}>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // 일반 기록 (기존 로직)
     const workoutTypeName = record.workout_type_name || '미지정';
     const workoutTypeType = record.workout_type_type || null;
     const duration = record.duration_minutes ? `${record.duration_minutes}분` : null;
@@ -853,6 +892,11 @@ function checkAllWorkoutsCompletedForDate(dateStr) {
     
     // 모든 운동이 완료되었는지 확인
     return dateRecords.every(record => {
+        // 텍스트 기록의 경우
+        if (record.is_text_record === true) {
+            return record.is_completed === true;
+        }
+        
         const workoutTypeType = record.workout_type_type || null;
         
         // 시간 운동의 경우
@@ -1096,14 +1140,31 @@ function setupClickListeners() {
                         const editModule = await import('./edit.js');
                         // 최신 record 데이터 다시 가져오기
                         const { getWorkoutRecordById } = await import('../api.js');
-                        const latestRecord = await getWorkoutRecordById(record.id, currentAppUserId);
+                        
+                        let latestRecord;
+                        try {
+                            latestRecord = await getWorkoutRecordById(record.id, currentAppUserId);
+                        } catch (fetchError) {
+                            // 조회 실패 시 원본 레코드 사용
+                            latestRecord = null;
+                        }
+                        
                         const recordToEdit = latestRecord || record;
-                        await editModule.showEditModal(recordToEdit, currentAppUserId, () => {
-                            loadRecords();
-                        });
+                        
+                        // 텍스트 기록인 경우 전용 모달 사용
+                        if (recordToEdit.is_text_record === true) {
+                            await editModule.showTextRecordEditModal(recordToEdit, currentAppUserId, () => {
+                                loadRecords();
+                            });
+                        } else {
+                            // 일반 기록인 경우 기존 모달 사용
+                            await editModule.showEditModal(recordToEdit, currentAppUserId, () => {
+                                loadRecords();
+                            });
+                        }
                     } catch (error) {
                         console.error('수정 모달 열기 오류:', error);
-                        alert('수정 모달을 열 수 없습니다.');
+                        alert('수정 모달을 열 수 없습니다: ' + (error.message || '알 수 없는 오류'));
                     }
                 });
             }
@@ -1795,6 +1856,23 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
     }
     
     const copyPromises = records.map(async (record) => {
+        // 텍스트 기록인 경우
+        if (record.is_text_record === true) {
+            const workoutData = {
+                app_user_id: targetAppUserId,
+                workout_date: targetDate,
+                is_text_record: true,
+                text_content: record.text_content || '',
+                workout_type_id: null,
+                duration_minutes: null,
+                sets: [],
+                notes: null,
+                is_completed: false // 복사된 기록은 완료 상태 초기화
+            };
+            return addWorkoutRecord(workoutData);
+        }
+        
+        // 일반 기록인 경우
         const workoutData = {
             app_user_id: targetAppUserId,
             workout_date: targetDate,

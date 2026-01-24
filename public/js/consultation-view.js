@@ -11,6 +11,87 @@ function getTokenFromUrl() {
     return null;
 }
 
+// 현재 링크 복사 함수
+async function copyCurrentLink() {
+    const currentUrl = window.location.href;
+    const copyBtn = document.getElementById('copyLinkBtn');
+    
+    try {
+        // 클립보드 API 사용 (모던 브라우저)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(currentUrl);
+            showCopySuccess(copyBtn);
+        } 
+        // 구형 브라우저 대체 방법
+        else {
+            const textArea = document.createElement('textarea');
+            textArea.value = currentUrl;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            textArea.setSelectionRange(0, 99999); // 모바일용
+            
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showCopySuccess(copyBtn);
+                } else {
+                    showCopyFallback(currentUrl);
+                }
+            } catch (err) {
+                showCopyFallback(currentUrl);
+            }
+            
+            document.body.removeChild(textArea);
+        }
+    } catch (err) {
+        console.error('링크 복사 실패:', err);
+        showCopyFallback(currentUrl);
+    }
+}
+
+// 복사 성공 시 버튼 상태 변경
+function showCopySuccess(btn) {
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '✓ 복사됨!';
+    btn.classList.add('copied');
+    
+    setTimeout(() => {
+        btn.innerHTML = originalText;
+        btn.classList.remove('copied');
+    }, 2000);
+}
+
+// 복사 실패 시 대체 방법 (링크 표시)
+function showCopyFallback(url) {
+    const copyBtn = document.getElementById('copyLinkBtn');
+    const originalText = copyBtn.innerHTML;
+    
+    // 링크를 선택 가능한 텍스트로 표시
+    const linkDisplay = document.createElement('div');
+    linkDisplay.style.cssText = 'margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; word-break: break-all; font-size: 12px; color: #333;';
+    linkDisplay.innerHTML = `<strong>링크:</strong><br><span style="user-select: all; -webkit-user-select: all;">${url}</span>`;
+    
+    const header = document.querySelector('.consultation-view-header');
+    if (header && !header.querySelector('.link-fallback')) {
+        linkDisplay.className = 'link-fallback';
+        header.appendChild(linkDisplay);
+        
+        // 5초 후 제거
+        setTimeout(() => {
+            if (linkDisplay.parentNode) {
+                linkDisplay.parentNode.removeChild(linkDisplay);
+            }
+        }, 5000);
+    }
+    
+    copyBtn.innerHTML = '📋 링크 표시됨';
+    setTimeout(() => {
+        copyBtn.innerHTML = originalText;
+    }, 2000);
+}
+
 // 상담기록 데이터 포맷팅
 function formatConsultationData(data) {
     const consultation = data.consultation;

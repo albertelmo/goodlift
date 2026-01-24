@@ -4,7 +4,7 @@ import { formatDate, escapeHtml, formatWeight, parseWeight } from '../utils.js';
 import { updateWorkoutRecord, deleteWorkoutRecord, getWorkoutTypes } from '../api.js';
 
 /**
- * 수정 모달 표시
+ * 수정 모달 표시 (일반 운동기록용)
  */
 export async function showEditModal(record, appUserId, onSuccess) {
     const modalBg = createModal();
@@ -109,7 +109,7 @@ export async function showEditModal(record, appUserId, onSuccess) {
         // 모달이 열릴 때 마지막 세트로 스크롤
         setTimeout(() => {
             // 세트 컨테이너가 스크롤 가능한 경우
-            if (setsContainer.scrollHeight > setsContainer.clientHeight) {
+            if (setsContainer && setsContainer.scrollHeight > setsContainer.clientHeight) {
                 setsContainer.scrollTop = setsContainer.scrollHeight;
             }
             // 또는 모달 자체를 스크롤
@@ -117,9 +117,11 @@ export async function showEditModal(record, appUserId, onSuccess) {
                 modal.scrollTop = modal.scrollHeight;
             }
             // 마지막 세트 카드로 스크롤
-            const lastSetCard = setsContainer.lastElementChild;
-            if (lastSetCard) {
-                lastSetCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            if (setsContainer) {
+                const lastSetCard = setsContainer.lastElementChild;
+                if (lastSetCard) {
+                    lastSetCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                }
             }
         }, 100);
     }
@@ -149,9 +151,11 @@ export async function showEditModal(record, appUserId, onSuccess) {
     });
     
     // 세트 추가 버튼
-    addSetBtn.addEventListener('click', () => {
-        addSet();
-    });
+    if (addSetBtn) {
+        addSetBtn.addEventListener('click', () => {
+            addSet();
+        });
+    }
     
     // 세트 삭제 버튼
     if (removeSetBtn) {
@@ -271,7 +275,6 @@ export async function showEditModal(record, appUserId, onSuccess) {
             });
         });
         
-        // 세트 삭제 버튼
         // 세트 삭제 버튼 상태 업데이트 (세트가 1개일 때 비활성화)
         if (removeSetBtn) {
             const canRemove = sets.length > 1;
@@ -353,7 +356,145 @@ export async function showEditModal(record, appUserId, onSuccess) {
             if (onSuccess) onSuccess();
         } catch (error) {
             console.error('운동기록 수정 오류:', error);
-            alert('운동기록 수정 중 오류가 발생했습니다.');
+            alert(error.message || '운동기록 수정 중 오류가 발생했습니다.');
+        }
+    });
+}
+
+/**
+ * 텍스트 기록 수정 모달 표시
+ */
+export async function showTextRecordEditModal(record, appUserId, onSuccess) {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    
+    // 날짜를 YYYY-MM-DD 형식으로 확실히 변환 (타임존 이슈 방지)
+    const workoutDateStr = formatDate(record.workout_date);
+    
+    // 날짜를 "YY.M.D" 형식으로 변환 (표시용)
+    const dateParts = workoutDateStr.split('-');
+    const year = dateParts[0].slice(-2);
+    const month = parseInt(dateParts[1]);
+    const day = parseInt(dateParts[2]);
+    const dateDisplay = `${year}.${month}.${day}`;
+    
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>텍스트 기록 수정 (${dateDisplay})</h2>
+            <button class="app-modal-close" aria-label="닫기">×</button>
+        </div>
+        <form class="app-modal-form" id="text-record-edit-form">
+            <input type="hidden" id="text-record-edit-date" value="${workoutDateStr}">
+            <div class="app-form-group">
+                <label for="text-record-edit-content">운동 내용</label>
+                <textarea 
+                    id="text-record-edit-content" 
+                    placeholder="예: 조깅 30분, 스트레칭 10분" 
+                    rows="10" 
+                    maxlength="500"
+                    style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; font-family: inherit; resize: vertical; box-sizing: border-box;"
+                >${escapeHtml(record.text_content || '')}</textarea>
+                <div style="text-align: right; margin-top: 4px; font-size: 12px; color: var(--app-text-muted);">
+                    <span id="text-record-edit-char-count">${(record.text_content || '').length}</span>/500
+                </div>
+            </div>
+        </form>
+        <div class="app-modal-actions">
+            <button type="button" class="app-btn-danger" id="text-record-edit-delete">삭제</button>
+            <div style="flex: 1;"></div>
+            <button type="button" class="app-btn-secondary" id="text-record-edit-cancel">취소</button>
+            <button type="submit" form="text-record-edit-form" class="app-btn-primary">수정</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modalBg);
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 이벤트 리스너
+    const closeBtn = modal.querySelector('.app-modal-close');
+    const cancelBtn = modal.querySelector('#text-record-edit-cancel');
+    const deleteBtn = modal.querySelector('#text-record-edit-delete');
+    const form = modal.querySelector('#text-record-edit-form');
+    const textContentTextarea = modal.querySelector('#text-record-edit-content');
+    const charCount = modal.querySelector('#text-record-edit-char-count');
+    
+    // 글자 수 카운터
+    if (textContentTextarea && charCount) {
+        textContentTextarea.addEventListener('input', (e) => {
+            const length = e.target.value.length;
+            charCount.textContent = length;
+        });
+    }
+    
+    const closeModal = () => {
+        // 모달 닫기 애니메이션
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+    
+    // 삭제 버튼
+    deleteBtn.addEventListener('click', async () => {
+        if (!confirm('정말 삭제하시겠습니까?')) {
+            return;
+        }
+        
+        try {
+            await deleteWorkoutRecord(record.id, appUserId);
+            closeModal();
+            if (onSuccess) onSuccess();
+        } catch (error) {
+            console.error('텍스트 기록 삭제 오류:', error);
+            alert('텍스트 기록 삭제 중 오류가 발생했습니다.');
+        }
+    });
+    
+    // 수정 폼 제출
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const workoutDate = document.getElementById('text-record-edit-date').value;
+        const textContent = document.getElementById('text-record-edit-content').value.trim();
+        
+        if (!textContent) {
+            alert('운동 내용을 입력해주세요.');
+            return;
+        }
+        
+        const updates = {
+            app_user_id: appUserId,
+            workout_date: workoutDate,
+            is_text_record: true,
+            text_content: textContent,
+            workout_type_id: null,
+            duration_minutes: null,
+            sets: [],
+            notes: null
+        };
+        
+        try {
+            await updateWorkoutRecord(record.id, updates);
+            
+            closeModal();
+            if (onSuccess) onSuccess();
+        } catch (error) {
+            console.error('텍스트 기록 수정 오류:', error);
+            alert(error.message || '텍스트 기록 수정 중 오류가 발생했습니다.');
         }
     });
 }

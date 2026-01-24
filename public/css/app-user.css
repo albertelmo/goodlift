@@ -1799,6 +1799,27 @@ body.app-user-active {
     align-items: flex-start;
 }
 
+/* 텍스트 기록 전용 스타일 */
+.app-workout-item-main-text {
+    /* 텍스트 기록의 경우 info 영역이 없으므로 전체 너비 사용 */
+}
+
+.app-workout-item-type-container-text {
+    /* 텍스트 기록의 경우 전체 너비를 사용하고 체크박스까지 포함 */
+    width: 100%;
+    max-width: 100%;
+    align-items: flex-start !important; /* 줄바꿈을 위해 flex-start로 변경 */
+}
+
+/* 텍스트 기록의 텍스트 영역 줄바꿈 허용 */
+.app-workout-item-text .app-workout-item-type {
+    white-space: pre-line !important; /* 입력한 줄바꿈(\n)을 그대로 반영 */
+    word-wrap: break-word !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+    line-height: 1.4;
+}
+
 .app-workout-item-duration-container {
     display: flex;
     align-items: center;

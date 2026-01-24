@@ -129,6 +129,12 @@ async function request(endpoint, options = {}) {
         
         // 응답 본문을 텍스트로 먼저 읽어서 확인
         const text = await response.text();
+        
+        // 빈 응답 체크
+        if (!text || text.trim() === '') {
+            throw new Error(`서버에서 빈 응답을 받았습니다. (${response.status} ${response.statusText})`);
+        }
+        
         let data;
         
         try {
@@ -138,10 +144,10 @@ async function request(endpoint, options = {}) {
                 url,
                 status: response.status,
                 statusText: response.statusText,
-                responseText: text,
+                responseText: text.substring(0, 500),
                 parseError: parseError.message
             });
-            throw new Error(`서버 응답 파싱 실패: ${text.substring(0, 100)}`);
+            throw new Error(`서버 응답 파싱 실패: ${parseError.message}. 응답: ${text.substring(0, 100)}`);
         }
         
         if (!response.ok) {
@@ -246,7 +252,8 @@ export async function getWorkoutRecords(appUserId, filters = {}) {
  * 운동기록 단일 조회
  */
 export async function getWorkoutRecordById(id, appUserId) {
-    return get(`/workout-records/${id}?app_user_id=${appUserId}`);
+    // 캐시를 사용하지 않음 (항상 최신 데이터 조회)
+    return get(`/workout-records/${id}?app_user_id=${appUserId}`, { useCache: false });
 }
 
 /**

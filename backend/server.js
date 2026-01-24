@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const sharp = require('sharp');
@@ -1368,10 +1369,25 @@ app.get('/api/workout-records/:id', async (req, res) => {
             return res.status(404).json({ message: '운동기록을 찾을 수 없습니다.' });
         }
         
+        // JSON 직렬화 테스트
+        try {
+            JSON.stringify(record);
+        } catch (jsonError) {
+            console.error('[API] JSON 직렬화 실패:', jsonError);
+            console.error('[API] 문제가 있는 레코드:', record);
+            return res.status(500).json({ message: '데이터 직렬화 중 오류가 발생했습니다.' });
+        }
+        
         res.json(record);
     } catch (error) {
         console.error('[API] 운동기록 단일 조회 오류:', error);
-        res.status(500).json({ message: '운동기록 조회 중 오류가 발생했습니다.' });
+        console.error('[API] 운동기록 단일 조회 오류 상세:', {
+            id: req.params.id,
+            app_user_id: req.query.app_user_id,
+            errorMessage: error.message,
+            errorStack: error.stack
+        });
+        res.status(500).json({ message: error.message || '운동기록 조회 중 오류가 발생했습니다.' });
     }
 });
 
@@ -1397,6 +1413,8 @@ app.post('/api/workout-records/batch', async (req, res) => {
         const workoutDataArray = workout_records.map(record => ({
             app_user_id,
             workout_date: record.workout_date,
+            is_text_record: record.is_text_record || false,
+            text_content: record.text_content || null,
             workout_type_id: record.workout_type_id || null,
             duration_minutes: record.duration_minutes ? parseInt(record.duration_minutes) : null,
             sets: record.sets || [],
@@ -1473,7 +1491,7 @@ app.post('/api/workout-records/batch', async (req, res) => {
 // 운동기록 단일 추가 (하위 호환성 유지)
 app.post('/api/workout-records', async (req, res) => {
     try {
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, trainer_username, trainer_name } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, trainer_username, trainer_name } = req.body;
         
         if (!app_user_id || !workout_date) {
             return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
@@ -1487,6 +1505,8 @@ app.post('/api/workout-records', async (req, res) => {
         const workoutData = {
             app_user_id,
             workout_date,
+            is_text_record: is_text_record || false,
+            text_content: text_content || null,
             workout_type_id: workout_type_id || null,
             duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
             sets: sets || [],
@@ -1520,7 +1540,7 @@ app.post('/api/workout-records', async (req, res) => {
         res.status(201).json(record);
     } catch (error) {
         console.error('[API] 운동기록 추가 오류:', error);
-        res.status(500).json({ message: '운동기록 추가 중 오류가 발생했습니다.' });
+        res.status(500).json({ message: error.message || '운동기록 추가 중 오류가 발생했습니다.' });
     }
 });
 
@@ -1567,7 +1587,7 @@ app.patch('/api/workout-records/reorder', async (req, res) => {
 app.patch('/api/workout-records/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content } = req.body;
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
@@ -1580,6 +1600,8 @@ app.patch('/api/workout-records/:id', async (req, res) => {
         
         const updates = {};
         if (workout_date !== undefined) updates.workout_date = workout_date;
+        if (is_text_record !== undefined) updates.is_text_record = is_text_record || false;
+        if (text_content !== undefined) updates.text_content = text_content || null;
         if (workout_type_id !== undefined) updates.workout_type_id = workout_type_id || null;
         if (duration_minutes !== undefined) updates.duration_minutes = duration_minutes ? parseInt(duration_minutes) : null;
         if (sets !== undefined) updates.sets = sets;
@@ -1594,7 +1616,7 @@ app.patch('/api/workout-records/:id', async (req, res) => {
         res.json(record);
     } catch (error) {
         console.error('[API] 운동기록 수정 오류:', error);
-        res.status(500).json({ message: '운동기록 수정 중 오류가 발생했습니다.' });
+        res.status(500).json({ message: error.message || '운동기록 수정 중 오류가 발생했습니다.' });
     }
 });
 
@@ -6983,8 +7005,27 @@ app.post('/api/ledger/copy-previous-month', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
+// 네트워크 인터페이스의 IP 주소 가져오기
+const getLocalIP = () => {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // IPv4이고 내부 주소가 아닌 경우
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
+};
+
+const HOST = '0.0.0.0'; // 모든 네트워크 인터페이스에서 수신
+const LOCAL_IP = getLocalIP();
+
+app.listen(PORT, HOST, () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Server also accessible at http://${LOCAL_IP}:${PORT}`);
+    console.log(`\n📱 핸드폰에서 접속: http://${LOCAL_IP}:${PORT}`);
     console.log('\n=== 쿼리 로깅 설정 ===');
     console.log(`ENABLE_QUERY_LOGGING: ${process.env.ENABLE_QUERY_LOGGING !== 'false' ? 'true' : 'false'}`);
     console.log(`SLOW_QUERY_THRESHOLD: ${parseInt(process.env.SLOW_QUERY_THRESHOLD || '100', 10)}ms`);

@@ -31,9 +31,35 @@
         }
         
         .consultation-view-header h1 {
-            margin: 0;
+            margin: 0 0 15px 0;
             font-size: 24px;
             color: #333;
+        }
+        
+        .consultation-view-copy-btn {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .consultation-view-copy-btn:hover {
+            background: #1565c0;
+        }
+        
+        .consultation-view-copy-btn:active {
+            background: #0d47a1;
+            transform: scale(0.98);
+        }
+        
+        .consultation-view-copy-btn.copied {
+            background: #4caf50;
         }
         
         .consultation-view-section {
@@ -130,6 +156,9 @@
         <div id="content" style="display:none;">
             <div class="consultation-view-header">
                 <h1>상담기록</h1>
+                <button id="copyLinkBtn" class="consultation-view-copy-btn" onclick="copyCurrentLink()">
+                    📋 링크 복사
+                </button>
             </div>
             <div id="consultationData"></div>
         </div>

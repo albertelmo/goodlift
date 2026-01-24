@@ -608,39 +608,97 @@ async function handleCreateConsultationShare() {
         }
         
         const result = await response.json();
+        const shareUrl = result.shareUrl;
         
-        // 링크 표시 모달
-        const linkText = result.shareUrl;
-        const linkDisplay = `
-상담지 링크가 생성되었습니다.
-
-링크:
-${linkText}
+        // 모바일 기기 감지
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                         (window.innerWidth <= 768);
+        
+        if (isMobile) {
+            // 모바일: 현재 창에서 이동
+            if (confirm(`상담지 화면으로 이동하시겠습니까?\n\n만료일: ${result.expiresAt ? new Date(result.expiresAt).toLocaleDateString('ko-KR') : '없음'}`)) {
+                window.location.href = shareUrl;
+            } else {
+                // 취소 시 링크 복사
+                try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    alert('링크가 클립보드에 복사되었습니다.');
+                } catch (err) {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = shareUrl;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        alert('링크가 클립보드에 복사되었습니다.');
+                    } catch (e) {
+                        alert('링크 복사에 실패했습니다. 아래 링크를 수동으로 복사해주세요:\n\n' + shareUrl);
+                    }
+                    document.body.removeChild(textarea);
+                }
+            }
+        } else {
+            // 데스크탑: 새 창으로 열기
+            const newWindow = window.open(shareUrl, '_blank', 'width=900,height=800,scrollbars=yes');
+            
+            if (newWindow) {
+                // 새 창이 성공적으로 열렸으면 링크 복사 옵션 제공
+                const linkText = shareUrl;
+                const linkDisplay = `상담지 화면이 새 창에서 열렸습니다.
 
 만료일: ${result.expiresAt ? new Date(result.expiresAt).toLocaleDateString('ko-KR') : '없음'}
 
 링크를 복사하시겠습니까?`;
-        
-        if (confirm(linkDisplay)) {
-            // 클립보드에 복사
-            try {
-                await navigator.clipboard.writeText(linkText);
-                alert('링크가 클립보드에 복사되었습니다.');
-            } catch (err) {
-                // 클립보드 복사 실패 시 수동 선택 가능하도록
-                const textarea = document.createElement('textarea');
-                textarea.value = linkText;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                try {
-                    document.execCommand('copy');
-                    alert('링크가 클립보드에 복사되었습니다.');
-                } catch (e) {
-                    alert('링크 복사에 실패했습니다. 아래 링크를 수동으로 복사해주세요:\n\n' + linkText);
+                
+                if (confirm(linkDisplay)) {
+                    // 클립보드에 복사
+                    try {
+                        await navigator.clipboard.writeText(linkText);
+                        alert('링크가 클립보드에 복사되었습니다.');
+                    } catch (err) {
+                        // 클립보드 복사 실패 시 수동 선택 가능하도록
+                        const textarea = document.createElement('textarea');
+                        textarea.value = linkText;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        try {
+                            document.execCommand('copy');
+                            alert('링크가 클립보드에 복사되었습니다.');
+                        } catch (e) {
+                            alert('링크 복사에 실패했습니다. 아래 링크를 수동으로 복사해주세요:\n\n' + linkText);
+                        }
+                        document.body.removeChild(textarea);
+                    }
                 }
-                document.body.removeChild(textarea);
+            } else {
+                // 팝업이 차단된 경우 현재 창에서 이동
+                if (confirm('팝업이 차단되었습니다. 현재 창에서 상담지 화면을 열까요?')) {
+                    window.location.href = shareUrl;
+                } else {
+                    // 링크 복사
+                    try {
+                        await navigator.clipboard.writeText(shareUrl);
+                        alert('링크가 클립보드에 복사되었습니다.');
+                    } catch (err) {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = shareUrl;
+                        textarea.style.position = 'fixed';
+                        textarea.style.opacity = '0';
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        try {
+                            document.execCommand('copy');
+                            alert('링크가 클립보드에 복사되었습니다.');
+                        } catch (e) {
+                            alert('링크 복사에 실패했습니다. 아래 링크를 수동으로 복사해주세요:\n\n' + shareUrl);
+                        }
+                        document.body.removeChild(textarea);
+                    }
+                }
             }
         }
         
