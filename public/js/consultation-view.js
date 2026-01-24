@@ -117,9 +117,10 @@ function formatConsultationData(data) {
                 
                 html += `<div class="consultation-view-field" style="margin-bottom: 0;">`;
                 html += `<div class="consultation-view-field-label">${escapeHtml(video.filename || `동영상 ${index + 1}`)}</div>`;
-                html += `<video controls preload="metadata" style="width: 100%; max-width: 100%; border-radius: 4px; margin-top: 8px;" `;
+                html += `<video controls preload="metadata" playsinline webkit-playsinline muted style="width: 100%; max-width: 100%; border-radius: 4px; margin-top: 8px; background: #000;" `;
                 html += `onerror="console.error('[동영상 ${index + 1}] 로드 실패:', this.currentSrc || this.src, '에러:', this.error); const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='block';" `;
-                html += `onloadedmetadata="const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none';" `;
+                html += `onloadedmetadata="const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none'; const video = this; video.currentTime = 0.01; setTimeout(() => { video.currentTime = 0; video.muted = false; }, 100);" `;
+                html += `oncanplay="const video = this; if(video.readyState >= 2) { video.currentTime = 0.01; setTimeout(() => { video.currentTime = 0; }, 50); }" `;
                 html += `src="${videoUrl}" `;
                 html += `type="${mimeType}">`;
                 html += `브라우저가 동영상 재생을 지원하지 않습니다.`;
