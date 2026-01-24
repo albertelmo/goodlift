@@ -330,6 +330,9 @@ async function loadConsultation() {
             titleElement.textContent = `${consultation.name}님의 상담기록`;
         }
         
+        // 트레이너 정보 표시
+        await loadTrainerInfo(consultation);
+        
     } catch (error) {
         console.error('상담기록 로드 오류:', error);
         loadingDiv.style.display = 'none';
@@ -337,6 +340,85 @@ async function loadConsultation() {
         errorDiv.textContent = '상담기록을 불러오는 중 오류가 발생했습니다.';
     }
 }
+
+// 트레이너 정보 로드 및 표시
+async function loadTrainerInfo(consultation) {
+    const trainerInfoDiv = document.getElementById('trainerInfo');
+    if (!trainerInfoDiv || !consultation) return;
+    
+    const trainerUsername = consultation.trainer_username || consultation.trainer;
+    if (!trainerUsername) return;
+    
+    try {
+        const trainerResponse = await fetch(`/api/trainers?username=${encodeURIComponent(trainerUsername)}`);
+        if (trainerResponse.ok) {
+            const trainers = await trainerResponse.json();
+            if (trainers && trainers.length > 0) {
+                const trainer = trainers[0];
+                const trainerName = trainer.name || trainerUsername;
+                const profileImageUrl = trainer.profile_image_url || null;
+                
+                let trainerHtml = '';
+                if (profileImageUrl) {
+                    trainerHtml = `
+                        <img src="${escapeHtml(profileImageUrl)}" alt="${escapeHtml(trainerName)} 트레이너" 
+                             style="width: 40px; height: 40px; object-fit: cover; border-radius: 50%; border: 2px solid #ddd; cursor: pointer;"
+                             onclick="showTrainerProfileModal('${escapeHtml(profileImageUrl)}', '${escapeHtml(trainerName)}')"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: #e0e0e0; display: none; align-items: center; justify-content: center; border: 2px solid #ddd; cursor: pointer;"
+                             onclick="showTrainerProfileModal('${escapeHtml(profileImageUrl)}', '${escapeHtml(trainerName)}')">
+                            <span style="font-size: 20px;">👤</span>
+                        </div>
+                    `;
+                }
+                trainerHtml += `<span style="font-size: 14px; color: #666; font-weight: 500;">${escapeHtml(trainerName)}</span>`;
+                
+                trainerInfoDiv.innerHTML = trainerHtml;
+                trainerInfoDiv.style.display = 'flex';
+            }
+        }
+    } catch (error) {
+        console.error('트레이너 정보 로드 오류:', error);
+    }
+}
+
+// 트레이너 프로필 사진 모달 표시
+function showTrainerProfileModal(imageUrl, trainerName) {
+    const modalBg = document.createElement('div');
+    modalBg.style.cssText = 'position: fixed; z-index: 1000; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;';
+    
+    const modal = document.createElement('div');
+    modal.style.cssText = 'background: white; padding: 24px; border-radius: 14px; max-width: 90vw; max-height: 90vh; position: relative;';
+    
+    modal.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <h3 style="margin: 0; font-size: 18px; font-weight: 600;">${escapeHtml(trainerName)} 트레이너</h3>
+            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" 
+                    style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
+        </div>
+        <div style="text-align: center;">
+            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(trainerName)} 트레이너 프로필" 
+                 style="max-width: 100%; max-height: 70vh; width: auto; height: auto; border-radius: 50%; border: 4px solid #ddd; box-shadow: 0 4px 12px rgba(0,0,0,0.1);"
+                 onerror="this.parentElement.innerHTML='<p style=\'color: #999; padding: 40px;\'>이미지를 불러올 수 없습니다.</p>';">
+        </div>
+        <div style="margin-top: 16px; text-align: right;">
+            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" 
+                    style="padding: 10px 20px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #333; cursor: pointer; font-weight: 600;">닫기</button>
+        </div>
+    `;
+    
+    modalBg.appendChild(modal);
+    document.body.appendChild(modalBg);
+    
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            modalBg.remove();
+        }
+    });
+}
+
+// 전역 함수로 등록
+window.showTrainerProfileModal = showTrainerProfileModal;
 
 // 페이지 로드 시 실행
 document.addEventListener('DOMContentLoaded', loadConsultation);

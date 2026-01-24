@@ -17,7 +17,8 @@
     "name": "김성현",
     "role": "trainer",
     "vip_member": false,
-    "30min_session": "on"
+    "30min_session": "on",
+    "profile_image_url": "/uploads/trainer-profiles/2026/01/df56c616-a3e2-4853-9ec6-b1c6001bc953/profile.jpg"
   },
   {
     "username": "ssc",
@@ -49,7 +50,8 @@
     "name": "이주영",
     "role": "trainer",
     "vip_member": true,
-    "30min_session": "on"
+    "30min_session": "on",
+    "profile_image_url": "/uploads/trainer-profiles/2026/01/4f674c2a-ff31-4b26-86cd-e9c729abd373/profile.jpg"
   },
   {
     "username": "wti",
