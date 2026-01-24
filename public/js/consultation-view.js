@@ -267,7 +267,7 @@ function formatConsultationData(data) {
     }
     
     // 하단 문구
-    html += '<div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; color: #666; font-size: 14px; font-weight: 500;">Good Lift Good Life!</div>';
+    html += '<div style="text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e0e0e0; color: #1976d2; font-size: 14px; font-weight: 500;">Good Lift Good Life!</div>';
     
     return html;
 }
