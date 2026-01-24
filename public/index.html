@@ -838,5 +838,58 @@
             });
         }
     </script>
+    
+    <!-- 트레이너 프로필 사진 업로드 모달 -->
+    <div id="trainerProfileImageModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);"></div>
+    <div id="trainerProfileImageModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.3);max-width:600px;width:90vw;max-height:90vh;overflow-y:auto;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h3 style="margin:0;font-size:20px;font-weight:600;">📷 프로필 사진 업로드</h3>
+            <button onclick="closeProfileImageModal()" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;padding:0;width:30px;height:30px;display:flex;align-items:center;justify-content:center;">×</button>
+        </div>
+        <div style="margin-bottom:16px;">
+            <strong>트레이너:</strong> <span id="profileImageTrainerName"></span>
+        </div>
+        
+        <!-- 파일 선택 영역 -->
+        <div id="profileImageFileSelectArea" style="margin-bottom:16px;text-align:center;">
+            <input type="file" id="profileImageFileInput" accept="image/*" style="display:none;" />
+            <button onclick="document.getElementById('profileImageFileInput').click()" class="btn-primary" style="padding:10px 20px;border-radius:8px;border:none;background:#2196f3;color:#fff;cursor:pointer;font-weight:600;">
+                파일 선택
+            </button>
+        </div>
+        
+        <!-- 이미지 크롭 영역 -->
+        <div id="profileImageCropArea" style="display:none;margin-bottom:16px;">
+            <div style="position:relative;max-width:100%;overflow:hidden;background:#f0f0f0;border:2px solid #ddd;border-radius:8px;">
+                <canvas id="profileImageCropCanvas" style="display:block;max-width:100%;cursor:move;"></canvas>
+                <div id="profileImageCropCircle" style="position:absolute;border:3px solid #2196f3;border-radius:50%;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,0.5);"></div>
+            </div>
+            <div style="margin-top:8px;text-align:center;font-size:12px;color:#666;">
+                드래그하여 이동 · 휠로 크기 조절
+            </div>
+        </div>
+        
+        <!-- 크롭된 미리보기 영역 -->
+        <div id="profileImagePreviewArea" style="display:none;margin-bottom:16px;text-align:center;">
+            <div style="margin-bottom:8px;font-weight:600;">미리보기</div>
+            <canvas id="profileImagePreviewCanvas" style="width:150px;height:150px;border-radius:50%;border:2px solid #ddd;"></canvas>
+        </div>
+        
+        <!-- 현재 프로필 사진 표시 (파일 선택 전) -->
+        <div id="profileImageCurrentPreview" style="margin-bottom:16px;text-align:center;">
+            <img id="profileImageCurrentImg" src="" alt="현재 프로필" style="width:150px;height:150px;object-fit:cover;border-radius:50%;border:2px solid #ddd;display:none;" />
+            <div id="profileImageCurrentPlaceholder" style="width:150px;height:150px;background:#e0e0e0;border-radius:50%;margin:0 auto;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:48px;">👤</span>
+            </div>
+        </div>
+        
+        <div id="profileImageResult" style="margin-bottom:16px;"></div>
+        
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+            <button onclick="uploadProfileImage()" class="btn-primary" id="uploadProfileImageBtn" style="display:none;padding:10px 20px;border-radius:8px;border:none;background:#2196f3;color:#fff;cursor:pointer;font-weight:600;">업로드</button>
+            <button onclick="deleteProfileImage()" class="btn-danger" id="deleteProfileImageBtn" style="display:none;padding:10px 20px;border-radius:8px;border:none;background:#d32f2f;color:#fff;cursor:pointer;font-weight:600;">삭제</button>
+            <button onclick="closeProfileImageModal()" class="btn-secondary" style="padding:10px 20px;border-radius:8px;border:1px solid #ddd;background:#fff;color:#333;cursor:pointer;font-weight:600;">취소</button>
+        </div>
+    </div>
 </body>
 </html>

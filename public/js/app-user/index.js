@@ -210,12 +210,6 @@ export function navigateToScreen(screen) {
                                     비밀번호 변경
                                 </button>
                             </div>
-                            
-                            <div class="app-profile-actions" style="display: flex; flex-direction: column; gap: 12px;">
-                                <a href="#" class="app-btn-secondary" data-screen="settings" style="text-decoration: none; text-align: center; padding: 12px; border-radius: var(--app-radius-sm); background: var(--app-bg); color: var(--app-text); font-weight: 500;">
-                                    ⚙️ 설정
-                                </a>
-                            </div>
                         </form>
                     </div>
                 `;
@@ -347,15 +341,6 @@ export function navigateToScreen(screen) {
                             passwordSaveBtn.disabled = false;
                             passwordSaveBtn.textContent = '비밀번호 변경';
                         }
-                    });
-                }
-                
-                // 설정 버튼 클릭 이벤트
-                const settingsBtn = profileContainer.querySelector('[data-screen="settings"]');
-                if (settingsBtn) {
-                    settingsBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        navigateToScreen('settings');
                     });
                 }
                 

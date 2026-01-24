@@ -248,8 +248,9 @@ async function loadNextSession() {
             
             const selectedSession = futureSessions[0];
             
-            // 트레이너 이름 조회
+            // 트레이너 정보 조회 (이름 및 프로필 사진)
             let trainerName = null;
+            let trainerProfileImageUrl = null;
             if (selectedSession.trainer) {
                 try {
                     const trainerResponse = await fetch(`/api/trainers?username=${encodeURIComponent(selectedSession.trainer)}`);
@@ -257,16 +258,18 @@ async function loadNextSession() {
                         const trainers = await trainerResponse.json();
                         if (trainers && trainers.length > 0) {
                             trainerName = trainers[0].name || selectedSession.trainer;
+                            trainerProfileImageUrl = trainers[0].profile_image_url || null;
                         }
                     }
                 } catch (err) {
-                    console.error('트레이너 이름 조회 오류:', err);
+                    console.error('트레이너 정보 조회 오류:', err);
                 }
             }
             
             nextSession = {
                 ...selectedSession,
-                trainerName: trainerName || selectedSession.trainer
+                trainerName: trainerName || selectedSession.trainer,
+                trainerProfileImageUrl: trainerProfileImageUrl
             };
         } else {
             nextSession = null;
@@ -595,7 +598,8 @@ async function loadMemberTrainers() {
         if (trainers.length > 0) {
             memberTrainers = [{
                 username: trainers[0].username,
-                name: trainers[0].name || trainers[0].username
+                name: trainers[0].name || trainers[0].username,
+                profile_image_url: trainers[0].profile_image_url || null
             }];
         } else {
             memberTrainers = null;
@@ -646,11 +650,13 @@ function render() {
     // 다음 세션 표시 텍스트 (트레이너가 아닌 경우에만)
     let nextSessionText = '예정된 세션이 없습니다';
     let trainerName = null;
+    let trainerProfileImageUrl = null;
     if (!isTrainer && nextSession) {
         const sessionDate = formatShortDate(nextSession.date);
         const dayOfWeek = formatDayOfWeek(nextSession.date);
         const sessionTime = nextSession.time || '';
         trainerName = nextSession.trainerName || null;
+        trainerProfileImageUrl = nextSession.trainerProfileImageUrl || null;
         nextSessionText = `${sessionDate}(${dayOfWeek}) ${sessionTime}`;
     }
     
@@ -749,15 +755,23 @@ function render() {
             ` : `
             <!-- 일반 회원용 카드 및 통계 -->
             <div class="app-dashboard-cards">
-                <div class="app-card app-card-info">
+                <div class="app-card app-card-info" style="display: flex; align-items: center; gap: 12px;">
                     <div class="app-card-icon">🏋️</div>
-                    <div class="app-card-content">
+                    <div class="app-card-content" style="flex: 1; min-width: 0;">
                         <h3>다음 수업</h3>
-                        <p class="app-card-value" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                            <span>${escapeHtml(hasMemberName ? nextSessionText : '연결된 회원 정보가 없습니다')}</span>
-                            ${trainerName ? `<span style="font-size: 14px; color: var(--app-text-muted);">${escapeHtml(trainerName)} 트레이너</span>` : ''}
+                        <p class="app-card-value">
+                            ${escapeHtml(hasMemberName ? nextSessionText : '연결된 회원 정보가 없습니다')}
                         </p>
                     </div>
+                    ${trainerProfileImageUrl 
+                        ? `<div style="flex-shrink: 0; margin: -8px 0;">
+                            <img src="${escapeHtml(trainerProfileImageUrl)}" alt="트레이너 프로필" class="trainer-profile-image" data-profile-image-url="${escapeHtml(trainerProfileImageUrl)}" data-trainer-name="${escapeHtml(trainerName || '트레이너')}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 50%; border: 2px solid var(--app-border); cursor: pointer; display: block;" onerror="this.style.display='none';" />
+                          </div>`
+                        : trainerName 
+                            ? `<div style="flex-shrink: 0; text-align: right; font-size: 14px; color: var(--app-text-muted);">
+                                ${escapeHtml(trainerName)} 트레이너
+                              </div>` 
+                            : ''}
                 </div>
                 
                 <div class="app-card app-card-primary" id="today-workout-card" ${!todayWorkoutSummary ? 'style="cursor: pointer;"' : ''}>
@@ -905,13 +919,18 @@ function render() {
                 <div class="app-member-list">
                     ${memberTrainers.map(trainer => {
                         return `
-                        <div class="app-member-item" data-trainer-username="${escapeHtml(trainer.username)}" style="cursor:pointer;">
-                            <div class="app-member-info">
+                        <div class="app-member-item" data-trainer-username="${escapeHtml(trainer.username)}" style="cursor:pointer; display: flex; align-items: center; gap: 12px;">
+                            <div class="app-member-info" style="flex: 1; min-width: 0;">
                                 <div style="display:flex;align-items:center;gap:8px;">
                                     <p class="app-member-name">${escapeHtml(trainer.name)}</p>
                                 </div>
                                 <p class="app-member-details">트레이너</p>
                             </div>
+                            ${trainer.profile_image_url 
+                                ? `<div style="flex-shrink: 0; margin: -8px 0;">
+                                    <img src="${escapeHtml(trainer.profile_image_url)}" alt="트레이너 프로필" class="trainer-profile-image" data-profile-image-url="${escapeHtml(trainer.profile_image_url)}" data-trainer-name="${escapeHtml(trainer.name)}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 50%; border: 2px solid var(--app-border); cursor: pointer; display: block;" onerror="this.style.display='none';" />
+                                  </div>`
+                                : ''}
                         </div>
                     `;
                     }).join('')}
@@ -939,6 +958,9 @@ function render() {
         
         // 주간 운동 카드 클릭 이벤트 설정
         setupWeeklyWorkoutCardClick();
+        
+        // 트레이너 프로필 사진 클릭 이벤트 설정
+        setupTrainerProfileImageClick();
     }
     
     // 활동 로그 이벤트 설정
@@ -1786,108 +1808,306 @@ function setupMemberActivityLogEvents() {
     const container = document.getElementById('app-user-content');
     if (!container) return;
     
+    // 기존 observer 정리
+    if (container._memberMarkAllReadObserver) {
+        container._memberMarkAllReadObserver.disconnect();
+        container._memberMarkAllReadObserver = null;
+    }
+    
+    // 중복 이벤트 리스너 방지: 이미 설정되어 있으면 기존 로그 아이템만 다시 확인
+    if (container._memberActivityLogEventsSetup) {
+        // 버튼이 나중에 생성되었을 수 있으므로 버튼만 다시 확인
+        const markAllBtn = document.getElementById('mark-all-member-read-btn');
+        if (markAllBtn && !markAllBtn._memberMarkAllReadSetup) {
+            const handleMarkAllRead = async (btn) => {
+                const appUserId = currentUser?.id;
+                if (!appUserId) return;
+                if (btn.disabled) return;
+                btn.disabled = true;
+                
+                try {
+                    const result = await markAllMemberActivityLogsAsRead(appUserId);
+                    const logItems = container.querySelectorAll('.app-activity-log-item-unread');
+                    logItems.forEach(item => {
+                        item.classList.remove('app-activity-log-item-unread');
+                        item.classList.add('app-activity-log-item-read');
+                        const indicator = item.querySelector('.app-activity-log-indicator');
+                        if (indicator) indicator.remove();
+                    });
+                    memberActivityLogsUnreadCount = 0;
+                    const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                    if (sectionTitle) {
+                        const badge = sectionTitle.querySelector('span');
+                        if (badge) badge.remove();
+                    }
+                    if (btn) btn.style.display = 'none';
+                    if (memberActivityLogs) {
+                        memberActivityLogs.forEach(log => { log.is_read = true; });
+                    }
+                    alert(`${result.readCount || 0}개의 로그가 읽음 처리되었습니다.`);
+                } catch (error) {
+                    console.error('전체 로그 읽음 처리 오류:', error);
+                    alert(`전체 로그 읽음 처리 중 오류가 발생했습니다: ${error.message}`);
+                    btn.disabled = false;
+                }
+            };
+            
+            markAllBtn.addEventListener('click', () => handleMarkAllRead(markAllBtn));
+            markAllBtn.addEventListener('touchstart', async (e) => {
+                if (markAllBtn.disabled) return;
+                e.preventDefault();
+                e.stopPropagation();
+                await handleMarkAllRead(markAllBtn);
+            }, { passive: false });
+            markAllBtn._memberMarkAllReadSetup = true;
+        }
+        
+        // 로그 아이템이 나중에 생성되었을 수 있으므로 로그 아이템도 다시 확인
+        const existingLogItems = container.querySelectorAll('.app-activity-log-item');
+        existingLogItems.forEach(item => {
+            if (!item._memberLogClickSetup) {
+                const handleLogClick = async (item) => {
+                    const logId = item.getAttribute('data-log-id');
+                    const isUnread = item.classList.contains('app-activity-log-item-unread');
+                    
+                    if (!logId || !isUnread) return;
+                    
+                    const appUserId = currentUser?.id;
+                    if (!appUserId) return;
+                    
+                    try {
+                        await markMemberActivityLogAsRead(logId, appUserId);
+                        item.classList.remove('app-activity-log-item-unread');
+                        item.classList.add('app-activity-log-item-read');
+                        const indicator = item.querySelector('.app-activity-log-indicator');
+                        if (indicator) indicator.remove();
+                        memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
+                        const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                        if (sectionTitle) {
+                            const badge = sectionTitle.querySelector('span');
+                            if (memberActivityLogsUnreadCount > 0) {
+                                if (badge) {
+                                    badge.textContent = memberActivityLogsUnreadCount;
+                                } else {
+                                    sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>`;
+                                }
+                            } else {
+                                if (badge) badge.remove();
+                                const markAllBtn = document.getElementById('mark-all-member-read-btn');
+                                if (markAllBtn) markAllBtn.style.display = 'none';
+                            }
+                        }
+                        const log = memberActivityLogs.find(l => l.id === logId);
+                        if (log) log.is_read = true;
+                    } catch (error) {
+                        console.error('로그 읽음 처리 오류:', error);
+                        alert(`로그 읽음 처리 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+                    }
+                };
+                
+                item.addEventListener('click', () => handleLogClick(item));
+                item.addEventListener('touchstart', async (e) => {
+                    const isUnread = item.classList.contains('app-activity-log-item-unread');
+                    if (!isUnread) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    await handleLogClick(item);
+                }, { passive: false });
+                item._memberLogClickSetup = true;
+            }
+        });
+        
+        return;
+    }
+    
     // 로그 카드 클릭 이벤트 (읽음 처리)
     const logItems = container.querySelectorAll('.app-activity-log-item');
-    logItems.forEach(item => {
-        item.addEventListener('click', async () => {
-            const logId = item.getAttribute('data-log-id');
-            const isUnread = item.classList.contains('app-activity-log-item-unread');
+    
+    // 로그 클릭 핸들러 함수
+    const handleLogClick = async (item) => {
+        const logId = item.getAttribute('data-log-id');
+        const isUnread = item.classList.contains('app-activity-log-item-unread');
+        
+        if (!logId || !isUnread) return;
+        
+        const appUserId = currentUser?.id;
+        if (!appUserId) return;
+        
+        try {
+            await markMemberActivityLogAsRead(logId, appUserId);
             
-            if (!logId || !isUnread) return;
+            // UI 업데이트
+            item.classList.remove('app-activity-log-item-unread');
+            item.classList.add('app-activity-log-item-read');
             
-            const appUserId = currentUser?.id;
-            if (!appUserId) return;
+            // 읽음 표시 제거
+            const indicator = item.querySelector('.app-activity-log-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
             
-            try {
-                await markMemberActivityLogAsRead(logId, appUserId);
-                
-                // UI 업데이트
-                item.classList.remove('app-activity-log-item-unread');
-                item.classList.add('app-activity-log-item-read');
-                
-                // 읽음 표시 제거
-                const indicator = item.querySelector('.app-activity-log-indicator');
-                if (indicator) {
-                    indicator.remove();
-                }
-                
-                // 읽지 않은 개수 업데이트
-                memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
-                
-                // 헤더의 읽지 않은 개수 뱃지 업데이트
-                const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                if (sectionTitle) {
-                    const badge = sectionTitle.querySelector('span');
+            // 읽지 않은 개수 업데이트
+            memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
+            
+            // 헤더의 읽지 않은 개수 뱃지 업데이트
+            const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+            if (sectionTitle) {
+                const badge = sectionTitle.querySelector('span');
+                if (memberActivityLogsUnreadCount > 0) {
                     if (badge) {
-                        if (memberActivityLogsUnreadCount > 0) {
-                            badge.textContent = memberActivityLogsUnreadCount;
-                        } else {
-                            badge.remove();
-                            // 전체 읽음 처리 버튼 숨김
-                            const markAllBtn = document.getElementById('mark-all-member-read-btn');
-                            if (markAllBtn) markAllBtn.style.display = 'none';
-                        }
+                        badge.textContent = memberActivityLogsUnreadCount;
+                    } else {
+                        sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>`;
                     }
+                } else {
+                    if (badge) badge.remove();
+                    // 전체 읽음 처리 버튼 숨김
+                    const markAllBtn = document.getElementById('mark-all-member-read-btn');
+                    if (markAllBtn) markAllBtn.style.display = 'none';
                 }
-                
-                // 로그 데이터 업데이트 (is_read 상태 변경)
-                if (memberActivityLogs) {
-                    const log = memberActivityLogs.find(l => l.id === logId);
-                    if (log) {
-                        log.is_read = true;
-                    }
+            }
+            
+            // 로그 데이터 업데이트 (is_read 상태 변경)
+            if (memberActivityLogs) {
+                const log = memberActivityLogs.find(l => l.id === logId);
+                if (log) {
+                    log.is_read = true;
                 }
-            } catch (error) {
-                console.error('로그 읽음 처리 오류:', error);
-                alert('로그 읽음 처리 중 오류가 발생했습니다.');
+            }
+        } catch (error) {
+            console.error('로그 읽음 처리 오류:', error);
+            alert(`로그 읽음 처리 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
+        }
+    };
+    
+    // 로그 아이템에 이벤트 리스너 등록 함수
+    const setupLogItemEvents = (item) => {
+        if (!item || item._memberLogClickSetup) return;
+        
+        // click 이벤트
+        item.addEventListener('click', () => handleLogClick(item));
+        
+        // PWA 환경 대비: touchstart 이벤트에서 직접 처리
+        item.addEventListener('touchstart', async (e) => {
+            const isUnread = item.classList.contains('app-activity-log-item-unread');
+            if (!isUnread) return;
+            e.preventDefault(); // 기본 동작 방지
+            e.stopPropagation();
+            await handleLogClick(item);
+        }, { passive: false });
+        
+        item._memberLogClickSetup = true;
+    };
+    
+    // 현재 존재하는 로그 아이템에 이벤트 리스너 등록
+    logItems.forEach(item => {
+        setupLogItemEvents(item);
+    });
+    
+    // 로그 아이템이 나중에 생성될 수 있으므로 MutationObserver 사용
+    const logObserver = new MutationObserver((mutations) => {
+        const newLogItems = container.querySelectorAll('.app-activity-log-item');
+        newLogItems.forEach(item => {
+            if (!item._memberLogClickSetup) {
+                setupLogItemEvents(item);
             }
         });
     });
+    logObserver.observe(container, { childList: true, subtree: true });
+    container._memberLogItemsObserver = logObserver;
     
-    // 전체 읽음 처리 버튼 클릭 이벤트
+    // 전체 읽음 처리 버튼 클릭 이벤트 핸들러
+    const handleMarkAllRead = async (btn) => {
+        const appUserId = currentUser?.id;
+        if (!appUserId) return;
+        
+        // 중복 클릭 방지
+        if (btn.disabled) return;
+        btn.disabled = true;
+        
+        try {
+            const result = await markAllMemberActivityLogsAsRead(appUserId);
+            
+            // UI 업데이트
+            const logItems = container.querySelectorAll('.app-activity-log-item-unread');
+            logItems.forEach(item => {
+                item.classList.remove('app-activity-log-item-unread');
+                item.classList.add('app-activity-log-item-read');
+                const indicator = item.querySelector('.app-activity-log-indicator');
+                if (indicator) indicator.remove();
+            });
+            
+            // 읽지 않은 개수 0으로 업데이트
+            memberActivityLogsUnreadCount = 0;
+            
+            // 헤더의 읽지 않은 개수 뱃지 제거
+            const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+            if (sectionTitle) {
+                const badge = sectionTitle.querySelector('span');
+                if (badge) badge.remove();
+            }
+            
+            // 버튼 비활성화 (제거하지 않고 숨김 처리)
+            if (btn) {
+                btn.style.display = 'none';
+            }
+            
+            // 로그 데이터 업데이트
+            if (memberActivityLogs) {
+                memberActivityLogs.forEach(log => {
+                    log.is_read = true;
+                });
+            }
+            
+            alert(`${result.readCount || 0}개의 로그가 읽음 처리되었습니다.`);
+        } catch (error) {
+            console.error('전체 로그 읽음 처리 오류:', error);
+            console.error('전체 로그 읽음 처리 오류 상세:', {
+                message: error.message,
+                stack: error.stack,
+                appUserId
+            });
+            alert(`전체 로그 읽음 처리 중 오류가 발생했습니다: ${error.message}`);
+            btn.disabled = false; // 에러 시 버튼 다시 활성화
+        }
+    };
+    
+    // 버튼에 이벤트 리스너 등록 함수
+    const setupMarkAllReadButton = (btn) => {
+        if (!btn || btn._memberMarkAllReadSetup) return;
+        
+        // click 이벤트
+        btn.addEventListener('click', () => handleMarkAllRead(btn));
+        
+        // PWA 환경 대비: touchstart 이벤트에서 직접 처리
+        btn.addEventListener('touchstart', async (e) => {
+            if (btn.disabled) return;
+            e.preventDefault(); // 기본 동작 방지
+            e.stopPropagation();
+            await handleMarkAllRead(btn);
+        }, { passive: false });
+        
+        btn._memberMarkAllReadSetup = true;
+    };
+    
+    // 현재 존재하는 버튼에 이벤트 리스너 등록
     const markAllBtn = document.getElementById('mark-all-member-read-btn');
     if (markAllBtn) {
-        markAllBtn.addEventListener('click', async () => {
-            const appUserId = currentUser?.id;
-            if (!appUserId) return;
-            
-            try {
-                const result = await markAllMemberActivityLogsAsRead(appUserId);
-                
-                // UI 업데이트
-                const logItems = container.querySelectorAll('.app-activity-log-item-unread');
-                logItems.forEach(item => {
-                    item.classList.remove('app-activity-log-item-unread');
-                    item.classList.add('app-activity-log-item-read');
-                    const indicator = item.querySelector('.app-activity-log-indicator');
-                    if (indicator) indicator.remove();
-                });
-                
-                // 전체 읽음 처리 버튼 숨김 (제거하지 않음)
-                markAllBtn.style.display = 'none';
-                
-                // 읽지 않은 개수 0으로 업데이트
-                memberActivityLogsUnreadCount = 0;
-                
-                // 헤더의 읽지 않은 개수 뱃지 제거
-                const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                if (sectionTitle) {
-                    const badge = sectionTitle.querySelector('span');
-                    if (badge) badge.remove();
-                }
-                
-                // 로그 데이터 업데이트 (is_read 상태 변경)
-                if (memberActivityLogs) {
-                    memberActivityLogs.forEach(log => {
-                        log.is_read = true;
-                    });
-                }
-            } catch (error) {
-                console.error('로그 읽음 처리 오류:', error);
-                alert('로그 읽음 처리 중 오류가 발생했습니다.');
-            }
-        });
+        setupMarkAllReadButton(markAllBtn);
     }
+    
+    // 버튼이 나중에 생성될 수 있으므로 MutationObserver 사용
+    const observer = new MutationObserver((mutations) => {
+        const btn = document.getElementById('mark-all-member-read-btn');
+        if (btn && !btn._memberMarkAllReadSetup) {
+            setupMarkAllReadButton(btn);
+        }
+    });
+    observer.observe(container, { childList: true, subtree: true });
+    container._memberMarkAllReadObserver = observer;
+    
+    // 설정 완료 플래그 설정
+    container._memberActivityLogEventsSetup = true;
 }
 
 /**
@@ -2296,4 +2516,120 @@ function setupActivityLogEvents() {
     
     // 설정 완료 플래그 설정
     container._activityLogEventsSetup = true;
+}
+
+/**
+ * 트레이너 프로필 사진 클릭 이벤트 설정
+ */
+function setupTrainerProfileImageClick() {
+    const container = document.getElementById('app-user-content');
+    if (!container) return;
+    
+    // 프로필 사진 클릭 핸들러
+    const handleProfileImageClick = (img) => {
+        const imageUrl = img.getAttribute('data-profile-image-url');
+        const trainerName = img.getAttribute('data-trainer-name') || '트레이너';
+        
+        if (!imageUrl) return;
+        
+        // 모달 생성
+        showProfileImageModal(imageUrl, trainerName);
+    };
+    
+    // 현재 존재하는 프로필 사진에 이벤트 리스너 등록
+    const profileImages = container.querySelectorAll('.trainer-profile-image');
+    profileImages.forEach(img => {
+        if (!img._profileImageClickSetup) {
+            img.addEventListener('click', () => handleProfileImageClick(img));
+            img.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleProfileImageClick(img);
+            }, { passive: false });
+            img._profileImageClickSetup = true;
+        }
+    });
+    
+    // 프로필 사진이 나중에 생성될 수 있으므로 MutationObserver 사용
+    if (container._profileImageObserver) {
+        container._profileImageObserver.disconnect();
+    }
+    
+    const observer = new MutationObserver((mutations) => {
+        const newProfileImages = container.querySelectorAll('.trainer-profile-image');
+        newProfileImages.forEach(img => {
+            if (!img._profileImageClickSetup) {
+                img.addEventListener('click', () => handleProfileImageClick(img));
+                img.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleProfileImageClick(img);
+                }, { passive: false });
+                img._profileImageClickSetup = true;
+            }
+        });
+    });
+    
+    observer.observe(container, { childList: true, subtree: true });
+    container._profileImageObserver = observer;
+}
+
+/**
+ * 프로필 사진 모달 표시
+ */
+function showProfileImageModal(imageUrl, trainerName) {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>${escapeHtml(trainerName)} 트레이너</h2>
+            <button class="app-modal-close" aria-label="닫기">×</button>
+        </div>
+        <div class="app-modal-content" style="padding: 24px; text-align: center; background: var(--app-bg);">
+            <img src="${escapeHtml(imageUrl)}" alt="${escapeHtml(trainerName)} 트레이너 프로필" 
+                 style="max-width: 100%; max-height: 70vh; width: auto; height: auto; border-radius: 50%; border: 4px solid var(--app-border); box-shadow: 0 4px 12px rgba(0,0,0,0.1);"
+                 onerror="this.parentElement.innerHTML='<p style=\'color: var(--app-text-muted); padding: 40px;\'>이미지를 불러올 수 없습니다.</p>';">
+        </div>
+        <div class="app-modal-actions" style="display: flex; justify-content: flex-end;">
+            <button type="button" class="app-btn-secondary" id="profile-image-modal-close">닫기</button>
+        </div>
+    `;
+    
+    document.body.appendChild(modalBg);
+    
+    // 모달 열기 애니메이션
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    // 모달 닫기
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+    
+    const closeBtn = modal.querySelector('.app-modal-close');
+    const closeBtn2 = modal.querySelector('#profile-image-modal-close');
+    
+    closeBtn.addEventListener('click', closeModal);
+    closeBtn2.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+    
+    // ESC 키로 닫기
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 }

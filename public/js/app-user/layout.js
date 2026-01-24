@@ -87,10 +87,6 @@ function render() {
                     <span class="app-drawer-icon">🔄</span>
                     <span>트레이너 화면으로</span>
                 </a>
-                <a href="#" class="app-drawer-item" id="app-drawer-settings">
-                    <span class="app-drawer-icon">⚙️</span>
-                    <span>설정</span>
-                </a>
                 <a href="#" class="app-drawer-item app-drawer-item-danger" id="app-drawer-logout">
                     <span class="app-drawer-icon">🚪</span>
                     <span>로그아웃</span>
@@ -207,16 +203,8 @@ function setupEventListeners() {
         }
     }
     
-    // 햄버거 메뉴의 설정/로그아웃
-    const drawerSettings = document.getElementById('app-drawer-settings');
+    // 햄버거 메뉴의 로그아웃
     const drawerLogout = document.getElementById('app-drawer-logout');
-    if (drawerSettings) {
-        drawerSettings.addEventListener('click', (e) => {
-            e.preventDefault();
-            closeHamburgerMenu();
-            navigateToScreen('settings');
-        });
-    }
     if (drawerLogout) {
         drawerLogout.addEventListener('click', (e) => {
             e.preventDefault();

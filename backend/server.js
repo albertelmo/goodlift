@@ -340,6 +340,7 @@ const UPLOADS_DIR = getUploadsDir();
 const DIET_IMAGES_DIR = path.join(UPLOADS_DIR, 'diet-images');
 const CONSULTATION_VIDEOS_DIR = path.join(UPLOADS_DIR, 'consultation-videos');
 const CONSULTATION_IMAGES_DIR = path.join(UPLOADS_DIR, 'consultation-images');
+const TRAINER_PROFILES_DIR = path.join(UPLOADS_DIR, 'trainer-profiles');
 
 // 디렉토리 자동 생성
 const ensureDirectories = () => {
@@ -359,6 +360,10 @@ const ensureDirectories = () => {
     if (!fs.existsSync(CONSULTATION_IMAGES_DIR)) {
       fs.mkdirSync(CONSULTATION_IMAGES_DIR, { recursive: true });
       console.log(`[Consultation] 상담기록 사진 디렉토리 생성: ${CONSULTATION_IMAGES_DIR}`);
+    }
+    if (!fs.existsSync(TRAINER_PROFILES_DIR)) {
+      fs.mkdirSync(TRAINER_PROFILES_DIR, { recursive: true });
+      console.log(`[Trainer Profiles] 프로필 사진 디렉토리 생성: ${TRAINER_PROFILES_DIR}`);
     }
   } catch (error) {
     console.error(`[Diet Records] 디렉토리 생성 오류: ${error.message}`);
@@ -788,6 +793,44 @@ const consultationImageUpload = multer({
             cb(null, true);
         } else {
             cb(new Error('이미지 파일만 업로드 가능합니다. (jpg, jpeg, png, gif, webp)'), false);
+        }
+    }
+});
+
+// 트레이너 프로필 사진 업로드 설정
+const trainerProfileUpload = multer({
+    storage: multer.diskStorage({
+        destination: (req, file, cb) => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const uuid = require('crypto').randomUUID();
+            const dir = path.join(TRAINER_PROFILES_DIR, String(year), month, uuid);
+            fs.mkdirSync(dir, { recursive: true });
+            // req에 저장 경로 정보 저장 (나중에 상대 경로 생성용)
+            req.trainerProfileDir = { year, month, uuid };
+            cb(null, dir);
+        },
+        filename: (req, file, cb) => {
+            const ext = path.extname(file.originalname).toLowerCase();
+            const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+            if (!allowedExts.includes(ext)) {
+                return cb(new Error('지원하지 않는 이미지 형식입니다.'));
+            }
+            cb(null, `profile${ext}`);
+        }
+    }),
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 5MB
+    },
+    fileFilter: (req, file, cb) => {
+        const ext = path.extname(file.originalname).toLowerCase();
+        const allowedExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+        const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowedExts.includes(ext) || allowedMimes.includes(file.mimetype)) {
+            cb(null, true);
+        } else {
+            cb(new Error('지원하지 않는 이미지 형식입니다.'));
         }
     }
 });
@@ -2621,7 +2664,8 @@ app.get('/api/trainers', (req, res) => {
                 name: trainer.name || trainer.username,
                 role: trainer.role,
                 vip_member: trainer.vip_member || false,
-                '30min_session': trainer['30min_session'] || 'off'
+                '30min_session': trainer['30min_session'] || 'off',
+                profile_image_url: trainer.profile_image_url || null
             }]);
         } else {
             return res.json([]);
@@ -2629,12 +2673,13 @@ app.get('/api/trainers', (req, res) => {
     }
     
     const trainers = accounts.filter(acc => acc.role === 'trainer')
-        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession }) => ({ 
+        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, profile_image_url }) => ({ 
             username, 
             name, 
             role, 
             vip_member: vip_member || false,  // 기본값: VIP 기능 사용 안함
-            '30min_session': thirtyMinSession || 'off'  // 기본값: 30분 세션 기능 사용 안함
+            '30min_session': thirtyMinSession || 'off',  // 기본값: 30분 세션 기능 사용 안함
+            profile_image_url: profile_image_url || null
         }));
     res.json(trainers);
 });
@@ -2731,6 +2776,196 @@ app.patch('/api/trainers/:username', async (req, res) => {
     } catch (error) {
         console.error('[API] 트레이너 설정 수정 오류:', error);
         res.status(500).json({ message: '트레이너 설정 수정에 실패했습니다.' });
+    }
+});
+
+// 트레이너 프로필 사진 업로드 API
+app.post('/api/trainers/:username/profile-image', trainerProfileUpload.single('image'), async (req, res) => {
+    try {
+        const username = req.params.username;
+        const currentUser = req.body.currentUser || req.session?.username;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        const trainerAccount = accounts.find(acc => acc.username === username && acc.role === 'trainer');
+        
+        if (!trainerAccount) {
+            // 업로드된 파일이 있으면 삭제
+            if (req.file) {
+                try {
+                    fs.unlinkSync(req.file.path);
+                    const dir = path.dirname(req.file.path);
+                    if (fs.existsSync(dir)) {
+                        fs.rmSync(dir, { recursive: true, force: true });
+                    }
+                } catch (e) {
+                    console.error('[API] 파일 삭제 오류:', e);
+                }
+            }
+            return res.status(404).json({ message: '트레이너를 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인: 관리자/SU 또는 본인
+        if (!isAdminOrSu(currentUserAccount) && currentUser !== username) {
+            // 업로드된 파일이 있으면 삭제
+            if (req.file) {
+                try {
+                    fs.unlinkSync(req.file.path);
+                    const dir = path.dirname(req.file.path);
+                    if (fs.existsSync(dir)) {
+                        fs.rmSync(dir, { recursive: true, force: true });
+                    }
+                } catch (e) {
+                    console.error('[API] 파일 삭제 오류:', e);
+                }
+            }
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 파일 확인
+        if (!req.file) {
+            return res.status(400).json({ message: '이미지 파일을 선택해주세요.' });
+        }
+        
+        // 기존 프로필 사진 삭제
+        if (trainerAccount.profile_image_url) {
+            try {
+                // 상대 경로에서 앞의 '/' 제거
+                const relativePath = trainerAccount.profile_image_url.startsWith('/') 
+                    ? trainerAccount.profile_image_url.substring(1) 
+                    : trainerAccount.profile_image_url;
+                
+                // UPLOADS_DIR 기준으로 경로 구성 (업로드 시와 동일한 방식)
+                const oldImagePath = path.join(UPLOADS_DIR, relativePath.replace('uploads/', ''));
+                
+                if (fs.existsSync(oldImagePath)) {
+                    // 디렉토리 전체 삭제
+                    const oldDir = path.dirname(oldImagePath);
+                    if (fs.existsSync(oldDir)) {
+                        fs.rmSync(oldDir, { recursive: true, force: true });
+                    }
+                } else {
+                    // 프로젝트 루트 기준으로도 시도 (이전 방식 호환성)
+                    const fallbackPath = path.join(__dirname, '..', relativePath);
+                    if (fs.existsSync(fallbackPath)) {
+                        const oldDir = path.dirname(fallbackPath);
+                        if (fs.existsSync(oldDir)) {
+                            fs.rmSync(oldDir, { recursive: true, force: true });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[API] 기존 프로필 사진 삭제 오류:', error);
+                // 삭제 실패해도 계속 진행
+            }
+        }
+        
+        // 상대 경로 생성 (consultation-images와 동일한 방식)
+        const { year, month, uuid } = req.trainerProfileDir;
+        const fileName = req.file.filename;
+        const relativePath = path.join('uploads', 'trainer-profiles', String(year), month, uuid, fileName).replace(/\\/g, '/');
+        const relativePathWithSlash = `/${relativePath}`;
+        
+        // accounts.json 업데이트
+        const trainerIndex = accounts.findIndex(acc => acc.username === username && acc.role === 'trainer');
+        accounts[trainerIndex].profile_image_url = relativePathWithSlash;
+        fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        
+        res.json({
+            message: '프로필 사진이 업로드되었습니다.',
+            profile_image_url: relativePathWithSlash
+        });
+    } catch (error) {
+        console.error('[API] 프로필 사진 업로드 오류:', error);
+        // 업로드된 파일이 있으면 삭제
+        if (req.file && req.file.path) {
+            try {
+                fs.unlinkSync(req.file.path);
+                const dir = path.dirname(req.file.path);
+                if (fs.existsSync(dir)) {
+                    fs.rmSync(dir, { recursive: true, force: true });
+                }
+            } catch (e) {
+                console.error('[API] 파일 삭제 오류:', e);
+            }
+        }
+        res.status(500).json({ message: '프로필 사진 업로드에 실패했습니다.' });
+    }
+});
+
+// 트레이너 프로필 사진 삭제 API
+app.delete('/api/trainers/:username/profile-image', async (req, res) => {
+    try {
+        const username = req.params.username;
+        const { currentUser } = req.body;
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        const trainerAccount = accounts.find(acc => acc.username === username && acc.role === 'trainer');
+        
+        if (!trainerAccount) {
+            return res.status(404).json({ message: '트레이너를 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인: 관리자/SU 또는 본인
+        if (!isAdminOrSu(currentUserAccount) && currentUser !== username) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 기존 프로필 사진 삭제
+        if (trainerAccount.profile_image_url) {
+            try {
+                // 상대 경로에서 앞의 '/' 제거
+                const relativePath = trainerAccount.profile_image_url.startsWith('/') 
+                    ? trainerAccount.profile_image_url.substring(1) 
+                    : trainerAccount.profile_image_url;
+                
+                // UPLOADS_DIR 기준으로 경로 구성 (업로드 시와 동일한 방식)
+                const oldImagePath = path.join(UPLOADS_DIR, relativePath.replace('uploads/', ''));
+                
+                if (fs.existsSync(oldImagePath)) {
+                    // 디렉토리 전체 삭제
+                    const oldDir = path.dirname(oldImagePath);
+                    if (fs.existsSync(oldDir)) {
+                        fs.rmSync(oldDir, { recursive: true, force: true });
+                    }
+                } else {
+                    // 프로젝트 루트 기준으로도 시도 (이전 방식 호환성)
+                    const fallbackPath = path.join(__dirname, '..', relativePath);
+                    if (fs.existsSync(fallbackPath)) {
+                        const oldDir = path.dirname(fallbackPath);
+                        if (fs.existsSync(oldDir)) {
+                            fs.rmSync(oldDir, { recursive: true, force: true });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('[API] 프로필 사진 삭제 오류:', error);
+                // 삭제 실패해도 계속 진행
+            }
+        }
+        
+        // accounts.json에서 profile_image_url 제거
+        const trainerIndex = accounts.findIndex(acc => acc.username === username && acc.role === 'trainer');
+        delete accounts[trainerIndex].profile_image_url;
+        fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        
+        res.json({ message: '프로필 사진이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 프로필 사진 삭제 오류:', error);
+        res.status(500).json({ message: '프로필 사진 삭제에 실패했습니다.' });
     }
 });
 

@@ -9,6 +9,10 @@ async function loadList() {
         const trainers = await res.json();
         if (loading) loading.style.display = 'none';
         
+        // 현재 사용자 role 확인
+        const currentRole = localStorage.getItem('role');
+        const isSu = currentRole === 'su';
+        
         if (trainers.length === 0) {
             if (listDiv) listDiv.innerHTML = '<div style="color:#888;">등록된 트레이너가 없습니다.</div>';
         } else {
@@ -18,7 +22,10 @@ async function loadList() {
             html += '<th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">이름</th>';
             html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">VIP 기능</th>';
             html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">30분 세션</th>';
-            html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">삭제</th>';
+            html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">프로필 사진</th>';
+            if (isSu) {
+                html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">삭제</th>';
+            }
             html += '</tr></thead><tbody>';
             
             trainers.forEach(tr => {
@@ -29,6 +36,20 @@ async function loadList() {
                 const thirtyMinStatus = tr['30min_session'] === 'on' ? 'ON' : 'OFF';
                 const thirtyMinColor = tr['30min_session'] === 'on' ? '#2196f3' : '#666';
                 const thirtyMinBgColor = tr['30min_session'] === 'on' ? '#e3f2fd' : '#f5f5f5';
+                
+                const profileImageUrl = tr.profile_image_url || null;
+                const profileImageHtml = profileImageUrl 
+                    ? `<img src="${profileImageUrl}" alt="프로필" style="width:50px;height:50px;object-fit:cover;border-radius:50%;cursor:pointer;border:2px solid #ddd;" 
+                         onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+                         onclick="openProfileImageModal('${tr.username}', '${tr.name}')" />
+                       <div style="width:50px;height:50px;border-radius:50%;background:#e0e0e0;display:none;align-items:center;justify-content:center;cursor:pointer;border:2px solid #ddd;margin:0 auto;"
+                         onclick="openProfileImageModal('${tr.username}', '${tr.name}')">
+                         <span style="font-size:20px;">👤</span>
+                       </div>`
+                    : `<div style="width:50px;height:50px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #ddd;margin:0 auto;"
+                         onclick="openProfileImageModal('${tr.username}', '${tr.name}')">
+                         <span style="font-size:20px;">👤</span>
+                       </div>`;
                 
                 html += `<tr>
                     <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.username}</td>
@@ -46,10 +67,15 @@ async function loadList() {
                         </button>
                     </td>
                     <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
+                        ${profileImageHtml}
+                    </td>`;
+                if (isSu) {
+                    html += `<td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
                         <button class="delete-trainer-btn" data-username="${tr.username}" data-name="${tr.name}" 
                                 style="background:#d32f2f;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.9rem;">삭제</button>
-                    </td>
-                </tr>`;
+                    </td>`;
+                }
+                html += `</tr>`;
             });
             
             html += '</tbody></table>';
@@ -61,8 +87,10 @@ async function loadList() {
             // 30분 세션 토글 버튼 이벤트 리스너 추가
             setupThirtyMinToggleListeners();
             
-            // 기존 삭제 버튼 이벤트 리스너 추가
-            setupDeleteTrainerListeners();
+            // su 유저인 경우에만 삭제 버튼 이벤트 리스너 추가
+            if (isSu) {
+                setupDeleteTrainerListeners();
+            }
         }
     } catch (e) {
         if (loading) loading.style.display = 'none';
@@ -1386,6 +1414,436 @@ function closeExpenseAddModal() {
         delete session30minBtn.dataset.wasVisible;
     }
 }
+
+// 프로필 사진 업로드 관련 변수
+let currentProfileImageUsername = null;
+let currentProfileImageUrl = null;
+let cropImage = null; // 원본 이미지 객체
+let cropCanvas = null;
+let cropCtx = null;
+let previewCanvas = null;
+let previewCtx = null;
+let cropCircle = null;
+let cropRadius = 100; // 크롭 원의 반지름
+let cropX = 0; // 크롭 원의 중심 X
+let cropY = 0; // 크롭 원의 중심 Y
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+
+// 프로필 사진 모달 열기
+function openProfileImageModal(username, name) {
+    currentProfileImageUsername = username;
+    document.getElementById('profileImageTrainerName').textContent = `${name} (${username})`;
+    
+    // 초기화
+    cropImage = null;
+    cropRadius = 100;
+    cropX = 0;
+    cropY = 0;
+    
+    // 캔버스 초기화
+    cropCanvas = document.getElementById('profileImageCropCanvas');
+    cropCtx = cropCanvas.getContext('2d');
+    previewCanvas = document.getElementById('profileImagePreviewCanvas');
+    previewCtx = previewCanvas.getContext('2d');
+    cropCircle = document.getElementById('profileImageCropCircle');
+    
+    // 현재 프로필 사진 로드
+    fetch(`/api/trainers?username=${encodeURIComponent(username)}`)
+        .then(res => res.json())
+        .then(trainers => {
+            const trainer = trainers[0];
+            if (trainer && trainer.profile_image_url) {
+                currentProfileImageUrl = trainer.profile_image_url;
+                document.getElementById('profileImageCurrentImg').src = trainer.profile_image_url;
+                document.getElementById('profileImageCurrentImg').style.display = 'block';
+                document.getElementById('profileImageCurrentPlaceholder').style.display = 'none';
+                document.getElementById('deleteProfileImageBtn').style.display = 'inline-block';
+            } else {
+                currentProfileImageUrl = null;
+                document.getElementById('profileImageCurrentImg').style.display = 'none';
+                document.getElementById('profileImageCurrentPlaceholder').style.display = 'flex';
+                document.getElementById('deleteProfileImageBtn').style.display = 'none';
+            }
+        });
+    
+    // 파일 선택 시 이미지 크롭 영역 표시
+    document.getElementById('profileImageFileInput').onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    cropImage = img;
+                    setupCropArea();
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+    
+    // 모달 배경 클릭 시 닫기
+    document.getElementById('trainerProfileImageModalBg').onclick = function(e) {
+        if (e.target === this) {
+            closeProfileImageModal();
+        }
+    };
+    
+    document.getElementById('trainerProfileImageModalBg').style.display = 'block';
+    document.getElementById('trainerProfileImageModal').style.display = 'block';
+}
+
+function setupCropArea() {
+    if (!cropImage) return;
+    
+    // 캔버스 크기 설정 (이미지 비율 유지)
+    const maxWidth = 500;
+    const maxHeight = 400;
+    let canvasWidth = cropImage.width;
+    let canvasHeight = cropImage.height;
+    
+    if (canvasWidth > maxWidth) {
+        canvasHeight = (canvasHeight * maxWidth) / canvasWidth;
+        canvasWidth = maxWidth;
+    }
+    if (canvasHeight > maxHeight) {
+        canvasWidth = (canvasWidth * maxHeight) / canvasHeight;
+        canvasHeight = maxHeight;
+    }
+    
+    cropCanvas.width = canvasWidth;
+    cropCanvas.height = canvasHeight;
+    
+    // 이미지 그리기
+    cropCtx.drawImage(cropImage, 0, 0, canvasWidth, canvasHeight);
+    
+    // 크롭 원 초기 위치 설정 (중앙)
+    cropX = canvasWidth / 2;
+    cropY = canvasHeight / 2;
+    cropRadius = Math.min(canvasWidth, canvasHeight) * 0.3; // 이미지 크기의 30%
+    
+    // 크롭 영역 표시
+    document.getElementById('profileImageCropArea').style.display = 'block';
+    document.getElementById('profileImagePreviewArea').style.display = 'block';
+    document.getElementById('profileImageFileSelectArea').style.display = 'none';
+    document.getElementById('profileImageCurrentPreview').style.display = 'none';
+    document.getElementById('uploadProfileImageBtn').style.display = 'inline-block';
+    
+    updateCropCircle();
+    updatePreview();
+    setupCropEvents();
+}
+
+function updateCropCircle() {
+    if (!cropCircle) return;
+    cropCircle.style.width = (cropRadius * 2) + 'px';
+    cropCircle.style.height = (cropRadius * 2) + 'px';
+    cropCircle.style.left = (cropX - cropRadius) + 'px';
+    cropCircle.style.top = (cropY - cropRadius) + 'px';
+}
+
+function updatePreview() {
+    if (!cropImage || !previewCanvas || !previewCtx) return;
+    
+    // 원본 이미지에서 크롭 영역 추출
+    const sourceX = (cropX - cropRadius) * (cropImage.width / cropCanvas.width);
+    const sourceY = (cropY - cropRadius) * (cropImage.height / cropCanvas.height);
+    const sourceSize = (cropRadius * 2) * (cropImage.width / cropCanvas.width);
+    
+    // 미리보기 캔버스에 원형으로 그리기
+    previewCanvas.width = 150;
+    previewCanvas.height = 150;
+    
+    previewCtx.save();
+    previewCtx.beginPath();
+    previewCtx.arc(75, 75, 75, 0, Math.PI * 2);
+    previewCtx.clip();
+    previewCtx.drawImage(
+        cropImage,
+        sourceX, sourceY, sourceSize, sourceSize,
+        0, 0, 150, 150
+    );
+    previewCtx.restore();
+}
+
+function setupCropEvents() {
+    // 드래그 시작
+    cropCanvas.addEventListener('mousedown', function(e) {
+        const rect = cropCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        // 크롭 원 내부인지 확인
+        const dx = x - cropX;
+        const dy = y - cropY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance <= cropRadius) {
+            isDragging = true;
+            dragStartX = x - cropX;
+            dragStartY = y - cropY;
+        }
+    });
+    
+    // 드래그 중
+    cropCanvas.addEventListener('mousemove', function(e) {
+        if (isDragging) {
+            const rect = cropCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            cropX = x - dragStartX;
+            cropY = y - dragStartY;
+            
+            // 경계 체크
+            cropX = Math.max(cropRadius, Math.min(cropCanvas.width - cropRadius, cropX));
+            cropY = Math.max(cropRadius, Math.min(cropCanvas.height - cropRadius, cropY));
+            
+            updateCropCircle();
+            updatePreview();
+        }
+    });
+    
+    // 드래그 종료
+    cropCanvas.addEventListener('mouseup', function() {
+        isDragging = false;
+    });
+    
+    cropCanvas.addEventListener('mouseleave', function() {
+        isDragging = false;
+    });
+    
+    // 휠로 크기 조절
+    cropCanvas.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -10 : 10;
+        const minRadius = 50;
+        const maxRadius = Math.min(cropCanvas.width, cropCanvas.height) / 2;
+        
+        cropRadius = Math.max(minRadius, Math.min(maxRadius, cropRadius + delta));
+        
+        // 크기 변경 시 위치 조정 (경계 내에 유지)
+        cropX = Math.max(cropRadius, Math.min(cropCanvas.width - cropRadius, cropX));
+        cropY = Math.max(cropRadius, Math.min(cropCanvas.height - cropRadius, cropY));
+        
+        updateCropCircle();
+        updatePreview();
+    });
+    
+    // 터치 이벤트 (모바일)
+    let touchStartDistance = 0;
+    cropCanvas.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 1) {
+            const rect = cropCanvas.getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            const y = e.touches[0].clientY - rect.top;
+            
+            const dx = x - cropX;
+            const dy = y - cropY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= cropRadius) {
+                isDragging = true;
+                dragStartX = x - cropX;
+                dragStartY = y - cropY;
+            }
+        } else if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            touchStartDistance = Math.sqrt(dx * dx + dy * dy);
+        }
+    });
+    
+    cropCanvas.addEventListener('touchmove', function(e) {
+        e.preventDefault();
+        if (e.touches.length === 1 && isDragging) {
+            const rect = cropCanvas.getBoundingClientRect();
+            const x = e.touches[0].clientX - rect.left;
+            const y = e.touches[0].clientY - rect.top;
+            
+            cropX = x - dragStartX;
+            cropY = y - dragStartY;
+            
+            cropX = Math.max(cropRadius, Math.min(cropCanvas.width - cropRadius, cropX));
+            cropY = Math.max(cropRadius, Math.min(cropCanvas.height - cropRadius, cropY));
+            
+            updateCropCircle();
+            updatePreview();
+        } else if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX;
+            const dy = e.touches[0].clientY - e.touches[1].clientY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            const delta = distance - touchStartDistance;
+            const minRadius = 50;
+            const maxRadius = Math.min(cropCanvas.width, cropCanvas.height) / 2;
+            
+            cropRadius = Math.max(minRadius, Math.min(maxRadius, cropRadius + delta * 0.1));
+            cropX = Math.max(cropRadius, Math.min(cropCanvas.width - cropRadius, cropX));
+            cropY = Math.max(cropRadius, Math.min(cropCanvas.height - cropRadius, cropY));
+            
+            touchStartDistance = distance;
+            updateCropCircle();
+            updatePreview();
+        }
+    });
+    
+    cropCanvas.addEventListener('touchend', function() {
+        isDragging = false;
+    });
+}
+
+function closeProfileImageModal() {
+    document.getElementById('trainerProfileImageModalBg').style.display = 'none';
+    document.getElementById('trainerProfileImageModal').style.display = 'none';
+    document.getElementById('profileImageFileInput').value = '';
+    document.getElementById('profileImageResult').innerHTML = '';
+    document.getElementById('profileImageCropArea').style.display = 'none';
+    document.getElementById('profileImagePreviewArea').style.display = 'none';
+    document.getElementById('profileImageFileSelectArea').style.display = 'block';
+    document.getElementById('profileImageCurrentPreview').style.display = 'block';
+    document.getElementById('uploadProfileImageBtn').style.display = 'none';
+    
+    // 상태 초기화
+    currentProfileImageUsername = null;
+    currentProfileImageUrl = null;
+    cropImage = null;
+    cropRadius = 100;
+    cropX = 0;
+    cropY = 0;
+    isDragging = false;
+}
+
+async function uploadProfileImage() {
+    if (!cropImage) {
+        alert('이미지를 선택해주세요.');
+        return;
+    }
+    
+    // 크롭된 이미지를 원형으로 변환하여 Blob 생성
+    const croppedImageBlob = await getCroppedImageBlob();
+    
+    if (!croppedImageBlob) {
+        alert('이미지 처리 중 오류가 발생했습니다.');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('image', croppedImageBlob, 'profile.jpg');
+    formData.append('currentUser', localStorage.getItem('username'));
+    
+    const resultDiv = document.getElementById('profileImageResult');
+    resultDiv.innerHTML = '업로드 중...';
+    resultDiv.style.color = '#666';
+    resultDiv.style.fontSize = '14px';
+    
+    try {
+        const res = await fetch(`/api/trainers/${encodeURIComponent(currentProfileImageUsername)}/profile-image`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        
+        if (res.ok && data.message) {
+            resultDiv.innerHTML = data.message;
+            resultDiv.style.color = '#4caf50';
+            setTimeout(() => {
+                closeProfileImageModal();
+                loadList(); // 목록 새로고침
+            }, 1000);
+        } else {
+            resultDiv.innerHTML = data.message || '업로드에 실패했습니다.';
+            resultDiv.style.color = '#d32f2f';
+        }
+    } catch (error) {
+        console.error('프로필 사진 업로드 오류:', error);
+        resultDiv.innerHTML = '업로드 중 오류가 발생했습니다.';
+        resultDiv.style.color = '#d32f2f';
+    }
+}
+
+function getCroppedImageBlob() {
+    if (!cropImage || !cropCanvas) return Promise.resolve(null);
+    
+    // 원본 이미지에서 크롭 영역 추출
+    const sourceX = (cropX - cropRadius) * (cropImage.width / cropCanvas.width);
+    const sourceY = (cropY - cropRadius) * (cropImage.height / cropCanvas.height);
+    const sourceSize = (cropRadius * 2) * (cropImage.width / cropCanvas.width);
+    
+    // 임시 캔버스에 원형으로 그리기
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 400; // 최종 이미지 크기
+    tempCanvas.height = 400;
+    const tempCtx = tempCanvas.getContext('2d');
+    
+    // 원형 클리핑
+    tempCtx.save();
+    tempCtx.beginPath();
+    tempCtx.arc(200, 200, 200, 0, Math.PI * 2);
+    tempCtx.clip();
+    tempCtx.drawImage(
+        cropImage,
+        sourceX, sourceY, sourceSize, sourceSize,
+        0, 0, 400, 400
+    );
+    tempCtx.restore();
+    
+    // Blob으로 변환
+    return new Promise((resolve) => {
+        tempCanvas.toBlob((blob) => {
+            resolve(blob);
+        }, 'image/jpeg', 0.9);
+    });
+}
+
+async function deleteProfileImage() {
+    if (!confirm('프로필 사진을 삭제하시겠습니까?')) {
+        return;
+    }
+    
+    const resultDiv = document.getElementById('profileImageResult');
+    resultDiv.innerHTML = '삭제 중...';
+    resultDiv.style.color = '#666';
+    resultDiv.style.fontSize = '14px';
+    
+    try {
+        const res = await fetch(`/api/trainers/${encodeURIComponent(currentProfileImageUsername)}/profile-image`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                currentUser: localStorage.getItem('username')
+            })
+        });
+        const data = await res.json();
+        
+        if (res.ok && data.message) {
+            resultDiv.innerHTML = data.message;
+            resultDiv.style.color = '#4caf50';
+            setTimeout(() => {
+                closeProfileImageModal();
+                loadList(); // 목록 새로고침
+            }, 1000);
+        } else {
+            resultDiv.innerHTML = data.message || '삭제에 실패했습니다.';
+            resultDiv.style.color = '#d32f2f';
+        }
+    } catch (error) {
+        console.error('프로필 사진 삭제 오류:', error);
+        resultDiv.innerHTML = '삭제 중 오류가 발생했습니다.';
+        resultDiv.style.color = '#d32f2f';
+    }
+}
+
+// 전역 함수로 등록 (HTML에서 onclick으로 호출하기 위해)
+window.openProfileImageModal = openProfileImageModal;
+window.closeProfileImageModal = closeProfileImageModal;
+window.uploadProfileImage = uploadProfileImage;
+window.deleteProfileImage = deleteProfileImage;
 
 export const trainer = { loadList, renderMyMembers, renderSessionCalendar };
 
