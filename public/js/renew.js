@@ -40,7 +40,7 @@ function render(container) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <h3 id="renew-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">재등록 현황</h3>
         <div style="display:flex;gap:12px;align-items:center;">
-          <button id="renew-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">추가</button>
+          <button id="renew-add-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">추가</button>
           <div class="date-navigation">
             <button id="renew-prev-btn" class="nav-btn">◀</button>
             <span id="renew-current-date" class="current-date"></span>
@@ -245,7 +245,7 @@ function renderRenewSessions(data, centerOrder) {
                 <div style="background:#f5f5f5;border-bottom:2px solid #ddd;padding:8px 6px;">
                   <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
                     <div style="font-weight:600;color:#1976d2;font-size:0.85rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${renewal.trainer}</div>
-                    <button class="renew-edit-btn" data-renewal-id="${renewal.id}" data-renewal-data='${JSON.stringify(renewal)}' style="background:#1976d2;color:#fff;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:0.7rem;white-space:nowrap;flex-shrink:0;">수정</button>
+                    <button class="renew-edit-btn header-text-btn" data-renewal-id="${renewal.id}" data-renewal-data='${JSON.stringify(renewal)}' style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:0.7rem;white-space:nowrap;flex-shrink:0;">수정</button>
                   </div>
                 </div>
                 <table style="width:100%;border-collapse:collapse;">

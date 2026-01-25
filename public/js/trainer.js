@@ -14,71 +14,61 @@ async function loadList() {
         const isSu = currentRole === 'su';
         
         if (trainers.length === 0) {
-            if (listDiv) listDiv.innerHTML = '<div style="color:#888;">등록된 트레이너가 없습니다.</div>';
+            if (listDiv) listDiv.innerHTML = '<div style="color:#888;text-align:center;padding:40px;">등록된 트레이너가 없습니다.</div>';
         } else {
-            let html = '<table style="width:100%;border-collapse:collapse;margin-top:10px;">';
-            html += '<thead><tr>';
-            html += '<th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">아이디</th>';
-            html += '<th style="text-align:left;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">이름</th>';
-            html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">VIP 기능</th>';
-            html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">30분 세션</th>';
-            html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">프로필 사진</th>';
-            if (isSu) {
-                html += '<th style="text-align:center;padding:8px 4px;border-bottom:1.5px solid #b6c6e3;">삭제</th>';
-            }
-            html += '</tr></thead><tbody>';
+            let html = '<div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:16px;">';
             
             trainers.forEach(tr => {
                 const vipStatus = tr.vip_member ? 'ON' : 'OFF';
-                const vipColor = tr.vip_member ? '#2196f3' : '#666';
+                const vipColor = tr.vip_member ? '#1976d2' : '#666';
                 const vipBgColor = tr.vip_member ? '#e3f2fd' : '#f5f5f5';
                 
                 const thirtyMinStatus = tr['30min_session'] === 'on' ? 'ON' : 'OFF';
-                const thirtyMinColor = tr['30min_session'] === 'on' ? '#2196f3' : '#666';
+                const thirtyMinColor = tr['30min_session'] === 'on' ? '#1976d2' : '#666';
                 const thirtyMinBgColor = tr['30min_session'] === 'on' ? '#e3f2fd' : '#f5f5f5';
                 
                 const profileImageUrl = tr.profile_image_url || null;
                 const profileImageHtml = profileImageUrl 
-                    ? `<img src="${profileImageUrl}" alt="프로필" style="width:50px;height:50px;object-fit:cover;border-radius:50%;cursor:pointer;border:2px solid #ddd;" 
+                    ? `<img src="${profileImageUrl}" alt="프로필" style="width:80px;height:80px;object-fit:cover;border-radius:50%;cursor:pointer;border:2px solid #e0e0e0;" 
                          onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
                          onclick="openProfileImageModal('${tr.username}', '${tr.name}')" />
-                       <div style="width:50px;height:50px;border-radius:50%;background:#e0e0e0;display:none;align-items:center;justify-content:center;cursor:pointer;border:2px solid #ddd;margin:0 auto;"
+                       <div style="width:80px;height:80px;border-radius:50%;background:#e0e0e0;display:none;align-items:center;justify-content:center;cursor:pointer;border:2px solid #e0e0e0;"
                          onclick="openProfileImageModal('${tr.username}', '${tr.name}')">
-                         <span style="font-size:20px;">👤</span>
+                         <span style="font-size:32px;">👤</span>
                        </div>`
-                    : `<div style="width:50px;height:50px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #ddd;margin:0 auto;"
+                    : `<div style="width:80px;height:80px;border-radius:50%;background:#e0e0e0;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #e0e0e0;"
                          onclick="openProfileImageModal('${tr.username}', '${tr.name}')">
-                         <span style="font-size:20px;">👤</span>
+                         <span style="font-size:32px;">👤</span>
                        </div>`;
                 
-                html += `<tr>
-                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.username}</td>
-                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;">${tr.name}</td>
-                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
-                        <button class="vip-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-vip="${tr.vip_member}" 
-                                style="background:${vipBgColor};color:${vipColor};border:1px solid ${vipColor};padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.9rem;min-width:60px;text-align:center;display:inline-block;width:60px;">
-                            ${vipStatus}
-                        </button>
-                    </td>
-                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
-                        <button class="thirty-min-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-thirty-min="${tr['30min_session']}" 
-                                style="background:${thirtyMinBgColor};color:${thirtyMinColor};border:1px solid ${thirtyMinColor};padding:4px 12px;border-radius:4px;cursor:pointer;font-size:0.9rem;min-width:60px;text-align:center;display:inline-block;width:60px;">
-                            ${thirtyMinStatus}
-                        </button>
-                    </td>
-                    <td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
-                        ${profileImageHtml}
-                    </td>`;
-                if (isSu) {
-                    html += `<td style="padding:8px 4px;border-bottom:1px solid #e3eaf5;text-align:center;">
-                        <button class="delete-trainer-btn" data-username="${tr.username}" data-name="${tr.name}" 
-                                style="background:#d32f2f;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.9rem;">삭제</button>
-                    </td>`;
-                }
-                html += `</tr>`;
+                html += `<div style="flex:0 0 calc(33.333% - 11px);min-width:280px;max-width:none;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);border-radius:8px;overflow:hidden;position:relative;">
+                    ${isSu ? `
+                    <button class="delete-trainer-btn" data-username="${tr.username}" data-name="${tr.name}" 
+                            style="position:absolute;top:8px;right:8px;background:#d32f2f;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;z-index:10;">삭제</button>
+                    ` : ''}
+                    <div style="display:flex;align-items:center;gap:16px;padding:16px;">
+                        <div style="flex-shrink:0;">
+                            ${profileImageHtml}
+                        </div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:600;color:#1976d2;font-size:1rem;margin-bottom:4px;">${tr.name}</div>
+                            <div style="font-size:0.85rem;color:#666;margin-bottom:12px;">${tr.username}</div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <button class="vip-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-vip="${tr.vip_member}" 
+                                        style="background:${vipBgColor};color:${vipColor};border:1px solid ${vipColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
+                                    VIP ${vipStatus}
+                                </button>
+                                <button class="thirty-min-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-thirty-min="${tr['30min_session']}" 
+                                        style="background:${thirtyMinBgColor};color:${thirtyMinColor};border:1px solid ${thirtyMinColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
+                                    30분 ${thirtyMinStatus}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
             });
             
-            html += '</tbody></table>';
+            html += '</div>';
             if (listDiv) listDiv.innerHTML = html;
             
             // VIP 기능 토글 버튼 이벤트 리스너 추가

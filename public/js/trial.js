@@ -35,11 +35,11 @@ function render(container) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <div style="display:flex;align-items:center;gap:12px;">
           <h3 id="trial-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">신규 상담 현황</h3>
-          <button id="trial-consultation-list-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">상세상담 목록</button>
-          <button id="trial-public-consultation-list-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">공개상담 링크 목록</button>
+          <button id="trial-consultation-list-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">상세상담 목록</button>
+          <button id="trial-public-consultation-list-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">공개상담 링크 목록</button>
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
-          <button id="trial-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">추가</button>
+          <button id="trial-add-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">추가</button>
           <div class="date-navigation">
             <button id="trial-prev-btn" class="nav-btn">◀</button>
             <span id="trial-current-date" class="current-date"></span>
@@ -182,48 +182,54 @@ function renderTrialSessions(data, centerOrder) {
     const totalCount = trials.length;
     
     html += `
-      <div style="margin-bottom:24px;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
-        <div style="background:#1976d2;color:#fff;padding:12px 16px;font-weight:600;font-size:1rem;">
-          ${center}
-          <span style="margin-left:12px;font-size:0.85rem;font-weight:normal;opacity:0.9;">
-            (${registeredCount}/${totalCount})
+      <div style="margin-bottom:32px;border:1px solid #e3eaf5;border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <div style="background:#f8f9fa;color:#333;padding:10px 20px;font-weight:600;font-size:0.9rem;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #e3eaf5;">
+          <span style="font-size:0.95rem;letter-spacing:0.3px;color:#1976d2;">${center}</span>
+          <span style="font-size:0.8rem;font-weight:500;background:#e3f2fd;color:#1976d2;padding:4px 12px;border-radius:14px;">
+            등록 ${registeredCount} / 전체 ${totalCount}
           </span>
         </div>
         <div style="padding:0;overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;min-width:800px;">
+          <table style="width:100%;border-collapse:collapse;min-width:900px;">
             <thead>
-              <tr style="background:#f5f5f5;">
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">날짜</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">시간</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">트레이너</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">회원명</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">성별</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">연락처</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">방문경로</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">상담목적</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">요구사항</th>
-                <th style="padding:6px 6px;text-align:left;font-size:0.75rem;font-weight:600;color:#333;border-bottom:1px solid #ddd;white-space:nowrap;">결과</th>
+              <tr style="background:#f8f9fa;">
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">날짜</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">시간</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">트레이너</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">회원명</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">성별</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">연락처</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">방문경로</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">상담목적</th>
+                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">요구사항</th>
+                <th style="padding:12px 10px;text-align:center;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">결과</th>
               </tr>
             </thead>
             <tbody>
-              ${trials.map(trial => {
+              ${trials.map((trial, index) => {
                 const date = new Date(trial.date);
                 const dateStr = `${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
                 const resultValue = trial.result || '미등록';
-                const resultColor = resultValue === '등록' ? '#4caf50' : '#333';
+                const resultColor = resultValue === '등록' ? '#4caf50' : '#666';
+                const resultBgColor = resultValue === '등록' ? '#e8f5e9' : '#f5f5f5';
+                const isEven = index % 2 === 0;
                 
                 return `
-                  <tr class="trial-row" data-trial-data='${JSON.stringify(trial)}' style="border-bottom:1px solid #f0f0f0;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
-                    <td style="padding:6px 6px;font-size:0.8rem;">${dateStr}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.time}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.trainer || ''}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.member_name || '-'}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;">${trial.gender || '-'}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
-                    <td style="padding:6px 6px;font-size:0.8rem;color:${resultColor};font-weight:${resultValue === '등록' ? '600' : 'normal'};">${resultValue}</td>
+                  <tr class="trial-row" data-trial-data='${JSON.stringify(trial)}' style="border-bottom:1px solid #f0f4f8;cursor:pointer;background:${isEven ? '#fff' : '#fafbfc'};transition:all 0.2s ease;" onmouseover="this.style.backgroundColor='#e3f2fd';this.style.transform='scale(1.001)'" onmouseout="this.style.backgroundColor='${isEven ? '#fff' : '#fafbfc'}';this.style.transform='scale(1)'">
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#333;font-weight:500;">${dateStr}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#333;">${trial.time || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#333;font-weight:500;">${trial.trainer || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#1976d2;font-weight:600;">${trial.member_name || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;">${trial.gender || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
+                    <td style="padding:14px 10px;font-size:0.85rem;text-align:center;">
+                      <span style="display:inline-block;padding:4px 10px;border-radius:12px;background:${resultBgColor};color:${resultColor};font-weight:${resultValue === '등록' ? '700' : '500'};font-size:0.8rem;">
+                        ${resultValue}
+                      </span>
+                    </td>
                   </tr>
                 `;
               }).join('')}

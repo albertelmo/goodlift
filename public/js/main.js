@@ -836,13 +836,19 @@ function showAccountSettingsModal() {
     document.getElementById('changePwForm').reset();
     document.getElementById('changePwResult').innerText = '';
 }
-document.getElementById('closeAccountSettingsBtn').onclick = function() {
+function closeAccountSettingsModal() {
     document.getElementById('accountSettingsModal').style.display = 'none';
     document.getElementById('accountSettingsModalBg').style.display = 'none';
-};
-document.getElementById('accountSettingsModalBg').onclick = function() {
-    document.getElementById('accountSettingsModal').style.display = 'none';
-    document.getElementById('accountSettingsModalBg').style.display = 'none';
+}
+document.getElementById('closeAccountSettingsBtn').onclick = closeAccountSettingsModal;
+const closeAccountSettingsBtn2 = document.getElementById('closeAccountSettingsBtn2');
+if (closeAccountSettingsBtn2) {
+    closeAccountSettingsBtn2.onclick = closeAccountSettingsModal;
+}
+document.getElementById('accountSettingsModalBg').onclick = function(e) {
+    if (e.target === this) {
+        closeAccountSettingsModal();
+    }
 };
 document.getElementById('changePwForm').onsubmit = async function(e) {
     e.preventDefault();
@@ -866,11 +872,10 @@ document.getElementById('changePwForm').onsubmit = async function(e) {
     });
     const result = await res.json();
     if (res.ok) {
-        document.getElementById('changePwResult').style.color = '#1976d2';
-        document.getElementById('changePwResult').innerText = '비밀번호가 변경되었습니다.';
+        document.getElementById('changePwResult').style.color = '#2e7d32';
+        document.getElementById('changePwResult').innerText = '✅ 비밀번호가 변경되었습니다.';
         setTimeout(() => {
-            document.getElementById('accountSettingsModal').style.display = 'none';
-            document.getElementById('accountSettingsModalBg').style.display = 'none';
+            closeAccountSettingsModal();
         }, 1200);
     } else {
         document.getElementById('changePwResult').style.color = '#d32f2f';

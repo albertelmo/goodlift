@@ -51,7 +51,7 @@ function render(container) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <h3 id="strategy-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">📈 전략</h3>
         <div style="display:flex;gap:12px;align-items:center;">
-          <button id="strategy-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;">추가</button>
+          <button id="strategy-add-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">추가</button>
           <div class="date-navigation">
             <button id="strategy-prev-btn" class="nav-btn">◀</button>
             <span id="strategy-current-date" class="current-date"></span>
@@ -242,7 +242,7 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
         <div style="background:#f5f5f5;border-bottom:2px solid #ddd;padding:8px 10px;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
             <h4 style="margin:0;color:#1976d2;font-size:0.95rem;font-weight:600;flex:1;">${center}</h4>
-            <button class="metric-edit-btn" data-metric-id="${currentMetric.id}" data-metric-data='${JSON.stringify(currentMetric)}' style="background:#1976d2;color:#fff;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.75rem;white-space:nowrap;flex-shrink:0;">수정</button>
+            <button class="metric-edit-btn header-text-btn" data-metric-id="${currentMetric.id}" data-metric-data='${JSON.stringify(currentMetric)}' style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.75rem;white-space:nowrap;flex-shrink:0;">수정</button>
           </div>
         </div>
         <div style="padding:8px 10px;">
@@ -593,7 +593,7 @@ async function loadMarketingData(contentEl, centerOrder, yearMonth) {
           <div style="margin-bottom:16px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;">
             <div style="background:#f5f5f5;border-bottom:1px solid #ddd;padding:6px 8px;display:flex;justify-content:space-between;align-items:center;">
               <h4 style="margin:0;color:#1976d2;font-size:0.85rem;font-weight:600;">${center} <span style="color:#666;font-weight:normal;">(비용 : ${formatNumber(centerCost)}원)</span></h4>
-              <button class="marketing-add-btn" data-center="${center}" style="background:#4caf50;color:#fff;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">추가</button>
+              <button class="marketing-add-btn header-text-btn" data-center="${center}" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">추가</button>
             </div>
             <div style="padding:8px;">
               ${items.length === 0 ? '<div style="text-align:center;color:#999;padding:8px;font-size:0.75rem;">등록된 데이터가 없습니다.</div>' : `
@@ -1328,7 +1328,7 @@ async function showMetricEditModal(metric) {
         <div style="border-top:2px solid #ddd;padding-top:16px;margin-top:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <h4 style="margin:0;color:#1976d2;font-size:1rem;">PT 지표</h4>
-            <button type="button" id="metric-edit-load-pt-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
+            <button type="button" id="metric-edit-load-pt-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
@@ -1373,7 +1373,7 @@ async function showMetricEditModal(metric) {
         <div style="border-top:2px solid #ddd;padding-top:16px;margin-top:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <h4 style="margin:0;color:#1976d2;font-size:1rem;">회원 수 지표</h4>
-            <button type="button" id="metric-edit-load-members-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
+            <button type="button" id="metric-edit-load-members-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
@@ -1397,7 +1397,7 @@ async function showMetricEditModal(metric) {
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <h4 style="margin:0;color:#1976d2;font-size:1rem;">매출 지표</h4>
             ${isPTSpecialty ? `
-            <button type="button" id="metric-edit-load-sales-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
+            <button type="button" id="metric-edit-load-sales-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
             ` : ''}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">

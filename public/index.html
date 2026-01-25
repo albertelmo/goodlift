@@ -140,26 +140,48 @@
                 </div>
         </div>
     </div>
-    <div id="accountSettingsModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
-    <div id="accountSettingsModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:32px 28px 24px 28px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:320px;max-width:90vw;">
-      <h3 style="margin-top:0;margin-bottom:18px;color:#1976d2;font-size:1.15rem;">계정 정보 변경</h3>
+    <div id="accountSettingsModalBg" style="display:none;position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.4);backdrop-filter:blur(2px);"></div>
+    <div id="accountSettingsModal" style="display:none;position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.15);min-width:400px;max-width:90vw;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid #e3f2fd;">
+        <h3 style="margin:0;color:#1976d2;font-size:1rem;font-weight:600;">비밀번호 변경</h3>
+        <button type="button" id="closeAccountSettingsBtn" style="background:transparent;border:none;color:#666;font-size:1.5rem;cursor:pointer;padding:0;width:24px;height:24px;display:flex;align-items:center;justify-content:center;line-height:1;" title="닫기">×</button>
+      </div>
       <form id="changePwForm">
-        <div class="form-row">
-          <label for="currentPw">현재 비밀번호</label>
-          <input type="password" id="currentPw" name="currentPw" required>
+        <div style="margin-bottom:12px;">
+          <label for="currentPw" style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+            현재 비밀번호 <span style="color:#d32f2f;">*</span>
+          </label>
+          <input type="password" id="currentPw" name="currentPw" required
+                 style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                 onfocus="this.style.borderColor='#1976d2';" 
+                 onblur="this.style.borderColor='#ddd';">
         </div>
-        <div class="form-row">
-          <label for="newPw">새 비밀번호</label>
-          <input type="password" id="newPw" name="newPw" required>
+        <div style="margin-bottom:12px;">
+          <label for="newPw" style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+            새 비밀번호 <span style="color:#d32f2f;">*</span>
+          </label>
+          <input type="password" id="newPw" name="newPw" required
+                 style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                 onfocus="this.style.borderColor='#1976d2';" 
+                 onblur="this.style.borderColor='#ddd';">
         </div>
-        <div class="form-row">
-          <label for="newPw2">새 비밀번호 확인</label>
-          <input type="password" id="newPw2" name="newPw2" required>
+        <div style="margin-bottom:16px;">
+          <label for="newPw2" style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+            새 비밀번호 확인 <span style="color:#d32f2f;">*</span>
+          </label>
+          <input type="password" id="newPw2" name="newPw2" required
+                 style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                 onfocus="this.style.borderColor='#1976d2';" 
+                 onblur="this.style.borderColor='#ddd';">
         </div>
-        <div id="changePwResult" style="min-height:22px;color:#d32f2f;margin-bottom:8px;"></div>
+        <div id="changePwResult" style="min-height:20px;margin-bottom:12px;font-size:0.9rem;text-align:center;"></div>
         <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button type="button" id="closeAccountSettingsBtn" style="background:#eee;color:#1976d2;">취소</button>
-          <button type="submit">비밀번호 변경</button>
+          <button type="button" id="closeAccountSettingsBtn2" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;font-size:0.9rem;font-weight:500;cursor:pointer;transition:background-color 0.2s;"
+                  onmouseover="this.style.background='#e0e0e0';" 
+                  onmouseout="this.style.background='#eee';">취소</button>
+          <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:0.9rem;font-weight:600;cursor:pointer;transition:background-color 0.2s;"
+                  onmouseover="this.style.background='#1565c0';" 
+                  onmouseout="this.style.background='#1976d2';">비밀번호 변경</button>
         </div>
       </form>
     </div>

@@ -113,7 +113,7 @@ function render(root) {
           <button id="sales-search-btn" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;">🔍 검색</button>
         </div>
         <div style="display:flex;align-items:center;gap:10px;position:relative;">
-          <button id="sales-add-btn" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;font-weight:600;">추가</button>
+          <button id="sales-add-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">추가</button>
           <button id="sales-month-prev" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:4px 10px;border-radius:6px;cursor:pointer;">◀</button>
           <div id="sales-month-label" style="font-weight:700;color:#1976d2;min-width:100px;text-align:center;cursor:pointer;padding:4px 8px;border-radius:4px;user-select:none;" 
                onmouseover="this.style.background='#f0f0f0'" 

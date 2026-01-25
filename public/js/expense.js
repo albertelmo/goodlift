@@ -80,7 +80,7 @@ function render(container) {
       <div style="margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4 style="margin:0;color:#1976d2;font-size:0.95rem;font-weight:600;">🍽️ 식대 내역</h4>
-          <button id="expense-meal-add-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">추가</button>
+          <button id="expense-meal-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">추가</button>
         </div>
         <div id="expense-meal-loading" style="text-align:center;color:#888;padding:20px;font-size:0.85rem;">식대 내역을 불러오는 중...</div>
         <div id="expense-meal-table-container" style="display:none;">
@@ -119,7 +119,7 @@ function render(container) {
       <div style="margin-bottom:20px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4 style="margin:0;color:#4caf50;font-size:0.95rem;font-weight:600;">🛒 구매 내역</h4>
-          <button id="expense-purchase-add-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">추가</button>
+          <button id="expense-purchase-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">추가</button>
         </div>
         <div id="expense-purchase-loading" style="text-align:center;color:#888;padding:20px;font-size:0.85rem;">구매 내역을 불러오는 중...</div>
         <div id="expense-purchase-table-container" style="display:none;">
@@ -163,7 +163,7 @@ function render(container) {
       <div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4 style="margin:0;color:#ff9800;font-size:0.95rem;font-weight:600;">👤 개인지출 내역</h4>
-          <button id="expense-personal-add-btn" style="background:#ff9800;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">추가</button>
+          <button id="expense-personal-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">추가</button>
         </div>
         <div id="expense-personal-loading" style="text-align:center;color:#888;padding:20px;font-size:0.85rem;">개인지출 내역을 불러오는 중...</div>
         <div id="expense-personal-table-container" style="display:none;">

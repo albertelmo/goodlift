@@ -8,28 +8,91 @@ let trainerMap = {};
 function renderAddForm(container) {
   if (!container) return;
   container.innerHTML = `
-    <form id="member-add-form" class="form-box" style="margin:0 auto;">
-      <h3>회원 추가</h3>
-      <label>이름 <input type="text" name="name" required></label>
-      <label>성별
-        <select name="gender" required>
-          <option value="">선택</option>
-          <option value="male">남성</option>
-          <option value="female">여성</option>
-        </select>
-      </label>
-      <label>전화번호 <input type="tel" name="phone" required pattern="[0-9\-]+" placeholder="010-1234-5678"></label>
-      <label>담당 트레이너
-        <select name="trainer" required id="member-trainer-select"><option value="">불러오는 중...</option></select>
-      </label>
-      <label>센터
-        <select name="center" required id="member-center-select"><option value="">불러오는 중...</option></select>
-      </label>
-      <label>등록일 <input type="date" name="regdate" required id="member-regdate"></label>
-      <label>세션 수 <input type="number" name="sessions" min="0" required value="0"></label>
-      <button type="submit">회원 추가</button>
-      <div id="member-add-result" style="min-height:24px;margin-top:8px;"></div>
-    </form>
+    <div style="max-width:800px;margin:0 auto;">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:24px;margin-top:16px;">
+        <h3 style="color:#1976d2;margin-top:0;margin-bottom:12px;font-size:1rem;font-weight:600;border-bottom:1px solid #e3f2fd;padding-bottom:8px;">회원 추가</h3>
+        <form id="member-add-form">
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+              이름 <span style="color:#d32f2f;">*</span>
+            </label>
+            <input type="text" name="name" required 
+                   style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   onfocus="this.style.borderColor='#1976d2';" 
+                   onblur="this.style.borderColor='#ddd';">
+          </div>
+          <div style="margin-bottom:4px;">
+            <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+              성별 <span style="color:#d32f2f;">*</span>
+            </label>
+            <select name="gender" required 
+                    style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
+                    onfocus="this.style.borderColor='#1976d2';" 
+                    onblur="this.style.borderColor='#ddd';">
+              <option value="">선택</option>
+              <option value="male">남성</option>
+              <option value="female">여성</option>
+            </select>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+              전화번호 <span style="color:#d32f2f;">*</span>
+            </label>
+            <input type="tel" name="phone" required pattern="[0-9\-]+" placeholder="010-1234-5678"
+                   style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   onfocus="this.style.borderColor='#1976d2';" 
+                   onblur="this.style.borderColor='#ddd';">
+          </div>
+          <div style="margin-bottom:4px;">
+            <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+              담당 트레이너 <span style="color:#d32f2f;">*</span>
+            </label>
+            <select name="trainer" required id="member-trainer-select"
+                    style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
+                    onfocus="this.style.borderColor='#1976d2';" 
+                    onblur="this.style.borderColor='#ddd';">
+              <option value="">불러오는 중...</option>
+            </select>
+          </div>
+          <div style="margin-bottom:4px;">
+            <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+              센터 <span style="color:#d32f2f;">*</span>
+            </label>
+            <select name="center" required id="member-center-select"
+                    style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
+                    onfocus="this.style.borderColor='#1976d2';" 
+                    onblur="this.style.borderColor='#ddd';">
+              <option value="">불러오는 중...</option>
+            </select>
+          </div>
+          <div style="margin-bottom:10px;">
+            <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+              등록일 <span style="color:#d32f2f;">*</span>
+            </label>
+            <input type="date" name="regdate" required id="member-regdate"
+                   style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   onfocus="this.style.borderColor='#1976d2';" 
+                   onblur="this.style.borderColor='#ddd';">
+          </div>
+          <div style="margin-bottom:6px;">
+            <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
+              세션 수 <span style="color:#d32f2f;">*</span>
+            </label>
+            <input type="number" name="sessions" min="0" required value="0"
+                   style="width:100%;max-width:200px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   onfocus="this.style.borderColor='#1976d2';" 
+                   onblur="this.style.borderColor='#ddd';">
+          </div>
+          <div id="member-add-result" style="min-height:24px;margin-bottom:6px;font-size:0.9rem;text-align:center;"></div>
+          <div style="display:flex;gap:12px;justify-content:flex-end;">
+            <button type="submit" 
+                    style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px !important;border-radius:20px !important;font-size:15px !important;font-weight:500;cursor:pointer;white-space:nowrap;">
+              회원 추가
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   `;
   // 오늘 날짜 기본값 (한국 시간대)
   const getKoreanDate = () => {
@@ -143,7 +206,7 @@ function renderList(container) {
         </select>
         <select id="search-type" style="padding:4px 4px;font-size:0.8rem;border:1px solid #bbb;border-radius:4px;width:75px;">
           <option value="trainer">트레이너</option>
-          <option value="name">이름</option>
+          <option value="name" selected>이름</option>
         </select>
         <input id="member-search-input" type="text" placeholder="검색어 입력" style="padding:4px 8px;font-size:0.85rem;border:1px solid #bbb;border-radius:4px;width:140px;">
       </div>
@@ -170,7 +233,7 @@ function renderList(container) {
   let sortColumn = null;
   let sortDirection = 'asc'; // 'asc' 또는 'desc'
   let currentDisplayedMembers = []; // 현재 표시된 회원 목록 추적
-  let currentFilters = { keyword: '', searchType: 'trainer', statusFilter: '', centerFilter: '' }; // 현재 필터 상태 추적
+  let currentFilters = { keyword: '', searchType: 'name', statusFilter: '', centerFilter: '' }; // 현재 필터 상태 추적
   
   // 데이터 불러오기
   Promise.all([

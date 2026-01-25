@@ -540,9 +540,8 @@ function renderStatsResults(stats) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h4 style="margin:0;">트레이너별 통계</h4>
         <button id="trainer-detail-stats-btn" 
-                style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:0.9rem;white-space:nowrap;transition:background-color 0.2s;" 
-                onmouseover="this.style.backgroundColor='#1565c0'" 
-                onmouseout="this.style.backgroundColor='#1976d2'">
+                class="header-text-btn"
+                style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:15px !important;white-space:nowrap;">
           상세통계
         </button>
       </div>

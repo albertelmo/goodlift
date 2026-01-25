@@ -15,7 +15,7 @@ function render(container) {
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4 style="margin:0;color:#333;font-size:0.9rem;">회원 관리</h4>
-          <button id="user-app-member-add-btn" style="background:#1976d2;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
+          <button id="user-app-member-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
             회원 추가
           </button>
         </div>
@@ -30,7 +30,7 @@ function render(container) {
           <h4 style="margin:0;color:#333;font-size:0.9rem;">운동종류 관리</h4>
           <div style="display:flex;align-items:stretch;gap:8px;">
             <input type="text" id="user-app-workout-types-search" placeholder="운동 이름 검색..." style="width:200px;padding:4px 8px;border:1px solid #ddd;border-radius:3px;font-size:0.75rem;box-sizing:border-box;margin:0;font-family:inherit;">
-            <button id="user-app-workout-type-add-btn" style="background:#1976d2;color:#fff;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;margin:0;font-family:inherit;white-space:nowrap;">
+            <button id="user-app-workout-type-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;margin:0;font-family:inherit;white-space:nowrap;">
               운동종류 추가
             </button>
           </div>
@@ -47,7 +47,7 @@ function render(container) {
           <div id="user-app-category-1-section" style="background:#fff;padding:8px;border-radius:4px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
               <h5 style="margin:0;color:#666;font-size:0.8rem;">분류 1</h5>
-              <button class="user-app-category-add-btn" data-category="1" style="background:#4caf50;color:#fff;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
+              <button class="user-app-category-add-btn header-text-btn" data-category="1" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
                 추가
               </button>
             </div>
@@ -56,7 +56,7 @@ function render(container) {
           <div id="user-app-category-2-section" style="background:#fff;padding:8px;border-radius:4px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
               <h5 style="margin:0;color:#666;font-size:0.8rem;">분류 2</h5>
-              <button class="user-app-category-add-btn" data-category="2" style="background:#4caf50;color:#fff;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
+              <button class="user-app-category-add-btn header-text-btn" data-category="2" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
                 추가
               </button>
             </div>
@@ -65,7 +65,7 @@ function render(container) {
           <div id="user-app-category-3-section" style="background:#fff;padding:8px;border-radius:4px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
               <h5 style="margin:0;color:#666;font-size:0.8rem;">분류 3</h5>
-              <button class="user-app-category-add-btn" data-category="3" style="background:#4caf50;color:#fff;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
+              <button class="user-app-category-add-btn header-text-btn" data-category="3" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
                 추가
               </button>
             </div>
@@ -74,7 +74,7 @@ function render(container) {
           <div id="user-app-category-4-section" style="background:#fff;padding:8px;border-radius:4px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
               <h5 style="margin:0;color:#666;font-size:0.8rem;">분류 4</h5>
-              <button class="user-app-category-add-btn" data-category="4" style="background:#4caf50;color:#fff;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
+              <button class="user-app-category-add-btn header-text-btn" data-category="4" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;">
                 추가
               </button>
             </div>
@@ -544,7 +544,7 @@ function showMemberModal(member = null) {
       <div style="margin-bottom:10px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <label style="font-weight:600;color:#333;font-size:0.85rem;">회원명 (선택)</label>
-          ${member ? `<button type="button" class="member-search-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.75rem;">검색/연결</button>` : ''}
+          ${member ? `<button type="button" class="member-search-btn header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.75rem;">검색/연결</button>` : ''}
         </div>
         <input type="text" id="member-member-name" readonly value="${member ? escapeHtml(member.member_name || '') : ''}" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;background:#f5f5f5;">
         ${member ? `<div id="member-match-result" style="margin-top:6px;font-size:0.75rem;color:#666;"></div>` : ''}
@@ -787,7 +787,7 @@ function showMemberSelectModal(members, appUser, parentModal) {
             <td style="padding:6px 8px;">${escapeHtml(m.name)}</td>
             <td style="padding:6px 8px;color:#666;">${escapeHtml(m.phone || '-')}</td>
             <td style="padding:6px 8px;text-align:center;">
-              <button class="member-link-btn" data-member-name="${escapeHtml(m.name)}" style="background:#1976d2;color:#fff;border:none;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.75rem;">연결</button>
+              <button class="member-link-btn header-text-btn" data-member-name="${escapeHtml(m.name)}" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 8px;border-radius:3px;cursor:pointer;font-size:0.75rem;">연결</button>
             </td>
           </tr>
           `).join('')}
