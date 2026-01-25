@@ -692,28 +692,33 @@ const saveDietImage = async (dietRecordId, imageBuffer, mealDate) => {
       fs.mkdirSync(recordDir, { recursive: true });
     }
     
-    // 원본 저장 (최대 1600x1600, JPEG 품질 70%로 압축 강화)
-    // rotate()는 EXIF orientation 정보를 자동으로 적용하여 이미지를 올바른 방향으로 회전시킵니다
+    // 원본과 썸네일을 병렬로 처리하여 성능 개선
     const originalPath = path.join(recordDir, 'original.jpg');
-    await sharp(imageBuffer)
-      .rotate() // EXIF orientation 자동 적용
-      .resize(1600, 1600, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ 
-        quality: 70, // 85% → 70%로 낮춰서 압축 강화
-        progressive: true // Progressive JPEG 사용 (더 나은 압축)
-      })
-      .toFile(originalPath);
-    
-    // 썸네일 저장 (300x300, JPEG 품질 65%로 압축 강화)
     const thumbnailPath = path.join(recordDir, 'thumbnail_300x300.jpg');
-    await sharp(imageBuffer)
-      .rotate() // EXIF orientation 자동 적용
-      .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ 
-        quality: 65, // 80% → 65%로 낮춰서 압축 강화
-        progressive: true // Progressive JPEG 사용 (더 나은 압축)
-      })
-      .toFile(thumbnailPath);
+    
+    // 두 작업을 병렬로 실행
+    await Promise.all([
+      // 원본 저장 (최대 1200x1200, JPEG 품질 65%로 최적화)
+      // rotate()는 EXIF orientation 정보를 자동으로 적용하여 이미지를 올바른 방향으로 회전시킵니다
+      sharp(imageBuffer)
+        .rotate() // EXIF orientation 자동 적용
+        .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ 
+          quality: 65, // 70% → 65%로 조정하여 파일 크기 감소
+          progressive: true // Progressive JPEG 사용 (더 나은 압축)
+        })
+        .toFile(originalPath),
+      
+      // 썸네일 저장 (300x300, JPEG 품질 60%로 최적화)
+      sharp(imageBuffer)
+        .rotate() // EXIF orientation 자동 적용
+        .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ 
+          quality: 60, // 65% → 60%로 조정하여 파일 크기 감소
+          progressive: true // Progressive JPEG 사용 (더 나은 압축)
+        })
+        .toFile(thumbnailPath)
+    ]);
     
     // 상대 경로 반환 (DB 저장용)
     // Local: /uploads/diet-images/2025/01/{uuid}/original.jpg
