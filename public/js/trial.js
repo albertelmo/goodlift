@@ -190,19 +190,19 @@ function renderTrialSessions(data, centerOrder) {
           </span>
         </div>
         <div style="padding:0;overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;min-width:900px;">
+          <table style="width:100%;border-collapse:collapse;">
             <thead>
               <tr style="background:#f8f9fa;">
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">날짜</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">시간</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">트레이너</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">회원명</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">성별</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">연락처</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">방문경로</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">상담목적</th>
-                <th style="padding:12px 10px;text-align:left;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">요구사항</th>
-                <th style="padding:12px 10px;text-align:center;font-size:0.8rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.3px;">결과</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">날짜</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">시간</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">트레이너</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">회원명</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">성별</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">연락처</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">방문경로</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">상담목적</th>
+                <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">요구사항</th>
+                <th style="padding:8px 6px;text-align:center;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">결과</th>
               </tr>
             </thead>
             <tbody>
@@ -216,17 +216,17 @@ function renderTrialSessions(data, centerOrder) {
                 
                 return `
                   <tr class="trial-row" data-trial-data='${JSON.stringify(trial)}' style="border-bottom:1px solid #f0f4f8;cursor:pointer;background:${isEven ? '#fff' : '#fafbfc'};transition:all 0.2s ease;" onmouseover="this.style.backgroundColor='#e3f2fd';this.style.transform='scale(1.001)'" onmouseout="this.style.backgroundColor='${isEven ? '#fff' : '#fafbfc'}';this.style.transform='scale(1)'">
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#333;font-weight:500;">${dateStr}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#333;">${trial.time || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#333;font-weight:500;">${trial.trainer || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#1976d2;font-weight:600;">${trial.member_name || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;">${trial.gender || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;color:#666;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
-                    <td style="padding:14px 10px;font-size:0.85rem;text-align:center;">
-                      <span style="display:inline-block;padding:4px 10px;border-radius:12px;background:${resultBgColor};color:${resultColor};font-weight:${resultValue === '등록' ? '700' : '500'};font-size:0.8rem;">
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#333;font-weight:500;">${dateStr}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#333;">${trial.time || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#333;font-weight:500;">${trial.trainer || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#1976d2;font-weight:600;">${trial.member_name || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#666;">${trial.gender || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#666;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.phone || ''}">${trial.phone || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#666;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.source || ''}">${trial.source || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#666;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.purpose || ''}">${trial.purpose || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;color:#666;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${trial.notes || ''}">${trial.notes || '-'}</td>
+                    <td style="padding:10px 6px;font-size:0.8rem;text-align:center;">
+                      <span style="display:inline-block;padding:3px 8px;border-radius:12px;background:${resultBgColor};color:${resultColor};font-weight:${resultValue === '등록' ? '700' : '500'};font-size:0.75rem;">
                         ${resultValue}
                       </span>
                     </td>
