@@ -7,6 +7,72 @@ let selectedImageFile = null;
 let imagePreviewUrl = null;
 
 /**
+ * 클라이언트 측 이미지 압축 및 리사이징
+ * @param {File} file - 원본 이미지 파일
+ * @param {number} maxWidth - 최대 너비 (기본값: 800)
+ * @param {number} maxHeight - 최대 높이 (기본값: 800)
+ * @param {number} quality - JPEG 품질 (0-1, 기본값: 0.65)
+ * @returns {Promise<File>} - 압축된 이미지 파일
+ */
+async function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.65) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                // 캔버스 생성
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // 비율 유지하며 리사이징
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = (height * maxWidth) / width;
+                        width = maxWidth;
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = (width * maxHeight) / height;
+                        height = maxHeight;
+                    }
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // 이미지 그리기 (메타데이터 제거됨)
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // JPEG로 변환 (Blob)
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) {
+                            reject(new Error('이미지 압축에 실패했습니다.'));
+                            return;
+                        }
+                        
+                        // File 객체로 변환 (원본 파일명 유지)
+                        const compressedFile = new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        });
+                        resolve(compressedFile);
+                    },
+                    'image/jpeg',
+                    quality
+                );
+            };
+            img.onerror = () => reject(new Error('이미지를 로드할 수 없습니다.'));
+            img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('파일을 읽을 수 없습니다.'));
+        reader.readAsDataURL(file);
+    });
+}
+
+/**
  * 식단기록 추가 모달 표시
  */
 export async function showDietAddModal(appUserId, selectedDate = null, onSuccess) {
@@ -170,7 +236,7 @@ export async function showDietAddModal(appUserId, selectedDate = null, onSuccess
     });
     
     // 이미지 선택 처리
-    function handleImageSelect(file) {
+    async function handleImageSelect(file) {
         if (!file.type.startsWith('image/')) {
             alert('이미지 파일만 업로드 가능합니다.');
             return;
@@ -181,15 +247,43 @@ export async function showDietAddModal(appUserId, selectedDate = null, onSuccess
             return;
         }
         
-        selectedImageFile = file;
+        // 압축 중 표시
+        const imageSelectBtn = document.getElementById('diet-image-select-btn');
+        const originalBtnText = imageSelectBtn.textContent;
+        imageSelectBtn.disabled = true;
+        imageSelectBtn.textContent = '압축 중...';
         
-        // 미리보기 생성
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            imagePreviewUrl = e.target.result;
-            updateImagePreview();
-        };
-        reader.readAsDataURL(file);
+        try {
+            // 클라이언트 측에서 이미지 압축 (800x800, 품질 65%)
+            const compressedFile = await compressImage(file, 800, 800, 0.65);
+            selectedImageFile = compressedFile;
+            
+            // 압축률 표시 (디버깅용, 필요시 제거 가능)
+            const compressionRatio = ((1 - compressedFile.size / file.size) * 100).toFixed(1);
+            console.log(`이미지 압축 완료: ${(file.size / 1024).toFixed(1)}KB → ${(compressedFile.size / 1024).toFixed(1)}KB (${compressionRatio}% 감소)`);
+            
+            // 미리보기 생성
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreviewUrl = e.target.result;
+                updateImagePreview();
+            };
+            reader.readAsDataURL(compressedFile);
+        } catch (error) {
+            console.error('이미지 압축 오류:', error);
+            alert('이미지 처리 중 오류가 발생했습니다. 원본 파일을 사용합니다.');
+            // 압축 실패 시 원본 사용
+            selectedImageFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                imagePreviewUrl = e.target.result;
+                updateImagePreview();
+            };
+            reader.readAsDataURL(file);
+        } finally {
+            imageSelectBtn.disabled = false;
+            imageSelectBtn.textContent = originalBtnText;
+        }
     }
     
     // 이미지 미리보기 업데이트
