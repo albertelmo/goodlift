@@ -32,6 +32,7 @@ export async function init(appUserId, readOnly = false, immediateFilters = null)
         endDate: targetDateStr
     };
     currentFilters = { ...filters }; // 필터 상태 저장
+    currentFilterDate = targetDateStr; // 필터 날짜 설정
     await loadRecords(filters);
     
     // 2단계: 백그라운드에서 나머지 데이터 로드
@@ -84,12 +85,11 @@ async function loadRemainingData() {
         // 새 데이터 추가
         currentRecords = [...currentRecords, ...newRecords];
         
-        // 현재 필터가 적용되어 있지 않으면 전체 목록 업데이트
-        if (!currentFilterDate) {
-            await render(currentRecords);
-        }
+        // 현재 필터가 적용되어 있으면 필터링된 상태 유지
+        // render() 함수 내부에서 currentFilterDate로 필터링하므로 그대로 호출
+        await render(currentRecords);
         
-        // 필터 상태 업데이트
+        // 필터 상태 업데이트 (전체 범위로 확장)
         currentFilters = {
             startDate: formatDate(twoMonthsAgo),
             endDate: formatDate(twoMonthsLater)
@@ -140,10 +140,20 @@ async function render(records) {
     }
     if (!container) return;
     
-    if (records.length === 0) {
+    // 선택된 날짜로 필터링
+    let filteredRecords = records;
+    if (currentFilterDate) {
+        filteredRecords = records.filter(record => {
+            return record.meal_date === currentFilterDate;
+        });
+    }
+    
+    if (filteredRecords.length === 0) {
         showEmpty(container, '식단기록이 없습니다.');
         return;
     }
+    
+    records = filteredRecords;
     
     // 날짜별로 그룹화
     const recordsByDate = {};
