@@ -2038,21 +2038,44 @@ app.delete('/api/diet-records/:id', async (req, res) => {
         // 이미지 파일 삭제
         if (deleted.image_url) {
             try {
-                // image_url에서 디렉토리 경로 추출
-                // 예: /uploads/diet-images/2025/01/{uuid}/original.jpg
-                // -> /uploads/diet-images/2025/01/{uuid}
-                const imagePath = path.join(process.cwd(), deleted.image_url);
+                // image_url에서 상대 경로 추출
+                // 예: uploads/diet-images/2025/01/{uuid}/original.jpg 또는 /uploads/diet-images/2025/01/{uuid}/original.jpg
+                let relativePath = deleted.image_url;
+                if (relativePath.startsWith('/')) {
+                    relativePath = relativePath.substring(1); // 앞의 / 제거
+                }
+                if (relativePath.startsWith('uploads/')) {
+                    relativePath = relativePath.substring('uploads/'.length); // 'uploads/' 제거
+                }
+                
+                // UPLOADS_DIR 기준으로 실제 파일 경로 구성
+                // 예: diet-images/2025/01/{uuid}/original.jpg -> UPLOADS_DIR/diet-images/2025/01/{uuid}
+                const imagePath = path.join(UPLOADS_DIR, relativePath);
                 const imageDir = path.dirname(imagePath);
+                
+                // UUID 추출 (디렉토리 이름에서)
+                const pathParts = deleted.image_url.split('/');
+                const uuidIndex = pathParts.findIndex(part => part.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));
+                const uuid = uuidIndex !== -1 ? pathParts[uuidIndex] : 'UUID를 찾을 수 없음';
+                
+                console.log(`[API] 식단기록 삭제 - 레코드 ID: ${id}, 이미지 폴더 UUID: ${uuid}`);
+                console.log(`[API] 이미지 URL: ${deleted.image_url}`);
+                console.log(`[API] UPLOADS_DIR: ${UPLOADS_DIR}`);
+                console.log(`[API] 이미지 디렉토리 경로: ${imageDir}`);
                 
                 // 디렉토리가 존재하면 전체 디렉토리 삭제 (original.jpg, thumbnail_300x300.jpg 모두 포함)
                 if (fs.existsSync(imageDir)) {
                     fs.rmSync(imageDir, { recursive: true, force: true });
-                    console.log(`[API] 식단 이미지 디렉토리 삭제 완료: ${imageDir}`);
+                    console.log(`[API] 식단 이미지 디렉토리 삭제 완료: ${imageDir} (UUID: ${uuid})`);
+                } else {
+                    console.log(`[API] 이미지 디렉토리가 존재하지 않음: ${imageDir} (UUID: ${uuid})`);
                 }
             } catch (fileError) {
                 // 파일 삭제 실패해도 DB 삭제는 성공했으므로 경고만 로그
                 console.warn('[API] 식단 이미지 파일 삭제 실패 (DB 삭제는 완료):', fileError);
             }
+        } else {
+            console.log(`[API] 식단기록 삭제 - 레코드 ID: ${id}, 이미지 없음`);
         }
         
         res.json({ message: '식단기록이 삭제되었습니다.' });
