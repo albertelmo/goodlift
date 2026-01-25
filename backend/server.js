@@ -2035,6 +2035,26 @@ app.delete('/api/diet-records/:id', async (req, res) => {
             return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
         }
         
+        // 이미지 파일 삭제
+        if (deleted.image_url) {
+            try {
+                // image_url에서 디렉토리 경로 추출
+                // 예: /uploads/diet-images/2025/01/{uuid}/original.jpg
+                // -> /uploads/diet-images/2025/01/{uuid}
+                const imagePath = path.join(process.cwd(), deleted.image_url);
+                const imageDir = path.dirname(imagePath);
+                
+                // 디렉토리가 존재하면 전체 디렉토리 삭제 (original.jpg, thumbnail_300x300.jpg 모두 포함)
+                if (fs.existsSync(imageDir)) {
+                    fs.rmSync(imageDir, { recursive: true, force: true });
+                    console.log(`[API] 식단 이미지 디렉토리 삭제 완료: ${imageDir}`);
+                }
+            } catch (fileError) {
+                // 파일 삭제 실패해도 DB 삭제는 성공했으므로 경고만 로그
+                console.warn('[API] 식단 이미지 파일 삭제 실패 (DB 삭제는 완료):', fileError);
+            }
+        }
+        
         res.json({ message: '식단기록이 삭제되었습니다.' });
     } catch (error) {
         console.error('[API] 식단기록 삭제 오류:', error);

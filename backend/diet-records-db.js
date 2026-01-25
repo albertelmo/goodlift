@@ -682,7 +682,7 @@ const deleteDietRecord = async (id, appUserId) => {
     const query = `
       DELETE FROM diet_records
       WHERE id = $1 AND app_user_id = $2
-      RETURNING id
+      RETURNING id, image_url, image_thumbnail_url
     `;
     const result = await pool.query(query, [id, appUserId]);
     return result.rows[0] || null;
