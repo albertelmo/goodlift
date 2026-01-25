@@ -119,8 +119,7 @@ function formatConsultationData(data) {
                 html += `<div class="consultation-view-field-label">${escapeHtml(video.filename || `동영상 ${index + 1}`)}</div>`;
                 html += `<video controls preload="metadata" playsinline webkit-playsinline style="width: 100%; max-width: 100%; border-radius: 4px; margin-top: 8px; background: #000;" `;
                 html += `onerror="console.error('[동영상 ${index + 1}] 로드 실패:', this.currentSrc || this.src, '에러:', this.error); const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='block';" `;
-                html += `onloadedmetadata="const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none';" `;
-                html += `oncanplay="const video = this; if(video.readyState >= 2 && video.currentTime === 0) { video.currentTime = 0.1; setTimeout(() => { if(video.readyState >= 2) { video.currentTime = 0; } }, 100); }" `;
+                html += `onloadedmetadata="const video = this; const errorMsg = video.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none'; if(video.readyState >= 2) { video.currentTime = 0; video.pause(); }" `;
                 html += `src="${videoUrl}" `;
                 html += `type="${mimeType}">`;
                 html += `브라우저가 동영상 재생을 지원하지 않습니다.`;
@@ -385,15 +384,17 @@ async function loadTrainerInfo(consultation) {
 // 트레이너 프로필 사진 모달 표시
 function showTrainerProfileModal(imageUrl, trainerName) {
     const modalBg = document.createElement('div');
+    modalBg.className = 'trainer-profile-modal-bg';
     modalBg.style.cssText = 'position: fixed; z-index: 1000; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;';
     
     const modal = document.createElement('div');
+    modal.className = 'trainer-profile-modal';
     modal.style.cssText = 'background: white; padding: 24px; border-radius: 14px; max-width: 90vw; max-height: 90vh; position: relative;';
     
     modal.innerHTML = `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
             <h3 style="margin: 0; font-size: 18px; font-weight: 600;">${escapeHtml(trainerName)} 트레이너</h3>
-            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" 
+            <button class="trainer-profile-modal-close" 
                     style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 0; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;">×</button>
         </div>
         <div style="text-align: center;">
@@ -402,7 +403,7 @@ function showTrainerProfileModal(imageUrl, trainerName) {
                  onerror="this.parentElement.innerHTML='<p style=\'color: #999; padding: 40px;\'>이미지를 불러올 수 없습니다.</p>';">
         </div>
         <div style="margin-top: 16px; text-align: right;">
-            <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" 
+            <button class="trainer-profile-modal-close-btn" 
                     style="padding: 10px 20px; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #333; cursor: pointer; font-weight: 600;">닫기</button>
         </div>
     `;
@@ -410,11 +411,38 @@ function showTrainerProfileModal(imageUrl, trainerName) {
     modalBg.appendChild(modal);
     document.body.appendChild(modalBg);
     
+    // 닫기 함수
+    const closeModal = () => {
+        modalBg.remove();
+    };
+    
+    // X 버튼 클릭 이벤트
+    const closeBtn = modal.querySelector('.trainer-profile-modal-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeModal);
+    }
+    
+    // 닫기 버튼 클릭 이벤트
+    const closeBtn2 = modal.querySelector('.trainer-profile-modal-close-btn');
+    if (closeBtn2) {
+        closeBtn2.addEventListener('click', closeModal);
+    }
+    
+    // 배경 클릭 시 닫기
     modalBg.addEventListener('click', (e) => {
         if (e.target === modalBg) {
-            modalBg.remove();
+            closeModal();
         }
     });
+    
+    // ESC 키로 닫기
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+            document.removeEventListener('keydown', escHandler);
+        }
+    };
+    document.addEventListener('keydown', escHandler);
 }
 
 // 전역 함수로 등록
