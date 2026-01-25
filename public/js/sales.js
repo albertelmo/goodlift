@@ -206,6 +206,10 @@ function render(root) {
             <div style="color:#666;margin-bottom:4px;font-size:0.75rem;">수업단가</div>
             <div id="sales-session-price" style="font-weight:600;color:#4caf50;">0원</div>
           </div>
+          <div>
+            <div style="color:#666;margin-bottom:4px;font-size:0.75rem;">부가세</div>
+            <div id="sales-expected-vat" style="font-weight:600;color:#ff9800;">0원</div>
+          </div>
         </div>
         <div id="sales-detail-loading" style="text-align:center;color:#888;padding:30px;font-size:0.85rem;">불러오는 중...</div>
         <div id="sales-detail-empty" style="display:none;text-align:center;color:#888;padding:30px;font-size:0.85rem;">해당 월에 매출 데이터가 없습니다.</div>
@@ -456,6 +460,11 @@ async function loadMonthDetail(root, yearMonth) {
       const newAmount = newMemberRows.reduce((sum, r) => sum + (r.amount || 0), 0);
       const sessionPrice = totalSessions > 0 ? Math.round(summary.totalAmount / totalSessions) : 0;
       
+      // 카드 결제 항목 합계 계산 및 예상부가세 (10%)
+      const cardRows = filtered.filter(r => r.paymentMethod === '카드');
+      const cardTotal = cardRows.reduce((sum, r) => sum + (r.amount || 0), 0);
+      const expectedVat = Math.round(cardTotal * 0.1);
+      
       // 신규회원 수업수 비율 계산
       const newSessionsPercent = totalSessions > 0 ? Math.round((newSessions / totalSessions) * 100) : 0;
       
@@ -468,12 +477,14 @@ async function loadMonthDetail(root, yearMonth) {
       const totalAmountEl = root.querySelector('#sales-total-amount');
       const newAmountEl = root.querySelector('#sales-new-amount');
       const sessionPriceEl = root.querySelector('#sales-session-price');
+      const expectedVatEl = root.querySelector('#sales-expected-vat');
       
       if (totalSessionsEl) totalSessionsEl.textContent = `${formatNumber(totalSessions)}회`;
       if (newSessionsEl) newSessionsEl.textContent = `${formatNumber(newSessions)}회 (${newSessionsPercent}%)`;
       if (totalAmountEl) totalAmountEl.textContent = `${formatNumber(summary.totalAmount)}원`;
       if (newAmountEl) newAmountEl.textContent = `${formatNumber(newAmount)}원 (${newAmountPercent}%)`;
       if (sessionPriceEl) sessionPriceEl.textContent = `${formatNumber(sessionPrice)}원`;
+      if (expectedVatEl) expectedVatEl.textContent = `${formatNumber(expectedVat)}원`;
       tbody.innerHTML = filtered.map((r, idx) => {
         // 날짜 처리: 타임존 변환 방지
         let dateStr = '';
@@ -766,6 +777,11 @@ async function loadSearchResults(root, data, startDate, endDate, memberName, isA
     const newAmount = newMemberRows.reduce((sum, r) => sum + (r.amount || 0), 0);
     const sessionPrice = totalSessions > 0 ? Math.round(summary.totalAmount / totalSessions) : 0;
     
+    // 카드 결제 항목 합계 계산 및 예상부가세 (10%)
+    const cardRows = filtered.filter(r => r.paymentMethod === '카드');
+    const cardTotal = cardRows.reduce((sum, r) => sum + (r.amount || 0), 0);
+    const expectedVat = Math.round(cardTotal * 0.1);
+    
     // 신규회원 수업수 비율 계산
     const newSessionsPercent = totalSessions > 0 ? Math.round((newSessions / totalSessions) * 100) : 0;
     
@@ -778,6 +794,7 @@ async function loadSearchResults(root, data, startDate, endDate, memberName, isA
     const totalAmountEl = root.querySelector('#sales-total-amount');
     const newAmountEl = root.querySelector('#sales-new-amount');
     const sessionPriceEl = root.querySelector('#sales-session-price');
+    const expectedVatEl = root.querySelector('#sales-expected-vat');
     
     // 회원명으로 검색했을 때만 신규회원 정보 숨김
     const isMemberNameSearch = !!(memberName && memberName.trim());
@@ -803,6 +820,7 @@ async function loadSearchResults(root, data, startDate, endDate, memberName, isA
       }
     }
     if (sessionPriceEl) sessionPriceEl.textContent = `${formatNumber(sessionPrice)}원`;
+    if (expectedVatEl) expectedVatEl.textContent = `${formatNumber(expectedVat)}원`;
     
     if (!tbody) {
       console.error('[Sales] tbody 요소를 찾을 수 없습니다.');
