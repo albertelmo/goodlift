@@ -1,6 +1,6 @@
 {
-  "name": "GoodLift - 헬스장 회원관리 시스템",
-  "short_name": "GoodLift",
+  "name": "스탠다드 멤버스",
+  "short_name": "스탠다드 멤버스",
   "description": "헬스장 회원관리 및 PT 세션 관리 시스템",
   "start_url": "/",
   "scope": "/",
