@@ -339,18 +339,8 @@ async function render() {
     
     if (viewingTrainerName) {
         memberDisplay = ` (${viewingTrainerName} 트레이너의 운동기록)`;
-    } else if (connectedMemberAppUserId) {
-        // 유저앱 회원 정보 조회하여 이름 표시
-        try {
-            const appUserResponse = await fetch(`/api/app-users/${connectedMemberAppUserId}`);
-            if (appUserResponse.ok) {
-                const appUser = await appUserResponse.json();
-                memberDisplay = ` (${appUser.name}님의 운동기록)`;
-            }
-        } catch (error) {
-            console.error('앱 유저 정보 조회 오류:', error);
-        }
     }
+    // connectedMemberAppUserId가 있는 경우는 병렬 호출에서 처리하므로 여기서는 처리하지 않음
     
     // 뒤로가기 버튼 (트레이너 기록을 볼 때만 표시)
     const backButton = isReadOnly && viewingTrainerName ? `
@@ -398,70 +388,98 @@ async function render() {
     // 월 변경 감지를 위한 인터벌 (캘린더 스와이프 시 업데이트)
     setupMonthUpdateObserver();
     
-    // 캘린더용 운동기록 로드 (먼저 실행하여 캘린더에 데이터 전달)
-    loadWorkoutRecordsForCalendar().then(async () => {
-        // 세션 데이터를 list.js에 전달
-        // 연결된 회원이 있으면 해당 회원의 app_user_id로 조회, 없으면 현재 사용자
-        const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
-        const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
-        
-        if (!targetAppUserId) {
-            console.error('세션 데이터 조회 오류: app_user_id가 없습니다.');
-            return;
-        }
-        
-        let memberName = null;
-        try {
-            const appUserResponse = await fetch(`/api/app-users/${targetAppUserId}`);
-            if (appUserResponse.ok) {
-                const appUser = await appUserResponse.json();
-                memberName = appUser.member_name;
-            }
-        } catch (error) {
+    // 병렬 API 호출로 성능 최적화
+    // 1. 앱 유저 정보 조회 (한 번만)
+    // 2. 캘린더 데이터와 목록 데이터를 병렬로 로드
+    // connectedMemberAppUserId는 위에서 이미 선언됨
+    const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+    
+    if (!targetAppUserId) {
+        console.error('운동기록 로드 오류: app_user_id가 없습니다.');
+        return;
+    }
+    
+    // 앱 유저 정보 조회 (한 번만, 다른 작업과 병렬)
+    const appUserPromise = fetch(`/api/app-users/${targetAppUserId}`)
+        .then(response => response.ok ? response.json() : null)
+        .catch(error => {
             console.error('앱 유저 정보 조회 오류:', error);
+            return null;
+        });
+    
+    // 세션 데이터 로드 Promise 생성 (appUser가 필요하지만 병렬 처리 가능)
+    const sessionsPromise = appUserPromise.then(async (appUser) => {
+        if (!appUser || !appUser.member_name) {
+            return [];
         }
-        
-        let sessions = [];
-        if (memberName) {
-            try {
-                const { getToday } = await import('../utils.js');
-                const today = getToday();
-                const todayDate = new Date(today);
-                const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
-                const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
-                
-                const params = new URLSearchParams({
-                    startDate: startDate.toISOString().split('T')[0],
-                    endDate: endDate.toISOString().split('T')[0],
-                    member: memberName
-                });
-                
-                const sessionsResponse = await fetch(`/api/sessions?${params.toString()}`);
-                if (sessionsResponse.ok) {
-                    sessions = await sessionsResponse.json();
-                }
-            } catch (error) {
-                console.error('세션 데이터 조회 오류:', error);
+        try {
+            const { getToday } = await import('../utils.js');
+            const today = getToday();
+            const todayDate = new Date(today);
+            const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
+            const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
+            
+            const params = new URLSearchParams({
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0],
+                member: appUser.member_name
+            });
+            
+            const sessionsResponse = await fetch(`/api/sessions?${params.toString()}`);
+            if (sessionsResponse.ok) {
+                return await sessionsResponse.json();
             }
+            return [];
+        } catch (error) {
+            console.error('세션 데이터 조회 오류:', error);
+            return [];
         }
-        
-        // 세션 데이터를 list.js에 전달 (트레이너 이름 매핑도 로드됨)
-        const listModule = await import('./list.js');
-        await listModule.updateSessions(sessions);
-        
-        // 운동 목록 초기화 (선택된 날짜로 필터링)
-        if (currentAppUserId) {
-            await initList(currentAppUserId, isReadOnly);
-            const selectedDateStr = getSelectedDate();
-            if (selectedDateStr) {
-                await listModule.filterByDate(selectedDateStr);
-            }
-        } else {
-            console.error('운동 목록 초기화 오류: currentAppUserId가 없습니다.');
-        }
-    }).catch(error => {
-        console.error('운동기록 로드 중 오류:', error);
     });
+    
+    // 캘린더 데이터, 목록 데이터, 세션 데이터를 모두 병렬로 로드
+    try {
+        const [appUser, calendarData, listData, sessions] = await Promise.all([
+            appUserPromise,
+            loadWorkoutRecordsForCalendar(),
+            // 목록 초기화도 병렬로 시작 (내부에서 데이터 로드)
+            (async () => {
+                const listModule = await import('./list.js');
+                if (currentAppUserId) {
+                    await listModule.init(currentAppUserId, isReadOnly);
+                }
+                return listModule;
+            })(),
+            sessionsPromise
+        ]);
+        
+        // memberDisplay 업데이트 (앱 유저 정보가 로드된 후)
+        if (appUser && connectedMemberAppUserId && appUser.name) {
+            memberDisplay = ` (${appUser.name}님의 운동기록)`;
+            const monthDisplayEl = document.querySelector('.app-workout-month-display');
+            if (monthDisplayEl) {
+                monthDisplayEl.textContent = `${year}년 ${month}월${memberDisplay}`;
+            }
+        }
+        
+        // 세션 데이터를 list.js와 calendar.js에 전달 (트레이너 이름 매핑도 로드됨)
+        await listData.updateSessions(sessions);
+        
+        // 캘린더에도 세션 데이터 업데이트
+        const calendarContainer = document.getElementById('workout-calendar-container');
+        if (calendarContainer) {
+            const { updateSessions: updateCalendarSessions, render: renderCalendar } = await import('./calendar.js');
+            updateCalendarSessions(sessions);
+            renderCalendar(calendarContainer);
+        }
+        
+        // 선택된 날짜로 필터링
+        const selectedDateStr = getSelectedDate();
+        if (selectedDateStr) {
+            await listData.filterByDate(selectedDateStr);
+        }
+    } catch (error) {
+        console.error('운동기록 로드 중 오류:', error);
+    }
     
     // 추가 버튼 이벤트는 init()에서 이벤트 위임으로 한 번만 설정되므로 여기서는 설정하지 않음
     
@@ -557,7 +575,7 @@ function setupMonthUpdateObserver() {
 }
 
 /**
- * 캘린더용 운동기록 로드
+ * 캘린더용 운동기록 로드 (병렬 호출을 위해 앱 유저 정보 조회 제거)
  */
 async function loadWorkoutRecordsForCalendar() {
     try {
@@ -585,43 +603,6 @@ async function loadWorkoutRecordsForCalendar() {
             endDate.toISOString().split('T')[0]
         );
         
-        // 앱 유저 정보 가져오기 (member_name 확인용)
-        let memberName = null;
-        try {
-            const appUserResponse = await fetch(`/api/app-users/${targetAppUserId}`);
-            if (appUserResponse.ok) {
-                const appUser = await appUserResponse.json();
-                memberName = appUser.member_name;
-            }
-        } catch (error) {
-            console.error('앱 유저 정보 조회 오류:', error);
-        }
-        
-        // 세션 데이터 가져오기 (member_name이 있는 경우만)
-        let sessions = [];
-        if (memberName) {
-            try {
-                const { getToday } = await import('../utils.js');
-                const today = getToday();
-                const todayDate = new Date(today);
-                const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
-                const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
-                
-                const params = new URLSearchParams({
-                    startDate: startDate.toISOString().split('T')[0],
-                    endDate: endDate.toISOString().split('T')[0],
-                    member: memberName
-                });
-                
-                const sessionsResponse = await fetch(`/api/sessions?${params.toString()}`);
-                if (sessionsResponse.ok) {
-                    sessions = await sessionsResponse.json();
-                }
-            } catch (error) {
-                console.error('세션 데이터 조회 오류:', error);
-            }
-        }
-        
         // 캘린더 초기화
         const calendarContainer = document.getElementById('workout-calendar-container');
         if (calendarContainer) {
@@ -638,8 +619,7 @@ async function loadWorkoutRecordsForCalendar() {
                 await updateMonthDisplay();
             }, summary);
             
-            // 세션 데이터 업데이트
-            updateSessions(sessions);
+            // 세션 데이터는 render()에서 로드 후 전달
             renderCalendar(calendarContainer);
             
             // 운동기록 업데이트 함수를 전역에 저장 (목록 새로고침 시 사용)
@@ -666,6 +646,8 @@ async function loadWorkoutRecordsForCalendar() {
                 renderCalendar(calendarContainer);
             };
         }
+        
+        return summary;
     } catch (error) {
         console.error('운동기록 로드 오류:', error);
         // 오류 발생 시에도 캘린더는 표시
@@ -676,6 +658,7 @@ async function loadWorkoutRecordsForCalendar() {
                 updateMonthDisplay();
             }, []);
         }
+        return {};
     }
 }
 

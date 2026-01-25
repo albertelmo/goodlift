@@ -18,21 +18,17 @@ export async function init(appUserId, readOnly = false) {
     currentAppUserId = appUserId;
     isReadOnly = readOnly;
     
-    // 초기 로드 시 최근 2개월 + 미래 2개월까지 로드 (성능 최적화)
+    // 초기 로드 시 현재 월 + 다음 달만 로드 (성능 최적화: 4개월 → 2개월)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const twoMonthsAgo = new Date(today);
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    twoMonthsAgo.setDate(1); // 월의 첫 날로 설정
+    const currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    const twoMonthsLater = new Date(today);
-    twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
-    twoMonthsLater.setDate(0); // 다음 달의 마지막 날로 설정
+    const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0); // 다음 달의 마지막 날
     
     const { formatDate } = await import('../utils.js');
     await loadRecords({
-        startDate: formatDate(twoMonthsAgo),
-        endDate: formatDate(twoMonthsLater)
+        startDate: formatDate(currentMonthStart),
+        endDate: formatDate(nextMonthEnd)
     });
 }
 
@@ -51,8 +47,11 @@ export async function updateSessions(sessions = []) {
         }
     });
     
-    // 트레이너 이름 매핑 로드
-    await loadTrainerNameMap();
+    // 트레이너 이름 매핑 로드는 병렬로 처리 (렌더링과 병렬)
+    // await를 제거하여 비동기로 처리하되, 필요시 await loadTrainerNameMap() 호출 가능
+    loadTrainerNameMap().catch(error => {
+        console.error('트레이너 이름 매핑 로드 오류:', error);
+    });
 }
 
 /**
@@ -185,12 +184,8 @@ async function render(records) {
     // 날짜별로 정렬 (최신순)
     const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
     
-    // 타이머 설정 불러오기 (캐시가 없거나 만료된 경우)
-    if (!cachedTimerSettings) {
-        await loadTimerSettings();
-    }
-    
-    // 타이머 표시 텍스트 생성
+    // 타이머 설정 불러오기 (캐시가 없거나 만료된 경우) - 병렬로 처리
+    // 렌더링 시점에는 캐시된 값 또는 기본값 사용, 로드 완료 후 업데이트
     let timerDisplayText = '-';
     if (cachedTimerSettings) {
         if (!cachedTimerSettings.restTimerEnabled) {
@@ -198,6 +193,27 @@ async function render(records) {
         } else {
             timerDisplayText = formatTime(cachedTimerSettings.restMinutes * 60 + cachedTimerSettings.restSeconds);
         }
+    } else {
+        // 캐시가 없으면 병렬로 로드하고, 로드 완료 후 업데이트
+        loadTimerSettings().then(settings => {
+            if (settings) {
+                let updatedText = '-';
+                if (!settings.restTimerEnabled) {
+                    updatedText = 'off';
+                } else {
+                    updatedText = formatTime(settings.restMinutes * 60 + settings.restSeconds);
+                }
+                // 타이머 표시 업데이트 (렌더링 후)
+                requestAnimationFrame(() => {
+                    const timerTexts = document.querySelectorAll('.app-workout-timer-text');
+                    timerTexts.forEach(el => {
+                        if (el) el.textContent = updatedText;
+                    });
+                });
+            }
+        }).catch(error => {
+            console.error('타이머 설정 로드 오류:', error);
+        });
     }
     
     let html = '<div class="app-workout-list">';

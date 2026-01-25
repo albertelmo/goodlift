@@ -196,17 +196,8 @@ async function render() {
     
     if (viewingTrainerName) {
         memberDisplay = ` (${viewingTrainerName} 트레이너의 식단기록)`;
-    } else if (connectedMemberAppUserId) {
-        try {
-            const appUserResponse = await fetch(`/api/app-users/${connectedMemberAppUserId}`);
-            if (appUserResponse.ok) {
-                const appUser = await appUserResponse.json();
-                memberDisplay = ` (${appUser.name}님의 식단기록)`;
-            }
-        } catch (error) {
-            console.error('앱 유저 정보 조회 오류:', error);
-        }
     }
+    // connectedMemberAppUserId가 있는 경우는 병렬 호출에서 처리하므로 여기서는 처리하지 않음
     
     // 뒤로가기 버튼 (트레이너 기록을 볼 때만 표시)
     const backButton = isReadOnly && viewingTrainerName ? `
@@ -248,20 +239,57 @@ async function render() {
     // 월 변경 감지 설정
     setupMonthUpdateObserver();
     
-    // 캘린더용 식단기록 로드
-    loadDietRecordsForCalendar().then(async () => {
-        // 식단 목록 초기화
-        if (currentAppUserId) {
-            await initList(currentAppUserId, isReadOnly);
-            const selectedDateStr = getSelectedDate();
-            if (selectedDateStr) {
+    // 병렬 API 호출로 성능 최적화
+    // 1. 앱 유저 정보 조회 (한 번만)
+    // 2. 캘린더 데이터와 목록 데이터를 병렬로 로드
+    // connectedMemberAppUserId는 위에서 이미 선언됨
+    const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+    
+    if (!targetAppUserId) {
+        console.error('식단기록 로드 오류: app_user_id가 없습니다.');
+        return;
+    }
+    
+    // 앱 유저 정보 조회 (한 번만, 다른 작업과 병렬)
+    const appUserPromise = fetch(`/api/app-users/${targetAppUserId}`)
+        .then(response => response.ok ? response.json() : null)
+        .catch(error => {
+            console.error('앱 유저 정보 조회 오류:', error);
+            return null;
+        });
+    
+    // 캘린더 데이터와 목록 데이터를 병렬로 로드
+    try {
+        const [appUser, calendarData, listData] = await Promise.all([
+            appUserPromise,
+            loadDietRecordsForCalendar(),
+            // 목록 초기화도 병렬로 시작 (내부에서 데이터 로드)
+            (async () => {
                 const listModule = await import('./list.js');
-                await listModule.filterByDate(selectedDateStr);
+                if (currentAppUserId) {
+                    await listModule.init(currentAppUserId, isReadOnly);
+                }
+                return listModule;
+            })()
+        ]);
+        
+        // memberDisplay 업데이트 (앱 유저 정보가 로드된 후)
+        if (appUser && connectedMemberAppUserId && appUser.name) {
+            memberDisplay = ` (${appUser.name}님의 식단기록)`;
+            const monthDisplayEl = document.querySelector('.app-diet-month-display');
+            if (monthDisplayEl) {
+                monthDisplayEl.textContent = `${year}년 ${month}월${memberDisplay}`;
             }
         }
-    }).catch(error => {
+        
+        // 선택된 날짜로 필터링
+        const selectedDateStr = getSelectedDate();
+        if (selectedDateStr && listData) {
+            await listData.filterByDate(selectedDateStr);
+        }
+    } catch (error) {
         console.error('식단기록 로드 중 오류:', error);
-    });
+    }
 }
 
 /**
