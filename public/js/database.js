@@ -2390,8 +2390,8 @@ function setupEventListeners(container) {
             monthsDiv.style.flexWrap = 'wrap';
             monthsDiv.style.gap = '6px';
             
-            // 월별로 정렬 (최신순)
-            const months = centerMap[center].sort((a, b) => b.yearMonth.localeCompare(a.yearMonth));
+            // 월별로 정렬 (오름차순)
+            const months = centerMap[center].sort((a, b) => a.yearMonth.localeCompare(b.yearMonth));
             
             months.forEach(snapshot => {
               const monthBtn = document.createElement('button');
