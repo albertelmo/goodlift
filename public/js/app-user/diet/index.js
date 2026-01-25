@@ -258,16 +258,29 @@ async function render() {
             return null;
         });
     
+    // 1단계: 오늘 날짜 목록 데이터 + 캘린더 전체 summary를 병렬로 로드
+    const { formatDate } = await import('../utils.js');
+    const { getSelectedDate } = await import('./calendar.js');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDateStr = getSelectedDate();
+    const targetDate = selectedDateStr ? new Date(selectedDateStr) : today;
+    const targetDateStr = formatDate(targetDate);
+    
     // 캘린더 데이터와 목록 데이터를 병렬로 로드
     try {
         const [appUser, calendarData, listData] = await Promise.all([
             appUserPromise,
+            // 캘린더 전체 summary 로드 (경량이므로 빠름)
             loadDietRecordsForCalendar(),
-            // 목록 초기화도 병렬로 시작 (내부에서 데이터 로드)
+            // 오늘 날짜 목록 데이터만 먼저 로드
             (async () => {
                 const listModule = await import('./list.js');
                 if (currentAppUserId) {
-                    await listModule.init(currentAppUserId, isReadOnly);
+                    await listModule.init(currentAppUserId, isReadOnly, {
+                        startDate: targetDateStr,
+                        endDate: targetDateStr
+                    });
                 }
                 return listModule;
             })()

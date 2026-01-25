@@ -11,28 +11,92 @@ let currentFilters = {}; // 현재 필터 상태 저장
 /**
  * 식단기록 목록 초기화
  */
-export async function init(appUserId, readOnly = false) {
+export async function init(appUserId, readOnly = false, immediateFilters = null) {
     currentAppUserId = appUserId;
     isReadOnly = readOnly;
     
-    // 최근 2개월 + 미래 2개월까지 로드
+    const { formatDate } = await import('../utils.js');
+    const { getSelectedDate } = await import('./calendar.js');
+    
+    // 1단계: 선택된 날짜(또는 오늘) 데이터만 즉시 로드
+    const selectedDateStr = immediateFilters ? null : getSelectedDate();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const twoMonthsAgo = new Date(today);
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    twoMonthsAgo.setDate(1);
+    const targetDate = immediateFilters 
+        ? new Date(immediateFilters.startDate)
+        : (selectedDateStr ? new Date(selectedDateStr) : today);
+    const targetDateStr = formatDate(targetDate);
     
-    const twoMonthsLater = new Date(today);
-    twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
-    twoMonthsLater.setDate(0);
-    
-    const { formatDate } = await import('../utils.js');
     const filters = {
-        startDate: formatDate(twoMonthsAgo),
-        endDate: formatDate(twoMonthsLater)
+        startDate: targetDateStr,
+        endDate: targetDateStr
     };
     currentFilters = { ...filters }; // 필터 상태 저장
     await loadRecords(filters);
+    
+    // 2단계: 백그라운드에서 나머지 데이터 로드
+    loadRemainingDataInBackground();
+}
+
+/**
+ * 백그라운드에서 나머지 데이터 로드
+ */
+function loadRemainingDataInBackground() {
+    // 브라우저가 여유가 있을 때 실행
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(async () => {
+            await loadRemainingData();
+        }, { timeout: 1000 }); // 최대 1초 후에는 실행
+    } else {
+        // requestIdleCallback을 지원하지 않으면 setTimeout 사용
+        setTimeout(async () => {
+            await loadRemainingData();
+        }, 100);
+    }
+}
+
+/**
+ * 나머지 데이터 로드
+ */
+async function loadRemainingData() {
+    try {
+        const { formatDate } = await import('../utils.js');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const twoMonthsAgo = new Date(today);
+        twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+        twoMonthsAgo.setDate(1);
+        
+        const twoMonthsLater = new Date(today);
+        twoMonthsLater.setMonth(twoMonthsLater.getMonth() + 2);
+        twoMonthsLater.setDate(0);
+        
+        // 나머지 데이터 로드
+        const additionalRecords = await getDietRecords(currentAppUserId, {
+            startDate: formatDate(twoMonthsAgo),
+            endDate: formatDate(twoMonthsLater)
+        });
+        
+        // 기존 데이터와 병합 (중복 제거)
+        const existingIds = new Set(currentRecords.map(r => r.id));
+        const newRecords = additionalRecords.filter(r => !existingIds.has(r.id));
+        
+        // 새 데이터 추가
+        currentRecords = [...currentRecords, ...newRecords];
+        
+        // 현재 필터가 적용되어 있지 않으면 전체 목록 업데이트
+        if (!currentFilterDate) {
+            await render(currentRecords);
+        }
+        
+        // 필터 상태 업데이트
+        currentFilters = {
+            startDate: formatDate(twoMonthsAgo),
+            endDate: formatDate(twoMonthsLater)
+        };
+    } catch (error) {
+        console.error('백그라운드 데이터 로드 오류:', error);
+    }
 }
 
 let currentFilterDate = null;
@@ -309,12 +373,35 @@ function setupEventListeners() {
  */
 export async function filterByDate(dateStr) {
     currentFilterDate = dateStr;
+    
+    // 해당 날짜의 데이터가 이미 로드되어 있는지 확인
+    const hasData = currentRecords.some(r => r.meal_date === dateStr);
+    
+    if (!hasData) {
+        // 데이터가 없으면 해당 날짜 데이터 로드
+        try {
+            const { getDietRecords } = await import('../api.js');
+            const newRecords = await getDietRecords(currentAppUserId, {
+                startDate: dateStr,
+                endDate: dateStr
+            });
+            
+            // 기존 데이터에 추가 (중복 제거)
+            const existingIds = new Set(currentRecords.map(r => r.id));
+            const uniqueNewRecords = newRecords.filter(r => !existingIds.has(r.id));
+            currentRecords = [...currentRecords, ...uniqueNewRecords];
+        } catch (error) {
+            console.error('날짜별 데이터 로드 오류:', error);
+        }
+    }
+    
+    // 필터링하여 렌더링
     const filters = {
         startDate: dateStr,
         endDate: dateStr
     };
     currentFilters = filters; // 필터 상태 업데이트
-    await loadRecords(filters);
+    await render(currentRecords);
 }
 
 /**
