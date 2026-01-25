@@ -133,27 +133,47 @@ function loadTrialData(container) {
     });
 }
 
-function loadTrialSessions(yearMonth, centerOrder) {
+async function loadTrialSessions(yearMonth, centerOrder) {
   const loadingEl = document.getElementById('trial-loading');
   const contentEl = document.getElementById('trial-content');
   
   loadingEl.style.display = 'block';
   contentEl.innerHTML = '';
   
-  fetch(`/api/trials?yearMonth=${yearMonth}`)
-    .then(r => r.json())
-    .then(data => {
-      loadingEl.style.display = 'none';
-      renderTrialSessions(data, centerOrder);
-    })
-    .catch(err => {
-      loadingEl.style.display = 'none';
-      contentEl.innerHTML = `<div style="text-align:center;padding:40px;color:#d32f2f;">데이터를 불러오지 못했습니다.</div>`;
-      console.error('신규 상담 조회 오류:', err);
+  try {
+    // 상담현황 데이터와 상세상담 목록을 동시에 가져오기
+    const [trialsResponse, consultationsResponse, trainersResponse] = await Promise.all([
+      fetch(`/api/trials?yearMonth=${yearMonth}`),
+      fetch(`/api/consultation-records?currentUser=${encodeURIComponent(localStorage.getItem('username') || '')}`),
+      fetch('/api/trainers')
+    ]);
+    
+    const trialsData = await trialsResponse.json();
+    const consultationsData = await consultationsResponse.json();
+    const trainers = await trainersResponse.json();
+    
+    loadingEl.style.display = 'none';
+    
+    // 트레이너 이름 -> username 매핑 생성
+    const trainerNameToUsernameMap = {};
+    trainers.forEach(trainer => {
+      if (trainer.name) {
+        trainerNameToUsernameMap[trainer.name] = trainer.username;
+      }
     });
+    
+    // 상세상담 목록
+    const consultations = consultationsData.records || [];
+    
+    renderTrialSessions(trialsData, centerOrder, consultations, trainerNameToUsernameMap);
+  } catch (err) {
+    loadingEl.style.display = 'none';
+    contentEl.innerHTML = `<div style="text-align:center;padding:40px;color:#d32f2f;">데이터를 불러오지 못했습니다.</div>`;
+    console.error('신규 상담 조회 오류:', err);
+  }
 }
 
-function renderTrialSessions(data, centerOrder) {
+function renderTrialSessions(data, centerOrder, consultations = [], trainerNameToUsernameMap = {}) {
   const contentEl = document.getElementById('trial-content');
   const centers = data.centers || {};
   
@@ -203,6 +223,7 @@ function renderTrialSessions(data, centerOrder) {
                 <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">상담목적</th>
                 <th style="padding:8px 6px;text-align:left;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">요구사항</th>
                 <th style="padding:8px 6px;text-align:center;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">결과</th>
+                <th style="padding:8px 6px;text-align:center;font-size:0.75rem;font-weight:700;color:#333;border-bottom:2px solid #e3eaf5;white-space:nowrap;letter-spacing:0.2px;">상세상담</th>
               </tr>
             </thead>
             <tbody>
@@ -213,6 +234,25 @@ function renderTrialSessions(data, centerOrder) {
                 const resultColor = resultValue === '등록' ? '#4caf50' : '#666';
                 const resultBgColor = resultValue === '등록' ? '#e8f5e9' : '#f5f5f5';
                 const isEven = index % 2 === 0;
+                
+                // 상세상담 매칭 확인
+                const trialCenter = (center || '').trim();
+                const trialTrainerName = (trial.trainer || '').trim();
+                const trialMemberName = (trial.member_name || '').trim();
+                const trialTrainerUsername = trainerNameToUsernameMap[trialTrainerName] || '';
+                
+                const matchingConsultation = consultations.find(consultation => {
+                  const consultationCenter = (consultation.center || '').trim();
+                  const consultationTrainer = (consultation.trainer_username || '').trim();
+                  const consultationName = (consultation.name || '').trim();
+                  
+                  return consultationCenter === trialCenter &&
+                         consultationTrainer === trialTrainerUsername &&
+                         consultationName === trialMemberName;
+                });
+                
+                const consultationId = matchingConsultation ? matchingConsultation.id : null;
+                const hasConsultation = !!matchingConsultation;
                 
                 return `
                   <tr class="trial-row" data-trial-data='${JSON.stringify(trial)}' style="border-bottom:1px solid #f0f4f8;cursor:pointer;background:${isEven ? '#fff' : '#fafbfc'};transition:all 0.2s ease;" onmouseover="this.style.backgroundColor='#e3f2fd';this.style.transform='scale(1.001)'" onmouseout="this.style.backgroundColor='${isEven ? '#fff' : '#fafbfc'}';this.style.transform='scale(1)'">
@@ -230,6 +270,17 @@ function renderTrialSessions(data, centerOrder) {
                         ${resultValue}
                       </span>
                     </td>
+                    <td style="padding:10px 6px;font-size:0.8rem;text-align:center;" onclick="event.stopPropagation();">
+                      ${hasConsultation ? `
+                        <span class="consultation-badge" data-consultation-id="${consultationId}" style="display:inline-block;padding:3px 8px;border-radius:12px;background:#e8f5e9;color:#2e7d32;font-weight:700;font-size:0.75rem;cursor:pointer;" title="상세상담 보기">
+                          상세
+                        </span>
+                      ` : `
+                        <span style="display:inline-block;padding:3px 8px;border-radius:12px;background:#f5f5f5;color:#999;font-weight:400;font-size:0.75rem;">
+                          -
+                        </span>
+                      `}
+                    </td>
                   </tr>
                 `;
               }).join('')}
@@ -244,14 +295,44 @@ function renderTrialSessions(data, centerOrder) {
   
   // 수정 버튼 이벤트 리스너 추가
   setupTrialEditListeners();
+  
+  // 상세상담 배지 클릭 이벤트 추가
+  setupConsultationBadgeListeners();
 }
 
 function setupTrialEditListeners() {
   // 행 클릭 이벤트 (수정 모달 열기)
   document.querySelectorAll('.trial-row').forEach(row => {
-    row.addEventListener('click', function() {
+    row.addEventListener('click', function(e) {
+      // 상세상담 배지 클릭 시에는 행 클릭 이벤트 무시
+      if (e.target.closest('.consultation-badge')) {
+        return;
+      }
       const trialData = JSON.parse(this.getAttribute('data-trial-data'));
       showTrialEditModal(trialData);
+    });
+  });
+}
+
+function setupConsultationBadgeListeners() {
+  // 상세상담 배지 클릭 이벤트
+  document.querySelectorAll('.consultation-badge').forEach(badge => {
+    badge.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const consultationId = this.getAttribute('data-consultation-id');
+      if (consultationId && typeof window.openConsultationEditModal === 'function') {
+        window.openConsultationEditModal(consultationId);
+      } else if (consultationId) {
+        // 함수가 아직 로드되지 않았으면 잠시 후 다시 시도
+        const tryOpen = () => {
+          if (typeof window.openConsultationEditModal === 'function') {
+            window.openConsultationEditModal(consultationId);
+          } else {
+            setTimeout(tryOpen, 100);
+          }
+        };
+        tryOpen();
+      }
     });
   });
 }
@@ -274,7 +355,7 @@ async function showTrialEditModal(trial) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <div style="display:flex;align-items:center;gap:12px;">
           <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">상담 정보 수정</h3>
-          <button type="button" id="trial-create-consultation-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">상세 상담 생성</button>
+          <button type="button" id="trial-create-consultation-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px !important;border-radius:20px !important;cursor:pointer;font-size:15px !important;white-space:nowrap;font-weight:500;">상세 상담 생성</button>
         </div>
         <button id="trial-edit-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
@@ -739,13 +820,41 @@ async function createConsultationFromTrial() {
     }
     
     // 이름이 없으면 회원명 사용, 둘 다 없으면 기본값
-    const name = memberName || '상담자';
+    const name = (memberName || '상담자').trim();
+    const centerTrimmed = center.trim();
+    const trainerTrimmed = trainer.trim();
     
-    // 현재 사용자 정보 가져오기
+    // 현재 사용자 정보 가져오기 (API 호출에 필요)
     const currentUser = localStorage.getItem('username');
     if (!currentUser) {
       alert('로그인이 필요합니다.');
       return;
+    }
+    
+    // 기존 상세상담 목록에서 중복 확인
+    const consultationsResponse = await fetch(`/api/consultation-records?currentUser=${encodeURIComponent(currentUser)}`);
+    if (!consultationsResponse.ok) {
+      console.error('상담기록 조회 실패:', consultationsResponse.status);
+      // 조회 실패 시에도 계속 진행 (중복 검사는 스킵)
+    } else {
+      const consultationsData = await consultationsResponse.json();
+      const existingConsultations = consultationsData.records || [];
+      
+      // 센터/트레이너/회원이름이 모두 같은 상담기록이 있는지 확인 (공백 제거 후 비교)
+      const isDuplicate = existingConsultations.some(consultation => {
+        const existingCenter = (consultation.center || '').trim();
+        const existingTrainer = (consultation.trainer_username || '').trim();
+        const existingName = (consultation.name || '').trim();
+        
+        return existingCenter === centerTrimmed &&
+               existingTrainer === trainerTrimmed &&
+               existingName === name;
+      });
+      
+      if (isDuplicate) {
+        alert('이미 동일한 센터/트레이너/회원이름 조합의 상세상담이 존재합니다.');
+        return;
+      }
     }
     
     // 상담목적 드롭다운 옵션 목록
@@ -764,8 +873,8 @@ async function createConsultationFromTrial() {
     // 상담기록 데이터 구성
     const consultationData = {
       currentUser: currentUser,
-      center: center,
-      trainer_username: trainer,
+      center: centerTrimmed,
+      trainer_username: trainerTrimmed,
       name: name,
       phone: phone,
       gender: gender === '남' ? 'M' : (gender === '여' ? 'F' : null),

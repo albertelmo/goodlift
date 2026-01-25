@@ -121,6 +121,7 @@ async function openConsultationListModal() {
 
 // 전역에서 접근 가능하도록 window 객체에 할당
 window.openConsultationListModal = openConsultationListModal;
+window.openConsultationEditModal = openConsultationEditModal;
 
 // 상담기록 목록 모달 닫기
 function closeConsultationListModal() {

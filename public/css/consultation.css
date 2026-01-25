@@ -159,7 +159,9 @@
 }
 
 #consultationListModal #consultation-list-add-btn {
-    flex: 0 0 auto;
+    flex: none !important;
+    width: auto !important;
+    max-width: none !important;
     padding: 4px 12px;
     font-size: 12px;
     min-width: auto;

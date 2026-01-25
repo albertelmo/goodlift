@@ -206,6 +206,10 @@ async function loadMembers() {
   }
 }
 
+// 회원 목록 정렬 상태 관리 (기본값: 생성순 내림차순 - 최신순)
+let membersSortColumn = 'created_at';
+let membersSortDirection = 'desc'; // 'asc' or 'desc'
+
 function renderMembersList(members) {
   const listContainer = document.getElementById('user-app-members-list');
   if (!listContainer) return;
@@ -215,12 +219,45 @@ function renderMembersList(members) {
     return;
   }
   
+  // 정렬된 회원 목록 생성
+  const sortedMembers = [...members].sort((a, b) => {
+    if (membersSortColumn === 'name') {
+      const aValue = (a.name || '').trim();
+      const bValue = (b.name || '').trim();
+      const comparison = aValue.localeCompare(bValue, 'ko', { numeric: true });
+      return membersSortDirection === 'asc' ? comparison : -comparison;
+    } else if (membersSortColumn === 'created_at') {
+      // 생성일 기준 정렬
+      const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bDate = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (membersSortDirection === 'asc') {
+        return aDate - bDate; // 오름차순: 오래된 것부터
+      } else {
+        return bDate - aDate; // 내림차순: 최신 것부터
+      }
+    } else {
+      return 0;
+    }
+  });
+  
+  // 정렬 아이콘 생성 함수 (운동종류와 동일한 스타일)
+  const getSortIcon = (column) => {
+    if (membersSortColumn !== column) {
+      return '<span style="color:#999;font-size:0.7rem;margin-left:4px;">↕</span>';
+    }
+    return membersSortDirection === 'asc' 
+      ? '<span style="color:#1976d2;font-size:0.7rem;margin-left:4px;">↑</span>'
+      : '<span style="color:#1976d2;font-size:0.7rem;margin-left:4px;">↓</span>';
+  };
+  
   let html = `
     <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
       <thead>
         <tr style="background:#f5f5f5;border-bottom:1px solid #ddd;">
           <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">아이디</th>
-          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">이름</th>
+          <th class="members-sort-header" data-column="name" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;position:relative;" onmouseover="this.style.backgroundColor='#e0e0e0'" onmouseout="this.style.backgroundColor='transparent'">
+            이름${getSortIcon('name')}
+          </th>
           <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">전화번호</th>
           <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">회원명</th>
           <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">트레이너</th>
@@ -230,7 +267,7 @@ function renderMembersList(members) {
       <tbody>
   `;
   
-  members.forEach(member => {
+  sortedMembers.forEach(member => {
     html += `
       <tr style="border-bottom:1px solid #eee;">
         <td style="padding:4px 6px;">${escapeHtml(member.username)}</td>
@@ -254,11 +291,28 @@ function renderMembersList(members) {
   
   listContainer.innerHTML = html;
   
+  // 정렬 헤더 클릭 이벤트
+  const sortHeader = listContainer.querySelector('.members-sort-header');
+  if (sortHeader) {
+    sortHeader.addEventListener('click', () => {
+      const column = sortHeader.getAttribute('data-column');
+      if (membersSortColumn === column) {
+        // 같은 컬럼 클릭 시 정렬 방향 토글
+        membersSortDirection = membersSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        // 다른 컬럼 클릭 시 해당 컬럼으로 변경하고 오름차순으로 설정
+        membersSortColumn = column;
+        membersSortDirection = 'asc';
+      }
+      renderMembersList(members);
+    });
+  }
+  
   // 테이블 행 클릭 이벤트 (수정 모달 열기)
   listContainer.querySelectorAll('tbody tr').forEach((row, index) => {
     row.style.cursor = 'pointer';
     row.addEventListener('click', () => {
-      const member = members[index];
+      const member = sortedMembers[index];
       if (member) {
         showMemberEditModal(member);
       }
