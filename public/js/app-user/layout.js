@@ -43,7 +43,7 @@ function render() {
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
             </button>
-            <div class="app-header-title">GoodLift</div>
+            <div class="app-header-title">스탠다드 멤버스</div>
             <div style="width: 40px;"></div>
         </header>
 

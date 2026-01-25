@@ -74,6 +74,11 @@ body.app-user-active {
     transition: background var(--app-transition);
     min-width: 40px;
     min-height: 40px;
+    height: 40px;
+    width: 40px;
+    margin: 0;
+    vertical-align: middle;
+    box-sizing: border-box;
 }
 
 .app-hamburger-btn:hover,
@@ -87,12 +92,21 @@ body.app-user-active {
 }
 
 .app-header-title {
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 700;
-    color: var(--app-primary);
+    color: #000;
     flex: 1;
     text-align: center;
     letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    height: 40px; /* 햄버거 버튼과 동일한 높이 */
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+    box-sizing: border-box;
 }
 
 /* 햄버거 메뉴 (사이드 드로어) */
