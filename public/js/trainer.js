@@ -253,7 +253,26 @@ export async function renderMyMembers(container, username) {
     }
 }
 
-let calState = { year: null, month: null, today: null };
+let calState = { year: null, month: null, today: null, viewMode: 'month', weekStartDate: null }; // 'month' or 'week', weekStartDate는 주간보기에서 현재 주의 시작일(일요일)
+
+// 로컬 시간대를 유지하면서 날짜 문자열 생성 (YYYY-MM-DD)
+function formatDateString(date) {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+        console.error('[Date Format] Invalid date object:', date);
+        return null;
+    }
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    
+    // 날짜 유효성 검사
+    if (year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31) {
+        console.error('[Date Format] Invalid date values:', { year, month, day });
+        return null;
+    }
+    
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
 
 // 월 변경 시 날짜 유효성 검사 및 조정 함수
 function adjustDateForMonthChange() {
@@ -314,7 +333,8 @@ function validateAndAdjustCalendarState() {
 
 async function renderCalUI(container, forceDate) {
     const yyyy = calState.year;
-    const mm = String(calState.month).padStart(2, '0');
+    const mm = String(calState.month).padStart(2, '0'); // 날짜 형식용 (YYYY-MM-DD)
+    const mmDisplay = calState.month; // 표시용 (1월, 2월 등)
     let dd = String(calState.today).padStart(2, '0');
     if (forceDate) dd = forceDate;
     
@@ -328,7 +348,19 @@ async function renderCalUI(container, forceDate) {
         calState.today = lastDayOfMonth;
     }
     
-    const selectedDate = `${yyyy}-${mm}-${dd}`;
+    // 주간보기일 때는 selectedDate를 나중에 계산 (calState.today가 인덱스이므로)
+    let selectedDate;
+    if (calState.viewMode === 'week') {
+        // 주간보기에서는 임시로 오늘 날짜 사용 (나중에 targetDate로 대체됨)
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        selectedDate = `${year}-${month}-${day}`;
+    } else {
+        selectedDate = `${yyyy}-${mm}-${dd}`;
+    }
+    
     const username = localStorage.getItem('username');
     
     try {
@@ -342,8 +374,49 @@ async function renderCalUI(container, forceDate) {
         
         // 세션이 있는 날짜와 결석 여부 정보 수집
         const sessionDayInfo = {};
-        allSessions.filter(s => s.date && s.date.startsWith(`${yyyy}-${mm}`)).forEach(s => {
-          const day = s.date.split('T')[0].split('-')[2];
+        let sessionsToFilter = allSessions;
+        
+        if (calState.viewMode === 'week') {
+            // 주간보기: calState.weekStartDate를 기준으로 1주일 범위의 세션만 필터링
+            let weekStart;
+            if (calState.weekStartDate) {
+                weekStart = new Date(calState.weekStartDate + 'T00:00:00');
+            } else {
+                const today = new Date();
+                const dayOfWeek = today.getDay();
+                weekStart = new Date(today);
+                weekStart.setDate(today.getDate() - dayOfWeek);
+                weekStart.setHours(0, 0, 0, 0);
+                const formattedDate = formatDateString(weekStart);
+                if (formattedDate) {
+                    calState.weekStartDate = formattedDate;
+                } else {
+                    console.error('[Week View] Failed to format weekStartDate, using fallback');
+                    // 폴백: 직접 문자열 생성
+                    const year = weekStart.getFullYear();
+                    const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                    const day = String(weekStart.getDate()).padStart(2, '0');
+                    calState.weekStartDate = `${year}-${month}-${day}`;
+                }
+            }
+            
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
+            
+            sessionsToFilter = allSessions.filter(s => {
+                if (!s.date) return false;
+                const sessionDate = new Date(s.date);
+                return sessionDate >= weekStart && sessionDate <= weekEnd;
+            });
+        } else {
+            // 월간보기: 해당 월의 세션만 필터링
+            sessionsToFilter = allSessions.filter(s => s.date && s.date.startsWith(`${yyyy}-${mm}`));
+        }
+        
+        sessionsToFilter.forEach(s => {
+          const sessionDateStr = s.date.split('T')[0]; // YYYY-MM-DD 형식
+          const day = sessionDateStr.split('-')[2]; // DD만 추출
           const member = members.find(m => m.name === s.member);
           const remainSessions = member ? member.remainSessions : 0;
           const hasNoRemainingSessions = remainSessions <= 0;
@@ -356,22 +429,134 @@ async function renderCalUI(container, forceDate) {
           // 결석 여부 확인
           const isAbsent = s.status !== '완료' && !hasNoRemainingSessions && isPastDate;
           
+          // 주간보기일 때는 날짜 문자열을 키로 사용, 월간보기일 때는 날짜(day)만 사용
+          const infoKey = calState.viewMode === 'week' ? sessionDateStr : day;
+          
           // 해당 날짜에 결석이 있는지 표시
-          if (!sessionDayInfo[day]) {
-            sessionDayInfo[day] = { hasSession: true, hasAbsent: false };
+          if (!sessionDayInfo[infoKey]) {
+            sessionDayInfo[infoKey] = { hasSession: true, hasAbsent: false };
           }
           if (isAbsent) {
-            sessionDayInfo[day].hasAbsent = true;
+            sessionDayInfo[infoKey].hasAbsent = true;
           }
         });
         
         const sessionDays = new Set(Object.keys(sessionDayInfo));
         
         // 선택 날짜의 세션만 추출 (시간순 정렬)
-        const sessions = allSessions.filter(s => {
-          const sessionDate = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
-          return sessionDate === selectedDate;
-        }).sort((a, b) => a.time.localeCompare(b.time));
+        // 주간보기일 때는 선택된 날짜를 올바르게 처리
+        let targetDate = selectedDate;
+        if (calState.viewMode === 'week') {
+            // 주간보기에서는 calState.weekStartDate를 기준으로 날짜 계산
+            let weekStart;
+            if (calState.weekStartDate) {
+                weekStart = new Date(calState.weekStartDate + 'T00:00:00');
+                if (isNaN(weekStart.getTime())) {
+                    console.error('[Week View] Invalid weekStartDate:', calState.weekStartDate);
+                    // 폴백: 오늘이 속한 주의 시작일로 재설정
+                    const today = new Date();
+                    const dayOfWeek = today.getDay();
+                    weekStart = new Date(today);
+                    weekStart.setDate(today.getDate() - dayOfWeek);
+                    weekStart.setHours(0, 0, 0, 0);
+                    const formattedDate = formatDateString(weekStart);
+                    if (formattedDate) {
+                        calState.weekStartDate = formattedDate;
+                    } else {
+                        const year = weekStart.getFullYear();
+                        const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                        const day = String(weekStart.getDate()).padStart(2, '0');
+                        calState.weekStartDate = `${year}-${month}-${day}`;
+                    }
+                }
+            } else {
+                const today = new Date();
+                const dayOfWeek = today.getDay();
+                weekStart = new Date(today);
+                weekStart.setDate(today.getDate() - dayOfWeek);
+                weekStart.setHours(0, 0, 0, 0);
+                const formattedDate = formatDateString(weekStart);
+                if (formattedDate) {
+                    calState.weekStartDate = formattedDate;
+                } else {
+                    const year = weekStart.getFullYear();
+                    const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                    const day = String(weekStart.getDate()).padStart(2, '0');
+                    calState.weekStartDate = `${year}-${month}-${day}`;
+                }
+            }
+            
+            // weekStart가 유효한지 최종 확인
+            if (isNaN(weekStart.getTime())) {
+                console.error('[Week View] Invalid weekStart after all attempts');
+                // 폴백: 오늘 날짜 사용
+                const today = new Date();
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                targetDate = `${year}-${month}-${day}`;
+            } else {
+                // 선택된 날짜 인덱스 (0=일요일, 6=토요일)
+                // calState.today가 null이거나 유효하지 않으면 오늘의 인덱스 사용
+                let selectedDayIndex = calState.today;
+                if (selectedDayIndex === null || selectedDayIndex < 0 || selectedDayIndex > 6) {
+                    const today = new Date();
+                    const dayOfWeek = today.getDay();
+                    selectedDayIndex = dayOfWeek;
+                }
+                
+                // weekStart에 인덱스를 더해서 선택된 날짜 계산
+                const selectedDay = new Date(weekStart);
+                selectedDay.setDate(weekStart.getDate() + selectedDayIndex);
+                
+                // selectedDay 유효성 검사
+                if (isNaN(selectedDay.getTime())) {
+                    console.error('[Week View] Invalid selectedDay after setDate:', { weekStart: weekStart.toISOString(), selectedDayIndex, weekStartDate: weekStart.getDate() });
+                    // 폴백: weekStart 사용
+                    const year = weekStart.getFullYear();
+                    const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                    const day = String(weekStart.getDate()).padStart(2, '0');
+                    targetDate = `${year}-${month}-${day}`;
+                } else {
+                    const selectedYear = selectedDay.getFullYear();
+                    const selectedMonth = selectedDay.getMonth() + 1;
+                    const selectedDayNum = selectedDay.getDate();
+                    
+                    // 날짜 값 유효성 검사
+                    if (selectedDayNum < 1 || selectedDayNum > 31 || selectedMonth < 1 || selectedMonth > 12) {
+                        console.error('[Week View] Invalid date values:', { selectedYear, selectedMonth, selectedDayNum });
+                        // 폴백: weekStart 사용
+                        const year = weekStart.getFullYear();
+                        const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                        const day = String(weekStart.getDate()).padStart(2, '0');
+                        targetDate = `${year}-${month}-${day}`;
+                    } else {
+                        targetDate = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(selectedDayNum).padStart(2, '0')}`;
+                    }
+                }
+            }
+        }
+        
+        // 주간보기일 때는 해당 주의 모든 세션, 월간보기일 때는 선택된 날짜의 세션만
+        let sessions;
+        if (calState.viewMode === 'week') {
+            // 주간보기: 해당 주의 모든 세션 사용 (이미 sessionsToFilter에 필터링됨)
+            sessions = sessionsToFilter.sort((a, b) => {
+                // 날짜 먼저 정렬, 같은 날짜면 시간순 정렬
+                const dateA = a.date.split('T')[0];
+                const dateB = b.date.split('T')[0];
+                if (dateA !== dateB) {
+                    return dateA.localeCompare(dateB);
+                }
+                return a.time.localeCompare(b.time);
+            });
+        } else {
+            // 월간보기: 선택된 날짜의 세션만
+            sessions = allSessions.filter(s => {
+                const sessionDate = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
+                return sessionDate === targetDate;
+            }).sort((a, b) => a.time.localeCompare(b.time));
+        }
         
         // 세션별로 회원 정보 매핑
         const sessionsWithMemberInfo = sessions.map(s => {
@@ -410,49 +595,123 @@ async function renderCalUI(container, forceDate) {
           };
         });
         
-        let html = `<div class="trainer-mobile-cal-wrap">
+        // 주간보기/월간보기 버튼 텍스트 결정
+        const viewButtonText = calState.viewMode === 'month' ? '주간보기' : '월간보기';
+        
+        // 주간보기 네비게이션 버튼
+        const weekNavButtons = calState.viewMode === 'week' 
+            ? `<button class="tmc-week-nav-btn" id="tmc-week-prev-btn">지난주</button>
+               <button class="tmc-week-nav-btn" id="tmc-week-next-btn">다음주</button>`
+            : '';
+        
+        // 주간보기/월간보기 모두 캘린더 고정을 위한 클래스 추가
+        const wrapClass = 'trainer-mobile-cal-wrap trainer-cal-fixed';
+        
+        let html = `<div class="${wrapClass}">
             <div class="tmc-header"></div>
             <div class="tmc-calendar">
                 <div class="tmc-month-nav">
-                    <span class="tmc-month">${mm}월</span>
+                    <span class="tmc-month">${calState.viewMode === 'week' ? getWeekRangeText() : `${yyyy}년 ${mmDisplay}월`}</span>
+                    <div class="tmc-nav-buttons">
+                        ${weekNavButtons}
+                        <button class="tmc-view-toggle-btn" id="tmc-view-toggle-btn">${viewButtonText}</button>
+                    </div>
                 </div>
                 <table class="tmc-cal-table">
                     <thead><tr>${['일','월','화','수','목','금','토'].map(d=>`<th>${d}</th>`).join('')}</tr></thead>
-                    <tbody>${renderSimpleMonthWithDots(yyyy, mm, dd, sessionDayInfo)}</tbody>
+                    <tbody>${calState.viewMode === 'week' ? renderWeekView(sessionDayInfo, targetDate) : renderSimpleMonthWithDots(yyyy, mm, dd, sessionDayInfo)}</tbody>
                 </table>
             </div>
             <div class="tmc-session-list">`;
         
         if (sessionsWithMemberInfo.length) {
-          sessionsWithMemberInfo.forEach(s => {
-            let itemClass = 'tmc-session-item';
-            if (s.status === '완료') itemClass += ' done';
-            // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
-            if (s.hasNoRemainingSessions && s.status !== '완료') itemClass += ' no-remaining';
+          // 주간보기일 때는 날짜별로 그룹화
+          if (calState.viewMode === 'week') {
+            // 날짜별로 그룹화
+            const sessionsByDate = {};
+            sessionsWithMemberInfo.forEach(s => {
+              const sessionDate = s.date.split('T')[0]; // YYYY-MM-DD
+              if (!sessionsByDate[sessionDate]) {
+                sessionsByDate[sessionDate] = [];
+              }
+              sessionsByDate[sessionDate].push(s);
+            });
             
-            let itemStyle = '';
-            if (s.status === '완료') itemStyle = 'style="pointer-events:none;opacity:0.6;"';
-            else if (s.displayStatus === '결석') itemStyle = 'style="opacity:0.7;"';
+            // 날짜순으로 정렬하여 렌더링
+            const sortedDates = Object.keys(sessionsByDate).sort();
             
-            let statusClass = '';
-            if (s.displayStatus === '완료') statusClass = 'attend';
-            else if (s.displayStatus === '예정') statusClass = 'scheduled';
-            else if (s.displayStatus === '결석') statusClass = 'absent';
-            // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
-            if (s.hasNoRemainingSessions && s.status !== '완료') statusClass += ' no-remaining';
-            
-            const is30min = s['30min'] === true;
-            const timeStyle = is30min ? 'style="color:#f57c00;"' : '';
-            const typeStyle = is30min ? 'style="color:#ff9800;"' : '';
-            
-            html += `<div class="${itemClass}" data-id="${s.id}" data-no-remaining="${s.hasNoRemainingSessions && s.status !== '완료'}" ${itemStyle}>
-                <span class="tmc-session-time" ${timeStyle}>${s.time}</span>
-                <span class="tmc-session-type" ${typeStyle}>${is30min ? '30분' : 'PT'}</span>
-                <span class="tmc-session-member">${s.member}</span>
-                <span class="tmc-session-status ${statusClass}">${s.displayStatus}</span>
-                ${s.hasNoRemainingSessions && s.status !== '완료' ? '<span style="color:#d32f2f;font-size:1.2em;margin-left:4px;">⚠️</span>' : ''}
-            </div>`;
-          });
+            sortedDates.forEach(dateStr => {
+              const date = new Date(dateStr + 'T00:00:00');
+              const month = date.getMonth() + 1;
+              const day = date.getDate();
+              const dayOfWeek = ['일', '월', '화', '수', '목', '금', '토'][date.getDay()];
+              
+              // 날짜 헤더 추가 (data 속성으로 날짜 식별)
+              html += `<div class="tmc-session-date-header" data-date-header="${dateStr}">${month}월 ${day}일 (${dayOfWeek})</div>`;
+              
+              // 해당 날짜의 세션들 렌더링
+              sessionsByDate[dateStr].forEach(s => {
+                let itemClass = 'tmc-session-item';
+                if (s.status === '완료') itemClass += ' done';
+                // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
+                if (s.hasNoRemainingSessions && s.status !== '완료') itemClass += ' no-remaining';
+                
+                let itemStyle = '';
+                if (s.status === '완료') itemStyle = 'style="pointer-events:none;opacity:0.6;"';
+                else if (s.displayStatus === '결석') itemStyle = 'style="opacity:0.7;"';
+                
+                let statusClass = '';
+                if (s.displayStatus === '완료') statusClass = 'attend';
+                else if (s.displayStatus === '예정') statusClass = 'scheduled';
+                else if (s.displayStatus === '결석') statusClass = 'absent';
+                // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
+                if (s.hasNoRemainingSessions && s.status !== '완료') statusClass += ' no-remaining';
+                
+                const is30min = s['30min'] === true;
+                const timeStyle = is30min ? 'style="color:#f57c00;"' : '';
+                const typeStyle = is30min ? 'style="color:#ff9800;"' : '';
+                
+                html += `<div class="${itemClass}" data-id="${s.id}" data-no-remaining="${s.hasNoRemainingSessions && s.status !== '완료'}" ${itemStyle}>
+                    <span class="tmc-session-time" ${timeStyle}>${s.time}</span>
+                    <span class="tmc-session-type" ${typeStyle}>${is30min ? '30분' : 'PT'}</span>
+                    <span class="tmc-session-member">${s.member}</span>
+                    <span class="tmc-session-status ${statusClass}">${s.displayStatus}</span>
+                    ${s.hasNoRemainingSessions && s.status !== '완료' ? '<span style="color:#d32f2f;font-size:1.2em;margin-left:4px;">⚠️</span>' : ''}
+                </div>`;
+              });
+            });
+          } else {
+            // 월간보기: 기존 로직 (날짜 헤더 없이)
+            sessionsWithMemberInfo.forEach(s => {
+              let itemClass = 'tmc-session-item';
+              if (s.status === '완료') itemClass += ' done';
+              // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
+              if (s.hasNoRemainingSessions && s.status !== '완료') itemClass += ' no-remaining';
+              
+              let itemStyle = '';
+              if (s.status === '완료') itemStyle = 'style="pointer-events:none;opacity:0.6;"';
+              else if (s.displayStatus === '결석') itemStyle = 'style="opacity:0.7;"';
+              
+              let statusClass = '';
+              if (s.displayStatus === '완료') statusClass = 'attend';
+              else if (s.displayStatus === '예정') statusClass = 'scheduled';
+              else if (s.displayStatus === '결석') statusClass = 'absent';
+              // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
+              if (s.hasNoRemainingSessions && s.status !== '완료') statusClass += ' no-remaining';
+              
+              const is30min = s['30min'] === true;
+              const timeStyle = is30min ? 'style="color:#f57c00;"' : '';
+              const typeStyle = is30min ? 'style="color:#ff9800;"' : '';
+              
+              html += `<div class="${itemClass}" data-id="${s.id}" data-no-remaining="${s.hasNoRemainingSessions && s.status !== '완료'}" ${itemStyle}>
+                  <span class="tmc-session-time" ${timeStyle}>${s.time}</span>
+                  <span class="tmc-session-type" ${typeStyle}>${is30min ? '30분' : 'PT'}</span>
+                  <span class="tmc-session-member">${s.member}</span>
+                  <span class="tmc-session-status ${statusClass}">${s.displayStatus}</span>
+                  ${s.hasNoRemainingSessions && s.status !== '완료' ? '<span style="color:#d32f2f;font-size:1.2em;margin-left:4px;">⚠️</span>' : ''}
+              </div>`;
+            });
+          }
         } else {
           html += '<div class="tmc-no-session">세션이 없습니다.</div>';
         }
@@ -595,7 +854,9 @@ async function renderCalUI(container, forceDate) {
         
         // 시간 드롭다운 업데이트 함수 (현재 로그인한 트레이너 기준)
         async function updateTimeDropdowns() {
-            const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${yyyy}-${mm}-${dd}`);
+            // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
+            const dateParam = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
+            const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${dateParam}`);
             const daySessions = await daySessionsRes.json();
             
             // 1시간 세션 모달 시간 드롭다운 업데이트 (1시간 세션만 고려)
@@ -702,7 +963,9 @@ async function renderCalUI(container, forceDate) {
         }
         
         // 해당 날짜의 세션 데이터 가져오기
-        const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${yyyy}-${mm}-${dd}`);
+        // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
+        const dateParam = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
+        const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${dateParam}`);
         const daySessions = await daySessionsRes.json();
         
         // 1시간 세션 모달 시간 드롭다운 초기화 (1시간 세션만 고려)
@@ -735,8 +998,10 @@ async function renderCalUI(container, forceDate) {
         }
         time30minSel.innerHTML = time30minOpts;
         
-        document.getElementById('tmc-date-input').value = `${yyyy}-${mm}-${dd}`;
-        document.getElementById('tmc-30min-date-input').value = `${yyyy}-${mm}-${dd}`;
+        // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
+        const dateValue = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
+        document.getElementById('tmc-date-input').value = dateValue;
+        document.getElementById('tmc-30min-date-input').value = dateValue;
         
         // 트레이너 30분 세션 권한 확인 및 30min 버튼 표시
         const currentTrainer = allTrainers.find(t => t.username === username);
@@ -747,11 +1012,17 @@ async function renderCalUI(container, forceDate) {
         }
         
         document.getElementById('tmc-add-btn').onclick = function() {
+            // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
+            const currentDateValue = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
+            document.getElementById('tmc-date-input').value = currentDateValue;
             document.getElementById('tmc-modal-bg').style.display = 'block';
             document.getElementById('tmc-modal').style.display = 'block';
         };
         
         document.getElementById('tmc-add-30min-btn').onclick = function() {
+            // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
+            const currentDateValue30min = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
+            document.getElementById('tmc-30min-date-input').value = currentDateValue30min;
             document.getElementById('tmc-modal-bg').style.display = 'block';
             document.getElementById('tmc-30min-modal').style.display = 'block';
         };
@@ -827,12 +1098,28 @@ async function renderCalUI(container, forceDate) {
                 resultDiv.innerHTML += `<br><small style="color:#666;">총 ${result.total}회 중 ${result.added}회 추가됨${result.skipped > 0 ? ` (${result.skipped}회는 시간 중복으로 제외)` : ''}</small>`;
               }
               
+              // 폼 리셋 전에 입력한 날짜 값 저장
+              const sessionDate = document.getElementById('tmc-date-input').value;
+              
               form.reset();
-              document.getElementById('tmc-date-input').value = `${yyyy}-${mm}-${dd}`;
+              // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
+              const dateValueAfterAdd = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
+              document.getElementById('tmc-date-input').value = dateValueAfterAdd;
               document.getElementById('tmc-repeat-checkbox').checked = false;
               document.getElementById('tmc-repeat-count-label').style.opacity = '0';
               document.getElementById('tmc-repeat-count-label').style.height = '0';
               renderCalUI(container, dd); // 세션 추가 후 갱신
+              
+              // 주간보기일 때 저장된 세션 날짜로 스크롤 (입력한 날짜 사용)
+              if (calState.viewMode === 'week' && sessionDate) {
+                setTimeout(() => {
+                  const dateHeader = container.querySelector(`[data-date-header="${sessionDate}"]`);
+                  if (dateHeader) {
+                    dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 200);
+              }
+              
               setTimeout(() => {
                 closeSessionModal();
               }, 1500);
@@ -873,12 +1160,28 @@ async function renderCalUI(container, forceDate) {
                 resultDiv.innerHTML += `<br><small style="color:#666;">총 ${result.total}회 중 ${result.added}회 추가됨${result.skipped > 0 ? ` (${result.skipped}회는 시간 중복으로 제외)` : ''}</small>`;
               }
               
+              // 폼 리셋 전에 입력한 날짜 값 저장
+              const sessionDate30min = document.getElementById('tmc-30min-date-input').value;
+              
               form.reset();
-              document.getElementById('tmc-30min-date-input').value = `${yyyy}-${mm}-${dd}`;
+              // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
+              const dateValueAfterAdd30min = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
+              document.getElementById('tmc-30min-date-input').value = dateValueAfterAdd30min;
               document.getElementById('tmc-30min-repeat-checkbox').checked = false;
               document.getElementById('tmc-30min-repeat-count-label').style.opacity = '0';
               document.getElementById('tmc-30min-repeat-count-label').style.height = '0';
               renderCalUI(container, dd); // 세션 추가 후 갱신
+              
+              // 주간보기일 때 저장된 세션 날짜로 스크롤 (입력한 날짜 사용)
+              if (calState.viewMode === 'week' && sessionDate30min) {
+                setTimeout(() => {
+                  const dateHeader = container.querySelector(`[data-date-header="${sessionDate30min}"]`);
+                  if (dateHeader) {
+                    dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 200);
+              }
+              
               setTimeout(() => {
                 closeSessionModal();
               }, 1500);
@@ -891,64 +1194,255 @@ async function renderCalUI(container, forceDate) {
             resultDiv.innerText = '30분 세션 추가에 실패했습니다.';
           }
         };
+        // 주간보기/월간보기 버튼 클릭 이벤트
+        const viewToggleBtn = container.querySelector('#tmc-view-toggle-btn');
+        if (viewToggleBtn) {
+            viewToggleBtn.onclick = function() {
+                calState.viewMode = calState.viewMode === 'month' ? 'week' : 'month';
+                // 주간보기로 전환 시 오늘 날짜로 초기화
+                if (calState.viewMode === 'week') {
+                    const today = new Date();
+                    calState.year = today.getFullYear();
+                    calState.month = today.getMonth() + 1;
+                    // 주간보기에서는 오늘이 속한 주의 인덱스(0-6)를 저장
+                    const dayOfWeek = today.getDay();
+                    calState.today = dayOfWeek;
+                    // 주간보기 시작일 설정
+                    const weekStart = new Date(today);
+                    weekStart.setDate(today.getDate() - dayOfWeek);
+                    weekStart.setHours(0, 0, 0, 0);
+                    // 로컬 시간대를 유지하면서 날짜 문자열 생성
+                    const year = weekStart.getFullYear();
+                    const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                    const day = String(weekStart.getDate()).padStart(2, '0');
+                    calState.weekStartDate = `${year}-${month}-${day}`;
+                    // 주간보기 진입 시 오늘 날짜로 스크롤 플래그 설정
+                    calState.initialWeekScroll = true;
+                } else {
+                    // 월간보기로 전환 시 오늘 날짜로 초기화
+                    const today = new Date();
+                    calState.year = today.getFullYear();
+                    calState.month = today.getMonth() + 1;
+                    calState.today = today.getDate();
+                    calState.weekStartDate = null;
+                }
+                renderCalUI(container);
+            };
+        }
+        
+        // 주간보기 네비게이션 버튼 이벤트
+        const weekPrevBtn = container.querySelector('#tmc-week-prev-btn');
+        const weekNextBtn = container.querySelector('#tmc-week-next-btn');
+        
+        if (weekPrevBtn) {
+            weekPrevBtn.onclick = function() {
+                if (calState.viewMode === 'week' && calState.weekStartDate) {
+                    const weekStart = new Date(calState.weekStartDate + 'T00:00:00');
+                    if (isNaN(weekStart.getTime())) {
+                        console.error('[Week Nav] Invalid weekStartDate:', calState.weekStartDate);
+                        return;
+                    }
+                    weekStart.setDate(weekStart.getDate() - 7); // 1주일 전으로 이동
+                    const newWeekStartDate = formatDateString(weekStart);
+                    if (newWeekStartDate) {
+                        calState.weekStartDate = newWeekStartDate;
+                        renderCalUI(container);
+                    } else {
+                        console.error('[Week Nav] Failed to format date after prev week');
+                    }
+                }
+            };
+        }
+        
+        if (weekNextBtn) {
+            weekNextBtn.onclick = function() {
+                if (calState.viewMode === 'week' && calState.weekStartDate) {
+                    const weekStart = new Date(calState.weekStartDate + 'T00:00:00');
+                    if (isNaN(weekStart.getTime())) {
+                        console.error('[Week Nav] Invalid weekStartDate:', calState.weekStartDate);
+                        return;
+                    }
+                    weekStart.setDate(weekStart.getDate() + 7); // 1주일 후로 이동
+                    const newWeekStartDate = formatDateString(weekStart);
+                    if (newWeekStartDate) {
+                        calState.weekStartDate = newWeekStartDate;
+                        renderCalUI(container);
+                    } else {
+                        console.error('[Week Nav] Failed to format date after next week');
+                    }
+                }
+            };
+        }
+        
         // 날짜 클릭 시 해당 날짜로 이동
         container.querySelectorAll('.tmc-cal-table td[data-day]').forEach(td => {
           td.onclick = function() {
             if (td.textContent) {
-              calState.today = Number(td.getAttribute('data-day'));
-              renderCalUI(container, td.getAttribute('data-day').padStart(2, '0'));
+              if (calState.viewMode === 'week') {
+                // 주간보기: 클릭한 날짜의 인덱스 계산 (0=일요일, 6=토요일)
+                const dataDate = td.getAttribute('data-date');
+                if (dataDate) {
+                    const clickedDate = new Date(dataDate + 'T00:00:00');
+                    if (isNaN(clickedDate.getTime())) {
+                        console.error('[Week View] Invalid clickedDate:', dataDate);
+                        return;
+                    }
+                    
+                    let weekStart;
+                    if (calState.weekStartDate) {
+                        weekStart = new Date(calState.weekStartDate + 'T00:00:00');
+                        if (isNaN(weekStart.getTime())) {
+                            console.error('[Week View] Invalid weekStartDate:', calState.weekStartDate);
+                            // 폴백: 오늘이 속한 주의 시작일로 재설정
+                            const today = new Date();
+                            const dayOfWeek = today.getDay();
+                            weekStart = new Date(today);
+                            weekStart.setDate(today.getDate() - dayOfWeek);
+                            weekStart.setHours(0, 0, 0, 0);
+                            const formattedDate = formatDateString(weekStart);
+                            if (formattedDate) {
+                                calState.weekStartDate = formattedDate;
+                            } else {
+                                // 폴백: 직접 문자열 생성
+                                const year = weekStart.getFullYear();
+                                const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                                const day = String(weekStart.getDate()).padStart(2, '0');
+                                calState.weekStartDate = `${year}-${month}-${day}`;
+                            }
+                        }
+                    } else {
+                        const today = new Date();
+                        const dayOfWeek = today.getDay();
+                        weekStart = new Date(today);
+                        weekStart.setDate(today.getDate() - dayOfWeek);
+                        weekStart.setHours(0, 0, 0, 0);
+                        const formattedDate = formatDateString(weekStart);
+                        if (formattedDate) {
+                            calState.weekStartDate = formattedDate;
+                        } else {
+                            // 폴백: 직접 문자열 생성
+                            const year = weekStart.getFullYear();
+                            const month = String(weekStart.getMonth() + 1).padStart(2, '0');
+                            const day = String(weekStart.getDate()).padStart(2, '0');
+                            calState.weekStartDate = `${year}-${month}-${day}`;
+                        }
+                    }
+                    
+                    // 날짜 차이 계산 (밀리초를 일수로 변환)
+                    const dayIndex = Math.floor((clickedDate - weekStart) / (1000 * 60 * 60 * 24));
+                    
+                    // 인덱스 유효성 검사 (0-6 범위)
+                    if (dayIndex >= 0 && dayIndex <= 6) {
+                        calState.today = dayIndex;
+                    } else {
+                        console.error('[Week View] Invalid dayIndex calculated:', dayIndex, 'from clickedDate:', clickedDate.toISOString(), 'weekStart:', weekStart.toISOString());
+                        // 폴백: 클릭한 날짜의 요일 인덱스 사용
+                        calState.today = clickedDate.getDay();
+                    }
+                    
+                    // 해당 날짜의 세션 카드 영역으로 스크롤
+                    renderCalUI(container);
+                    setTimeout(() => {
+                        const dateHeader = container.querySelector(`[data-date-header="${dataDate}"]`);
+                        if (dateHeader) {
+                            dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    }, 100);
+                }
+              } else {
+                // 월간보기: 기존 로직
+                calState.today = Number(td.getAttribute('data-day'));
+              }
+              renderCalUI(container);
             }
           };
         });
-        // 모바일 스와이프 이벤트(좌우) - 세션카드 영역 제외
-        let startX = null;
-        const calWrap = container.querySelector('.trainer-mobile-cal-wrap');
-        const sessionList = container.querySelector('.tmc-session-list');
-        calWrap.addEventListener('touchstart', e => {
-            if (sessionList.contains(e.target)) return;
-            if (e.touches.length === 1) startX = e.touches[0].clientX;
-        });
-        calWrap.addEventListener('touchend', e => {
-            if (sessionList.contains(e.target)) return;
-            if (startX === null) return;
-            const endX = e.changedTouches[0].clientX;
-            const dx = endX - startX;
-            if (Math.abs(dx) > 40) {
-                if (dx < 0) {
-                    // 다음달로 이동 (안전한 월 변경)
-                    if (calState.month === 12) {
-                        calState.month = 1;
-                        calState.year++;
+        // 모바일 스와이프 이벤트(좌우) - 세션카드 영역 제외, 주간보기에서는 비활성화
+        if (calState.viewMode === 'month') {
+            let startX = null;
+            const calWrap = container.querySelector('.trainer-mobile-cal-wrap');
+            const sessionList = container.querySelector('.tmc-session-list');
+            calWrap.addEventListener('touchstart', e => {
+                if (sessionList.contains(e.target)) return;
+                if (e.touches.length === 1) startX = e.touches[0].clientX;
+            });
+            calWrap.addEventListener('touchend', e => {
+                if (sessionList.contains(e.target)) return;
+                if (startX === null) return;
+                const endX = e.changedTouches[0].clientX;
+                const dx = endX - startX;
+                if (Math.abs(dx) > 40) {
+                    if (dx < 0) {
+                        // 다음달로 이동 (안전한 월 변경)
+                        if (calState.month === 12) {
+                            calState.month = 1;
+                            calState.year++;
+                        } else {
+                            calState.month++;
+                        }
+                        // 날짜 유효성 검사 및 조정
+                        adjustDateForMonthChange();
+                        renderCalUI(container);
                     } else {
-                        calState.month++;
+                        // 이전달로 이동 (안전한 월 변경)
+                        if (calState.month === 1) {
+                            calState.month = 12;
+                            calState.year--;
+                        } else {
+                            calState.month--;
+                        }
+                        // 날짜 유효성 검사 및 조정
+                        adjustDateForMonthChange();
+                        renderCalUI(container);
                     }
-                    // 날짜 유효성 검사 및 조정
-                    adjustDateForMonthChange();
-                    renderCalUI(container);
-                } else {
-                    // 이전달로 이동 (안전한 월 변경)
-                    if (calState.month === 1) {
-                        calState.month = 12;
-                        calState.year--;
-                    } else {
-                        calState.month--;
-                    }
-                    // 날짜 유효성 검사 및 조정
-                    adjustDateForMonthChange();
-                    renderCalUI(container);
                 }
-            }
-            startX = null;
-        });
+                startX = null;
+            });
+        }
         // 세션카드 클릭 시 출석체크 모달
         container.querySelectorAll('.tmc-session-item').forEach(card => {
           if(card.classList.contains('done')) return;
           card.onclick = function() {
+            // 스크롤 위치 저장 (세션 리스트 영역)
+            const sessionList = container.querySelector('.tmc-session-list');
+            if (sessionList) {
+              calState.savedScrollPosition = sessionList.scrollTop;
+            }
             const sessionId = card.getAttribute('data-id');
             const hasNoRemaining = card.getAttribute('data-no-remaining') === 'true';
             showAttendModal(sessionId, container, hasNoRemaining);
           };
         });
+        
+        // 저장된 스크롤 위치 복원 (세션 카드 클릭 후 모달 닫힌 경우)
+        if (calState.savedScrollPosition !== undefined && calState.savedScrollPosition !== null) {
+          const sessionList = container.querySelector('.tmc-session-list');
+          if (sessionList) {
+            // DOM 업데이트 후 스크롤 복원
+            setTimeout(() => {
+              sessionList.scrollTop = calState.savedScrollPosition;
+              calState.savedScrollPosition = null; // 복원 후 초기화
+            }, 100);
+          }
+        } else if (calState.viewMode === 'week' && calState.initialWeekScroll === true) {
+          // 주간보기 진입 시 오늘 날짜로 자동 스크롤
+          const today = new Date();
+          const year = today.getFullYear();
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const day = String(today.getDate()).padStart(2, '0');
+          const todayDateStr = `${year}-${month}-${day}`;
+          
+          const sessionList = container.querySelector('.tmc-session-list');
+          if (sessionList) {
+            setTimeout(() => {
+              const dateHeader = container.querySelector(`[data-date-header="${todayDateStr}"]`);
+              if (dateHeader) {
+                dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+              calState.initialWeekScroll = false; // 한 번만 실행
+            }, 100);
+          }
+        }
       } catch (e) {
         console.error("Error rendering calendar UI:", e);
         if (container) container.innerHTML = '<div style="color:#d32f2f;">달력을 불러오지 못했습니다.</div>';
@@ -1010,6 +1504,12 @@ function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
         return '';
     }
     
+    // 오늘 날짜 확인
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth() + 1;
+    const todayDay = now.getDate();
+    
     let html = '';
     let day = 1 - first.getDay();
     for (let w=0; w<6; w++) {
@@ -1019,7 +1519,17 @@ function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
                 html += '<td></td>';
             } else {
                 const dayStr = String(day).padStart(2,'0');
-                const isToday = dayStr === today;
+                const isSelected = dayStr === today; // 선택된 날짜
+                const isToday = year === todayYear && m === todayMonth && day === todayDay; // 실제 오늘 날짜
+                
+                // 클래스 결정: 선택된 날짜는 tmc-today, 오늘이지만 선택되지 않으면 tmc-today-border
+                let cellClass = '';
+                if (isSelected) {
+                    cellClass = 'tmc-today'; // 선택된 날짜: 색깔 원
+                } else if (isToday) {
+                    cellClass = 'tmc-today-border'; // 오늘이지만 선택되지 않음: 테두리만
+                }
+                
                 const dayInfo = sessionDayInfo[dayStr];
                 
                 let dotHtml = '<div style="height:1.1em;"></div>';
@@ -1028,13 +1538,104 @@ function renderSimpleMonthWithDots(year, month, today, sessionDayInfo) {
                     dotHtml = `<div style="margin-top:2px;font-size:1.1em;color:${dotColor};line-height:1;">●</div>`;
                 }
                 
-                html += `<td data-day="${dayStr}"${isToday ? ' class="tmc-today"' : ''}><div>${day}</div>${dotHtml}</td>`;
+                html += `<td data-day="${dayStr}"${cellClass ? ` class="${cellClass}"` : ''}><div>${day}</div>${dotHtml}</td>`;
             }
         }
         html += '</tr>';
         if (day > last.getDate()) break;
     }
     return html;
+}
+
+// 주간보기 렌더링 함수 (오늘이 포함된 1주일)
+function renderWeekView(sessionDayInfo, selectedDate) {
+    const today = new Date();
+    const todayDay = today.getDate();
+    const todayMonth = today.getMonth() + 1;
+    const todayYear = today.getFullYear();
+    
+    // 주간보기 시작일 계산 (calState.weekStartDate가 있으면 사용, 없으면 오늘이 속한 주의 시작일)
+    let weekStart;
+    if (calState.weekStartDate) {
+        weekStart = new Date(calState.weekStartDate + 'T00:00:00');
+    } else {
+        const dayOfWeek = today.getDay(); // 0=일요일, 6=토요일
+        weekStart = new Date(today);
+        weekStart.setDate(todayDay - dayOfWeek);
+        weekStart.setHours(0, 0, 0, 0);
+        calState.weekStartDate = formatDateString(weekStart); // YYYY-MM-DD 형식으로 저장
+    }
+    
+    let html = '<tr>';
+    for (let i = 0; i < 7; i++) {
+        const currentDate = new Date(weekStart);
+        currentDate.setDate(weekStart.getDate() + i);
+        
+        const currentDay = currentDate.getDate();
+        const currentMonth = currentDate.getMonth() + 1;
+        const currentYear = currentDate.getFullYear();
+        const dayStr = String(currentDay).padStart(2, '0');
+        const monthStr = String(currentMonth).padStart(2, '0');
+        
+        // 오늘인지 확인
+        const isToday = currentYear === todayYear && 
+                       currentMonth === todayMonth && 
+                       currentDay === todayDay;
+        
+        // 선택된 날짜인지 확인
+        const dateKey = `${currentYear}-${monthStr}-${dayStr}`;
+        const isSelected = selectedDate && dateKey === selectedDate;
+        
+        // 클래스 결정: 선택된 날짜는 tmc-today, 오늘이지만 선택되지 않으면 tmc-today-border
+        let cellClass = '';
+        if (isSelected) {
+            cellClass = 'tmc-today'; // 선택된 날짜: 색깔 원
+        } else if (isToday) {
+            cellClass = 'tmc-today-border'; // 오늘이지만 선택되지 않음: 테두리만
+        }
+        
+        // 세션 정보 확인 (주간보기에서는 날짜 문자열을 키로 사용)
+        // 주간보기에서는 날짜 문자열을 키로 사용
+        const dayInfo = sessionDayInfo[dateKey];
+        
+        let dotHtml = '<div style="height:1.1em;"></div>';
+        if (dayInfo && dayInfo.hasSession) {
+            const dotColor = dayInfo.hasAbsent ? '#ff6b6b' : '#1de9b6';
+            dotHtml = `<div style="margin-top:2px;font-size:1.1em;color:${dotColor};line-height:1;">●</div>`;
+        }
+        
+        html += `<td data-day="${dayStr}" data-date="${dateKey}"${cellClass ? ` class="${cellClass}"` : ''}><div>${currentDay}</div>${dotHtml}</td>`;
+    }
+    html += '</tr>';
+    return html;
+}
+
+// 주간 범위 텍스트 생성
+function getWeekRangeText() {
+    let weekStart;
+    if (calState.weekStartDate) {
+        weekStart = new Date(calState.weekStartDate + 'T00:00:00');
+    } else {
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - dayOfWeek);
+        weekStart.setHours(0, 0, 0, 0);
+    }
+    
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    const startMonth = weekStart.getMonth() + 1;
+    const startDay = weekStart.getDate();
+    const endMonth = weekEnd.getMonth() + 1;
+    const endDay = weekEnd.getDate();
+    
+    if (startMonth === endMonth) {
+        return `${startMonth}월 ${startDay}일~${endDay}일`;
+    } else {
+        return `${startMonth}월 ${startDay}일~${endMonth}월 ${endDay}일`;
+    }
 }
 
 // 지출 내역 추가 버튼 설정 (캘린더 화면용)
@@ -1998,7 +2599,10 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
           if (res.ok) {
             resultDiv.className = 'tmc-modal-result success';
             resultDiv.innerText = result.message;
-            setTimeout(() => { close(); renderCalUI(container); }, 700);
+            setTimeout(() => { 
+              close(); 
+              renderCalUI(container); 
+            }, 700);
           } else {
             resultDiv.className = 'tmc-modal-result error';
             resultDiv.innerText = result.message;
@@ -2201,7 +2805,10 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
             if (res.ok) {
               resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
-              setTimeout(() => { close(); renderCalUI(container); }, 700);
+              setTimeout(() => { 
+              close(); 
+              renderCalUI(container); 
+            }, 700);
             } else {
               resultDiv.className = 'tmc-modal-result error';
               resultDiv.innerText = result.message;

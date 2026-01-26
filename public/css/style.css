@@ -1208,6 +1208,26 @@ li, td, th {
     position: relative;
     transition: transform var(--trainer-transition), box-shadow var(--trainer-transition);
 }
+.trainer-cal-fixed {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px);
+    max-height: 800px;
+    padding: 0;
+}
+.trainer-cal-fixed .tmc-calendar {
+    flex-shrink: 0;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--trainer-border);
+}
+.trainer-cal-fixed .tmc-session-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    margin: 0 16px;
+    margin-top: 16px;
+    padding-bottom: 16px;
+}
 .trainer-mobile-cal-wrap:hover {
     box-shadow: 0 6px 12px rgba(102, 126, 234, 0.15);
 }
@@ -1224,12 +1244,64 @@ li, td, th {
 .tmc-calendar {
     padding: 0 16px 0 16px;
 }
+.tmc-month-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+}
 .tmc-month {
     font-size: 1.05rem;
     font-weight: 600;
     color: var(--trainer-text);
-    margin: 4px 0 8px 0;
+    margin: 0;
+    line-height: 1.5;
     letter-spacing: -0.3px;
+}
+.tmc-nav-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.tmc-week-nav-btn {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    background: var(--app-bg);
+    padding: 4px 8px;
+    border-radius: var(--app-radius-sm);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--app-transition), background var(--app-transition);
+}
+.tmc-week-nav-btn:hover {
+    color: var(--app-primary);
+    background: var(--app-bg-hover);
+}
+.tmc-week-nav-btn:active {
+    transform: scale(0.95);
+}
+.tmc-view-toggle-btn {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    background: var(--app-bg);
+    padding: 4px 8px;
+    border-radius: var(--app-radius-sm);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--app-transition), background var(--app-transition);
+}
+.tmc-view-toggle-btn:hover {
+    color: var(--app-primary);
+    background: var(--app-bg-hover);
+}
+.tmc-view-toggle-btn:active {
+    transform: scale(0.95);
 }
 .tmc-cal-table {
     width: 100%;
@@ -1275,9 +1347,44 @@ li, td, th {
     color: white;
     box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
+.tmc-cal-table td.tmc-today-border {
+    background: none;
+    color: var(--trainer-text);
+    font-weight: normal;
+    border: none;
+    position: relative;
+}
+.tmc-cal-table td.tmc-today-border > div:first-child {
+    background: transparent;
+    border: 1px solid var(--trainer-primary);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    color: var(--trainer-text);
+    box-sizing: border-box;
+}
 .tmc-session-list {
     margin: 0 16px;
     margin-top: 16px;
+}
+.tmc-session-date-header {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--trainer-text-muted);
+    padding: 10px 0 6px 0;
+    margin-top: 16px;
+    border-bottom: 1px solid var(--trainer-border);
+    position: sticky;
+    top: 0;
+    background: var(--trainer-bg);
+    z-index: 10;
+}
+.tmc-session-date-header:first-child {
+    margin-top: 0;
 }
 .tmc-session-item {
     display: flex;
