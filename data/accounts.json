@@ -73,7 +73,8 @@
     "username": "jyk",
     "password": "123",
     "name": "김재영",
-    "role": "trainer"
+    "role": "trainer",
+    "probation": "on"
   },
   {
     "username": "ice",

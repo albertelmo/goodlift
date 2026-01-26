@@ -705,6 +705,10 @@ function migrateTrainerDefaultViewMode() {
                 account.default_view_mode = 'week'; // 기본값: 주간보기
                 hasChanges = true;
             }
+            if (account.role === 'trainer' && account.probation === undefined) {
+                account.probation = 'off'; // 기본값: 수습 아님
+                hasChanges = true;
+            }
         });
 
         if (hasChanges) {
@@ -2772,6 +2776,7 @@ app.get('/api/trainers', (req, res) => {
                 vip_member: trainer.vip_member || false,
                 '30min_session': trainer['30min_session'] || 'off',
                 default_view_mode: trainer.default_view_mode || 'week',
+                probation: trainer.probation || 'off',
                 profile_image_url: trainer.profile_image_url || null
             }]);
         } else {
@@ -2780,13 +2785,14 @@ app.get('/api/trainers', (req, res) => {
     }
     
     const trainers = accounts.filter(acc => acc.role === 'trainer')
-        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, default_view_mode, profile_image_url }) => ({ 
+        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, profile_image_url }) => ({ 
             username, 
             name, 
             role, 
             vip_member: vip_member || false,  // 기본값: VIP 기능 사용 안함
             '30min_session': thirtyMinSession || 'off',  // 기본값: 30분 세션 기능 사용 안함
             default_view_mode: default_view_mode || 'week',  // 기본값: 주간보기
+            probation: probation || 'off',  // 기본값: 수습 아님
             profile_image_url: profile_image_url || null
         }));
     res.json(trainers);
@@ -2837,7 +2843,7 @@ app.delete('/api/trainers/:username', async (req, res) => {
 app.patch('/api/trainers/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        const { vip_member, '30min_session': thirtyMinSession, default_view_mode, currentUser } = req.body;
+        const { vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, currentUser } = req.body;
         
         // 권한 확인: 관리자이거나 본인인 경우만 허용
         let accounts = [];
@@ -2887,6 +2893,18 @@ app.patch('/api/trainers/:username', async (req, res) => {
             accounts[trainerIndex].default_view_mode = default_view_mode;
         }
         
+        // 수습 여부 설정 업데이트 (SU만 가능)
+        if (probation !== undefined) {
+            // SU 권한 확인
+            if (currentUserAccount && currentUserAccount.role !== 'su') {
+                return res.status(403).json({ message: '수습 여부 설정은 SU 권한이 필요합니다.' });
+            }
+            if (!['on', 'off'].includes(probation)) {
+                return res.status(400).json({ message: '수습 여부는 "on" 또는 "off"만 가능합니다.' });
+            }
+            accounts[trainerIndex].probation = probation;
+        }
+        
         fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
         
         res.json({ 
@@ -2896,7 +2914,8 @@ app.patch('/api/trainers/:username', async (req, res) => {
                 name: accounts[trainerIndex].name,
                 vip_member: accounts[trainerIndex].vip_member,
                 '30min_session': accounts[trainerIndex]['30min_session'],
-                default_view_mode: accounts[trainerIndex].default_view_mode || 'week'
+                default_view_mode: accounts[trainerIndex].default_view_mode || 'week',
+                probation: accounts[trainerIndex].probation || 'off'
             }
         });
     } catch (error) {

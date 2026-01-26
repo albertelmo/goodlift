@@ -556,6 +556,11 @@ const centerHamburgerItems = [
     { label: '🎯 상담', id: 'Trial', content: '<div id="trial-root"></div>' }
 ];
 function showMainSection(role, name) {
+    // 로그인 시 세션 캐시 초기화 (다른 트레이너의 캐시 방지)
+    if (role === 'trainer') {
+        trainer.invalidateSessionsCache();
+    }
+    
     document.getElementById('authSection').style.display = 'none';
     document.getElementById('mainSection').style.display = 'block';
     
@@ -597,12 +602,43 @@ function showMainSection(role, name) {
     let tabs;
     if (isAdminOrSu(role)) {
         tabs = adminTabs;
+        renderTabs(tabs);
     } else if (role === 'center') {
         tabs = centerTabs;
+        renderTabs(tabs);
+    } else if (role === 'trainer') {
+        // 트레이너 정보 조회하여 수습 여부 확인
+        const username = localStorage.getItem('username');
+        if (username) {
+            fetch(`/api/trainers?username=${encodeURIComponent(username)}`)
+                .then(res => res.json())
+                .then(trainers => {
+                    if (trainers && trainers.length > 0) {
+                        const trainer = trainers[0];
+                        // 수습 트레이너(probation === 'on')인 경우 '전체 수업' 탭 제외
+                        if (trainer.probation === 'on') {
+                            tabs = trainerTabs.filter(tab => tab.id !== 'Today');
+                        } else {
+                            tabs = trainerTabs;
+                        }
+                    } else {
+                        tabs = trainerTabs;
+                    }
+                    renderTabs(tabs);
+                })
+                .catch(error => {
+                    console.error('트레이너 정보 조회 오류:', error);
+                    tabs = trainerTabs;
+                    renderTabs(tabs);
+                });
+        } else {
+            tabs = trainerTabs;
+            renderTabs(tabs);
+        }
     } else {
         tabs = trainerTabs;
+        renderTabs(tabs);
     }
-    renderTabs(tabs);
 }
 
 // showAppUserSection은 app-user/index.js로 이동됨

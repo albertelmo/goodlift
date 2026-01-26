@@ -32,6 +32,10 @@ async function loadList() {
                 const monthlyViewColor = defaultViewMode === 'month' ? '#1976d2' : '#666';
                 const monthlyViewBgColor = defaultViewMode === 'month' ? '#e3f2fd' : '#f5f5f5';
                 
+                const probationStatus = tr.probation === 'on' ? 'ON' : 'OFF';
+                const probationColor = tr.probation === 'on' ? '#1976d2' : '#666';
+                const probationBgColor = tr.probation === 'on' ? '#e3f2fd' : '#f5f5f5';
+                
                 const profileImageUrl = tr.profile_image_url || null;
                 const profileImageHtml = profileImageUrl 
                     ? `<img src="${profileImageUrl}" alt="프로필" style="width:80px;height:80px;object-fit:cover;border-radius:50%;cursor:pointer;border:2px solid #e0e0e0;" 
@@ -56,8 +60,7 @@ async function loadList() {
                             ${profileImageHtml}
                         </div>
                         <div style="flex:1;min-width:0;">
-                            <div style="font-weight:600;color:#1976d2;font-size:1rem;margin-bottom:4px;">${tr.name}</div>
-                            <div style="font-size:0.85rem;color:#666;margin-bottom:12px;">${tr.username}</div>
+                            <div style="font-weight:600;color:#1976d2;font-size:1rem;margin-bottom:12px;">${tr.name} (${tr.username})</div>
                             <div style="display:flex;gap:8px;flex-wrap:wrap;">
                                 <button class="vip-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-vip="${tr.vip_member}" 
                                         style="background:${vipBgColor};color:${vipColor};border:1px solid ${vipColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
@@ -71,6 +74,12 @@ async function loadList() {
                                         style="background:${monthlyViewBgColor};color:${monthlyViewColor};border:1px solid ${monthlyViewColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
                                     월간보기 ${monthlyViewStatus}
                                 </button>
+                                ${isSu ? `
+                                <button class="probation-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-probation="${tr.probation || 'off'}" 
+                                        style="background:${probationBgColor};color:${probationColor};border:1px solid ${probationColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
+                                    수습 ${probationStatus}
+                                </button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -88,6 +97,9 @@ async function loadList() {
             
             // 월간보기 토글 버튼 이벤트 리스너 추가
             setupMonthlyViewToggleListeners();
+            
+            // 수습 여부 토글 버튼 이벤트 리스너 추가
+            setupProbationToggleListeners();
             
             // su 유저인 경우에만 삭제 버튼 이벤트 리스너 추가
             if (isSu) {
@@ -224,6 +236,49 @@ function setupMonthlyViewToggleListeners() {
             } catch (error) {
                 console.error('월간보기 기능 설정 변경 오류:', error);
                 alert('월간보기 기능 설정 변경에 실패했습니다.');
+            }
+        });
+    });
+}
+
+// 수습 여부 토글 버튼 이벤트 리스너 설정
+function setupProbationToggleListeners() {
+    const listDiv = document.getElementById('trainer-list');
+    if (!listDiv) return;
+    
+    listDiv.querySelectorAll('.probation-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const username = this.getAttribute('data-username');
+            const name = this.getAttribute('data-name');
+            const currentProbation = this.getAttribute('data-probation') || 'off';
+            const newProbation = currentProbation === 'off' ? 'on' : 'off';
+            
+            const action = newProbation === 'on' ? '활성화' : '비활성화';
+            if (!confirm(`트레이너 "${name}"의 수습 여부를 ${action}하시겠습니까?`)) {
+                return;
+            }
+            
+            try {
+                const currentUser = localStorage.getItem('username');
+                const res = await fetch(`/api/trainers/${encodeURIComponent(username)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        probation: newProbation,
+                        currentUser 
+                    })
+                });
+                const result = await res.json();
+                
+                if (res.ok) {
+                    alert(`수습 여부가 ${action}되었습니다.`);
+                    loadList(); // 목록 새로고침
+                } else {
+                    alert(result.message || '수습 여부 설정 변경에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('수습 여부 설정 변경 오류:', error);
+                alert('수습 여부 설정 변경에 실패했습니다.');
             }
         });
     });
@@ -2633,7 +2688,7 @@ window.closeProfileImageModal = closeProfileImageModal;
 window.uploadProfileImage = uploadProfileImage;
 window.deleteProfileImage = deleteProfileImage;
 
-export const trainer = { loadList, renderMyMembers, renderSessionCalendar };
+export const trainer = { loadList, renderMyMembers, renderSessionCalendar, invalidateSessionsCache };
 
 function showAttendModal(sessionId, container, hasNoRemaining = false) {
   // 스크롤 방지
