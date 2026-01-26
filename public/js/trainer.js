@@ -1482,6 +1482,9 @@ async function renderCalUI(container, forceDate) {
                     calState.initialWeekScroll = false;
                     
                     // 해당 날짜의 세션 카드 영역으로 스크롤
+                    // savedScrollPosition을 명시적으로 null로 설정하여 복원 로직이 실행되지 않도록 함
+                    calState.savedScrollPosition = null;
+                    
                     renderCalUI(container);
                     setTimeout(() => {
                         const dateHeader = container.querySelector(`[data-date-header="${dataDate}"]`);
@@ -1492,11 +1495,26 @@ async function renderCalUI(container, forceDate) {
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     level: 'INFO',
-                                    message: `[클릭한 날짜로 스크롤 실행] 날짜: ${dataDate}`
+                                    message: `[클릭한 날짜로 스크롤 실행] 날짜: ${dataDate}, scrollTop: ${container.querySelector('.tmc-session-list')?.scrollTop || 'N/A'}`
                                 })
                             }).catch(err => console.error('디버그 로그 전송 실패:', err));
                             
                             dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            
+                            // 스크롤 실행 후 실제 스크롤 위치 확인
+                            setTimeout(() => {
+                                const sessionList = container.querySelector('.tmc-session-list');
+                                if (sessionList) {
+                                    fetch('/api/debug-log', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            level: 'INFO',
+                                            message: `[스크롤 실행 후 위치] scrollTop: ${sessionList.scrollTop}, dateHeader offsetTop: ${dateHeader.offsetTop}`
+                                        })
+                                    }).catch(err => console.error('디버그 로그 전송 실패:', err));
+                                }
+                            }, 300);
                         } else {
                             // 서버 터미널에 로그 출력
                             fetch('/api/debug-log', {
