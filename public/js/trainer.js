@@ -1448,6 +1448,12 @@ async function renderCalUI(container, forceDate) {
                         calState.today = clickedDate.getDay();
                     }
                     
+                    // initialWeekScroll 플래그를 false로 설정하여 오늘 날짜로 스크롤하는 로직이 실행되지 않도록 함
+                    calState.initialWeekScroll = false;
+                    
+                    // initialWeekScroll 플래그를 false로 설정하여 오늘 날짜로 스크롤하는 로직이 실행되지 않도록 함
+                    calState.initialWeekScroll = false;
+                    
                     // 해당 날짜의 세션 카드 영역으로 스크롤
                     renderCalUI(container);
                     setTimeout(() => {
@@ -1460,8 +1466,8 @@ async function renderCalUI(container, forceDate) {
               } else {
                 // 월간보기: 기존 로직
                 calState.today = Number(td.getAttribute('data-day'));
+                renderCalUI(container);
               }
-              renderCalUI(container);
             }
           };
         });
@@ -1533,7 +1539,10 @@ async function renderCalUI(container, forceDate) {
             }, 100);
           }
         } else if (calState.viewMode === 'week' && calState.initialWeekScroll === true) {
-          // 주간보기 진입 시 오늘 날짜로 자동 스크롤
+          // 주간보기 진입 시 오늘 날짜로 자동 스크롤 (한 번만 실행)
+          // 플래그를 먼저 false로 설정하여 중복 실행 방지
+          calState.initialWeekScroll = false;
+          
           const today = new Date();
           const year = today.getFullYear();
           const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -1547,7 +1556,6 @@ async function renderCalUI(container, forceDate) {
               if (dateHeader) {
                 dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }
-              calState.initialWeekScroll = false; // 한 번만 실행
             }, 100);
           }
         }
