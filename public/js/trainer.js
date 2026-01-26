@@ -289,19 +289,51 @@ export async function renderMyMembers(container, username) {
             container.innerHTML = html;
             return;
         }
-        html += `<table style="width:100%;border-collapse:collapse;margin-top:18px;">
-          <thead><tr>
-            <th style="text-align:center;">이름</th><th style="text-align:center;">세션 수</th><th style="text-align:center;">잔여세션</th><th style="text-align:center;">상태</th>
-          </tr></thead><tbody>`;
+        html += '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">';
         myMembers.forEach(m => {
-            html += `<tr>
-                <td style="text-align:center;">${m.name}</td>
-                <td style="text-align:center;">${m.sessions}</td>
-                <td style="text-align:center;">${m.remainSessions !== undefined ? m.remainSessions : ''}</td>
-                <td style="text-align:center;">${m.status || ''}</td>
-            </tr>`;
+            const remainSessions = m.remainSessions !== undefined ? m.remainSessions : null;
+            const sessions = m.sessions || 0;
+            
+            // 잔여세션에 따른 색상 및 스타일 결정
+            let remainBadgeStyle = '';
+            let remainText = '';
+            if (remainSessions === null || remainSessions === undefined) {
+                remainText = '정보 없음';
+                remainBadgeStyle = 'background:#f5f5f5;color:#666;';
+            } else if (remainSessions === 0) {
+                remainText = '0회';
+                remainBadgeStyle = 'background:#ffebee;color:#d32f2f;';
+            } else if (remainSessions <= 5) {
+                remainText = `${remainSessions}회`;
+                remainBadgeStyle = 'background:#fff3e0;color:#f57c00;';
+            } else {
+                remainText = `${remainSessions}회`;
+                remainBadgeStyle = 'background:#e8f5e9;color:#2e7d32;';
+            }
+            
+            html += `<div style="background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);transition:all 0.2s;border:1px solid #e0e0e0;" 
+                        onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)';" 
+                        onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)';this.style.transform='translateY(0)';">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1rem;font-weight:600;flex-shrink:0;">
+                            ${m.name ? m.name.charAt(0) : '?'}
+                        </div>
+                        <div>
+                            <div style="font-size:1rem;font-weight:600;color:#333;margin-bottom:2px;">${m.name || '이름 없음'}</div>
+                            <div style="font-size:0.8rem;color:#666;">총 ${sessions}회</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                        <div style="padding:4px 10px;border-radius:20px;font-size:0.8rem;font-weight:600;${remainBadgeStyle}">
+                            ${remainText}
+                        </div>
+                        ${m.status ? `<div style="font-size:0.7rem;color:#666;padding:2px 6px;background:#f5f5f5;border-radius:12px;">${m.status}</div>` : ''}
+                    </div>
+                </div>
+            </div>`;
         });
-        html += '</tbody></table>';
+        html += '</div>';
         container.innerHTML = html;
     } catch {
         container.innerHTML = '<div style="color:#d32f2f;text-align:center;">회원 목록을 불러오지 못했습니다.</div>';

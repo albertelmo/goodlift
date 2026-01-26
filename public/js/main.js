@@ -539,8 +539,9 @@ const adminHamburgerItems = [
     { label: '📖 장부', id: 'Ledger', content: '<div id="ledger-root"></div>', suOnly: true }
 ];
 const trainerTabs = [
-    { label: '📅', id: '📅', content: '<div id="session-calendar"></div>' },
-    { label: '👤', id: '👤', content: '<div id="my-member-list"></div>' }
+    { label: '나의 수업', id: '📅', content: '<div id="session-calendar"></div>' },
+    { label: '전체 수업', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
+    { label: '나의 회원', id: '👤', content: '<div id="my-member-list"></div>' }
 ];
 
 // 센터관리자용 탭 (Center, Trainer 탭 제외)
@@ -792,6 +793,8 @@ function renderTabContent(tabId, tabContent) {
         trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);
     } else if (tabId === '📅') {
         trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
+    } else if (tabId === 'Today') {
+        adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
     }
 }
 
