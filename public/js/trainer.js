@@ -1486,16 +1486,20 @@ async function renderCalUI(container, forceDate) {
                     calState.savedScrollPosition = null;
                     
                     renderCalUI(container);
-                    setTimeout(() => {
+                    
+                    // DOM이 완전히 렌더링될 때까지 대기 (재시도 로직 포함)
+                    const scrollToDate = (retryCount = 0) => {
                         const dateHeader = container.querySelector(`[data-date-header="${dataDate}"]`);
-                        if (dateHeader) {
-                            // 서버 터미널에 로그 출력
+                        const sessionList = container.querySelector('.tmc-session-list');
+                        
+                        if (dateHeader && sessionList && dateHeader.offsetTop > 0) {
+                            // dateHeader를 찾았고 DOM이 준비됨
                             fetch('/api/debug-log', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     level: 'INFO',
-                                    message: `[클릭한 날짜로 스크롤 실행] 날짜: ${dataDate}, scrollTop: ${container.querySelector('.tmc-session-list')?.scrollTop || 'N/A'}`
+                                    message: `[클릭한 날짜로 스크롤 실행] 날짜: ${dataDate}, retryCount: ${retryCount}, dateHeader offsetTop: ${dateHeader.offsetTop}`
                                 })
                             }).catch(err => console.error('디버그 로그 전송 실패:', err));
                             
@@ -1503,7 +1507,6 @@ async function renderCalUI(container, forceDate) {
                             
                             // 스크롤 실행 후 실제 스크롤 위치 확인
                             setTimeout(() => {
-                                const sessionList = container.querySelector('.tmc-session-list');
                                 if (sessionList) {
                                     fetch('/api/debug-log', {
                                         method: 'POST',
@@ -1515,18 +1518,24 @@ async function renderCalUI(container, forceDate) {
                                     }).catch(err => console.error('디버그 로그 전송 실패:', err));
                                 }
                             }, 300);
+                        } else if (retryCount < 10) {
+                            // 아직 DOM이 준비되지 않았으면 재시도
+                            setTimeout(() => scrollToDate(retryCount + 1), 50);
                         } else {
-                            // 서버 터미널에 로그 출력
+                            // 최대 재시도 횟수 초과
                             fetch('/api/debug-log', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({
                                     level: 'WARN',
-                                    message: `[클릭한 날짜로 스크롤 실패] 날짜: ${dataDate}, dateHeader를 찾을 수 없음`
+                                    message: `[클릭한 날짜로 스크롤 실패] 날짜: ${dataDate}, dateHeader 존재: ${dateHeader ? '있음' : '없음'}, offsetTop: ${dateHeader?.offsetTop || 0}, sessionList 존재: ${sessionList ? '있음' : '없음'}`
                                 })
                             }).catch(err => console.error('디버그 로그 전송 실패:', err));
                         }
-                    }, 100);
+                    };
+                    
+                    // 초기 시도 (100ms 후)
+                    setTimeout(() => scrollToDate(0), 100);
                 }
               } else {
                 // 월간보기: 기존 로직
