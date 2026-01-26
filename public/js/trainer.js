@@ -340,7 +340,79 @@ export async function renderMyMembers(container, username) {
     }
 }
 
-let calState = { year: null, month: null, today: null, viewMode: 'month', weekStartDate: null, initialWeekScroll: false, savedScrollPosition: null, scrollToDate: null }; // 'month' or 'week', weekStartDate는 주간보기에서 현재 주의 시작일(일요일), scrollToDate는 날짜 클릭 시 스크롤할 날짜
+let calState = { 
+    year: null, 
+    month: null, 
+    today: null, 
+    viewMode: 'month', 
+    weekStartDate: null, 
+    initialWeekScroll: false, 
+    savedScrollPosition: null, 
+    scrollToDate: null,
+    // 세션 데이터 캐시
+    sessionsCache: {
+        allSessions: null,        // 전체 세션 캐시
+        lastFetchTime: null,      // 마지막 조회 시간
+        dateCache: {}             // 날짜별 세션 캐시 { '2026-01-26': { sessions: [...], timestamp: ... }, ... }
+    }
+}; // 'month' or 'week', weekStartDate는 주간보기에서 현재 주의 시작일(일요일), scrollToDate는 날짜 클릭 시 스크롤할 날짜
+
+// 캐시 TTL (Time To Live) - 5분
+const SESSIONS_CACHE_TTL = 5 * 60 * 1000; // 5분 (밀리초)
+
+// 캐시된 세션 데이터 가져오기
+function getCachedSessions(date = null) {
+    const now = Date.now();
+    const cache = calState.sessionsCache;
+    
+    if (date) {
+        // 날짜별 캐시 확인
+        if (cache.dateCache[date] && 
+            (now - cache.dateCache[date].timestamp) < SESSIONS_CACHE_TTL) {
+            return cache.dateCache[date].sessions;
+        }
+    } else {
+        // 전체 세션 캐시 확인
+        if (cache.allSessions && 
+            cache.lastFetchTime && 
+            (now - cache.lastFetchTime) < SESSIONS_CACHE_TTL) {
+            return cache.allSessions;
+        }
+    }
+    
+    return null;
+}
+
+// 세션 데이터를 캐시에 저장
+function setCachedSessions(sessions, date = null) {
+    const cache = calState.sessionsCache;
+    const now = Date.now();
+    
+    if (date) {
+        cache.dateCache[date] = {
+            sessions: sessions,
+            timestamp: now
+        };
+    } else {
+        cache.allSessions = sessions;
+        cache.lastFetchTime = now;
+    }
+}
+
+// 세션 캐시 무효화
+function invalidateSessionsCache(date = null) {
+    const cache = calState.sessionsCache;
+    
+    if (date) {
+        // 특정 날짜의 캐시만 무효화
+        delete cache.dateCache[date];
+    } else {
+        // 전체 캐시 무효화
+        cache.allSessions = null;
+        cache.lastFetchTime = null;
+        cache.dateCache = {};
+    }
+}
 
 // 로컬 시간대를 유지하면서 날짜 문자열 생성 (YYYY-MM-DD)
 function formatDateString(date) {
@@ -473,9 +545,16 @@ async function renderCalUI(container, forceDate) {
     const username = localStorage.getItem('username');
     
     try {
-        // 세션 정보 가져오기
-        const sessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}`);
-        const allSessions = await sessionsRes.json();
+        // 세션 정보 가져오기 (캐시 확인 후 없을 때만 API 호출)
+        let allSessions = getCachedSessions();
+        
+        if (!allSessions) {
+            // 캐시가 없거나 만료된 경우 API 호출
+            const sessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}`);
+            allSessions = await sessionsRes.json();
+            // 캐시에 저장
+            setCachedSessions(allSessions);
+        }
         
         // 회원 정보 가져오기
         const membersRes = await fetch('/api/members');
@@ -962,12 +1041,8 @@ async function renderCalUI(container, forceDate) {
         await update30minMemberDropdown(username);
         
         // 시간 드롭다운 업데이트 함수 (현재 로그인한 트레이너 기준)
-        async function updateTimeDropdowns() {
-            // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
-            const dateParam = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
-            const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${dateParam}`);
-            const daySessions = await daySessionsRes.json();
-            
+        // daySessions 파라미터를 받아서 중복 API 호출 제거
+        function updateTimeDropdowns(daySessions) {
             // 1시간 세션 모달 시간 드롭다운 업데이트 (1시간 세션만 고려)
             const disabledTimes1Hour = getDisabledTimes(daySessions, false);
             const timeSel = document.getElementById('tmc-time-input');
@@ -1071,41 +1146,17 @@ async function renderCalUI(container, forceDate) {
             return disabledTimes;
         }
         
-        // 해당 날짜의 세션 데이터 가져오기
+        // 해당 날짜의 세션 데이터 가져오기 (전체 세션에서 필터링하여 중복 API 호출 제거)
         // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
         const dateParam = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
-        const daySessionsRes = await fetch(`/api/sessions?trainer=${encodeURIComponent(username)}&date=${dateParam}`);
-        const daySessions = await daySessionsRes.json();
+        // 전체 세션에서 해당 날짜의 세션만 필터링
+        const daySessions = allSessions.filter(s => {
+            const sessionDate = s.date.split('T')[0]; // ISO 날짜에서 날짜 부분만 추출
+            return sessionDate === dateParam;
+        });
         
-        // 1시간 세션 모달 시간 드롭다운 초기화 (1시간 세션만 고려)
-        const disabledTimes1Hour = getDisabledTimes(daySessions, false);
-        const timeSel = document.getElementById('tmc-time-input');
-        let timeOpts = '';
-        for(let h=6; h<=22; h++) {
-            for(let m=0; m<60; m+=30) {
-                if(h===22 && m>0) break;
-                const hh = String(h).padStart(2,'0');
-                const mm = String(m).padStart(2,'0');
-                const val = `${hh}:${mm}`;
-                timeOpts += `<option value="${val}"${disabledTimes1Hour.has(val)?' disabled':''}>${val}${disabledTimes1Hour.has(val)?' (예약불가)':''}</option>`;
-            }
-        }
-        timeSel.innerHTML = timeOpts;
-        
-        // 30분 세션 모달 시간 드롭다운 초기화 (30분 세션만 고려)
-        const disabledTimes30Min = getDisabledTimes(daySessions, true);
-        const time30minSel = document.getElementById('tmc-30min-time-input');
-        let time30minOpts = '';
-        for(let h=6; h<=22; h++) {
-            for(let m=0; m<60; m+=30) {
-                if(h===22 && m>0) break;
-                const hh = String(h).padStart(2,'0');
-                const mm = String(m).padStart(2,'0');
-                const val = `${hh}:${mm}`;
-                time30minOpts += `<option value="${val}"${disabledTimes30Min.has(val)?' disabled':''}>${val}${disabledTimes30Min.has(val)?' (예약불가)':''}</option>`;
-            }
-        }
-        time30minSel.innerHTML = time30minOpts;
+        // 시간 드롭다운 업데이트 (필터링된 daySessions 전달)
+        updateTimeDropdowns(daySessions);
         
         // 주간보기일 때는 targetDate 사용, 월간보기일 때는 yyyy-mm-dd 사용
         const dateValue = calState.viewMode === 'week' ? targetDate : `${yyyy}-${mm}-${dd}`;
@@ -1199,6 +1250,9 @@ async function renderCalUI(container, forceDate) {
             });
             const result = await res.json();
             if (res.ok) {
+              // 세션 추가 성공 시 캐시 무효화
+              invalidateSessionsCache();
+              
               resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
               
@@ -1261,6 +1315,9 @@ async function renderCalUI(container, forceDate) {
             });
             const result = await res.json();
             if (res.ok) {
+              // 30분 세션 추가 성공 시 캐시 무효화
+              invalidateSessionsCache();
+              
               resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
               
@@ -2646,12 +2703,15 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
   // 출석(사인) 화면
   function renderSignBody(sessionId, hasNoRemaining) {
     // 잔여세션 표시를 위해 세션 정보와 회원 정보 불러오기
+    // 단일 세션 조회 API 사용하여 성능 개선
     Promise.all([
-      fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}`).then(r=>r.json()),
+      fetch(`/api/sessions/${sessionId}`).then(r => {
+        if (!r.ok) throw new Error('세션을 찾을 수 없습니다.');
+        return r.json();
+      }),
       fetch('/api/members').then(r=>r.json()),
       fetch('/api/trainers').then(r=>r.json())
-    ]).then(([allSessions, members, trainers]) => {
-      const session = allSessions.find(s => s.id === sessionId);
+    ]).then(([session, members, trainers]) => {
       if (!session) return;
       
       const member = members.find(m => m.name === session.member);
@@ -2737,6 +2797,9 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
           const res = await fetch(`/api/sessions/${sessionId}/attend`, { method: 'PATCH' });
           const result = await res.json();
           if (res.ok) {
+            // 출석 처리 성공 시 캐시 무효화
+            invalidateSessionsCache();
+            
             resultDiv.className = 'tmc-modal-result success';
             resultDiv.innerText = result.message;
             setTimeout(() => { 
@@ -2772,11 +2835,13 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
         <button type="submit" form="change-session-form" class="tmc-modal-submit-btn">변경</button>
       </div>
     `;
-    // 기존 세션 정보 불러오기
-    fetch(`/api/sessions?trainer=${encodeURIComponent(localStorage.getItem('username'))}`)
-      .then(r=>r.json())
-      .then(allSessions => {
-        const session = allSessions.find(s => s.id === sessionId);
+    // 기존 세션 정보 불러오기 (단일 세션 조회 API 사용하여 성능 개선)
+    fetch(`/api/sessions/${sessionId}`)
+      .then(r => {
+        if (!r.ok) throw new Error('세션을 찾을 수 없습니다.');
+        return r.json();
+      })
+      .then(session => {
         if (!session) return;
         document.getElementById('change-date-input').value = session.date;
         // 시간 드롭다운 생성(세션 타입에 따른 중복 방지)
@@ -2943,6 +3008,9 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
             });
             const result = await res.json();
             if (res.ok) {
+              // 세션 수정 성공 시 캐시 무효화
+              invalidateSessionsCache();
+              
               resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
               setTimeout(() => { 
@@ -2978,6 +3046,9 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
         const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
         const result = await res.json();
         if (res.ok) {
+          // 세션 삭제 성공 시 캐시 무효화
+          invalidateSessionsCache();
+          
           resultDiv.className = 'tmc-modal-result success';
           resultDiv.innerText = result.message;
           setTimeout(() => { close(); renderCalUI(container); }, 700);

@@ -3475,6 +3475,24 @@ app.get('/api/sessions', async (req, res) => {
         res.status(500).json({ message: '세션 목록을 불러오지 못했습니다.' });
     }
 });
+
+// 단일 세션 조회
+app.get('/api/sessions/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const session = await sessionsDB.getSessionById(id);
+        
+        if (!session) {
+            return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
+        }
+        
+        res.json(session);
+    } catch (error) {
+        console.error('[API] 세션 조회 오류:', error);
+        res.status(500).json({ message: '세션 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 세션 추가
 app.post('/api/sessions', async (req, res) => {
     try {
