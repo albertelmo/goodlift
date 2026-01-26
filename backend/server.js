@@ -675,8 +675,39 @@ function migrateTrainer30minSessionField() {
     }
 }
 
+// 트레이너 기본 뷰 모드 필드 마이그레이션
+function migrateTrainerDefaultViewMode() {
+    try {
+        if (!fs.existsSync(DATA_PATH)) {
+            return;
+        }
+
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        if (!raw) {
+            return;
+        }
+
+        let accounts = JSON.parse(raw);
+        let hasChanges = false;
+
+        accounts.forEach(account => {
+            if (account.role === 'trainer' && account.default_view_mode === undefined) {
+                account.default_view_mode = 'week'; // 기본값: 주간보기
+                hasChanges = true;
+            }
+        });
+
+        if (hasChanges) {
+            fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
+        }
+    } catch (error) {
+        console.error('[Migration] 트레이너 기본 뷰 모드 필드 마이그레이션 오류:', error);
+    }
+}
+
 // migrateTrainerVipField();
 // migrateTrainer30minSessionField();
+// migrateTrainerDefaultViewMode();
 
 // 식단 이미지 저장 함수
 const saveDietImage = async (dietRecordId, imageBuffer, mealDate) => {
@@ -2698,6 +2729,7 @@ app.get('/api/trainers', (req, res) => {
                 role: trainer.role,
                 vip_member: trainer.vip_member || false,
                 '30min_session': trainer['30min_session'] || 'off',
+                default_view_mode: trainer.default_view_mode || 'week',
                 profile_image_url: trainer.profile_image_url || null
             }]);
         } else {
@@ -2706,12 +2738,13 @@ app.get('/api/trainers', (req, res) => {
     }
     
     const trainers = accounts.filter(acc => acc.role === 'trainer')
-        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, profile_image_url }) => ({ 
+        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, default_view_mode, profile_image_url }) => ({ 
             username, 
             name, 
             role, 
             vip_member: vip_member || false,  // 기본값: VIP 기능 사용 안함
             '30min_session': thirtyMinSession || 'off',  // 기본값: 30분 세션 기능 사용 안함
+            default_view_mode: default_view_mode || 'week',  // 기본값: 주간보기
             profile_image_url: profile_image_url || null
         }));
     res.json(trainers);
@@ -2762,9 +2795,9 @@ app.delete('/api/trainers/:username', async (req, res) => {
 app.patch('/api/trainers/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        const { vip_member, '30min_session': thirtyMinSession, currentUser } = req.body;
+        const { vip_member, '30min_session': thirtyMinSession, default_view_mode, currentUser } = req.body;
         
-        // 관리자 권한 확인
+        // 권한 확인: 관리자이거나 본인인 경우만 허용
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
@@ -2772,8 +2805,17 @@ app.patch('/api/trainers/:username', async (req, res) => {
         }
         
         const currentUserAccount = accounts.find(acc => acc.username === currentUser);
-        if (!isAdminOrSu(currentUserAccount)) {
-            return res.status(403).json({ message: '관리자만 트레이너 설정을 수정할 수 있습니다.' });
+        const isAdmin = isAdminOrSu(currentUserAccount);
+        const isSelf = currentUser === username;
+        
+        // 관리자가 아니고 본인도 아닌 경우 거부
+        if (!isAdmin && !isSelf) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 본인이 변경하는 경우, 본인이 트레이너인지 확인
+        if (isSelf && currentUserAccount && currentUserAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 자신의 옵션을 변경할 수 있습니다.' });
         }
         
         // 트레이너 찾기
@@ -2795,6 +2837,14 @@ app.patch('/api/trainers/:username', async (req, res) => {
             accounts[trainerIndex]['30min_session'] = thirtyMinSession;
         }
         
+        // 기본 뷰 모드 설정 업데이트
+        if (default_view_mode !== undefined) {
+            if (!['week', 'month'].includes(default_view_mode)) {
+                return res.status(400).json({ message: '기본 뷰 모드는 "week" 또는 "month"만 가능합니다.' });
+            }
+            accounts[trainerIndex].default_view_mode = default_view_mode;
+        }
+        
         fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
         
         res.json({ 
@@ -2803,7 +2853,8 @@ app.patch('/api/trainers/:username', async (req, res) => {
                 username: accounts[trainerIndex].username,
                 name: accounts[trainerIndex].name,
                 vip_member: accounts[trainerIndex].vip_member,
-                '30min_session': accounts[trainerIndex]['30min_session']
+                '30min_session': accounts[trainerIndex]['30min_session'],
+                default_view_mode: accounts[trainerIndex].default_view_mode || 'week'
             }
         });
     } catch (error) {

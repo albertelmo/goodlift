@@ -828,14 +828,167 @@ function renderSampleScheduler() {
     root.innerHTML = html;
 }
 
-function showAccountSettingsModal() {
+async function showAccountSettingsModal() {
     const modal = document.getElementById('accountSettingsModal');
     const bg = document.getElementById('accountSettingsModalBg');
+    const trainerOptionsSection = document.getElementById('trainerOptionsSection');
+    const role = localStorage.getItem('role');
+    
     modal.style.display = 'block';
     bg.style.display = 'block';
     document.getElementById('changePwForm').reset();
     document.getElementById('changePwResult').innerText = '';
+    document.getElementById('trainerOptionsResult').innerText = '';
+    
+    // 트레이너인 경우 옵션 섹션 표시 및 정보 로드
+    if (role === 'trainer') {
+        trainerOptionsSection.style.display = 'block';
+        await loadTrainerOptions();
+    } else {
+        trainerOptionsSection.style.display = 'none';
+    }
 }
+
+// 트레이너 옵션 정보 로드 및 버튼 상태 설정
+async function loadTrainerOptions() {
+    const username = localStorage.getItem('username');
+    if (!username) return;
+    
+    try {
+        const res = await fetch(`/api/trainers?username=${encodeURIComponent(username)}`);
+        const trainers = await res.json();
+        
+        if (trainers.length > 0) {
+            const trainer = trainers[0];
+            
+            // VIP 버튼 상태 설정
+            const vipBtn = document.getElementById('trainerVipToggle');
+            const vipStatus = trainer.vip_member || false;
+            updateToggleButton(vipBtn, vipStatus, 'VIP');
+            
+            // 30분 세션 버튼 상태 설정
+            const thirtyMinBtn = document.getElementById('trainer30minToggle');
+            const thirtyMinStatus = trainer['30min_session'] === 'on';
+            updateToggleButton(thirtyMinBtn, thirtyMinStatus, '30분');
+            
+            // 월간보기 버튼 상태 설정
+            const monthlyViewBtn = document.getElementById('trainerMonthlyViewToggle');
+            const monthlyViewStatus = (trainer.default_view_mode || 'week') === 'month';
+            updateToggleButton(monthlyViewBtn, monthlyViewStatus, '월간보기');
+        }
+    } catch (error) {
+        console.error('트레이너 옵션 로드 오류:', error);
+    }
+}
+
+// 토글 버튼 상태 업데이트
+function updateToggleButton(btn, isOn, label) {
+    if (isOn) {
+        btn.style.background = '#e3f2fd';
+        btn.style.color = '#1976d2';
+        btn.style.borderColor = '#1976d2';
+        btn.textContent = 'ON';
+    } else {
+        btn.style.background = '#f5f5f5';
+        btn.style.color = '#666';
+        btn.style.borderColor = '#666';
+        btn.textContent = 'OFF';
+    }
+}
+
+// 트레이너 옵션 업데이트
+async function updateTrainerOption(optionType, newValue) {
+    const username = localStorage.getItem('username');
+    if (!username) return;
+    
+    const resultDiv = document.getElementById('trainerOptionsResult');
+    resultDiv.style.color = '#666';
+    resultDiv.innerText = '처리 중...';
+    
+    try {
+        const currentUser = localStorage.getItem('username');
+        const body = { currentUser };
+        
+        if (optionType === 'vip') {
+            body.vip_member = newValue;
+        } else if (optionType === '30min') {
+            body['30min_session'] = newValue ? 'on' : 'off';
+        } else if (optionType === 'monthlyView') {
+            body.default_view_mode = newValue ? 'month' : 'week';
+        }
+        
+        const res = await fetch(`/api/trainers/${encodeURIComponent(username)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        
+        const result = await res.json();
+        
+        if (res.ok) {
+            resultDiv.style.color = '#2e7d32';
+            resultDiv.innerText = '✅ 설정이 변경되었습니다.';
+            setTimeout(() => {
+                resultDiv.innerText = '';
+            }, 1500);
+        } else {
+            resultDiv.style.color = '#d32f2f';
+            resultDiv.innerText = result.message || '설정 변경에 실패했습니다.';
+        }
+    } catch (error) {
+        console.error('트레이너 옵션 업데이트 오류:', error);
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '설정 변경 중 오류가 발생했습니다.';
+    }
+}
+
+// 트레이너 옵션 토글 버튼 이벤트 리스너 설정
+document.addEventListener('DOMContentLoaded', function() {
+    // VIP 토글
+    const vipBtn = document.getElementById('trainerVipToggle');
+    if (vipBtn) {
+        vipBtn.onclick = async function() {
+            const currentStatus = this.textContent === 'ON';
+            const newStatus = !currentStatus;
+            updateToggleButton(this, newStatus, 'VIP');
+            await updateTrainerOption('vip', newStatus);
+            // 실패 시 원래 상태로 복원
+            if (document.getElementById('trainerOptionsResult').style.color === '#d32f2f') {
+                updateToggleButton(this, currentStatus, 'VIP');
+            }
+        };
+    }
+    
+    // 30분 세션 토글
+    const thirtyMinBtn = document.getElementById('trainer30minToggle');
+    if (thirtyMinBtn) {
+        thirtyMinBtn.onclick = async function() {
+            const currentStatus = this.textContent === 'ON';
+            const newStatus = !currentStatus;
+            updateToggleButton(this, newStatus, '30분');
+            await updateTrainerOption('30min', newStatus);
+            // 실패 시 원래 상태로 복원
+            if (document.getElementById('trainerOptionsResult').style.color === '#d32f2f') {
+                updateToggleButton(this, currentStatus, '30분');
+            }
+        };
+    }
+    
+    // 월간보기 토글
+    const monthlyViewBtn = document.getElementById('trainerMonthlyViewToggle');
+    if (monthlyViewBtn) {
+        monthlyViewBtn.onclick = async function() {
+            const currentStatus = this.textContent === 'ON';
+            const newStatus = !currentStatus;
+            updateToggleButton(this, newStatus, '월간보기');
+            await updateTrainerOption('monthlyView', newStatus);
+            // 실패 시 원래 상태로 복원
+            if (document.getElementById('trainerOptionsResult').style.color === '#d32f2f') {
+                updateToggleButton(this, currentStatus, '월간보기');
+            }
+        };
+    }
+});
 function closeAccountSettingsModal() {
     document.getElementById('accountSettingsModal').style.display = 'none';
     document.getElementById('accountSettingsModalBg').style.display = 'none';

@@ -27,6 +27,11 @@ async function loadList() {
                 const thirtyMinColor = tr['30min_session'] === 'on' ? '#1976d2' : '#666';
                 const thirtyMinBgColor = tr['30min_session'] === 'on' ? '#e3f2fd' : '#f5f5f5';
                 
+                const defaultViewMode = tr.default_view_mode || 'week';
+                const monthlyViewStatus = defaultViewMode === 'month' ? 'ON' : 'OFF';
+                const monthlyViewColor = defaultViewMode === 'month' ? '#1976d2' : '#666';
+                const monthlyViewBgColor = defaultViewMode === 'month' ? '#e3f2fd' : '#f5f5f5';
+                
                 const profileImageUrl = tr.profile_image_url || null;
                 const profileImageHtml = profileImageUrl 
                     ? `<img src="${profileImageUrl}" alt="프로필" style="width:80px;height:80px;object-fit:cover;border-radius:50%;cursor:pointer;border:2px solid #e0e0e0;" 
@@ -62,6 +67,10 @@ async function loadList() {
                                         style="background:${thirtyMinBgColor};color:${thirtyMinColor};border:1px solid ${thirtyMinColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
                                     30분 ${thirtyMinStatus}
                                 </button>
+                                <button class="monthly-view-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-default-view-mode="${defaultViewMode}" 
+                                        style="background:${monthlyViewBgColor};color:${monthlyViewColor};border:1px solid ${monthlyViewColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
+                                    월간보기 ${monthlyViewStatus}
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -76,6 +85,9 @@ async function loadList() {
             
             // 30분 세션 토글 버튼 이벤트 리스너 추가
             setupThirtyMinToggleListeners();
+            
+            // 월간보기 토글 버튼 이벤트 리스너 추가
+            setupMonthlyViewToggleListeners();
             
             // su 유저인 경우에만 삭제 버튼 이벤트 리스너 추가
             if (isSu) {
@@ -169,6 +181,49 @@ function setupThirtyMinToggleListeners() {
             } catch (error) {
                 console.error('30분 세션 기능 설정 변경 오류:', error);
                 alert('30분 세션 기능 설정 변경에 실패했습니다.');
+            }
+        });
+    });
+}
+
+// 월간보기 토글 버튼 이벤트 리스너 설정
+function setupMonthlyViewToggleListeners() {
+    const listDiv = document.getElementById('trainer-list');
+    if (!listDiv) return;
+    
+    listDiv.querySelectorAll('.monthly-view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const username = this.getAttribute('data-username');
+            const name = this.getAttribute('data-name');
+            const currentViewMode = this.getAttribute('data-default-view-mode') || 'week';
+            const newViewMode = currentViewMode === 'week' ? 'month' : 'week';
+            
+            const action = newViewMode === 'month' ? '활성화' : '비활성화';
+            if (!confirm(`트레이너 "${name}"의 월간보기 기능을 ${action}하시겠습니까?`)) {
+                return;
+            }
+            
+            try {
+                const currentUser = localStorage.getItem('username');
+                const res = await fetch(`/api/trainers/${encodeURIComponent(username)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        default_view_mode: newViewMode,
+                        currentUser 
+                    })
+                });
+                const result = await res.json();
+                
+                if (res.ok) {
+                    alert(`월간보기 기능이 ${action}되었습니다.`);
+                    loadList(); // 목록 새로고침
+                } else {
+                    alert(result.message || '월간보기 기능 설정 변경에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('월간보기 기능 설정 변경 오류:', error);
+                alert('월간보기 기능 설정 변경에 실패했습니다.');
             }
         });
     });
@@ -289,7 +344,7 @@ function adjustDateForMonthChange() {
     }
 }
 
-export function renderSessionCalendar(container) {
+export async function renderSessionCalendar(container) {
     if (!container) return;
     // 상태 초기화(최초 진입 시 오늘로)
     if (!calState.year) {
@@ -297,6 +352,27 @@ export function renderSessionCalendar(container) {
         calState.year = today.getFullYear();
         calState.month = today.getMonth() + 1;
         calState.today = today.getDate();
+        
+        // 트레이너의 기본 뷰 모드 확인
+        const username = localStorage.getItem('username');
+        if (username) {
+            try {
+                const res = await fetch(`/api/trainers?username=${encodeURIComponent(username)}`);
+                const trainers = await res.json();
+                if (trainers.length > 0 && trainers[0].default_view_mode) {
+                    calState.viewMode = trainers[0].default_view_mode; // 'week' 또는 'month'
+                } else {
+                    calState.viewMode = 'week'; // 기본값: 주간보기
+                }
+            } catch (error) {
+                console.error('트레이너 정보 조회 오류:', error);
+                calState.viewMode = 'week'; // 기본값: 주간보기
+            }
+        } else {
+            calState.viewMode = 'week'; // 기본값: 주간보기
+        }
+        
+        calState.weekStartDate = null;
     }
     
     // 초기 상태 유효성 검사
