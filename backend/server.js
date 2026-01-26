@@ -35,6 +35,10 @@ const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
 const consultationRecordsDB = require('./consultation-records-db');
 const consultationSharesDB = require('./consultation-shares-db');
+const elmoUsersDB = require('./elmo-users-db');
+const elmoCalendarRecordsDB = require('./elmo-calendar-records-db');
+const elmoApiRouter = require('./elmo-api-router');
+const { ELMO_IMAGES_DIR } = require('./elmo-utils');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -365,6 +369,10 @@ const ensureDirectories = () => {
       fs.mkdirSync(TRAINER_PROFILES_DIR, { recursive: true });
       console.log(`[Trainer Profiles] 프로필 사진 디렉토리 생성: ${TRAINER_PROFILES_DIR}`);
     }
+    if (!fs.existsSync(ELMO_IMAGES_DIR)) {
+      fs.mkdirSync(ELMO_IMAGES_DIR, { recursive: true });
+      console.log(`[Elmo Calendar] 이미지 디렉토리 생성: ${ELMO_IMAGES_DIR}`);
+    }
   } catch (error) {
     console.error(`[Diet Records] 디렉토리 생성 오류: ${error.message}`);
     throw error;
@@ -517,6 +525,8 @@ activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
 consultationRecordsDB.initializeDatabase(); // 상담기록 테이블 초기화
 consultationSharesDB.initializeDatabase(); // 상담기록 공유 토큰 테이블 초기화
+elmoUsersDB.initializeDatabase(); // Elmo 사용자 테이블 초기화
+elmoCalendarRecordsDB.initializeDatabase(); // Elmo 캘린더 기록 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -765,6 +775,7 @@ const saveDietImage = async (dietRecordId, imageBuffer, mealDate) => {
   }
 };
 
+
 // 파일 업로드 설정
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -892,6 +903,37 @@ app.get('/consultation/view/:token', (req, res) => {
     res.sendFile(path.join(__dirname, '../public/consultation-view.html'));
 });
 
+// ========== Elmo 서비스 (완전 분리) ==========
+// Elmo 정적 파일 서빙 (경로 우선순위: /elmo가 먼저 매칭)
+// Elmo 정적 파일 서빙 (HTML은 캐시 방지)
+app.use('/elmo', (req, res, next) => {
+    if (req.path === '/' || req.path === '/index.html') {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+    next();
+}, express.static(path.join(__dirname, '../public-elmo'), {
+    index: 'index.html',
+    fallthrough: false // /elmo 경로는 여기서만 처리
+}));
+
+// Elmo 전용 PWA manifest
+app.get('/elmo/manifest.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/manifest+json');
+    res.sendFile(path.join(__dirname, '../public-elmo/manifest.json'));
+});
+
+// Elmo 전용 Service Worker
+app.get('/elmo/sw.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(__dirname, '../public-elmo/sw.js'));
+});
+
+// Elmo API 라우터 연결
+app.use('/api/elmo', elmoApiRouter);
+
+// ========== 기존 서비스 (변경 없음) ==========
 app.use(express.static(path.join(__dirname, '../public')));
 
 // uploads 폴더를 정적 파일로 서빙 (이미지 및 동영상 접근)
