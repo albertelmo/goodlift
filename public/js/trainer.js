@@ -440,15 +440,6 @@ function validateAndAdjustCalendarState() {
 }
 
 async function renderCalUI(container, forceDate) {
-    // 서버 터미널에 로그 출력 (renderCalUI 호출 시점의 initialWeekScroll 값 확인)
-    fetch('/api/debug-log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            level: 'INFO',
-            message: `[renderCalUI 호출] initialWeekScroll: ${calState.initialWeekScroll}, viewMode: ${calState.viewMode}, forceDate: ${forceDate || '없음'}`
-        })
-    }).catch(err => console.error('디버그 로그 전송 실패:', err));
     
     const yyyy = calState.year;
     const mm = String(calState.month).padStart(2, '0'); // 날짜 형식용 (YYYY-MM-DD)
@@ -1336,15 +1327,6 @@ async function renderCalUI(container, forceDate) {
                     calState.weekStartDate = `${year}-${month}-${day}`;
                     // 주간보기 진입 시 오늘 날짜로 스크롤 플래그 설정
                     calState.initialWeekScroll = true;
-                    // 서버 터미널에 로그 출력
-                    fetch('/api/debug-log', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            level: 'INFO',
-                            message: `[주간보기 전환] initialWeekScroll을 true로 설정`
-                        })
-                    }).catch(err => console.error('디버그 로그 전송 실패:', err));
                 } else {
                     // 월간보기로 전환 시 오늘 날짜로 초기화
                     const today = new Date();
@@ -1468,16 +1450,6 @@ async function renderCalUI(container, forceDate) {
                         calState.today = clickedDate.getDay();
                     }
                     
-                    // 서버 터미널에 로그 출력 (날짜 클릭 시점의 initialWeekScroll 값 확인)
-                    fetch('/api/debug-log', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            level: 'INFO',
-                            message: `[날짜 클릭] initialWeekScroll: ${calState.initialWeekScroll}, 클릭한 날짜: ${dataDate}, viewMode: ${calState.viewMode}`
-                        })
-                    }).catch(err => console.error('디버그 로그 전송 실패:', err));
-                    
                     // initialWeekScroll 플래그를 false로 설정하여 오늘 날짜로 스크롤하는 로직이 실행되지 않도록 함
                     calState.initialWeekScroll = false;
                     // 날짜 클릭 스크롤을 위한 플래그 설정
@@ -1585,16 +1557,6 @@ async function renderCalUI(container, forceDate) {
           }
         } else if (calState.viewMode === 'week' && calState.initialWeekScroll === true) {
           // 주간보기 진입 시 오늘 날짜로 자동 스크롤 (한 번만 실행)
-          // 서버 터미널에 로그 출력
-          fetch('/api/debug-log', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              level: 'INFO',
-              message: `[오늘 날짜 스크롤 실행] initialWeekScroll: ${calState.initialWeekScroll}, viewMode: ${calState.viewMode}, savedScrollPosition: ${calState.savedScrollPosition}`
-            })
-          }).catch(err => console.error('디버그 로그 전송 실패:', err));
-          
           // 플래그를 먼저 false로 설정하여 중복 실행 방지
           calState.initialWeekScroll = false;
           
