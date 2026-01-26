@@ -340,7 +340,7 @@ export async function renderMyMembers(container, username) {
     }
 }
 
-let calState = { year: null, month: null, today: null, viewMode: 'month', weekStartDate: null, initialWeekScroll: false, savedScrollPosition: null }; // 'month' or 'week', weekStartDate는 주간보기에서 현재 주의 시작일(일요일)
+let calState = { year: null, month: null, today: null, viewMode: 'month', weekStartDate: null, initialWeekScroll: false, savedScrollPosition: null, scrollToDate: null }; // 'month' or 'week', weekStartDate는 주간보기에서 현재 주의 시작일(일요일), scrollToDate는 날짜 클릭 시 스크롤할 날짜
 
 // 로컬 시간대를 유지하면서 날짜 문자열 생성 (YYYY-MM-DD)
 function formatDateString(date) {
@@ -1480,62 +1480,30 @@ async function renderCalUI(container, forceDate) {
                     
                     // initialWeekScroll 플래그를 false로 설정하여 오늘 날짜로 스크롤하는 로직이 실행되지 않도록 함
                     calState.initialWeekScroll = false;
+                    // 날짜 클릭 스크롤을 위한 플래그 설정
+                    calState.scrollToDate = dataDate;
                     
                     // 해당 날짜의 세션 카드 영역으로 스크롤
-                    // savedScrollPosition을 명시적으로 null로 설정하여 복원 로직이 실행되지 않도록 함
-                    calState.savedScrollPosition = null;
-                    
-                    renderCalUI(container);
-                    
-                    // DOM이 완전히 렌더링될 때까지 대기 (재시도 로직 포함)
-                    const scrollToDate = (retryCount = 0) => {
-                        const dateHeader = container.querySelector(`[data-date-header="${dataDate}"]`);
-                        const sessionList = container.querySelector('.tmc-session-list');
-                        
-                        if (dateHeader && sessionList && dateHeader.offsetTop > 0) {
-                            // dateHeader를 찾았고 DOM이 준비됨
-                            fetch('/api/debug-log', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    level: 'INFO',
-                                    message: `[클릭한 날짜로 스크롤 실행] 날짜: ${dataDate}, retryCount: ${retryCount}, dateHeader offsetTop: ${dateHeader.offsetTop}`
-                                })
-                            }).catch(err => console.error('디버그 로그 전송 실패:', err));
-                            
-                            dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                            
-                            // 스크롤 실행 후 실제 스크롤 위치 확인
-                            setTimeout(() => {
-                                if (sessionList) {
-                                    fetch('/api/debug-log', {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({
-                                            level: 'INFO',
-                                            message: `[스크롤 실행 후 위치] scrollTop: ${sessionList.scrollTop}, dateHeader offsetTop: ${dateHeader.offsetTop}`
-                                        })
-                                    }).catch(err => console.error('디버그 로그 전송 실패:', err));
-                                }
-                            }, 300);
-                        } else if (retryCount < 10) {
-                            // 아직 DOM이 준비되지 않았으면 재시도
-                            setTimeout(() => scrollToDate(retryCount + 1), 50);
-                        } else {
-                            // 최대 재시도 횟수 초과
-                            fetch('/api/debug-log', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    level: 'WARN',
-                                    message: `[클릭한 날짜로 스크롤 실패] 날짜: ${dataDate}, dateHeader 존재: ${dateHeader ? '있음' : '없음'}, offsetTop: ${dateHeader?.offsetTop || 0}, sessionList 존재: ${sessionList ? '있음' : '없음'}`
-                                })
-                            }).catch(err => console.error('디버그 로그 전송 실패:', err));
-                        }
-                    };
-                    
-                    // 초기 시도 (100ms 후)
-                    setTimeout(() => scrollToDate(0), 100);
+                    // renderCalUI 완료를 기다린 후 스크롤
+                    renderCalUI(container).then(() => {
+                        // DOM 렌더링 완료 확인 (재시도 로직 포함)
+                        const scrollToDateHeader = (retryCount = 0) => {
+                            const dateHeader = container.querySelector(`[data-date-header="${dataDate}"]`);
+                            if (dateHeader && dateHeader.offsetTop > 0) {
+                                // DOM이 준비되었고 dateHeader가 정상적으로 렌더링됨
+                                dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                calState.scrollToDate = null; // 스크롤 완료 후 플래그 제거
+                            } else if (retryCount < 10) {
+                                // 아직 DOM이 준비되지 않았으면 재시도 (50ms 간격)
+                                setTimeout(() => scrollToDateHeader(retryCount + 1), 50);
+                            } else {
+                                // 최대 재시도 횟수 초과
+                                calState.scrollToDate = null;
+                            }
+                        };
+                        // 초기 시도 (100ms 후)
+                        setTimeout(() => scrollToDateHeader(0), 100);
+                    });
                 }
               } else {
                 // 월간보기: 기존 로직
@@ -1603,19 +1571,12 @@ async function renderCalUI(container, forceDate) {
         });
         
         // 저장된 스크롤 위치 복원 (세션 카드 클릭 후 모달 닫힌 경우)
-        if (calState.savedScrollPosition !== undefined && calState.savedScrollPosition !== null) {
+        // 단, 날짜 클릭 스크롤 중이면 실행하지 않음
+        if (calState.scrollToDate) {
+          // 날짜 클릭 스크롤이 예정되어 있으면 스킵 (날짜 클릭 스크롤이 우선)
+        } else if (calState.savedScrollPosition !== undefined && calState.savedScrollPosition !== null) {
           const sessionList = container.querySelector('.tmc-session-list');
           if (sessionList) {
-            // 서버 터미널에 로그 출력
-            fetch('/api/debug-log', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                level: 'INFO',
-                message: `[스크롤 위치 복원] savedScrollPosition: ${calState.savedScrollPosition}`
-              })
-            }).catch(err => console.error('디버그 로그 전송 실패:', err));
-            
             // DOM 업데이트 후 스크롤 복원
             setTimeout(() => {
               sessionList.scrollTop = calState.savedScrollPosition;
@@ -1645,32 +1606,19 @@ async function renderCalUI(container, forceDate) {
           
           const sessionList = container.querySelector('.tmc-session-list');
           if (sessionList) {
-            setTimeout(() => {
+            // DOM 렌더링 완료 확인 (재시도 로직 포함)
+            const scrollToToday = (retryCount = 0) => {
               const dateHeader = container.querySelector(`[data-date-header="${todayDateStr}"]`);
-              if (dateHeader) {
-                // 서버 터미널에 로그 출력
-                fetch('/api/debug-log', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    level: 'INFO',
-                    message: `[오늘 날짜로 스크롤 실행] todayDateStr: ${todayDateStr}`
-                  })
-                }).catch(err => console.error('디버그 로그 전송 실패:', err));
-                
+              if (dateHeader && dateHeader.offsetTop > 0) {
+                // DOM이 준비되었고 dateHeader가 정상적으로 렌더링됨
                 dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              } else {
-                // 서버 터미널에 로그 출력
-                fetch('/api/debug-log', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    level: 'WARN',
-                    message: `[오늘 날짜로 스크롤 실패] todayDateStr: ${todayDateStr}, dateHeader를 찾을 수 없음`
-                  })
-                }).catch(err => console.error('디버그 로그 전송 실패:', err));
+              } else if (retryCount < 10) {
+                // 아직 DOM이 준비되지 않았으면 재시도 (50ms 간격)
+                setTimeout(() => scrollToToday(retryCount + 1), 50);
               }
-            }, 100);
+            };
+            // 초기 시도 (100ms 후)
+            setTimeout(() => scrollToToday(0), 100);
           }
         }
       } catch (e) {
