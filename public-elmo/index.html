@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Elmo 서비스">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Elmo</title>
+    <link rel="manifest" href="/elmo/manifest.json">
+    <link rel="stylesheet" href="/elmo/css/elmo.css">
+    <meta name="theme-color" content="#1976d2">
+</head>
+<body>
+    <!-- 회원가입 모달 (body 직하위로 이동하여 overflow 문제 방지) -->
+    <div id="elmo-register-modal" style="display:none;">
+        <div class="elmo-modal-content">
+            <div class="elmo-modal-header">
+                <h2>회원가입</h2>
+                <button type="button" id="elmo-register-close" class="elmo-modal-close">&times;</button>
+            </div>
+            <form id="elmo-register-form" class="elmo-form">
+                <div class="elmo-form-group">
+                    <label for="elmo-register-username">아이디</label>
+                    <input type="text" id="elmo-register-username" name="username" required autocomplete="username">
+                </div>
+                <div class="elmo-form-group">
+                    <label for="elmo-register-password">비밀번호</label>
+                    <input type="password" id="elmo-register-password" name="password" required autocomplete="new-password">
+                </div>
+                <div class="elmo-form-group">
+                    <label for="elmo-register-name">이름</label>
+                    <input type="text" id="elmo-register-name" name="name" required>
+                </div>
+                <div class="elmo-form-group">
+                    <label for="elmo-register-email">이메일 (선택)</label>
+                    <input type="email" id="elmo-register-email" name="email" autocomplete="email">
+                </div>
+                <div id="elmo-register-result" class="elmo-result"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">
+                    <button type="button" id="elmo-register-cancel" class="elmo-btn elmo-btn-secondary">취소</button>
+                    <button type="submit" class="elmo-btn elmo-btn-primary">가입하기</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="elmo-app">
+        <!-- 로그인 화면 -->
+        <div id="elmo-login-section" class="elmo-section">
+            <div class="elmo-login-container">
+                <div class="elmo-logo">
+                    <h1>Elmo</h1>
+                </div>
+                <form id="elmo-login-form" class="elmo-form">
+                    <div class="elmo-form-group">
+                        <label for="elmo-username">아이디</label>
+                        <input type="text" id="elmo-username" name="username" required autocomplete="username">
+                    </div>
+                    <div class="elmo-form-group">
+                        <label for="elmo-password">비밀번호</label>
+                        <input type="password" id="elmo-password" name="password" required autocomplete="current-password">
+                    </div>
+                    <div id="elmo-login-result" class="elmo-result"></div>
+                    <button type="submit" class="elmo-btn elmo-btn-primary">로그인</button>
+                </form>
+                <button type="button" id="elmo-register-btn" class="elmo-btn elmo-btn-text" style="margin-top: 8px; width: 100%;">회원가입</button>
+            </div>
+        </div>
+
+        <!-- 회원가입 버튼 인라인 이벤트 바인딩 (즉시 실행) -->
+        <script>
+            (function() {
+                function setupRegisterButton() {
+                    const btn = document.getElementById('elmo-register-btn');
+                    if (btn) {
+                        // 기존 리스너 제거 후 재등록
+                        const newBtn = btn.cloneNode(true);
+                        btn.parentNode.replaceChild(newBtn, btn);
+                        const registerBtn = document.getElementById('elmo-register-btn');
+                        registerBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const modal = document.getElementById('elmo-register-modal');
+                            if (modal) {
+                                // 모달이 body 직하위에 있는지 확인하고, 없으면 이동
+                                if (modal.parentElement !== document.body) {
+                                    document.body.appendChild(modal);
+                                }
+                                
+                                // 모달 표시 - position: fixed와 flex 정렬이 제대로 적용되도록 명시
+                                modal.style.display = 'flex';
+                                modal.style.flexDirection = 'row';
+                                modal.style.justifyContent = 'center';
+                                modal.style.alignItems = 'center';
+                                modal.style.position = 'fixed';
+                                modal.style.top = '0';
+                                modal.style.left = '0';
+                                modal.style.right = '0';
+                                modal.style.bottom = '0';
+                                modal.style.width = '100vw';
+                                modal.style.height = '100vh';
+                                modal.style.zIndex = '10000';
+                                modal.style.background = '#f5f5f5';
+                                modal.style.margin = '0';
+                                modal.style.padding = '24px';
+                                modal.style.boxSizing = 'border-box';
+                                
+                                const form = document.getElementById('elmo-register-form');
+                                const resultDiv = document.getElementById('elmo-register-result');
+                                if (form) form.reset();
+                                if (resultDiv) {
+                                    resultDiv.textContent = '';
+                                    resultDiv.className = 'elmo-result';
+                                }
+                            }
+                        });
+                    } else {
+                        setTimeout(setupRegisterButton, 100);
+                    }
+                }
+                // 즉시 실행
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', setupRegisterButton);
+                } else {
+                    setupRegisterButton();
+                }
+                // 추가 안전장치
+                window.addEventListener('load', setupRegisterButton);
+            })();
+        </script>
+
+        <!-- 메인 화면 -->
+        <div id="elmo-main-section" class="elmo-section" style="display:none;">
+            <!-- 헤더 -->
+            <header class="elmo-header">
+                <button class="elmo-hamburger-btn" id="elmo-hamburger-btn">☰</button>
+                <h1 class="elmo-header-title">Elmo</h1>
+            </header>
+
+            <!-- 사이드 드로어 -->
+            <div id="elmo-drawer" class="elmo-drawer">
+                <div class="elmo-drawer-header">
+                    <h2>메뉴</h2>
+                    <button class="elmo-drawer-close" id="elmo-drawer-close">&times;</button>
+                </div>
+                <div class="elmo-drawer-content">
+                    <div class="elmo-drawer-user">
+                        <div class="elmo-drawer-avatar" id="elmo-drawer-avatar">U</div>
+                        <div class="elmo-drawer-user-info">
+                            <div class="elmo-drawer-user-name" id="elmo-drawer-user-name">사용자</div>
+                            <div class="elmo-drawer-user-id" id="elmo-drawer-user-id">username</div>
+                        </div>
+                    </div>
+                    <div class="elmo-drawer-menu">
+                        <a href="#" class="elmo-drawer-item" data-screen="home">
+                            <span class="elmo-drawer-item-icon">🏠</span>
+                            <span class="elmo-drawer-item-label">홈</span>
+                        </a>
+                        <a href="#" class="elmo-drawer-item" data-screen="calendar">
+                            <span class="elmo-drawer-item-icon">📅</span>
+                            <span class="elmo-drawer-item-label">캘린더</span>
+                        </a>
+                        <a href="#" class="elmo-drawer-item" data-screen="goodlift">
+                            <span class="elmo-drawer-item-icon">💪</span>
+                            <span class="elmo-drawer-item-label">굿리프트</span>
+                        </a>
+                        <a href="#" class="elmo-drawer-item" data-screen="profile">
+                            <span class="elmo-drawer-item-icon">👤</span>
+                            <span class="elmo-drawer-item-label">내정보</span>
+                        </a>
+                    </div>
+                    <div class="elmo-drawer-footer">
+                        <a href="#" class="elmo-drawer-item" id="elmo-drawer-account-management" data-screen="account-management" style="display: none;">
+                            <span class="elmo-drawer-item-icon">⚙️</span>
+                            <span class="elmo-drawer-item-label">계정관리</span>
+                        </a>
+                        <button class="elmo-drawer-item elmo-drawer-item-logout" id="elmo-drawer-logout">
+                            <span class="elmo-drawer-item-icon">🚪</span>
+                            <span class="elmo-drawer-item-label">로그아웃</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div id="elmo-drawer-overlay" class="elmo-drawer-overlay" style="display:none;"></div>
+
+            <!-- 메인 콘텐츠 -->
+            <main class="elmo-content" id="elmo-content"></main>
+
+            <!-- 하단 네비게이션 -->
+            <nav class="elmo-bottom-nav">
+                <a href="#" class="elmo-bottom-nav-item active" data-screen="home">
+                    <span class="elmo-bottom-nav-icon">🏠</span>
+                    <span class="elmo-bottom-nav-label">홈</span>
+                </a>
+                <a href="#" class="elmo-bottom-nav-item" data-screen="calendar">
+                    <span class="elmo-bottom-nav-icon">📅</span>
+                    <span class="elmo-bottom-nav-label">캘린더</span>
+                </a>
+                <a href="#" class="elmo-bottom-nav-item" data-screen="goodlift">
+                    <span class="elmo-bottom-nav-icon">💪</span>
+                    <span class="elmo-bottom-nav-label">굿리프트</span>
+                </a>
+                <a href="#" class="elmo-bottom-nav-item" data-screen="profile">
+                    <span class="elmo-bottom-nav-icon">👤</span>
+                    <span class="elmo-bottom-nav-label">내정보</span>
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <script type="module" src="/elmo/js/elmo-main.js"></script>
+</body>
+</html>

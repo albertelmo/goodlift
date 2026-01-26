@@ -1,0 +1,12 @@
+{
+  "name": "Elmo 서비스",
+  "short_name": "Elmo",
+  "description": "Elmo 전용 서비스",
+  "start_url": "/elmo/",
+  "scope": "/elmo/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f5f5",
+  "theme_color": "#1976d2",
+  "icons": []
+}

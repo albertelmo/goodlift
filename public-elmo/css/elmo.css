@@ -1,0 +1,1596 @@
+/* Elmo 서비스 전용 스타일 */
+
+:root {
+    --elmo-primary: #1976d2;
+    --elmo-primary-dark: #1565c0;
+    --elmo-secondary: #42a5f5;
+    --elmo-success: #2e7d32;
+    --elmo-error: #d32f2f;
+    --elmo-warning: #f57c00;
+    --elmo-text: #333;
+    --elmo-text-muted: #666;
+    --elmo-bg: #f5f5f5;
+    --elmo-surface: #ffffff;
+    --elmo-border: #e0e0e0;
+    --elmo-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    --elmo-shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.15);
+    --elmo-radius: 8px;
+    --elmo-radius-sm: 4px;
+    --elmo-transition: all 0.2s ease;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: var(--elmo-bg);
+    color: var(--elmo-text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.elmo-section {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+/* 로그인 섹션만 중앙 정렬 */
+#elmo-login-section.elmo-section {
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+}
+
+/* 메인 섹션은 기본 정렬 (헤더가 상단에 위치) */
+#elmo-main-section.elmo-section {
+    padding: 0;
+}
+
+/* 로그인 화면 */
+.elmo-login-container {
+    max-width: 400px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px;
+    background: var(--elmo-surface);
+    border-radius: var(--elmo-radius);
+    box-shadow: var(--elmo-shadow-lg);
+    box-sizing: border-box;
+}
+
+.elmo-logo {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.elmo-logo h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--elmo-primary);
+    letter-spacing: -0.5px;
+}
+
+.elmo-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.elmo-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.elmo-form-group label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--elmo-text);
+}
+
+.elmo-form-group input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--elmo-border);
+    border-radius: var(--elmo-radius-sm);
+    font-size: 1rem;
+    transition: var(--elmo-transition);
+    background: var(--elmo-surface);
+}
+
+.elmo-form-group input:focus {
+    outline: none;
+    border-color: var(--elmo-primary);
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+}
+
+.elmo-btn {
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--elmo-radius-sm);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--elmo-transition);
+    text-align: center;
+}
+
+.elmo-btn-primary {
+    background: var(--elmo-primary);
+    color: #fff;
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--elmo-radius-sm);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--elmo-transition), transform var(--elmo-transition);
+}
+
+.elmo-btn-primary:hover {
+    background: var(--elmo-primary-dark);
+}
+
+.elmo-btn-primary:active {
+    background: var(--elmo-primary-dark);
+    transform: scale(0.98);
+}
+
+.elmo-btn-text {
+    background: transparent;
+    color: var(--elmo-primary);
+    padding: 8px 16px;
+}
+
+.elmo-btn-text:hover {
+    background: rgba(25, 118, 210, 0.1);
+}
+
+.elmo-result {
+    min-height: 20px;
+    padding: 8px;
+    border-radius: var(--elmo-radius-sm);
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.elmo-result.error {
+    background: rgba(211, 47, 47, 0.1);
+    color: var(--elmo-error);
+    border: 1px solid rgba(211, 47, 47, 0.3);
+}
+
+.elmo-result.success {
+    background: rgba(46, 125, 50, 0.1);
+    color: var(--elmo-success);
+    border: 1px solid rgba(46, 125, 50, 0.3);
+}
+
+/* 메인 화면 */
+#elmo-main-section {
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    background: var(--elmo-bg);
+    min-height: 100vh;
+    position: relative;
+    padding-bottom: 60px; /* 하단 네비게이션 공간 */
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+.elmo-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--elmo-surface);
+    border-bottom: 1px solid var(--elmo-border);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: var(--elmo-shadow);
+    height: 48px;
+}
+
+.elmo-hamburger-btn {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--elmo-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--elmo-radius-sm);
+    transition: background var(--elmo-transition);
+    min-width: 40px;
+    min-height: 40px;
+    height: 40px;
+    width: 40px;
+    margin: 0;
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
+.elmo-hamburger-btn:hover {
+    background: var(--elmo-bg);
+}
+
+.elmo-hamburger-btn:active {
+    background: var(--elmo-border);
+}
+
+.elmo-header-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #000;
+    flex: 1;
+    text-align: center;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    height: 40px;
+    margin: 0;
+    padding: 0;
+    vertical-align: middle;
+    box-sizing: border-box;
+}
+
+/* 햄버거 메뉴 (사이드 드로어) */
+.elmo-drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--elmo-transition), visibility var(--elmo-transition);
+}
+
+.elmo-drawer-overlay-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.elmo-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px;
+    max-width: 85vw;
+    height: 100vh;
+    background: var(--elmo-surface);
+    z-index: 1001;
+    transform: translateX(-100%);
+    transition: transform var(--elmo-transition);
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--elmo-shadow-lg);
+}
+
+.elmo-drawer-open {
+    transform: translateX(0);
+}
+
+.elmo-drawer-header {
+    padding: 16px;
+    border-bottom: 1px solid var(--elmo-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: linear-gradient(135deg, var(--elmo-primary) 0%, var(--elmo-secondary) 100%);
+    color: white;
+}
+
+.elmo-drawer-user {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.elmo-drawer-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+}
+
+.elmo-drawer-user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.elmo-drawer-user-name {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.elmo-drawer-user-id {
+    font-size: 12px;
+    opacity: 0.8;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.elmo-drawer-close {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--elmo-radius-sm);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background var(--elmo-transition);
+}
+
+.elmo-drawer-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.elmo-drawer-menu {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.elmo-drawer-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    color: var(--elmo-text);
+    text-decoration: none;
+    transition: background var(--elmo-transition), color var(--elmo-transition);
+    font-size: 15px;
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+
+.elmo-drawer-item:hover {
+    background: var(--elmo-bg);
+}
+
+.elmo-drawer-item:active {
+    background: var(--elmo-border);
+}
+
+.elmo-drawer-item-active {
+    color: var(--elmo-primary);
+    background: rgba(25, 118, 210, 0.1);
+}
+
+.elmo-drawer-item-icon {
+    font-size: 22px;
+    width: 24px;
+    text-align: center;
+    line-height: 1;
+}
+
+.elmo-drawer-item-label {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.elmo-drawer-item-active .elmo-drawer-item-icon {
+    transform: scale(1.1);
+}
+
+.elmo-drawer-footer {
+    border-top: 1px solid var(--elmo-border);
+    padding-top: 8px;
+    margin-top: 8px;
+}
+
+.elmo-drawer-item-logout {
+    color: var(--elmo-error);
+}
+
+.elmo-drawer-item-logout:hover {
+    background: rgba(211, 47, 47, 0.1);
+}
+
+/* 계정관리 화면 */
+.elmo-account-management-screen {
+    width: 100%;
+    max-width: 100%;
+    padding: 16px;
+}
+
+.elmo-account-management-header {
+    margin-bottom: 24px;
+}
+
+.elmo-account-management-header h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--elmo-text);
+    margin: 0;
+}
+
+.elmo-account-list-wrapper {
+    width: 100%;
+}
+
+.elmo-loading,
+.elmo-error,
+.elmo-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--elmo-text-muted);
+    font-size: 14px;
+}
+
+.elmo-error {
+    color: var(--elmo-error);
+}
+
+.elmo-account-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.elmo-account-item {
+    background: var(--elmo-surface);
+    border: 1px solid var(--elmo-border);
+    border-radius: var(--elmo-radius);
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    box-shadow: var(--elmo-shadow);
+}
+
+.elmo-account-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.elmo-account-name-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.elmo-account-name {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--elmo-text);
+}
+
+.elmo-account-current-badge {
+    font-size: 12px;
+    color: var(--elmo-primary);
+    font-weight: 500;
+}
+
+.elmo-account-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.elmo-account-username {
+    font-size: 14px;
+    color: var(--elmo-text-muted);
+}
+
+.elmo-account-email {
+    font-size: 14px;
+    color: var(--elmo-text-muted);
+}
+
+.elmo-account-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--elmo-text-muted);
+}
+
+.elmo-account-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.elmo-account-role-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.elmo-account-role-selector label {
+    font-size: 14px;
+    color: var(--elmo-text);
+    font-weight: 500;
+}
+
+.elmo-account-role-select {
+    padding: 6px 12px;
+    border: 1px solid var(--elmo-border);
+    border-radius: var(--elmo-radius-sm);
+    font-size: 14px;
+    background: var(--elmo-surface);
+    color: var(--elmo-text);
+    cursor: pointer;
+    transition: border-color var(--elmo-transition);
+}
+
+.elmo-account-role-select:focus {
+    outline: none;
+    border-color: var(--elmo-primary);
+}
+
+.elmo-account-role-select:disabled {
+    background: var(--elmo-bg);
+    color: var(--elmo-text-muted);
+    cursor: not-allowed;
+}
+
+.elmo-account-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--elmo-error);
+    cursor: pointer;
+    border-radius: var(--elmo-radius-sm);
+    transition: background var(--elmo-transition);
+}
+
+.elmo-account-delete-btn:hover {
+    background: rgba(211, 47, 47, 0.1);
+}
+
+.elmo-account-delete-btn:active {
+    background: rgba(211, 47, 47, 0.2);
+}
+
+.elmo-drawer-divider {
+    height: 1px;
+    background: var(--elmo-border);
+    margin: 8px 0;
+}
+
+.elmo-drawer-item-danger {
+    color: var(--elmo-error);
+}
+
+.elmo-main {
+    flex: 1;
+    padding: 16px;
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+#elmo-content {
+    width: 100%;
+    max-width: 100%;
+}
+
+/* 하단 네비게이션 */
+.elmo-bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--elmo-surface);
+    border-top: 1px solid var(--elmo-border);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 6px 0;
+    z-index: 100;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+    height: 56px;
+}
+
+.elmo-bottom-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 8px;
+    text-decoration: none;
+    color: var(--elmo-text-muted);
+    transition: color var(--elmo-transition);
+    min-height: 44px;
+    border-radius: var(--elmo-radius-sm);
+}
+
+.elmo-bottom-nav-item:active {
+    background: var(--elmo-bg);
+}
+
+.elmo-bottom-nav-icon {
+    font-size: 22px;
+    line-height: 1;
+}
+
+.elmo-bottom-nav-label {
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+}
+
+.elmo-bottom-nav-item-active {
+    color: var(--elmo-primary);
+}
+
+.elmo-bottom-nav-item-active .elmo-bottom-nav-icon {
+    transform: scale(1.1);
+}
+
+/* 캘린더 화면 */
+.elmo-calendar-screen {
+    max-width: 100%;
+}
+
+.elmo-calendar-top-bar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: transparent;
+    padding: 8px 0;
+    margin: -16px -16px 16px -16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.elmo-calendar-month-display {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--elmo-text);
+    padding-left: 12px;
+}
+
+.elmo-calendar-today-btn {
+    font-size: 12px;
+    color: var(--elmo-text-muted);
+    background: var(--elmo-bg);
+    padding: 4px 8px;
+    border-radius: var(--elmo-radius-sm);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--elmo-transition), background var(--elmo-transition);
+}
+
+.elmo-calendar-today-btn:hover {
+    color: var(--elmo-primary);
+    background: rgba(25, 118, 210, 0.1);
+}
+
+.elmo-calendar-today-btn:active {
+    transform: scale(0.95);
+}
+
+.elmo-calendar-top-buttons {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 12px;
+}
+
+.elmo-calendar-add-section {
+    margin: 16px 0;
+}
+
+.elmo-btn-full {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+/* 캘린더 컴포넌트 */
+.elmo-calendar {
+    background: var(--elmo-surface);
+    border-radius: var(--elmo-radius);
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: var(--elmo-shadow);
+    margin-top: 8px;
+}
+
+.elmo-calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin-bottom: 6px;
+}
+
+.elmo-calendar-weekday {
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--elmo-text-muted);
+    padding: 6px 0;
+}
+
+.elmo-calendar-weekday:first-child {
+    color: #ef4444; /* 일요일 빨간색 */
+}
+
+.elmo-calendar-weekday:last-child {
+    color: #0ea5e9; /* 토요일 하늘색 */
+}
+
+.elmo-calendar-days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.elmo-calendar-day {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--elmo-radius-sm);
+    cursor: pointer;
+    transition: background var(--elmo-transition), transform var(--elmo-transition);
+    position: relative;
+    border: none;
+    min-height: 0;
+    overflow: visible;
+}
+
+.elmo-calendar-day:not(.elmo-calendar-day-empty):active {
+    transform: scale(0.95);
+}
+
+.elmo-calendar-day-empty {
+    cursor: pointer;
+}
+
+.elmo-calendar-day-empty .elmo-calendar-day-number {
+    color: #9ca3af;
+}
+
+.elmo-calendar-day-number {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--elmo-text);
+}
+
+.elmo-calendar-day-sunday .elmo-calendar-day-number {
+    color: #ef4444; /* 일요일 빨간색 */
+}
+
+.elmo-calendar-day-saturday .elmo-calendar-day-number {
+    color: #0ea5e9; /* 토요일 하늘색 */
+}
+
+/* 오늘 날짜 동그라미 (::before 가상 요소) */
+.elmo-calendar-day-today::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    border: 1.5px solid var(--elmo-primary);
+    border-radius: 50%;
+    z-index: 0;
+    pointer-events: none;
+    box-sizing: border-box;
+}
+
+.elmo-calendar-day-today .elmo-calendar-day-number {
+    color: var(--elmo-text);
+    font-weight: 500;
+    position: relative;
+    z-index: 1;
+}
+
+/* 오늘 날짜가 선택된 경우 */
+.elmo-calendar-day-today.elmo-calendar-day-selected::before {
+    display: none;
+}
+
+/* 오늘 날짜가 선택된 경우 배경 원 (기존 ::before 대신 사용) */
+.elmo-calendar-day-today.elmo-calendar-day-selected::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    background: var(--elmo-primary-dark);
+    border-radius: 50%;
+    z-index: 0;
+    pointer-events: none;
+    display: block !important;
+}
+
+.elmo-calendar-day-today.elmo-calendar-day-selected {
+    background: transparent !important;
+    position: relative;
+    overflow: visible;
+}
+
+.elmo-calendar-day-today.elmo-calendar-day-selected .elmo-calendar-day-number {
+    color: white;
+    font-weight: 700;
+    position: relative;
+    z-index: 2; /* 밑줄보다 위에 표시 */
+}
+
+/* 다른 날짜가 선택된 경우 - 배경 원을 ::before로 그리기 */
+.elmo-calendar-day-selected:not(.elmo-calendar-day-today) {
+    background: transparent !important;
+    position: relative;
+    overflow: visible;
+}
+
+.elmo-calendar-day-selected:not(.elmo-calendar-day-today)::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    background: var(--elmo-primary-dark);
+    border-radius: 50%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.elmo-calendar-day-selected .elmo-calendar-day-number {
+    color: white;
+    font-weight: 700;
+    position: relative;
+    z-index: 1;
+}
+
+/* 기록이 있는 날짜 표시 (작은 줄) */
+.elmo-calendar-day-has-record {
+    position: relative;
+}
+
+.elmo-calendar-day-has-record::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 16px;
+    height: 2px;
+    background: var(--elmo-primary);
+    border-radius: 1px;
+    z-index: 0; /* 숫자보다 아래 */
+    pointer-events: none;
+}
+
+.elmo-calendar-day-selected.elmo-calendar-day-has-record::after {
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1; /* 숫자보다 아래 */
+}
+
+/* 오늘 날짜에 기록이 있는 경우 - 동그라미 밑에 줄 */
+.elmo-calendar-day-today.elmo-calendar-day-has-record::after {
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--elmo-primary);
+    z-index: 0; /* 숫자보다 아래 */
+}
+
+/* 오늘 날짜가 선택되었을 때도 줄이 전체 셀 기준으로 표시되도록 */
+.elmo-calendar-day-today.elmo-calendar-day-selected.elmo-calendar-day-has-record::after {
+    bottom: 4px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 16px !important;
+    height: 2px !important;
+    background: var(--elmo-primary) !important;
+    border-radius: 1px !important;
+    top: auto !important;
+    z-index: 0 !important; /* 숫자보다 아래 */
+    pointer-events: none;
+}
+
+/* 회원가입 모달 (ID 기반으로만 스타일링하여 다른 요소와 충돌 방지) */
+#elmo-register-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    background: var(--elmo-bg);
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    padding: 24px;
+    box-sizing: border-box;
+    margin: 0;
+}
+
+#elmo-register-modal > .elmo-modal-content {
+    background: var(--elmo-surface);
+    border-radius: var(--elmo-radius);
+    box-shadow: var(--elmo-shadow-lg);
+    width: 100%;
+    max-width: 400px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: elmo-modal-fade-in 0.2s ease;
+    margin: 0 auto;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+@keyframes elmo-modal-fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.elmo-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--elmo-border);
+}
+
+.elmo-modal-header h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--elmo-text);
+    margin: 0;
+}
+
+.elmo-modal-close {
+    background: none;
+    border: none;
+    font-size: 2rem;
+    color: var(--elmo-text-muted);
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--elmo-radius-sm);
+    transition: var(--elmo-transition);
+    line-height: 1;
+}
+
+.elmo-modal-close:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--elmo-text);
+}
+
+.elmo-modal-content .elmo-form {
+    padding: 24px;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .elmo-section {
+        padding: 16px;
+    }
+    
+    .elmo-login-container {
+        margin: 0 auto;
+        padding: 20px;
+        width: calc(100% - 32px);
+        max-width: 100%;
+    }
+
+    .elmo-header {
+        padding: 12px 16px;
+    }
+
+    .elmo-main {
+        padding: 16px;
+    }
+
+    .elmo-content {
+        padding: 20px;
+    }
+
+    #elmo-register-modal {
+        padding: 16px;
+    }
+    
+    #elmo-register-modal > .elmo-modal-content {
+        width: 100%;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    .elmo-modal-content {
+        max-width: 100%;
+    }
+
+    .elmo-modal-header {
+        padding: 16px 20px;
+    }
+
+    .elmo-modal-content .elmo-form {
+        padding: 20px;
+    }
+}
+
+/* 모달 배경 */
+.elmo-modal-bg {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    opacity: 0;
+    transition: opacity var(--elmo-transition);
+}
+
+.elmo-modal-bg.elmo-modal-show {
+    opacity: 1;
+}
+
+/* 기록 목록 */
+.elmo-calendar-list-wrapper {
+    padding: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.elmo-calendar-list-header {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--elmo-text);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--elmo-border);
+}
+
+.elmo-calendar-records-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.elmo-calendar-record-item {
+    background: var(--elmo-surface);
+    border: 1px solid var(--elmo-border);
+    border-radius: var(--elmo-radius);
+    padding: 12px;
+    box-shadow: var(--elmo-shadow);
+    transition: background var(--elmo-transition), box-shadow var(--elmo-transition), transform var(--elmo-transition);
+    cursor: pointer;
+    position: relative;
+}
+
+.elmo-calendar-record-item:hover {
+    background: var(--elmo-bg);
+    box-shadow: var(--elmo-shadow-lg);
+}
+
+.elmo-calendar-record-item:active {
+    background: var(--elmo-border);
+    transform: scale(0.98);
+    box-shadow: var(--elmo-shadow);
+}
+
+.elmo-calendar-card-content {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    pointer-events: none; /* 카드 내부 요소가 클릭을 방해하지 않도록 */
+}
+
+.elmo-calendar-card-content > * {
+    pointer-events: auto; /* 각 요소는 다시 클릭 가능 */
+}
+
+.elmo-calendar-card-edit-btn {
+    pointer-events: auto; /* 수정 버튼은 항상 클릭 가능 */
+}
+
+/* Elmo 카드 이미지 */
+.elmo-calendar-card-image {
+    flex-shrink: 0;
+    width: 80px;
+    height: 80px;
+    border-radius: var(--elmo-radius-sm);
+    overflow: hidden;
+    background: var(--elmo-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.elmo-calendar-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.elmo-calendar-card-image-placeholder {
+    background: var(--elmo-bg);
+    color: var(--elmo-text-muted);
+}
+
+.elmo-calendar-card-image-placeholder svg {
+    width: 32px;
+    height: 32px;
+    opacity: 0.5;
+}
+
+/* Elmo 카드 정보 */
+.elmo-calendar-card-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.elmo-calendar-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.elmo-calendar-card-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.elmo-calendar-card-type {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--elmo-primary);
+    flex: 1;
+}
+
+.elmo-calendar-card-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: var(--elmo-text-muted);
+    cursor: pointer;
+    border-radius: var(--elmo-radius-sm);
+    transition: background var(--elmo-transition), color var(--elmo-transition);
+}
+
+.elmo-calendar-card-edit-btn:hover {
+    background: var(--elmo-bg);
+    color: var(--elmo-text);
+}
+
+.elmo-calendar-card-edit-btn:active {
+    background: var(--elmo-border);
+    transform: scale(0.95);
+}
+
+.elmo-calendar-card-text {
+    font-size: 14px;
+    color: var(--elmo-text-muted);
+    line-height: 1.5;
+    word-wrap: break-word;
+    margin-top: 4px;
+    white-space: pre-line;
+}
+
+.elmo-calendar-record-text {
+    font-size: 14px;
+    color: var(--elmo-text);
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.elmo-calendar-record-image img,
+.elmo-calendar-record-video video {
+    max-width: 100%;
+    border-radius: var(--elmo-radius-sm);
+    margin-top: 8px;
+}
+
+.elmo-calendar-no-records {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--elmo-text-muted);
+    font-size: 14px;
+}
+
+/* 캘린더 모달 스타일 (회원가입 모달과 분리) */
+.elmo-modal-bg .elmo-modal {
+    background: var(--elmo-surface);
+    border-radius: var(--elmo-radius);
+    width: 100%;
+    max-width: 400px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--elmo-shadow-lg);
+    transform: scale(0.95);
+    transition: transform var(--elmo-transition), opacity var(--elmo-transition);
+    opacity: 0;
+}
+
+.elmo-modal-bg .elmo-modal.elmo-modal-show {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.elmo-modal-bg .elmo-modal.elmo-modal-large {
+    max-width: 500px;
+}
+
+.elmo-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px;
+    border-bottom: 1px solid var(--elmo-border);
+    position: relative;
+    z-index: 10;
+    flex-shrink: 0;
+}
+
+.elmo-modal-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--elmo-text);
+    margin: 0;
+}
+
+.elmo-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--elmo-text-muted);
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--elmo-radius-sm);
+    transition: background var(--elmo-transition);
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.elmo-modal-close-btn:hover {
+    background: var(--elmo-bg);
+}
+
+.elmo-modal-close-btn svg {
+    pointer-events: none;
+}
+
+.elmo-modal-content {
+    padding: 16px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    -webkit-overflow-scrolling: touch; /* iOS 부드러운 스크롤 */
+}
+
+/* 모달 액션 버튼 */
+.elmo-modal-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--elmo-border);
+    flex-shrink: 0;
+    background: var(--elmo-surface);
+}
+
+/* 폼 그룹 스타일 개선 */
+.elmo-form-group {
+    margin-bottom: 16px;
+}
+
+.elmo-form-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--elmo-text);
+    margin-bottom: 8px;
+}
+
+.elmo-form-group input,
+.elmo-form-group select,
+.elmo-form-group textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--elmo-border);
+    border-radius: var(--elmo-radius-sm);
+    font-size: 16px; /* 16px 이상으로 설정하여 모바일에서 자동 확대 방지 */
+    font-family: inherit;
+    color: var(--elmo-text);
+    background: var(--elmo-surface);
+    box-sizing: border-box;
+}
+
+.elmo-form-group input[type="date"] {
+    width: 100%;
+    max-width: 200px;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.elmo-form-group input:focus,
+.elmo-form-group select:focus,
+.elmo-form-group textarea:focus {
+    outline: none;
+    border-color: var(--elmo-primary);
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.1);
+}
+
+.elmo-form-group textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+/* 타입 라디오 버튼 그룹 */
+.elmo-type-radio-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.elmo-radio-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--elmo-text);
+    user-select: none;
+}
+
+.elmo-radio-label input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    min-height: 20px;
+    max-width: 20px;
+    max-height: 20px;
+    margin: 0;
+    padding: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    border: 2.5px solid #666;
+    border-radius: 50%;
+    background: var(--elmo-surface);
+    position: relative;
+    transition: all 0.2s ease;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05);
+    cursor: pointer;
+}
+
+.elmo-radio-label input[type="radio"]:hover {
+    border-color: var(--elmo-primary);
+    box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.2);
+    transform: scale(1.1);
+}
+
+.elmo-radio-label input[type="radio"]:checked {
+    border-color: var(--elmo-primary);
+    background: var(--elmo-primary);
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.3);
+}
+
+.elmo-radio-label input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.elmo-radio-label span {
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+/* 이미지/동영상 업로드 영역 */
+.elmo-image-upload-area,
+.elmo-video-upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.elmo-image-upload-preview,
+.elmo-video-upload-preview {
+    width: 100%;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px dashed var(--elmo-border);
+    border-radius: var(--elmo-radius-sm);
+    background: var(--elmo-bg);
+    transition: border-color var(--elmo-transition);
+}
+
+.elmo-image-upload-preview.elmo-upload-dragover,
+.elmo-video-upload-preview.elmo-upload-dragover,
+.elmo-image-upload-area.elmo-upload-dragover .elmo-image-upload-preview,
+.elmo-video-upload-area.elmo-upload-dragover .elmo-video-upload-preview {
+    border-color: var(--elmo-primary);
+    background: rgba(25, 118, 210, 0.05);
+}
+
+.elmo-image-upload-placeholder,
+.elmo-video-upload-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--elmo-text-muted);
+    padding: 24px;
+}
+
+.elmo-image-upload-placeholder svg,
+.elmo-video-upload-placeholder svg {
+    margin-bottom: 8px;
+}
+
+.elmo-image-upload-preview img,
+.elmo-video-upload-preview video {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    object-fit: contain;
+}
+
+/* 버튼 스타일 개선 */
+.elmo-btn-primary,
+.elmo-btn-secondary,
+.elmo-btn-danger {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    border-radius: var(--elmo-radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--elmo-transition), transform var(--elmo-transition);
+}
+
+.elmo-btn-primary {
+    background: var(--elmo-primary);
+    color: white;
+}
+
+.elmo-btn-primary:hover {
+    background: var(--elmo-primary-dark);
+}
+
+.elmo-btn-primary:active {
+    transform: scale(0.98);
+}
+
+.elmo-btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.elmo-btn-secondary {
+    background: var(--elmo-bg);
+    color: var(--elmo-text);
+    border: 1px solid var(--elmo-border);
+}
+
+.elmo-btn-secondary:hover {
+    background: var(--elmo-border);
+}
+
+.elmo-btn-secondary:active {
+    transform: scale(0.98);
+}
+
+.elmo-btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.elmo-btn-danger:hover {
+    background: #b71c1c;
+}
