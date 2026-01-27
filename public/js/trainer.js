@@ -321,30 +321,86 @@ function setupDeleteTrainerListeners() {
     });
 }
 
-export async function renderMyMembers(container, username) {
+export async function renderMyMembers(container, username, statusFilter = '유효', searchQuery = '') {
     if (!container) return;
-    container.innerHTML = '<div style="color:#888;text-align:center;">불러오는 중...</div>';
+    
+    // 필터 버튼과 검색창 렌더링
+    let html = '';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid #e0e0e0;background:#fff;">';
+    html += '<div style="display:flex;gap:6px;align-items:center;">';
+    const filterOptions = [
+        { value: '전체', label: '전체' },
+        { value: '유효', label: '유효' },
+        { value: '만료', label: '만료' },
+        { value: '정지', label: '정지' }
+    ];
+    filterOptions.forEach(option => {
+        const isActive = statusFilter === option.value;
+        const activeStyle = isActive 
+            ? 'background:#667eea;color:#fff;border-color:#667eea;' 
+            : 'background:#fff;color:#666;border-color:#e0e0e0;';
+        html += `<button class="tmc-member-filter-btn" 
+                    data-filter="${option.value}"
+                    style="padding:4px 12px;border-radius:16px;border:1px solid;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.2s;height:28px;box-sizing:border-box;${activeStyle}"
+                    onmouseover="${!isActive ? "this.style.background='#f5f5f5';this.style.borderColor='#d0d0d0';" : ''}"
+                    onmouseout="${!isActive ? "this.style.background='#fff';this.style.borderColor='#e0e0e0';" : ''}">
+                ${option.label}
+            </button>`;
+    });
+    html += '</div>';
+    html += `<input type="search" 
+                id="tmc-member-search" 
+                placeholder="회원 검색..." 
+                style="padding:4px 12px;border-radius:16px;border:1px solid #e0e0e0;font-size:0.8rem;width:100px;height:28px;outline:none;transition:all 0.2s;box-sizing:border-box;"
+                onfocus="this.style.borderColor='#667eea';this.style.boxShadow='0 0 0 2px rgba(102,126,234,0.1)';"
+                onblur="this.style.borderColor='#e0e0e0';this.style.boxShadow='none';">`;
+    html += '</div>';
+    
+    // 회원 리스트 영역 초기화 (로딩 메시지 없이 바로 렌더링)
+    html += '<div id="tmc-members-list"></div>';
+    container.innerHTML = html;
+    
+    // 필터 버튼 및 검색창 이벤트 리스너 추가
+    setupMemberFilterButtons(container, username);
+    
+    // 검색창에 현재 검색어 설정
+    const searchInput = container.querySelector('#tmc-member-search');
+    if (searchInput && searchQuery) {
+        searchInput.value = searchQuery;
+    }
+    
     try {
         const res = await fetch('/api/members');
         const members = await res.json();
-        const myMembers = members.filter(m => 
-            m.trainer === username && 
-            m.status === '유효'
-        ).sort((a, b) => {
+        
+        // 필터링 로직
+        let myMembers = members.filter(m => {
+            if (m.trainer !== username) return false;
+            if (statusFilter !== '전체' && m.status !== statusFilter) return false;
+            // 검색어 필터링
+            if (searchQuery && searchQuery.trim()) {
+                const query = searchQuery.trim().toLowerCase();
+                const memberName = (m.name || '').toLowerCase();
+                return memberName.includes(query);
+            }
+            return true;
+        }).sort((a, b) => {
             // 잔여세션이 없는 경우를 맨 뒤로
             const aRemain = a.remainSessions !== undefined ? a.remainSessions : -1;
             const bRemain = b.remainSessions !== undefined ? b.remainSessions : -1;
             return aRemain - bRemain; // 오름차순 (잔여세션 적은 순)
         });
         
-        let html = '';
+        // 회원 리스트 영역만 업데이트
+        const membersListContainer = container.querySelector('#tmc-members-list');
+        if (!membersListContainer) return;
         
         if (!myMembers.length) {
-            html += '<div style="color:#888;text-align:center;">담당 회원이 없습니다.</div>';
-            container.innerHTML = html;
+            membersListContainer.innerHTML = '<div style="color:#888;text-align:center;padding:40px 16px;">담당 회원이 없습니다.</div>';
             return;
         }
-        html += '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">';
+        
+        let membersHtml = '<div style="display:flex;flex-direction:column;gap:12px;padding:16px;">';
         myMembers.forEach(m => {
             const remainSessions = m.remainSessions !== undefined ? m.remainSessions : null;
             const sessions = m.sessions || 0;
@@ -366,7 +422,7 @@ export async function renderMyMembers(container, username) {
                 remainBadgeStyle = 'background:#e8f5e9;color:#2e7d32;';
             }
             
-            html += `<div style="background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);transition:all 0.2s;border:1px solid #e0e0e0;" 
+            membersHtml += `<div class="tmc-member-card" data-member-name="${m.name}" style="background:#fff;border-radius:12px;padding:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);transition:all 0.2s;border:1px solid #e0e0e0;cursor:pointer;" 
                         onmouseover="this.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';this.style.transform='translateY(-2px)';" 
                         onmouseout="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.08)';this.style.transform='translateY(0)';">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -388,11 +444,349 @@ export async function renderMyMembers(container, username) {
                 </div>
             </div>`;
         });
-        html += '</div>';
-        container.innerHTML = html;
+        membersHtml += '</div>';
+        membersListContainer.innerHTML = membersHtml;
+        
+        // 회원 카드 클릭 이벤트 추가 (회원 데이터 전달)
+        setupMemberCardClickEvents(container, username, statusFilter, searchQuery, members);
     } catch {
-        container.innerHTML = '<div style="color:#d32f2f;text-align:center;">회원 목록을 불러오지 못했습니다.</div>';
+        const membersListContainer = container.querySelector('#tmc-members-list');
+        if (membersListContainer) {
+            membersListContainer.innerHTML = '<div style="color:#d32f2f;text-align:center;padding:40px 16px;">회원 목록을 불러오지 못했습니다.</div>';
+        } else {
+            container.innerHTML = '<div style="color:#d32f2f;text-align:center;padding:40px 16px;">회원 목록을 불러오지 못했습니다.</div>';
+        }
     }
+}
+
+// 회원 필터 버튼 이벤트 리스너 설정
+function setupMemberFilterButtons(container, username) {
+    const filterButtons = container.querySelectorAll('.tmc-member-filter-btn');
+    filterButtons.forEach(btn => {
+        btn.onclick = function() {
+            const selectedFilter = this.getAttribute('data-filter');
+            const searchInput = container.querySelector('#tmc-member-search');
+            const searchQuery = searchInput ? searchInput.value : '';
+            // 필터 변경 시 재렌더링
+            renderMyMembers(container, username, selectedFilter, searchQuery);
+        };
+    });
+    
+    // 검색창 이벤트 리스너 설정 (엔터 키 및 입력 완료 버튼 클릭 시 검색)
+    const searchInput = container.querySelector('#tmc-member-search');
+    if (searchInput) {
+        let lastSearchValue = searchInput.value || '';
+        let isComposing = false; // 한글 입력 중인지 확인
+        
+        // 검색 실행 함수
+        const executeSearch = () => {
+            // 현재 선택된 필터 가져오기
+            const activeFilterBtn = container.querySelector('.tmc-member-filter-btn[style*="background:#667eea"]');
+            const currentFilter = activeFilterBtn ? activeFilterBtn.getAttribute('data-filter') : '유효';
+            
+            const searchQuery = searchInput.value;
+            lastSearchValue = searchQuery; // 마지막 검색 값 저장
+            renderMyMembers(container, username, currentFilter, searchQuery);
+        };
+        
+        // 엔터 키 입력 시 검색
+        searchInput.onkeydown = function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                executeSearch();
+            }
+        };
+        
+        // 모바일 키보드의 "입력 완료" 버튼 클릭 시 검색 (onsearch 이벤트)
+        searchInput.onsearch = function() {
+            executeSearch();
+        };
+        
+        // 한글 입력 시작
+        searchInput.oncompositionstart = function() {
+            isComposing = true;
+        };
+        
+        // 한글 입력 완료
+        searchInput.oncompositionend = function() {
+            isComposing = false;
+        };
+        
+        // 포커스가 벗어날 때 (키보드 닫힐 때) 검색
+        searchInput.onblur = function() {
+            // 값이 변경되었고, 한글 입력 중이 아닐 때만 검색
+            if (!isComposing && this.value !== lastSearchValue) {
+                executeSearch();
+            }
+        };
+        
+        // input 이벤트로 값 변경 추적 (검색은 하지 않고 값만 추적)
+        searchInput.oninput = function() {
+            // 값 변경 추적만 하고 검색은 하지 않음
+        };
+    }
+}
+
+// 트레이너/센터 목록 캐시 (TTL: 5분)
+const memberEditCache = {
+    trainers: {
+        data: null,
+        timestamp: null
+    },
+    centers: {
+        data: null,
+        timestamp: null
+    },
+    currentTrainer: {
+        data: null,
+        timestamp: null
+    }
+};
+const MEMBER_EDIT_CACHE_TTL = 5 * 60 * 1000; // 5분
+
+// 캐시된 트레이너 목록 가져오기
+async function getCachedTrainers() {
+    const now = Date.now();
+    if (memberEditCache.trainers.data && 
+        memberEditCache.trainers.timestamp && 
+        (now - memberEditCache.trainers.timestamp) < MEMBER_EDIT_CACHE_TTL) {
+        return memberEditCache.trainers.data;
+    }
+    
+    const res = await fetch('/api/trainers');
+    const trainers = await res.json();
+    memberEditCache.trainers.data = trainers;
+    memberEditCache.trainers.timestamp = now;
+    return trainers;
+}
+
+// 캐시된 센터 목록 가져오기
+async function getCachedCenters() {
+    const now = Date.now();
+    if (memberEditCache.centers.data && 
+        memberEditCache.centers.timestamp && 
+        (now - memberEditCache.centers.timestamp) < MEMBER_EDIT_CACHE_TTL) {
+        return memberEditCache.centers.data;
+    }
+    
+    const res = await fetch('/api/centers');
+    const centers = await res.json();
+    memberEditCache.centers.data = centers;
+    memberEditCache.centers.timestamp = now;
+    return centers;
+}
+
+// 캐시된 현재 트레이너 정보 가져오기
+async function getCachedCurrentTrainer(username) {
+    const now = Date.now();
+    if (memberEditCache.currentTrainer.data && 
+        memberEditCache.currentTrainer.timestamp && 
+        (now - memberEditCache.currentTrainer.timestamp) < MEMBER_EDIT_CACHE_TTL &&
+        memberEditCache.currentTrainer.data.username === username) {
+        return memberEditCache.currentTrainer.data;
+    }
+    
+    const res = await fetch(`/api/trainers?username=${encodeURIComponent(username)}`);
+    const trainers = await res.json();
+    const trainer = trainers && trainers.length > 0 ? trainers[0] : null;
+    memberEditCache.currentTrainer.data = trainer;
+    memberEditCache.currentTrainer.timestamp = now;
+    return trainer;
+}
+
+// 회원 카드 클릭 이벤트 설정
+function setupMemberCardClickEvents(container, username, statusFilter, searchQuery, membersData) {
+    const memberCards = container.querySelectorAll('.tmc-member-card');
+    memberCards.forEach(card => {
+        card.onclick = async function() {
+            const memberName = this.getAttribute('data-member-name');
+            if (!memberName) return;
+            
+            // 트레이너의 probation 상태 확인 (캐시 사용)
+            try {
+                const trainer = await getCachedCurrentTrainer(username);
+                
+                if (trainer && trainer.probation === 'on') {
+                    // 수습 트레이너인 경우 모달 표시 안 함
+                    return;
+                }
+            } catch (error) {
+                console.error('트레이너 정보 조회 오류:', error);
+                return;
+            }
+            
+            // 회원 정보는 이미 로드된 데이터에서 찾기
+            const member = membersData.find(m => m.name === memberName);
+            
+            if (member) {
+                // 회원 수정 모달 표시
+                showMemberEditModal(member, container, username, statusFilter, searchQuery);
+            } else {
+                alert('회원 정보를 찾을 수 없습니다.');
+            }
+        };
+    });
+}
+
+// 회원 정보 수정 모달 표시
+async function showMemberEditModal(member, container, username, statusFilter, searchQuery) {
+    // 모달 배경 생성 (없으면)
+    let modalBg = document.getElementById('tmc-member-edit-modal-bg');
+    if (!modalBg) {
+        modalBg = document.createElement('div');
+        modalBg.id = 'tmc-member-edit-modal-bg';
+        modalBg.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;';
+        document.body.appendChild(modalBg);
+    }
+    
+    // 트레이너 목록과 센터 목록 병렬 조회 (캐시 사용)
+    const [trainers, centers] = await Promise.all([
+        getCachedTrainers(),
+        getCachedCenters()
+    ]);
+    
+    modalBg.style.display = 'block';
+    modalBg.innerHTML = `
+      <div id="tmc-member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:18px 16px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:14px;font-size:1.1rem;">회원 정보 수정</h3>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;"></div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">VIP</b><br><input id="tmc-edit-vip-session" type="number" min="0" max="99" value="${member.vip_session || 0}" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;" oninput="this.value = this.value < 0 ? 0 : this.value > 99 ? 99 : this.value;"></div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">성별</b><br>
+          <select id="tmc-edit-gender" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+            <option value="male"${member.gender==='male'?' selected':''}>남성</option>
+            <option value="female"${member.gender==='female'?' selected':''}>여성</option>
+          </select>
+        </div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">센터</b><br>
+          <select id="tmc-edit-center" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+            <option value="">불러오는 중...</option>
+          </select>
+        </div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">상태</b><br>
+          <select id="tmc-edit-status" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+            <option value="유효"${member.status==='유효'?' selected':''}>유효</option>
+            <option value="정지"${member.status==='정지'?' selected':''}>정지</option>
+            <option value="만료"${member.status==='만료'?' selected':''}>만료</option>
+          </select>
+        </div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">담당 트레이너</b><br>
+          <select id="tmc-edit-trainer" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+            ${trainers.map(t=>`<option value="${t.username}"${member.trainer===t.username?' selected':''}>${t.name}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">추가 세션</b><br><input id="tmc-edit-add-sessions" type="number" min="0" value="0" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;"></div>
+        <div id="tmc-edit-modal-result" style="min-height:18px;margin-bottom:6px;color:#1976d2;font-size:0.85rem;"></div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;">
+          <button id="tmc-edit-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;padding:6px;font-size:0.9rem;">저장</button>
+          <button id="tmc-edit-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;padding:6px;font-size:0.9rem;">닫기</button>
+        </div>
+      </div>
+    `;
+
+    // 센터 드롭다운 로딩 (이미 로드된 데이터 사용)
+    const centerSel = document.getElementById('tmc-edit-center');
+    const userRole = localStorage.getItem('role');
+    const userCenter = localStorage.getItem('center');
+    
+    if (userRole === 'center' && userCenter) {
+      // 센터관리자인 경우 자신의 센터로 강제 고정
+      centerSel.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
+      centerSel.disabled = true;
+      centerSel.style.backgroundColor = '#f5f5f5';
+      centerSel.style.color = '#666';
+      centerSel.title = '센터관리자는 자신의 센터만 관리할 수 있습니다.';
+    } else {
+      // 관리자나 트레이너인 경우 모든 센터 선택 가능
+      centerSel.innerHTML = '<option value="">선택</option>' + centers.map(c=>`<option value="${c.name}"${member.center===c.name?' selected':''}>${c.name}</option>`).join('');
+    }
+
+    // 닫기 버튼
+    document.getElementById('tmc-edit-modal-cancel').onclick = function() {
+      modalBg.style.display = 'none';
+      modalBg.innerHTML = '';
+    };
+    
+    // 저장 버튼
+    document.getElementById('tmc-edit-modal-save').onclick = async function() {
+      const status = document.getElementById('tmc-edit-status').value;
+      const trainer = document.getElementById('tmc-edit-trainer').value;
+      const addSessions = Number(document.getElementById('tmc-edit-add-sessions').value)||0;
+      const gender = document.getElementById('tmc-edit-gender').value;
+      const center = document.getElementById('tmc-edit-center').value;
+      const vipSession = Number(document.getElementById('tmc-edit-vip-session').value)||0;
+      
+      // VIP 세션 범위 검증
+      if (vipSession < 0 || vipSession > 99) {
+        const resultDiv = document.getElementById('tmc-edit-modal-result');
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = 'VIP 세션은 0~99 사이의 값이어야 합니다.';
+        return;
+      }
+      
+      const resultDiv = document.getElementById('tmc-edit-modal-result');
+      resultDiv.style.color = '#1976d2';
+      resultDiv.innerText = '처리 중...';
+      try {
+        const currentUser = localStorage.getItem('username');
+        const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status, trainer, addSessions, gender, center, vipSession, currentUser })
+        });
+        const result = await res.json();
+        if (res.ok) {
+          resultDiv.innerText = '저장되었습니다.';
+          setTimeout(() => {
+            modalBg.style.display = 'none';
+            modalBg.innerHTML = '';
+            // 회원 목록 새로고침
+            renderMyMembers(container, username, statusFilter, searchQuery);
+          }, 900);
+        } else {
+          resultDiv.style.color = '#d32f2f';
+          resultDiv.innerText = result.message;
+        }
+      } catch {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '수정에 실패했습니다.';
+      }
+    };
+    
+    // 바깥 클릭 시 닫기
+    let isDragging = false;
+    let startX, startY;
+    
+    modalBg.addEventListener('mousedown', function(e) {
+      if (e.target === modalBg) {
+        startX = e.clientX;
+        startY = e.clientY;
+        isDragging = false;
+      }
+    });
+    
+    modalBg.addEventListener('mousemove', function(e) {
+      if (startX !== undefined && startY !== undefined) {
+        const deltaX = Math.abs(e.clientX - startX);
+        const deltaY = Math.abs(e.clientY - startY);
+        if (deltaX > 5 || deltaY > 5) {
+          isDragging = true;
+        }
+      }
+    });
+    
+    modalBg.addEventListener('mouseup', function(e) {
+      if (e.target === modalBg && !isDragging && startX !== undefined && startY !== undefined) {
+        const deltaX = Math.abs(e.clientX - startX);
+        const deltaY = Math.abs(e.clientY - startY);
+        if (deltaX < 5 && deltaY < 5) {
+          modalBg.style.display = 'none';
+          modalBg.innerHTML = '';
+        }
+      }
+      startX = undefined;
+      startY = undefined;
+      isDragging = false;
+    });
 }
 
 let calState = { 
