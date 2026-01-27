@@ -27,7 +27,8 @@
     "name": "천성식",
     "role": "trainer",
     "vip_member": false,
-    "30min_session": "on"
+    "30min_session": "on",
+    "ledger": "on"
   },
   {
     "username": "shy",

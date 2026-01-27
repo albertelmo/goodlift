@@ -36,6 +36,10 @@ async function loadList() {
                 const probationColor = tr.probation === 'on' ? '#1976d2' : '#666';
                 const probationBgColor = tr.probation === 'on' ? '#e3f2fd' : '#f5f5f5';
                 
+                const ledgerStatus = tr.ledger === 'on' ? 'ON' : 'OFF';
+                const ledgerColor = tr.ledger === 'on' ? '#1976d2' : '#666';
+                const ledgerBgColor = tr.ledger === 'on' ? '#e3f2fd' : '#f5f5f5';
+                
                 const profileImageUrl = tr.profile_image_url || null;
                 const profileImageHtml = profileImageUrl 
                     ? `<img src="${profileImageUrl}" alt="프로필" style="width:80px;height:80px;object-fit:cover;border-radius:50%;cursor:pointer;border:2px solid #e0e0e0;" 
@@ -79,6 +83,10 @@ async function loadList() {
                                         style="background:${probationBgColor};color:${probationColor};border:1px solid ${probationColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
                                     수습 ${probationStatus}
                                 </button>
+                                <button class="ledger-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-ledger="${tr.ledger || 'off'}" 
+                                        style="background:${ledgerBgColor};color:${ledgerColor};border:1px solid ${ledgerColor};padding:4px 12px;border-radius:16px;cursor:pointer;font-size:0.8rem;font-weight:500;white-space:nowrap;">
+                                    장부 ${ledgerStatus}
+                                </button>
                                 ` : ''}
                             </div>
                         </div>
@@ -100,6 +108,9 @@ async function loadList() {
             
             // 수습 여부 토글 버튼 이벤트 리스너 추가
             setupProbationToggleListeners();
+            
+            // 장부 토글 버튼 이벤트 리스너 추가
+            setupLedgerToggleListeners();
             
             // su 유저인 경우에만 삭제 버튼 이벤트 리스너 추가
             if (isSu) {
@@ -279,6 +290,49 @@ function setupProbationToggleListeners() {
             } catch (error) {
                 console.error('수습 여부 설정 변경 오류:', error);
                 alert('수습 여부 설정 변경에 실패했습니다.');
+            }
+        });
+    });
+}
+
+// 장부 토글 버튼 이벤트 리스너 설정
+function setupLedgerToggleListeners() {
+    const listDiv = document.getElementById('trainer-list');
+    if (!listDiv) return;
+    
+    listDiv.querySelectorAll('.ledger-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const username = this.getAttribute('data-username');
+            const name = this.getAttribute('data-name');
+            const currentLedger = this.getAttribute('data-ledger') || 'off';
+            const newLedger = currentLedger === 'off' ? 'on' : 'off';
+            
+            const action = newLedger === 'on' ? '활성화' : '비활성화';
+            if (!confirm(`트레이너 "${name}"의 장부 기능을 ${action}하시겠습니까?`)) {
+                return;
+            }
+            
+            try {
+                const currentUser = localStorage.getItem('username');
+                const res = await fetch(`/api/trainers/${encodeURIComponent(username)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        ledger: newLedger,
+                        currentUser 
+                    })
+                });
+                const result = await res.json();
+                
+                if (res.ok) {
+                    alert(`장부 기능이 ${action}되었습니다.`);
+                    loadList(); // 목록 새로고침
+                } else {
+                    alert(result.message || '장부 기능 설정 변경에 실패했습니다.');
+                }
+            } catch (error) {
+                console.error('장부 기능 설정 변경 오류:', error);
+                alert('장부 기능 설정 변경에 실패했습니다.');
             }
         });
     });

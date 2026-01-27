@@ -25,6 +25,8 @@ const salesDB = require('./sales-db');
 const metricsDB = require('./metrics-db');
 const marketingDB = require('./marketing-db');
 const ledgerDB = require('./ledger-db');
+const trainerLedgerDB = require('./trainer-ledger-db');
+const trainerRevenueDB = require('./trainer-revenue-db');
 const appUsersDB = require('./app-users-db');
 const workoutRecordsDB = require('./workout-records-db');
 const workoutTypesDB = require('./workout-types-db');
@@ -512,6 +514,8 @@ salesDB.initializeDatabase();
 metricsDB.initializeDatabase();
 marketingDB.initializeDatabase();
 ledgerDB.initializeDatabase();
+trainerLedgerDB.initializeDatabase();
+trainerRevenueDB.initializeDatabase();
 // app_users 테이블 초기화 후 트레이너 동기화 실행
 (async () => {
     await appUsersDB.initializeDatabase();
@@ -709,6 +713,10 @@ function migrateTrainerDefaultViewMode() {
             }
             if (account.role === 'trainer' && account.probation === undefined) {
                 account.probation = 'off'; // 기본값: 수습 아님
+                hasChanges = true;
+            }
+            if (account.role === 'trainer' && account.ledger === undefined) {
+                account.ledger = 'off'; // 기본값: 장부 기능 사용 안함
                 hasChanges = true;
             }
         });
@@ -2964,6 +2972,7 @@ app.get('/api/trainers', (req, res) => {
                 '30min_session': trainer['30min_session'] || 'off',
                 default_view_mode: trainer.default_view_mode || 'week',
                 probation: trainer.probation || 'off',
+                ledger: trainer.ledger || 'off',
                 profile_image_url: trainer.profile_image_url || null
             }]);
         } else {
@@ -2972,7 +2981,7 @@ app.get('/api/trainers', (req, res) => {
     }
     
     const trainers = accounts.filter(acc => acc.role === 'trainer')
-        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, profile_image_url }) => ({ 
+        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, ledger, profile_image_url }) => ({ 
             username, 
             name, 
             role, 
@@ -2980,6 +2989,7 @@ app.get('/api/trainers', (req, res) => {
             '30min_session': thirtyMinSession || 'off',  // 기본값: 30분 세션 기능 사용 안함
             default_view_mode: default_view_mode || 'week',  // 기본값: 주간보기
             probation: probation || 'off',  // 기본값: 수습 아님
+            ledger: ledger || 'off',  // 기본값: 장부 기능 사용 안함
             profile_image_url: profile_image_url || null
         }));
     res.json(trainers);
@@ -3030,7 +3040,7 @@ app.delete('/api/trainers/:username', async (req, res) => {
 app.patch('/api/trainers/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        const { vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, currentUser } = req.body;
+        const { vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, ledger, currentUser } = req.body;
         
         // 권한 확인: 관리자이거나 본인인 경우만 허용
         let accounts = [];
@@ -3092,6 +3102,18 @@ app.patch('/api/trainers/:username', async (req, res) => {
             accounts[trainerIndex].probation = probation;
         }
         
+        // 장부 기능 설정 업데이트 (SU만 가능)
+        if (ledger !== undefined) {
+            // SU 권한 확인
+            if (currentUserAccount && currentUserAccount.role !== 'su') {
+                return res.status(403).json({ message: '장부 기능 설정은 SU 권한이 필요합니다.' });
+            }
+            if (!['on', 'off'].includes(ledger)) {
+                return res.status(400).json({ message: '장부 기능은 "on" 또는 "off"만 가능합니다.' });
+            }
+            accounts[trainerIndex].ledger = ledger;
+        }
+        
         fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
         
         res.json({ 
@@ -3102,7 +3124,8 @@ app.patch('/api/trainers/:username', async (req, res) => {
                 vip_member: accounts[trainerIndex].vip_member,
                 '30min_session': accounts[trainerIndex]['30min_session'],
                 default_view_mode: accounts[trainerIndex].default_view_mode || 'week',
-                probation: accounts[trainerIndex].probation || 'off'
+                probation: accounts[trainerIndex].probation || 'off',
+                ledger: accounts[trainerIndex].ledger || 'off'
             }
         });
     } catch (error) {
@@ -7939,6 +7962,761 @@ app.delete('/api/settlements/:id', async (req, res) => {
         } else {
             res.status(500).json({ message: '정산 삭제에 실패했습니다.' });
         }
+    }
+});
+
+// ========== 트레이너 장부 API ==========
+
+// 트레이너 고정지출 조회 API
+app.get('/api/trainer/fixed-expenses', async (req, res) => {
+    try {
+        const currentUser = req.query.currentUser || req.session?.username;
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        const filters = {
+            trainer: currentUser
+        };
+        if (req.query.month) filters.month = req.query.month;
+        
+        const expenses = await trainerLedgerDB.getTrainerFixedExpenses(filters);
+        res.json(expenses);
+    } catch (error) {
+        console.error('[API] 트레이너 고정지출 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 고정지출 조회에 실패했습니다.' });
+    }
+});
+
+// 트레이너 고정지출 추가 API
+app.post('/api/trainer/fixed-expenses', async (req, res) => {
+    try {
+        const { month, item, amount, currentUser } = req.body;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        if (!month || !item) {
+            return res.status(400).json({ message: '월, 항목은 필수입니다.' });
+        }
+        
+        const expense = {
+            trainer,
+            month,
+            item,
+            amount: amount || 0
+        };
+        
+        const result = await trainerLedgerDB.addTrainerFixedExpense(expense);
+        res.json({ message: '고정지출이 추가되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 트레이너 고정지출 추가 오류:', error);
+        res.status(500).json({ message: '트레이너 고정지출 추가에 실패했습니다.' });
+    }
+});
+
+// 트레이너 고정지출 수정 API
+app.patch('/api/trainer/fixed-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { month, item, amount, currentUser } = req.body;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        // 본인 데이터인지 확인
+        const existingExpense = await trainerLedgerDB.getTrainerFixedExpenses({ trainer });
+        const expense = existingExpense.find(e => e.id === id);
+        if (!expense || expense.trainer !== trainer) {
+            return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
+        }
+        
+        const updates = {};
+        if (month !== undefined) updates.month = month;
+        if (item !== undefined) updates.item = item;
+        if (amount !== undefined) updates.amount = amount;
+        
+        const result = await trainerLedgerDB.updateTrainerFixedExpense(id, updates);
+        res.json({ message: '고정지출이 수정되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 트레이너 고정지출 수정 오류:', error);
+        res.status(500).json({ message: '트레이너 고정지출 수정에 실패했습니다.' });
+    }
+});
+
+// 트레이너 고정지출 삭제 API
+app.delete('/api/trainer/fixed-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.query;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        // 본인 데이터인지 확인
+        const existingExpense = await trainerLedgerDB.getTrainerFixedExpenses({ trainer });
+        const expense = existingExpense.find(e => e.id === id);
+        if (!expense || expense.trainer !== trainer) {
+            return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
+        }
+        
+        await trainerLedgerDB.deleteTrainerFixedExpense(id);
+        res.json({ message: '고정지출이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 트레이너 고정지출 삭제 오류:', error);
+        res.status(500).json({ message: '트레이너 고정지출 삭제에 실패했습니다.' });
+    }
+});
+
+// 트레이너 변동지출 조회 API
+app.get('/api/trainer/variable-expenses', async (req, res) => {
+    try {
+        const currentUser = req.query.currentUser || req.session?.username;
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        const filters = {
+            trainer: currentUser
+        };
+        if (req.query.month) filters.month = req.query.month;
+        
+        const expenses = await trainerLedgerDB.getTrainerVariableExpenses(filters);
+        res.json(expenses);
+    } catch (error) {
+        console.error('[API] 트레이너 변동지출 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 변동지출 조회에 실패했습니다.' });
+    }
+});
+
+// 트레이너 변동지출 추가 API
+app.post('/api/trainer/variable-expenses', async (req, res) => {
+    try {
+        const { month, date, item, amount, note, taxType, currentUser } = req.body;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        if (!month || !item) {
+            return res.status(400).json({ message: '월, 항목은 필수입니다.' });
+        }
+        
+        const expense = {
+            trainer,
+            month,
+            date: date || null,
+            item,
+            amount: amount || 0,
+            note: note || null,
+            taxType: taxType || null
+        };
+        
+        const result = await trainerLedgerDB.addTrainerVariableExpense(expense);
+        res.json({ message: '변동지출이 추가되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 트레이너 변동지출 추가 오류:', error);
+        res.status(500).json({ message: '트레이너 변동지출 추가에 실패했습니다.' });
+    }
+});
+
+// 트레이너 변동지출 수정 API
+app.patch('/api/trainer/variable-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { month, date, item, amount, note, taxType, currentUser } = req.body;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        // 본인 데이터인지 확인
+        const existingExpense = await trainerLedgerDB.getTrainerVariableExpenses({ trainer });
+        const expense = existingExpense.find(e => e.id === id);
+        if (!expense || expense.trainer !== trainer) {
+            return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
+        }
+        
+        const updates = {};
+        if (month !== undefined) updates.month = month;
+        if (date !== undefined) updates.date = date;
+        if (item !== undefined) updates.item = item;
+        if (amount !== undefined) updates.amount = amount;
+        if (note !== undefined) updates.note = note;
+        if (taxType !== undefined) updates.taxType = taxType;
+        
+        const result = await trainerLedgerDB.updateTrainerVariableExpense(id, updates);
+        res.json({ message: '변동지출이 수정되었습니다.', expense: result });
+    } catch (error) {
+        console.error('[API] 트레이너 변동지출 수정 오류:', error);
+        res.status(500).json({ message: '트레이너 변동지출 수정에 실패했습니다.' });
+    }
+});
+
+// 트레이너 변동지출 삭제 API
+app.delete('/api/trainer/variable-expenses/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.query;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        // 본인 데이터인지 확인
+        const existingExpense = await trainerLedgerDB.getTrainerVariableExpenses({ trainer });
+        const expense = existingExpense.find(e => e.id === id);
+        if (!expense || expense.trainer !== trainer) {
+            return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
+        }
+        
+        await trainerLedgerDB.deleteTrainerVariableExpense(id);
+        res.json({ message: '변동지출이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 트레이너 변동지출 삭제 오류:', error);
+        res.status(500).json({ message: '트레이너 변동지출 삭제에 실패했습니다.' });
+    }
+});
+
+// 트레이너 급여 조회 API
+app.get('/api/trainer/salaries', async (req, res) => {
+    try {
+        const currentUser = req.query.currentUser || req.session?.username;
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        const filters = {
+            trainer: currentUser
+        };
+        if (req.query.month) filters.month = req.query.month;
+        
+        const salaries = await trainerLedgerDB.getTrainerSalaries(filters);
+        res.json(salaries);
+    } catch (error) {
+        console.error('[API] 트레이너 급여 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 급여 조회에 실패했습니다.' });
+    }
+});
+
+// 트레이너 급여 추가 API
+app.post('/api/trainer/salaries', async (req, res) => {
+    try {
+        const { month, item, amount, currentUser } = req.body;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        if (!month || !item) {
+            return res.status(400).json({ message: '월, 항목은 필수입니다.' });
+        }
+        
+        const salary = {
+            trainer,
+            month,
+            item,
+            amount: amount || 0
+        };
+        
+        const result = await trainerLedgerDB.addTrainerSalary(salary);
+        res.json({ message: '급여가 추가되었습니다.', salary: result });
+    } catch (error) {
+        console.error('[API] 트레이너 급여 추가 오류:', error);
+        res.status(500).json({ message: '트레이너 급여 추가에 실패했습니다.' });
+    }
+});
+
+// 트레이너 급여 수정 API
+app.patch('/api/trainer/salaries/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { month, item, amount, currentUser } = req.body;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        // 본인 데이터인지 확인
+        const existingSalary = await trainerLedgerDB.getTrainerSalaries({ trainer });
+        const salary = existingSalary.find(s => s.id === id);
+        if (!salary || salary.trainer !== trainer) {
+            return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
+        }
+        
+        const updates = {};
+        if (month !== undefined) updates.month = month;
+        if (item !== undefined) updates.item = item;
+        if (amount !== undefined) updates.amount = amount;
+        
+        const result = await trainerLedgerDB.updateTrainerSalary(id, updates);
+        res.json({ message: '급여가 수정되었습니다.', salary: result });
+    } catch (error) {
+        console.error('[API] 트레이너 급여 수정 오류:', error);
+        res.status(500).json({ message: '트레이너 급여 수정에 실패했습니다.' });
+    }
+});
+
+// 트레이너 급여 삭제 API
+app.delete('/api/trainer/salaries/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.query;
+        const trainer = currentUser || req.session?.username;
+        
+        if (!trainer) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === trainer);
+        if (!userAccount || userAccount.role !== 'trainer') {
+            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        }
+        
+        // 본인 데이터인지 확인
+        const existingSalary = await trainerLedgerDB.getTrainerSalaries({ trainer });
+        const salary = existingSalary.find(s => s.id === id);
+        if (!salary || salary.trainer !== trainer) {
+            return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
+        }
+        
+        await trainerLedgerDB.deleteTrainerSalary(id);
+        res.json({ message: '급여가 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 트레이너 급여 삭제 오류:', error);
+        res.status(500).json({ message: '트레이너 급여 삭제에 실패했습니다.' });
+    }
+});
+
+// 트레이너 매출 조회 API
+app.get('/api/trainer/revenues', async (req, res) => {
+    try {
+        const { month, currentUser } = req.query;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        const filters = {
+            trainer: currentUser,
+            month: month || null
+        };
+        
+        const revenues = await trainerRevenueDB.getTrainerRevenues(filters);
+        res.json(revenues);
+    } catch (error) {
+        console.error('[API] 트레이너 매출 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 매출 조회에 실패했습니다.' });
+    }
+});
+
+// 트레이너 매출 추가/수정 API
+app.post('/api/trainer/revenues', async (req, res) => {
+    try {
+        const { month, amount, currentUser } = req.body;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        if (!month) {
+            return res.status(400).json({ message: '연월은 필수입니다.' });
+        }
+        
+        const revenue = {
+            trainer: currentUser,
+            month,
+            amount: parseInt(amount) || 0
+        };
+        
+        const result = await trainerRevenueDB.addTrainerRevenue(revenue);
+        res.json(result);
+    } catch (error) {
+        console.error('[API] 트레이너 매출 추가/수정 오류:', error);
+        res.status(500).json({ message: '트레이너 매출 추가/수정에 실패했습니다.' });
+    }
+});
+
+// 트레이너 매출 수정 API
+app.patch('/api/trainer/revenues/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { month, amount, currentUser } = req.body;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 권한 체크: 본인 데이터만 수정 가능
+        const existingRevenue = await trainerRevenueDB.getTrainerRevenues({ trainer: currentUser });
+        const revenue = existingRevenue.find(r => r.id === id);
+        
+        if (!revenue || revenue.trainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
+        }
+        
+        const updates = {};
+        if (month !== undefined) updates.month = month;
+        if (amount !== undefined) updates.amount = parseInt(amount) || 0;
+        
+        const result = await trainerRevenueDB.updateTrainerRevenue(id, updates);
+        res.json(result);
+    } catch (error) {
+        console.error('[API] 트레이너 매출 수정 오류:', error);
+        res.status(500).json({ message: '트레이너 매출 수정에 실패했습니다.' });
+    }
+});
+
+// 트레이너 매출 삭제 API
+app.delete('/api/trainer/revenues/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.query;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 권한 체크: 본인 데이터만 삭제 가능
+        const existingRevenue = await trainerRevenueDB.getTrainerRevenues({ trainer: currentUser });
+        const revenue = existingRevenue.find(r => r.id === id);
+        
+        if (!revenue || revenue.trainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
+        }
+        
+        await trainerRevenueDB.deleteTrainerRevenue(id);
+        res.json({ message: '매출이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 트레이너 매출 삭제 오류:', error);
+        res.status(500).json({ message: '트레이너 매출 삭제에 실패했습니다.' });
+    }
+});
+
+// 트레이너 기타수입 조회 API
+app.get('/api/trainer/other-revenues', async (req, res) => {
+    try {
+        const { month, currentUser } = req.query;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        const filters = {
+            trainer: currentUser,
+            month: month || null
+        };
+        
+        const revenues = await trainerRevenueDB.getTrainerOtherRevenues(filters);
+        res.json(revenues);
+    } catch (error) {
+        console.error('[API] 트레이너 기타수입 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 기타수입 조회에 실패했습니다.' });
+    }
+});
+
+// 트레이너 기타수입 추가 API
+app.post('/api/trainer/other-revenues', async (req, res) => {
+    try {
+        const { month, item, amount, currentUser } = req.body;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        if (!month || !item) {
+            return res.status(400).json({ message: '연월과 항목은 필수입니다.' });
+        }
+        
+        const revenue = {
+            trainer: currentUser,
+            month,
+            item,
+            amount: parseInt(amount) || 0
+        };
+        
+        const result = await trainerRevenueDB.addTrainerOtherRevenue(revenue);
+        res.json(result);
+    } catch (error) {
+        console.error('[API] 트레이너 기타수입 추가 오류:', error);
+        res.status(500).json({ message: '트레이너 기타수입 추가에 실패했습니다.' });
+    }
+});
+
+// 트레이너 기타수입 수정 API
+app.patch('/api/trainer/other-revenues/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { month, item, amount, currentUser } = req.body;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 권한 체크: 본인 데이터만 수정 가능
+        const existingRevenue = await trainerRevenueDB.getTrainerOtherRevenues({ trainer: currentUser });
+        const revenue = existingRevenue.find(r => r.id === id);
+        
+        if (!revenue || revenue.trainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
+        }
+        
+        const updates = {};
+        if (month !== undefined) updates.month = month;
+        if (item !== undefined) updates.item = item;
+        if (amount !== undefined) updates.amount = parseInt(amount) || 0;
+        
+        const result = await trainerRevenueDB.updateTrainerOtherRevenue(id, updates);
+        res.json(result);
+    } catch (error) {
+        console.error('[API] 트레이너 기타수입 수정 오류:', error);
+        res.status(500).json({ message: '트레이너 기타수입 수정에 실패했습니다.' });
+    }
+});
+
+// 트레이너 기타수입 삭제 API
+app.delete('/api/trainer/other-revenues/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.query;
+        
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 권한 체크: 본인 데이터만 삭제 가능
+        const existingRevenue = await trainerRevenueDB.getTrainerOtherRevenues({ trainer: currentUser });
+        const revenue = existingRevenue.find(r => r.id === id);
+        
+        if (!revenue || revenue.trainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
+        }
+        
+        await trainerRevenueDB.deleteTrainerOtherRevenue(id);
+        res.json({ message: '기타수입이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 트레이너 기타수입 삭제 오류:', error);
+        res.status(500).json({ message: '트레이너 기타수입 삭제에 실패했습니다.' });
+    }
+});
+
+// 트레이너 이전월 데이터 복사 API
+app.post('/api/trainer/copy-previous-month', async (req, res) => {
+    try {
+        const { fromMonth, toMonth, currentUser } = req.body;
+        
+        if (!fromMonth || !toMonth || !currentUser) {
+            return res.status(400).json({ message: 'fromMonth, toMonth, currentUser는 필수입니다.' });
+        }
+        
+        // 현재 로그인한 트레이너의 이전월 데이터 조회
+        const [fixedExpenses, variableExpenses, salaries] = await Promise.all([
+            trainerLedgerDB.getTrainerFixedExpenses({ trainer: currentUser, month: fromMonth }),
+            trainerLedgerDB.getTrainerVariableExpenses({ trainer: currentUser, month: fromMonth }),
+            trainerLedgerDB.getTrainerSalaries({ trainer: currentUser, month: fromMonth })
+        ]);
+        
+        // 이번달 데이터 복사
+        const copyResults = {
+            fixed: 0,
+            variable: 0,
+            salary: 0
+        };
+        
+        // 고정지출 복사
+        for (const expense of fixedExpenses) {
+            try {
+                await trainerLedgerDB.addTrainerFixedExpense({
+                    trainer: currentUser,
+                    month: toMonth,
+                    item: expense.item,
+                    amount: expense.amount
+                });
+                copyResults.fixed++;
+            } catch (err) {
+                // 중복 등 오류는 무시하고 계속 진행
+                console.error(`트레이너 고정지출 복사 오류 (${expense.id}):`, err);
+            }
+        }
+        
+        // 변동지출 복사
+        for (const expense of variableExpenses) {
+            try {
+                await trainerLedgerDB.addTrainerVariableExpense({
+                    trainer: currentUser,
+                    month: toMonth,
+                    date: expense.date,
+                    item: expense.item,
+                    amount: expense.amount,
+                    note: expense.note,
+                    taxType: expense.tax_type || null
+                });
+                copyResults.variable++;
+            } catch (err) {
+                console.error(`트레이너 변동지출 복사 오류 (${expense.id}):`, err);
+            }
+        }
+        
+        // 급여 복사
+        for (const salary of salaries) {
+            try {
+                await trainerLedgerDB.addTrainerSalary({
+                    trainer: currentUser,
+                    month: toMonth,
+                    item: salary.item,
+                    amount: salary.amount
+                });
+                copyResults.salary++;
+            } catch (err) {
+                console.error(`트레이너 급여 복사 오류 (${salary.id}):`, err);
+            }
+        }
+        
+        res.json({
+            message: '이전월 데이터가 복사되었습니다.',
+            results: copyResults
+        });
+    } catch (error) {
+        console.error('[API] 트레이너 이전월 데이터 복사 오류:', error);
+        res.status(500).json({ message: '이전월 데이터 복사에 실패했습니다.' });
     }
 });
 

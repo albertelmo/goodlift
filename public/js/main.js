@@ -11,6 +11,7 @@ import { database } from './database.js';
 import { sales } from './sales.js';
 import { strategy } from './strategy.js';
 import { ledger } from './ledger.js';
+import { trainerLedger } from './trainer-ledger.js';
 import { userApp } from './userApp.js';
 import { showAppUserSection } from './app-user/index.js';
 
@@ -541,7 +542,8 @@ const adminHamburgerItems = [
 const trainerTabs = [
     { label: '나의 수업', id: '📅', content: '<div id="session-calendar"></div>' },
     { label: '전체 수업', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
-    { label: '나의 회원', id: '👤', content: '<div id="my-member-list"></div>' }
+    { label: '나의 회원', id: '👤', content: '<div id="my-member-list"></div>' },
+    { label: '장부', id: '📖', content: '<div id="trainer-ledger-root"></div>' }
 ];
 
 // 센터관리자용 탭 (Center, Trainer 탭 제외)
@@ -607,7 +609,7 @@ function showMainSection(role, name) {
         tabs = centerTabs;
         renderTabs(tabs);
     } else if (role === 'trainer') {
-        // 트레이너 정보 조회하여 수습 여부 확인
+        // 트레이너 정보 조회하여 수습 여부 및 장부 여부 확인
         const username = localStorage.getItem('username');
         if (username) {
             fetch(`/api/trainers?username=${encodeURIComponent(username)}`)
@@ -615,24 +617,29 @@ function showMainSection(role, name) {
                 .then(trainers => {
                     if (trainers && trainers.length > 0) {
                         const trainer = trainers[0];
+                        tabs = [...trainerTabs];
+                        
                         // 수습 트레이너(probation === 'on')인 경우 '전체 수업' 탭 제외
                         if (trainer.probation === 'on') {
-                            tabs = trainerTabs.filter(tab => tab.id !== 'Today');
-                        } else {
-                            tabs = trainerTabs;
+                            tabs = tabs.filter(tab => tab.id !== 'Today');
+                        }
+                        
+                        // 장부 기능이 'off'인 경우 장부 탭 제외
+                        if (trainer.ledger !== 'on') {
+                            tabs = tabs.filter(tab => tab.id !== '📖');
                         }
                     } else {
-                        tabs = trainerTabs;
+                        tabs = trainerTabs.filter(tab => tab.id !== '📖'); // 장부 탭 제외
                     }
                     renderTabs(tabs);
                 })
                 .catch(error => {
                     console.error('트레이너 정보 조회 오류:', error);
-                    tabs = trainerTabs;
+                    tabs = trainerTabs.filter(tab => tab.id !== '📖'); // 장부 탭 제외
                     renderTabs(tabs);
                 });
         } else {
-            tabs = trainerTabs;
+            tabs = trainerTabs.filter(tab => tab.id !== '📖'); // 장부 탭 제외
             renderTabs(tabs);
         }
     } else {
@@ -829,6 +836,8 @@ function renderTabContent(tabId, tabContent) {
         trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);
     } else if (tabId === '📅') {
         trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
+    } else if (tabId === '📖') {
+        trainerLedger.render(tabContent.querySelector('#trainer-ledger-root') || tabContent);
     } else if (tabId === 'Today') {
         adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
     }
