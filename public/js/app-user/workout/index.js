@@ -300,6 +300,41 @@ function setupButtonEventListeners() {
             }
             return;
         }
+        
+        // 운동 코멘트 버튼 클릭
+        if (btnId === 'workout-comment-btn' && !isReadOnly) {
+            if (eventType === 'touchstart') {
+                return;
+            }
+            
+            const now = Date.now();
+            if (now - lastButtonClickTime < BUTTON_CLICK_THROTTLE) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            lastButtonClickTime = now;
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                const { showWorkoutCommentModal } = await import('./comment.js');
+                const selectedDateStr = getSelectedDate();
+                const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+                await showWorkoutCommentModal(targetAppUserId, selectedDateStr, (commentDate) => {
+                    import('./list.js').then(module => {
+                        module.refresh(commentDate);
+                    });
+                });
+            } catch (error) {
+                console.error('[Workout] 코멘트 버튼 클릭 오류:', error);
+            }
+            return;
+        }
     };
     
     // 여러 이벤트 타입 처리 (스와이프 직후 click 이벤트가 발생하지 않을 수 있음)
@@ -379,6 +414,13 @@ async function render() {
                         📝 직접 기록하기
                     </button>
                 </div>
+            </div>
+            ` : ''}
+            ${!isReadOnly && connectedMemberAppUserId ? `
+            <div class="app-workout-add-section">
+                <button class="app-btn-secondary app-btn-full" id="workout-comment-btn">
+                    💬 운동 코멘트 남기기
+                </button>
             </div>
             ` : ''}
             <div id="workout-list-wrapper"></div>

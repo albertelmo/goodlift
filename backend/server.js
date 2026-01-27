@@ -33,6 +33,7 @@ const userSettingsDB = require('./app-user-settings-db');
 const dietRecordsDB = require('./diet-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
+const workoutTrainerCommentsDB = require('./workout-trainer-comments-db');
 const consultationRecordsDB = require('./consultation-records-db');
 const consultationSharesDB = require('./consultation-shares-db');
 const elmoUsersDB = require('./elmo-users-db');
@@ -523,6 +524,7 @@ dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
+workoutTrainerCommentsDB.initializeDatabase(); // 운동 코멘트 테이블 초기화
 consultationRecordsDB.initializeDatabase(); // 상담기록 테이블 초기화
 consultationSharesDB.initializeDatabase(); // 상담기록 공유 토큰 테이블 초기화
 elmoUsersDB.initializeDatabase(); // Elmo 사용자 테이블 초기화
@@ -2374,6 +2376,191 @@ app.post('/api/diet-records/:id/comments', async (req, res) => {
     } catch (error) {
         console.error('[API] 식단 코멘트 추가 오류:', error);
         res.status(500).json({ message: '식단 코멘트 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동 코멘트 조회
+app.get('/api/workout-records/:appUserId/comments', async (req, res) => {
+    try {
+        const { appUserId } = req.params;
+        const { date, startDate, endDate } = req.query;
+        
+        if (!appUserId) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const filters = {};
+        if (date) {
+            filters.date = date;
+        } else if (startDate && endDate) {
+            filters.startDate = startDate;
+            filters.endDate = endDate;
+        }
+        
+        const comments = await workoutTrainerCommentsDB.getComments(appUserId, filters);
+        res.json({ comments });
+    } catch (error) {
+        console.error('[API] 운동 코멘트 조회 오류:', error);
+        res.status(500).json({ message: '운동 코멘트 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동 코멘트 생성
+app.post('/api/workout-records/:appUserId/comments', async (req, res) => {
+    try {
+        const { appUserId } = req.params;
+        const { workout_date, comment, trainer_username, trainer_name } = req.body;
+        
+        if (!appUserId || !workout_date || !comment) {
+            return res.status(400).json({ message: '앱 유저 ID, 운동 날짜, 코멘트 내용이 필요합니다.' });
+        }
+        
+        if (!trainer_username) {
+            return res.status(400).json({ message: '트레이너 정보가 필요합니다.' });
+        }
+        
+        // 앱 유저 존재 확인
+        const appUser = await appUsersDB.getAppUserById(appUserId);
+        if (!appUser) {
+            return res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
+        }
+        
+        // 권한 확인: 트레이너가 해당 회원의 담당 트레이너인지 확인
+        if (appUser.member_name) {
+            const member = await membersDB.getMemberByName(appUser.member_name);
+            if (!member || member.trainer !== trainer_username) {
+                return res.status(403).json({ message: '해당 회원의 담당 트레이너만 코멘트를 작성할 수 있습니다.' });
+            }
+        } else {
+            return res.status(403).json({ message: '회원과 연결되지 않은 앱 유저입니다.' });
+        }
+        
+        // 트레이너 이름이 없으면 조회
+        let finalTrainerName = trainer_name;
+        if (!finalTrainerName) {
+            try {
+                const trainerAppUsers = await appUsersDB.getAppUsers({ username: trainer_username });
+                const trainerAppUser = Array.isArray(trainerAppUsers) ? trainerAppUsers[0] : trainerAppUsers;
+                if (trainerAppUser && trainerAppUser.name) {
+                    finalTrainerName = trainerAppUser.name;
+                } else {
+                    // accounts.json에서 조회
+                    let accounts = [];
+                    if (fs.existsSync(DATA_PATH)) {
+                        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+                        if (raw) accounts = JSON.parse(raw);
+                    }
+                    const trainerAccount = accounts.find(acc => acc.username === trainer_username && acc.role === 'trainer');
+                    if (trainerAccount && trainerAccount.name) {
+                        finalTrainerName = trainerAccount.name;
+                    } else {
+                        finalTrainerName = trainer_username;
+                    }
+                }
+            } catch (e) {
+                finalTrainerName = trainer_username;
+            }
+        }
+        
+        // 코멘트 저장
+        const commentData = {
+            app_user_id: appUserId,
+            workout_date,
+            trainer_username,
+            trainer_name: finalTrainerName,
+            comment
+        };
+        const savedComment = await workoutTrainerCommentsDB.addComment(commentData);
+        
+        // 회원 활동 로그 생성 (알림) - 운동기록 생성과 동일한 방식
+        createActivityLogForMember(
+            appUserId,
+            'workout_comment_added',
+            '운동 코멘트를 남겼습니다.',
+            savedComment.id,
+            workout_date,
+            trainer_username,
+            finalTrainerName
+        ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
+        
+        res.status(201).json(savedComment);
+    } catch (error) {
+        console.error('[API] 운동 코멘트 생성 오류:', error);
+        res.status(500).json({ message: error.message || '운동 코멘트 생성 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동 코멘트 수정
+app.put('/api/workout-records/:appUserId/comments/:commentId', async (req, res) => {
+    try {
+        const { appUserId, commentId } = req.params;
+        const { comment, trainer_username } = req.body;
+        
+        if (!comment) {
+            return res.status(400).json({ message: '코멘트 내용이 필요합니다.' });
+        }
+        
+        // 코멘트 존재 확인 및 권한 확인
+        const existingComment = await workoutTrainerCommentsDB.getCommentById(commentId);
+        if (!existingComment) {
+            return res.status(404).json({ message: '코멘트를 찾을 수 없습니다.' });
+        }
+        
+        if (existingComment.app_user_id !== appUserId) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 작성자 확인
+        if (trainer_username && existingComment.trainer_username !== trainer_username) {
+            return res.status(403).json({ message: '본인이 작성한 코멘트만 수정할 수 있습니다.' });
+        }
+        
+        // 코멘트 수정
+        const updatedComment = await workoutTrainerCommentsDB.updateComment(commentId, { comment });
+        
+        if (!updatedComment) {
+            return res.status(404).json({ message: '코멘트 수정에 실패했습니다.' });
+        }
+        
+        res.json(updatedComment);
+    } catch (error) {
+        console.error('[API] 운동 코멘트 수정 오류:', error);
+        res.status(500).json({ message: error.message || '운동 코멘트 수정 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동 코멘트 삭제
+app.delete('/api/workout-records/:appUserId/comments/:commentId', async (req, res) => {
+    try {
+        const { appUserId, commentId } = req.params;
+        const { trainer_username } = req.body;
+        
+        // 코멘트 존재 확인 및 권한 확인
+        const existingComment = await workoutTrainerCommentsDB.getCommentById(commentId);
+        if (!existingComment) {
+            return res.status(404).json({ message: '코멘트를 찾을 수 없습니다.' });
+        }
+        
+        if (existingComment.app_user_id !== appUserId) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 작성자 확인
+        if (trainer_username && existingComment.trainer_username !== trainer_username) {
+            return res.status(403).json({ message: '본인이 작성한 코멘트만 삭제할 수 있습니다.' });
+        }
+        
+        // 코멘트 삭제
+        const deletedComment = await workoutTrainerCommentsDB.deleteComment(commentId);
+        
+        if (!deletedComment) {
+            return res.status(404).json({ message: '코멘트 삭제에 실패했습니다.' });
+        }
+        
+        res.json({ message: '코멘트가 삭제되었습니다.', id: deletedComment.id });
+    } catch (error) {
+        console.error('[API] 운동 코멘트 삭제 오류:', error);
+        res.status(500).json({ message: error.message || '운동 코멘트 삭제 중 오류가 발생했습니다.' });
     }
 });
 

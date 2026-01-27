@@ -23,7 +23,7 @@ const createMemberActivityLogsTable = async () => {
           app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
           trainer_username VARCHAR(50) NOT NULL,
           trainer_name VARCHAR(100),
-          activity_type VARCHAR(20) NOT NULL CHECK (activity_type IN ('workout_recorded', 'diet_comment_added')),
+          activity_type VARCHAR(50) NOT NULL CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'workout_comment_added')),
           activity_message TEXT NOT NULL,
           related_record_id UUID,
           record_date DATE,
@@ -40,10 +40,98 @@ const createMemberActivityLogsTable = async () => {
       console.log('[PostgreSQL] member_activity_logs 테이블이 생성되었습니다.');
     } else {
       console.log('[PostgreSQL] member_activity_logs 테이블이 이미 존재합니다.');
+      // 기존 테이블 마이그레이션
+      await migrateMemberActivityLogsTable();
     }
   } catch (error) {
     console.error('[PostgreSQL] 회원 활동 로그 테이블 생성 오류:', error);
     throw error;
+  }
+};
+
+// 테이블 마이그레이션
+const migrateMemberActivityLogsTable = async () => {
+  try {
+    // activity_type 컬럼 길이 확인 및 확장 (VARCHAR(20) -> VARCHAR(50))
+    const checkColumnQuery = `
+      SELECT character_maximum_length
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'member_activity_logs'
+        AND column_name = 'activity_type'
+    `;
+    const columnResult = await pool.query(checkColumnQuery);
+    
+    if (columnResult.rows.length > 0) {
+      const maxLength = columnResult.rows[0].character_maximum_length;
+      if (maxLength && maxLength < 50) {
+        // 컬럼 길이 확장
+        await pool.query(`
+          ALTER TABLE member_activity_logs 
+          ALTER COLUMN activity_type TYPE VARCHAR(50)
+        `);
+        console.log('[PostgreSQL] member_activity_logs 테이블의 activity_type 컬럼 길이가 50으로 확장되었습니다.');
+      }
+    }
+    
+    // activity_type CHECK 제약조건 확인 및 업데이트
+    const checkConstraintQuery = `
+      SELECT cc.constraint_name, cc.check_clause
+      FROM information_schema.check_constraints cc
+      JOIN information_schema.table_constraints tc 
+        ON cc.constraint_name = tc.constraint_name
+        AND cc.constraint_schema = tc.constraint_schema
+      WHERE tc.table_schema = 'public'
+        AND tc.table_name = 'member_activity_logs'
+        AND cc.constraint_name LIKE '%activity_type%'
+    `;
+    const constraintResult = await pool.query(checkConstraintQuery);
+    
+    // 기존 제약조건이 있으면 확인
+    if (constraintResult.rows.length > 0) {
+      for (const constraint of constraintResult.rows) {
+        const checkClause = constraint.check_clause;
+        
+        // 'workout_comment_added'가 포함되어 있지 않으면 업데이트
+        if (!checkClause.includes('workout_comment_added')) {
+          // 기존 제약조건 제거
+          await pool.query(`
+            ALTER TABLE member_activity_logs 
+            DROP CONSTRAINT IF EXISTS ${constraint.constraint_name}
+          `);
+          
+          console.log(`[PostgreSQL] 기존 제약조건 ${constraint.constraint_name} 제거됨`);
+        }
+      }
+    }
+    
+    // 새로운 제약조건이 있는지 확인
+    const checkNewConstraintQuery = `
+      SELECT cc.constraint_name, cc.check_clause
+      FROM information_schema.check_constraints cc
+      JOIN information_schema.table_constraints tc 
+        ON cc.constraint_name = tc.constraint_name
+        AND cc.constraint_schema = tc.constraint_schema
+      WHERE tc.table_schema = 'public'
+        AND tc.table_name = 'member_activity_logs'
+        AND cc.check_clause LIKE '%workout_comment_added%'
+    `;
+    const newConstraintResult = await pool.query(checkNewConstraintQuery);
+    
+    // 새로운 제약조건이 없으면 추가
+    if (newConstraintResult.rows.length === 0) {
+      await pool.query(`
+        ALTER TABLE member_activity_logs 
+        ADD CONSTRAINT member_activity_logs_activity_type_check 
+        CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'workout_comment_added'))
+      `);
+      console.log('[PostgreSQL] member_activity_logs 테이블에 activity_type 제약조건이 추가되었습니다.');
+    } else {
+      console.log('[PostgreSQL] member_activity_logs 테이블의 activity_type 제약조건이 이미 올바르게 설정되어 있습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] 회원 활동 로그 테이블 마이그레이션 오류:', error);
+    // 마이그레이션 실패해도 계속 진행 (제약조건이 이미 올바르게 설정되어 있을 수 있음)
   }
 };
 
