@@ -217,6 +217,11 @@ async function render(container) {
           </div>
         </div>
       </div>
+      
+      <!-- 통장잔고 섹션 -->
+      <div id="trainer-ledger-settlement-section" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin-top:16px;">
+        <h4 id="trainer-ledger-settlement-title" style="margin:0;color:#1976d2;font-size:0.95rem;font-weight:600;">통장잔고</h4>
+      </div>
     </div>
   `;
   
@@ -328,13 +333,14 @@ async function loadLedgerData() {
       throw new Error('로그인이 필요합니다.');
     }
     
-    // 고정지출, 변동지출, 급여, 매출, 기타수입 데이터 가져오기
-    const [fixedResponse, variableResponse, salaryResponse, revenueResponse, otherRevenueResponse] = await Promise.all([
+    // 고정지출, 변동지출, 급여, 매출, 기타수입, 월별정산 데이터 가져오기
+    const [fixedResponse, variableResponse, salaryResponse, revenueResponse, otherRevenueResponse, allSettlementsResponse] = await Promise.all([
       fetch(`/api/trainer/fixed-expenses?month=${yearMonth}&currentUser=${encodeURIComponent(currentUser)}`),
       fetch(`/api/trainer/variable-expenses?month=${yearMonth}&currentUser=${encodeURIComponent(currentUser)}`),
       fetch(`/api/trainer/salaries?month=${yearMonth}&currentUser=${encodeURIComponent(currentUser)}`),
       fetch(`/api/trainer/revenues?month=${yearMonth}&currentUser=${encodeURIComponent(currentUser)}`),
-      fetch(`/api/trainer/other-revenues?month=${yearMonth}&currentUser=${encodeURIComponent(currentUser)}`)
+      fetch(`/api/trainer/other-revenues?month=${yearMonth}&currentUser=${encodeURIComponent(currentUser)}`),
+      fetch(`/api/settlements`) // 모든 정산 데이터 (누적 계산용)
     ]);
     
     const fixedExpenses = fixedResponse.ok ? await fixedResponse.json() : [];
@@ -342,6 +348,7 @@ async function loadLedgerData() {
     const salaries = salaryResponse.ok ? await salaryResponse.json() : [];
     const revenues = revenueResponse.ok ? await revenueResponse.json() : [];
     const otherRevenues = otherRevenueResponse.ok ? await otherRevenueResponse.json() : [];
+    const allSettlements = allSettlementsResponse.ok ? await allSettlementsResponse.json() : [];
     
     // 지출 종류별 합계 계산 및 표시
     renderExpenseSummary(fixedExpenses, variableExpenses, salaries);
@@ -366,6 +373,9 @@ async function loadLedgerData() {
     
     // 급여 렌더링
     renderSalaries(salaries);
+    
+    // 월별정산 렌더링
+    renderSettlement(allSettlements);
     
   } catch (error) {
     console.error('트레이너 장부 데이터 로드 오류:', error);
@@ -2049,4 +2059,20 @@ function closeOtherRevenueEditModal() {
   const modal = document.querySelector('.trainer-ledger-other-revenue-edit-modal');
   if (overlay) overlay.remove();
   if (modal) modal.remove();
+}
+
+// 월별정산 렌더링
+function renderSettlement(allSettlements) {
+  const titleEl = document.getElementById('trainer-ledger-settlement-title');
+  if (!titleEl) return;
+  
+  // 누적 손익액과 누적 정산액 계산
+  const cumulativeProfit = allSettlements.reduce((sum, s) => sum + (parseInt(s.profitAmount) || 0), 0);
+  const cumulativeSettlement = allSettlements.reduce((sum, s) => sum + (s.settlementAmount !== null ? parseInt(s.settlementAmount) || 0 : 0), 0);
+  const difference = cumulativeProfit - cumulativeSettlement;
+  
+  const differenceFormatted = difference < 0 ? `-${formatNumber(Math.abs(difference))}` : formatNumber(difference);
+  const differenceColor = difference < 0 ? '#d32f2f' : '#1976d2';
+  
+  titleEl.innerHTML = `통장잔고 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(누적 손익액 ${formatNumber(cumulativeProfit)}원 - 누적 정산액 ${formatNumber(cumulativeSettlement)}원 = <span style="color:${differenceColor};">${differenceFormatted}원</span>)</span>`;
 }

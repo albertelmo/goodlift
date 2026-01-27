@@ -7971,23 +7971,36 @@ app.delete('/api/settlements/:id', async (req, res) => {
 app.get('/api/trainer/fixed-expenses', async (req, res) => {
     try {
         const currentUser = req.query.currentUser || req.session?.username;
+        const trainer = req.query.trainer; // SU가 특정 트레이너 조회 시 사용
         if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
         const userAccount = accounts.find(acc => acc.username === currentUser);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        // SU이거나 트레이너인 경우만 접근 가능
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 조회할 트레이너 결정: SU가 trainer 파라미터를 보낸 경우 해당 트레이너, 아니면 본인
+        const targetTrainer = (isSU && trainer) ? trainer : currentUser;
+        
+        // SU가 아닌 경우 본인 데이터만 조회 가능
+        if (!isSU && targetTrainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 조회할 수 있습니다.' });
         }
         
         const filters = {
-            trainer: currentUser
+            trainer: targetTrainer
         };
         if (req.query.month) filters.month = req.query.month;
         
@@ -8002,22 +8015,33 @@ app.get('/api/trainer/fixed-expenses', async (req, res) => {
 // 트레이너 고정지출 추가 API
 app.post('/api/trainer/fixed-expenses', async (req, res) => {
     try {
-        const { month, item, amount, currentUser } = req.body;
-        const trainer = currentUser || req.session?.username;
+        const { month, item, amount, currentUser, trainer: targetTrainer } = req.body;
+        const currentUserAccount = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUserAccount) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUserAccount);
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 저장할 트레이너 결정: SU가 targetTrainer를 보낸 경우 해당 트레이너, 아니면 본인
+        const trainer = (isSU && targetTrainer) ? targetTrainer : currentUserAccount;
+        
+        // SU가 아닌 경우 본인 데이터만 저장 가능
+        if (!isSU && trainer !== currentUserAccount) {
+            return res.status(403).json({ message: '본인의 데이터만 추가할 수 있습니다.' });
         }
         
         if (!month || !item) {
@@ -8044,27 +8068,30 @@ app.patch('/api/trainer/fixed-expenses/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { month, item, amount, currentUser } = req.body;
-        const trainer = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        
+        // 데이터 조회하여 트레이너 확인
+        const allExpenses = await trainerLedgerDB.getTrainerFixedExpenses({});
+        const expense = allExpenses.find(e => e.id === id);
+        
+        if (!expense) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
         }
         
-        // 본인 데이터인지 확인
-        const existingExpense = await trainerLedgerDB.getTrainerFixedExpenses({ trainer });
-        const expense = existingExpense.find(e => e.id === id);
-        if (!expense || expense.trainer !== trainer) {
+        // SU가 아니면 본인 데이터만 수정 가능
+        if (!isSU && expense.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
         }
         
@@ -8086,27 +8113,30 @@ app.delete('/api/trainer/fixed-expenses/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { currentUser } = req.query;
-        const trainer = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        
+        // 데이터 조회하여 트레이너 확인
+        const allExpenses = await trainerLedgerDB.getTrainerFixedExpenses({});
+        const expense = allExpenses.find(e => e.id === id);
+        
+        if (!expense) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
         }
         
-        // 본인 데이터인지 확인
-        const existingExpense = await trainerLedgerDB.getTrainerFixedExpenses({ trainer });
-        const expense = existingExpense.find(e => e.id === id);
-        if (!expense || expense.trainer !== trainer) {
+        // SU가 아니면 본인 데이터만 삭제 가능
+        if (!isSU && expense.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
         }
         
@@ -8122,23 +8152,36 @@ app.delete('/api/trainer/fixed-expenses/:id', async (req, res) => {
 app.get('/api/trainer/variable-expenses', async (req, res) => {
     try {
         const currentUser = req.query.currentUser || req.session?.username;
+        const trainer = req.query.trainer; // SU가 특정 트레이너 조회 시 사용
         if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
         const userAccount = accounts.find(acc => acc.username === currentUser);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        // SU이거나 트레이너인 경우만 접근 가능
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 조회할 트레이너 결정: SU가 trainer 파라미터를 보낸 경우 해당 트레이너, 아니면 본인
+        const targetTrainer = (isSU && trainer) ? trainer : currentUser;
+        
+        // SU가 아닌 경우 본인 데이터만 조회 가능
+        if (!isSU && targetTrainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 조회할 수 있습니다.' });
         }
         
         const filters = {
-            trainer: currentUser
+            trainer: targetTrainer
         };
         if (req.query.month) filters.month = req.query.month;
         
@@ -8153,22 +8196,33 @@ app.get('/api/trainer/variable-expenses', async (req, res) => {
 // 트레이너 변동지출 추가 API
 app.post('/api/trainer/variable-expenses', async (req, res) => {
     try {
-        const { month, date, item, amount, note, taxType, currentUser } = req.body;
-        const trainer = currentUser || req.session?.username;
+        const { month, date, item, amount, note, taxType, currentUser, trainer: targetTrainer } = req.body;
+        const currentUserAccount = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUserAccount) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUserAccount);
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 저장할 트레이너 결정: SU가 targetTrainer를 보낸 경우 해당 트레이너, 아니면 본인
+        const trainer = (isSU && targetTrainer) ? targetTrainer : currentUserAccount;
+        
+        // SU가 아닌 경우 본인 데이터만 저장 가능
+        if (!isSU && trainer !== currentUserAccount) {
+            return res.status(403).json({ message: '본인의 데이터만 추가할 수 있습니다.' });
         }
         
         if (!month || !item) {
@@ -8198,27 +8252,30 @@ app.patch('/api/trainer/variable-expenses/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { month, date, item, amount, note, taxType, currentUser } = req.body;
-        const trainer = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        
+        // 데이터 조회하여 트레이너 확인
+        const allExpenses = await trainerLedgerDB.getTrainerVariableExpenses({});
+        const expense = allExpenses.find(e => e.id === id);
+        
+        if (!expense) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
         }
         
-        // 본인 데이터인지 확인
-        const existingExpense = await trainerLedgerDB.getTrainerVariableExpenses({ trainer });
-        const expense = existingExpense.find(e => e.id === id);
-        if (!expense || expense.trainer !== trainer) {
+        // SU가 아니면 본인 데이터만 수정 가능
+        if (!isSU && expense.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
         }
         
@@ -8243,27 +8300,30 @@ app.delete('/api/trainer/variable-expenses/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { currentUser } = req.query;
-        const trainer = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        
+        // 데이터 조회하여 트레이너 확인
+        const allExpenses = await trainerLedgerDB.getTrainerVariableExpenses({});
+        const expense = allExpenses.find(e => e.id === id);
+        
+        if (!expense) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
         }
         
-        // 본인 데이터인지 확인
-        const existingExpense = await trainerLedgerDB.getTrainerVariableExpenses({ trainer });
-        const expense = existingExpense.find(e => e.id === id);
-        if (!expense || expense.trainer !== trainer) {
+        // SU가 아니면 본인 데이터만 삭제 가능
+        if (!isSU && expense.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
         }
         
@@ -8279,23 +8339,36 @@ app.delete('/api/trainer/variable-expenses/:id', async (req, res) => {
 app.get('/api/trainer/salaries', async (req, res) => {
     try {
         const currentUser = req.query.currentUser || req.session?.username;
+        const trainer = req.query.trainer; // SU가 특정 트레이너 조회 시 사용
         if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
         const userAccount = accounts.find(acc => acc.username === currentUser);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        // SU이거나 트레이너인 경우만 접근 가능
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 조회할 트레이너 결정: SU가 trainer 파라미터를 보낸 경우 해당 트레이너, 아니면 본인
+        const targetTrainer = (isSU && trainer) ? trainer : currentUser;
+        
+        // SU가 아닌 경우 본인 데이터만 조회 가능
+        if (!isSU && targetTrainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 조회할 수 있습니다.' });
         }
         
         const filters = {
-            trainer: currentUser
+            trainer: targetTrainer
         };
         if (req.query.month) filters.month = req.query.month;
         
@@ -8310,22 +8383,33 @@ app.get('/api/trainer/salaries', async (req, res) => {
 // 트레이너 급여 추가 API
 app.post('/api/trainer/salaries', async (req, res) => {
     try {
-        const { month, item, amount, currentUser } = req.body;
-        const trainer = currentUser || req.session?.username;
+        const { month, item, amount, currentUser, trainer: targetTrainer } = req.body;
+        const currentUserAccount = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUserAccount) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUserAccount);
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 저장할 트레이너 결정: SU가 targetTrainer를 보낸 경우 해당 트레이너, 아니면 본인
+        const trainer = (isSU && targetTrainer) ? targetTrainer : currentUserAccount;
+        
+        // SU가 아닌 경우 본인 데이터만 저장 가능
+        if (!isSU && trainer !== currentUserAccount) {
+            return res.status(403).json({ message: '본인의 데이터만 추가할 수 있습니다.' });
         }
         
         if (!month || !item) {
@@ -8352,27 +8436,30 @@ app.patch('/api/trainer/salaries/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { month, item, amount, currentUser } = req.body;
-        const trainer = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        
+        // 데이터 조회하여 트레이너 확인
+        const allSalaries = await trainerLedgerDB.getTrainerSalaries({});
+        const salary = allSalaries.find(s => s.id === id);
+        
+        if (!salary) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
         }
         
-        // 본인 데이터인지 확인
-        const existingSalary = await trainerLedgerDB.getTrainerSalaries({ trainer });
-        const salary = existingSalary.find(s => s.id === id);
-        if (!salary || salary.trainer !== trainer) {
+        // SU가 아니면 본인 데이터만 수정 가능
+        if (!isSU && salary.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
         }
         
@@ -8394,27 +8481,30 @@ app.delete('/api/trainer/salaries/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { currentUser } = req.query;
-        const trainer = currentUser || req.session?.username;
         
-        if (!trainer) {
+        if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 트레이너 권한 확인 및 본인 데이터인지 확인
+        // 권한 확인
         let accounts = [];
         if (fs.existsSync(DATA_PATH)) {
             const raw = fs.readFileSync(DATA_PATH, 'utf-8');
             if (raw) accounts = JSON.parse(raw);
         }
-        const userAccount = accounts.find(acc => acc.username === trainer);
-        if (!userAccount || userAccount.role !== 'trainer') {
-            return res.status(403).json({ message: '트레이너만 접근 가능합니다.' });
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        
+        // 데이터 조회하여 트레이너 확인
+        const allSalaries = await trainerLedgerDB.getTrainerSalaries({});
+        const salary = allSalaries.find(s => s.id === id);
+        
+        if (!salary) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
         }
         
-        // 본인 데이터인지 확인
-        const existingSalary = await trainerLedgerDB.getTrainerSalaries({ trainer });
-        const salary = existingSalary.find(s => s.id === id);
-        if (!salary || salary.trainer !== trainer) {
+        // SU가 아니면 본인 데이터만 삭제 가능
+        if (!isSU && salary.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
         }
         
@@ -8429,14 +8519,37 @@ app.delete('/api/trainer/salaries/:id', async (req, res) => {
 // 트레이너 매출 조회 API
 app.get('/api/trainer/revenues', async (req, res) => {
     try {
-        const { month, currentUser } = req.query;
+        const { month, currentUser, trainer } = req.query;
         
         if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        // SU이거나 트레이너인 경우만 접근 가능
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 조회할 트레이너 결정: SU가 trainer 파라미터를 보낸 경우 해당 트레이너, 아니면 본인
+        const targetTrainer = (isSU && trainer) ? trainer : currentUser;
+        
+        // SU가 아닌 경우 본인 데이터만 조회 가능
+        if (!isSU && targetTrainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 조회할 수 있습니다.' });
+        }
+        
         const filters = {
-            trainer: currentUser,
+            trainer: targetTrainer,
             month: month || null
         };
         
@@ -8451,10 +8564,32 @@ app.get('/api/trainer/revenues', async (req, res) => {
 // 트레이너 매출 추가/수정 API
 app.post('/api/trainer/revenues', async (req, res) => {
     try {
-        const { month, amount, currentUser } = req.body;
+        const { month, amount, currentUser, trainer: targetTrainer } = req.body;
         
         if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 저장할 트레이너 결정: SU가 targetTrainer를 보낸 경우 해당 트레이너, 아니면 본인
+        const trainer = (isSU && targetTrainer) ? targetTrainer : currentUser;
+        
+        // SU가 아닌 경우 본인 데이터만 저장 가능
+        if (!isSU && trainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 추가할 수 있습니다.' });
         }
         
         if (!month) {
@@ -8462,7 +8597,7 @@ app.post('/api/trainer/revenues', async (req, res) => {
         }
         
         const revenue = {
-            trainer: currentUser,
+            trainer: trainer,
             month,
             amount: parseInt(amount) || 0
         };
@@ -8485,11 +8620,25 @@ app.patch('/api/trainer/revenues/:id', async (req, res) => {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 권한 체크: 본인 데이터만 수정 가능
-        const existingRevenue = await trainerRevenueDB.getTrainerRevenues({ trainer: currentUser });
-        const revenue = existingRevenue.find(r => r.id === id);
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
         
-        if (!revenue || revenue.trainer !== currentUser) {
+        // 데이터 조회하여 트레이너 확인
+        const allRevenues = await trainerRevenueDB.getTrainerRevenues({});
+        const revenue = allRevenues.find(r => r.id === id);
+        
+        if (!revenue) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
+        }
+        
+        // SU가 아니면 본인 데이터만 수정 가능
+        if (!isSU && revenue.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
         }
         
@@ -8515,11 +8664,25 @@ app.delete('/api/trainer/revenues/:id', async (req, res) => {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 권한 체크: 본인 데이터만 삭제 가능
-        const existingRevenue = await trainerRevenueDB.getTrainerRevenues({ trainer: currentUser });
-        const revenue = existingRevenue.find(r => r.id === id);
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
         
-        if (!revenue || revenue.trainer !== currentUser) {
+        // 데이터 조회하여 트레이너 확인
+        const allRevenues = await trainerRevenueDB.getTrainerRevenues({});
+        const revenue = allRevenues.find(r => r.id === id);
+        
+        if (!revenue) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
+        }
+        
+        // SU가 아니면 본인 데이터만 삭제 가능
+        if (!isSU && revenue.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
         }
         
@@ -8534,14 +8697,37 @@ app.delete('/api/trainer/revenues/:id', async (req, res) => {
 // 트레이너 기타수입 조회 API
 app.get('/api/trainer/other-revenues', async (req, res) => {
     try {
-        const { month, currentUser } = req.query;
+        const { month, currentUser, trainer } = req.query;
         
         if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        // SU이거나 트레이너인 경우만 접근 가능
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 조회할 트레이너 결정: SU가 trainer 파라미터를 보낸 경우 해당 트레이너, 아니면 본인
+        const targetTrainer = (isSU && trainer) ? trainer : currentUser;
+        
+        // SU가 아닌 경우 본인 데이터만 조회 가능
+        if (!isSU && targetTrainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 조회할 수 있습니다.' });
+        }
+        
         const filters = {
-            trainer: currentUser,
+            trainer: targetTrainer,
             month: month || null
         };
         
@@ -8556,10 +8742,32 @@ app.get('/api/trainer/other-revenues', async (req, res) => {
 // 트레이너 기타수입 추가 API
 app.post('/api/trainer/other-revenues', async (req, res) => {
     try {
-        const { month, item, amount, currentUser } = req.body;
+        const { month, item, amount, currentUser, trainer: targetTrainer } = req.body;
         
         if (!currentUser) {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+        
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
+        const isTrainer = userAccount && userAccount.role === 'trainer';
+        
+        if (!isSU && !isTrainer) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        // 저장할 트레이너 결정: SU가 targetTrainer를 보낸 경우 해당 트레이너, 아니면 본인
+        const trainer = (isSU && targetTrainer) ? targetTrainer : currentUser;
+        
+        // SU가 아닌 경우 본인 데이터만 저장 가능
+        if (!isSU && trainer !== currentUser) {
+            return res.status(403).json({ message: '본인의 데이터만 추가할 수 있습니다.' });
         }
         
         if (!month || !item) {
@@ -8567,7 +8775,7 @@ app.post('/api/trainer/other-revenues', async (req, res) => {
         }
         
         const revenue = {
-            trainer: currentUser,
+            trainer: trainer,
             month,
             item,
             amount: parseInt(amount) || 0
@@ -8591,11 +8799,25 @@ app.patch('/api/trainer/other-revenues/:id', async (req, res) => {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 권한 체크: 본인 데이터만 수정 가능
-        const existingRevenue = await trainerRevenueDB.getTrainerOtherRevenues({ trainer: currentUser });
-        const revenue = existingRevenue.find(r => r.id === id);
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
         
-        if (!revenue || revenue.trainer !== currentUser) {
+        // 데이터 조회하여 트레이너 확인
+        const allRevenues = await trainerRevenueDB.getTrainerOtherRevenues({});
+        const revenue = allRevenues.find(r => r.id === id);
+        
+        if (!revenue) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
+        }
+        
+        // SU가 아니면 본인 데이터만 수정 가능
+        if (!isSU && revenue.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 수정할 수 있습니다.' });
         }
         
@@ -8622,11 +8844,25 @@ app.delete('/api/trainer/other-revenues/:id', async (req, res) => {
             return res.status(401).json({ message: '로그인이 필요합니다.' });
         }
         
-        // 권한 체크: 본인 데이터만 삭제 가능
-        const existingRevenue = await trainerRevenueDB.getTrainerOtherRevenues({ trainer: currentUser });
-        const revenue = existingRevenue.find(r => r.id === id);
+        // 권한 확인
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        const isSU = userAccount && userAccount.role === 'su';
         
-        if (!revenue || revenue.trainer !== currentUser) {
+        // 데이터 조회하여 트레이너 확인
+        const allRevenues = await trainerRevenueDB.getTrainerOtherRevenues({});
+        const revenue = allRevenues.find(r => r.id === id);
+        
+        if (!revenue) {
+            return res.status(404).json({ message: '데이터를 찾을 수 없습니다.' });
+        }
+        
+        // SU가 아니면 본인 데이터만 삭제 가능
+        if (!isSU && revenue.trainer !== currentUser) {
             return res.status(403).json({ message: '본인의 데이터만 삭제할 수 있습니다.' });
         }
         

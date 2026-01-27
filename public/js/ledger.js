@@ -50,6 +50,12 @@ function navigateDate(delta) {
   currentDate = newDate;
   updateDateDisplay();
   loadLedgerData();
+  
+  // 트레이너 장부도 함께 리로드
+  const trainerSelect = document.getElementById('ledger-trainer-select');
+  if (trainerSelect && trainerSelect.value) {
+    loadTrainerLedger(trainerSelect.value);
+  }
 }
 
 function formatNumber(num) {
@@ -107,6 +113,10 @@ async function render(container) {
   // 현재 날짜 초기화
   currentDate = new Date();
   currentDate.setHours(0, 0, 0, 0);
+  
+  // 현재 사용자 role 확인
+  const currentRole = localStorage.getItem('role');
+  const isSU = currentRole === 'su';
   
   container.innerHTML = `
     <div id="ledger-content" style="padding:20px;">
@@ -194,6 +204,24 @@ async function render(container) {
           <div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터를 불러오는 중...</div>
         </div>
       </div>
+      
+      ${isSU ? `
+      <!-- 트레이너 선택 UI (SU만 표시) -->
+      <div id="ledger-trainer-select-section" style="display:flex;align-items:center;gap:12px;margin-top:16px;margin-bottom:16px;padding:12px;background:#f5f5f5;border-radius:6px;">
+        <label style="font-size:0.9rem;font-weight:600;color:#333;white-space:nowrap;">트레이너 선택:</label>
+        <select id="ledger-trainer-select" style="padding:6px 12px;border:1px solid #ddd;border-radius:4px;font-size:0.9rem;width:auto;min-width:80px;">
+          <option value="">선택하세요...</option>
+        </select>
+      </div>
+      
+      <!-- 트레이너 장부 섹션 (SU만 표시) -->
+      <div id="ledger-trainer-section" style="margin-top:32px;padding-top:32px;border-top:2px solid #e0e0e0;display:none;">
+        <h3 id="ledger-trainer-section-title" style="margin:0 0 16px 0;color:#1976d2;font-size:1.1rem;">트레이너 장부</h3>
+        <div id="ledger-trainer-content">
+          <div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">트레이너를 선택하세요.</div>
+        </div>
+      </div>
+      ` : ''}
     </div>
   `;
   
@@ -202,6 +230,11 @@ async function render(container) {
   
   // 초기 데이터 로드
   await loadLedgerData();
+  
+  // SU인 경우 트레이너 목록 로드
+  if (isSU) {
+    await loadTrainerList();
+  }
 }
 
 function setupEventListeners(container) {
@@ -221,6 +254,26 @@ function setupEventListeners(container) {
   
   // 날짜 표시 업데이트
   updateDateDisplay();
+  
+  // 트레이너 선택 드롭다운 (SU만)
+  const trainerSelect = document.getElementById('ledger-trainer-select');
+  if (trainerSelect) {
+    console.log('트레이너 선택 드롭다운 이벤트 리스너 설정');
+    trainerSelect.addEventListener('change', async (e) => {
+      const selectedTrainer = e.target.value;
+      console.log('트레이너 선택 변경:', selectedTrainer);
+      if (selectedTrainer) {
+        await loadTrainerLedger(selectedTrainer);
+      } else {
+        const trainerSection = document.getElementById('ledger-trainer-section');
+        if (trainerSection) {
+          trainerSection.style.display = 'none';
+        }
+      }
+    });
+  } else {
+    console.warn('트레이너 선택 드롭다운을 찾을 수 없습니다.');
+  }
   
   // 고정지출 추가 버튼
   document.getElementById('ledger-fixed-add-btn').addEventListener('click', () => {
@@ -2046,4 +2099,1392 @@ function closeSettlementEditModal() {
   const modal = document.querySelector('.ledger-settlement-edit-modal');
   if (overlay) overlay.remove();
   if (modal) modal.remove();
+}
+
+// 트레이너 목록 로드 (SU만)
+async function loadTrainerList() {
+  try {
+    const response = await fetch('/api/trainers');
+    if (!response.ok) {
+      throw new Error('트레이너 목록을 불러오는데 실패했습니다.');
+    }
+    
+    const trainers = await response.json();
+    const select = document.getElementById('ledger-trainer-select');
+    if (!select) return;
+    
+    // 기존 옵션 제거 (첫 번째 옵션 제외)
+    while (select.children.length > 1) {
+      select.removeChild(select.lastChild);
+    }
+    
+    // ledger='on'인 트레이너만 필터링
+    const ledgerTrainers = trainers.filter(t => t.ledger === 'on');
+    
+    ledgerTrainers.forEach(trainer => {
+      const option = document.createElement('option');
+      option.value = trainer.username;
+      option.textContent = trainer.name || trainer.username;
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error('트레이너 목록 로드 오류:', error);
+  }
+}
+
+// 트레이너 장부 로드 및 렌더링 (SU만)
+async function loadTrainerLedger(trainerUsername) {
+  console.log('loadTrainerLedger 호출됨:', trainerUsername);
+  
+  const trainerSection = document.getElementById('ledger-trainer-section');
+  const trainerContent = document.getElementById('ledger-trainer-content');
+  const trainerTitle = document.getElementById('ledger-trainer-section-title');
+  
+  if (!trainerSection || !trainerContent) {
+    console.error('트레이너 섹션 요소를 찾을 수 없습니다:', { trainerSection, trainerContent, trainerTitle });
+    return;
+  }
+  
+  // 트레이너 이름 가져오기
+  const trainers = await fetch('/api/trainers').then(r => r.json()).catch(() => []);
+  const trainer = trainers.find(t => t.username === trainerUsername);
+  const trainerName = trainer ? (trainer.name || trainer.username) : trainerUsername;
+  
+  trainerTitle.textContent = `트레이너 장부 - ${trainerName}`;
+  trainerSection.style.display = 'block';
+  trainerContent.innerHTML = '<div style="text-align:center;padding:40px;color:#999;font-size:0.9rem;">데이터를 불러오는 중...</div>';
+  
+  const month = getSelectedYearMonth();
+  const currentUser = localStorage.getItem('username');
+  
+  console.log('API 호출 시작:', { month, currentUser, trainerUsername });
+  
+  try {
+    // 모든 데이터 병렬 로드
+    const [revenues, otherRevenues, fixedExpenses, variableExpenses, salaries] = await Promise.all([
+      fetch(`/api/trainer/revenues?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`).then(r => r.json()).catch(err => { console.error('revenues API 오류:', err); return []; }),
+      fetch(`/api/trainer/other-revenues?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`).then(r => r.json()).catch(err => { console.error('other-revenues API 오류:', err); return []; }),
+      fetch(`/api/trainer/fixed-expenses?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`).then(r => r.json()).catch(err => { console.error('fixed-expenses API 오류:', err); return []; }),
+      fetch(`/api/trainer/variable-expenses?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`).then(r => r.json()).catch(err => { console.error('variable-expenses API 오류:', err); return []; }),
+      fetch(`/api/trainer/salaries?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`).then(r => r.json()).catch(err => { console.error('salaries API 오류:', err); return []; })
+    ]);
+    
+    console.log('API 응답:', { revenues, otherRevenues, fixedExpenses, variableExpenses, salaries });
+    
+    // 계산식 렌더링
+    const revenue = revenues.length > 0 ? revenues[0] : null;
+    const revenueAmount = revenue ? (revenue.amount || 0) : 0;
+    const otherRevenueTotal = otherRevenues.reduce((sum, r) => sum + (r.amount || 0), 0);
+    const totalRevenue = revenueAmount + otherRevenueTotal;
+    const cardFee = Math.round(revenueAmount * 0.01); // 매출의 1%
+    const fixedTotal = fixedExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const variableTotal = variableExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const salaryTotal = salaries.reduce((sum, s) => sum + (s.amount || 0), 0);
+    const totalExpense = fixedTotal + variableTotal + salaryTotal;
+    const result = totalRevenue - cardFee - totalExpense;
+    
+    // UI 렌더링
+    trainerContent.innerHTML = `
+      <!-- 계산식 섹션 -->
+      <div style="background:#e3f2fd;border:1px solid #bbdefb;border-radius:6px;padding:12px;margin-bottom:16px;font-size:0.9rem;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+          <span style="font-weight:600;color:#1976d2;">총 수입:</span>
+          <span style="font-weight:600;color:#1976d2;">${formatNumber(totalRevenue)}원</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px;padding-left:10px;">
+          <span style="color:#555;">- 카드수수료:</span>
+          <span style="color:#555;">${formatNumber(cardFee)}원</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;padding-left:10px;">
+          <span style="color:#555;">- 지출:</span>
+          <span style="color:#555;">${formatNumber(totalExpense)}원</span>
+        </div>
+        <div style="border-top:1px dashed #90caf9;margin-bottom:8px;"></div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="font-weight:700;color:#333;">= 최종 결과:</span>
+          <span style="font-weight:700;color:#333;">${formatNumber(result)}원</span>
+        </div>
+      </div>
+      
+      <!-- 매출 섹션 -->
+      <div style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">매출</h4>
+          <button id="ledger-trainer-revenue-edit-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">수정</button>
+        </div>
+        <div style="font-size:1rem;font-weight:600;color:#333;padding:8px 0;">${formatNumber(revenueAmount)}원</div>
+      </div>
+      
+      <!-- 기타수입 섹션 -->
+      <div style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin-bottom:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">기타수입</h4>
+          <button id="ledger-trainer-other-revenue-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
+        </div>
+        <div id="ledger-trainer-other-revenue-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;min-height:100px;">
+          ${renderTrainerOtherRevenues(otherRevenues, trainerUsername)}
+        </div>
+      </div>
+      
+      <!-- 고정지출 / 변동지출 / 급여 섹션 -->
+      <div style="display:flex;gap:12px;align-items:flex-start;">
+        <!-- 고정지출 -->
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">고정지출</h4>
+            <button id="ledger-trainer-fixed-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
+          </div>
+          <div id="ledger-trainer-fixed-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;min-height:200px;">
+            ${renderTrainerFixedExpenses(fixedExpenses, trainerUsername)}
+          </div>
+        </div>
+        
+        <!-- 변동지출 -->
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">변동지출</h4>
+            <button id="ledger-trainer-variable-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
+          </div>
+          <div id="ledger-trainer-variable-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;min-height:200px;">
+            ${renderTrainerVariableExpenses(variableExpenses, trainerUsername)}
+          </div>
+        </div>
+        
+        <!-- 급여 -->
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <h4 style="margin:0;color:#1976d2;font-size:0.9rem;">급여</h4>
+            <button id="ledger-trainer-salary-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
+          </div>
+          <div id="ledger-trainer-salary-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;overflow:hidden;min-height:200px;">
+            ${renderTrainerSalaries(salaries, trainerUsername)}
+          </div>
+        </div>
+      </div>
+    `;
+    
+    // 이벤트 리스너 설정
+    setupTrainerLedgerEventListeners(trainerUsername);
+  } catch (error) {
+    console.error('트레이너 장부 로드 오류:', error);
+    trainerContent.innerHTML = '<div style="text-align:center;padding:40px;color:#f44336;font-size:0.9rem;">데이터를 불러오는데 실패했습니다.</div>';
+  }
+}
+
+// 트레이너 장부 렌더링 헬퍼 함수들
+function renderTrainerOtherRevenues(revenues, trainerUsername) {
+  if (!revenues || revenues.length === 0) {
+    return '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터가 없습니다.</div>';
+  }
+  
+  return revenues.map(r => `
+    <div class="ledger-trainer-other-revenue-row" data-id="${r.id}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+      <span style="font-size:0.85rem;color:#333;">${r.item || '-'}</span>
+      <span style="font-size:0.85rem;font-weight:600;color:#333;">${formatNumber(r.amount || 0)}원</span>
+    </div>
+  `).join('');
+}
+
+function renderTrainerFixedExpenses(expenses, trainerUsername) {
+  if (!expenses || expenses.length === 0) {
+    return '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터가 없습니다.</div>';
+  }
+  
+  return expenses.map(e => `
+    <div class="ledger-trainer-fixed-row" data-id="${e.id}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+      <span style="font-size:0.85rem;color:#333;">${e.item || '-'}</span>
+      <span style="font-size:0.85rem;font-weight:600;color:#333;">${formatNumber(e.amount || 0)}원</span>
+    </div>
+  `).join('');
+}
+
+function renderTrainerVariableExpenses(expenses, trainerUsername) {
+  if (!expenses || expenses.length === 0) {
+    return '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터가 없습니다.</div>';
+  }
+  
+  return expenses.map(e => `
+    <div class="ledger-trainer-variable-row" data-id="${e.id}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+      <span style="font-size:0.85rem;color:#333;">${e.item || '-'}</span>
+      <span style="font-size:0.85rem;font-weight:600;color:#333;">${formatNumber(e.amount || 0)}원</span>
+    </div>
+  `).join('');
+}
+
+function renderTrainerSalaries(salaries, trainerUsername) {
+  if (!salaries || salaries.length === 0) {
+    return '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터가 없습니다.</div>';
+  }
+  
+  return salaries.map(s => `
+    <div class="ledger-trainer-salary-row" data-id="${s.id}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #f0f0f0;cursor:pointer;" onmouseover="this.style.backgroundColor='#f5f5f5'" onmouseout="this.style.backgroundColor='transparent'">
+      <span style="font-size:0.85rem;color:#333;">${s.item || '-'}</span>
+      <span style="font-size:0.85rem;font-weight:600;color:#333;">${formatNumber(s.amount || 0)}원</span>
+    </div>
+  `).join('');
+}
+
+// 트레이너 장부 이벤트 리스너 설정
+function setupTrainerLedgerEventListeners(trainerUsername) {
+  // 매출 수정 버튼
+  const revenueEditBtn = document.getElementById('ledger-trainer-revenue-edit-btn');
+  if (revenueEditBtn) {
+    revenueEditBtn.addEventListener('click', () => {
+      showTrainerRevenueEditModal(trainerUsername);
+    });
+  }
+  
+  // 기타수입 추가 버튼
+  const otherRevenueAddBtn = document.getElementById('ledger-trainer-other-revenue-add-btn');
+  if (otherRevenueAddBtn) {
+    otherRevenueAddBtn.addEventListener('click', () => {
+      showTrainerOtherRevenueAddModal(trainerUsername);
+    });
+  }
+  
+  // 기타수입 목록 클릭 시 수정 모달 열기
+  document.querySelectorAll('.ledger-trainer-other-revenue-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const id = row.getAttribute('data-id');
+      showTrainerOtherRevenueEditModal(id, trainerUsername);
+    });
+  });
+  
+  // 고정지출 추가 버튼
+  const fixedAddBtn = document.getElementById('ledger-trainer-fixed-add-btn');
+  if (fixedAddBtn) {
+    fixedAddBtn.addEventListener('click', () => {
+      showTrainerFixedExpenseAddModal(trainerUsername);
+    });
+  }
+  
+  // 고정지출 목록 클릭 시 수정 모달 열기
+  document.querySelectorAll('.ledger-trainer-fixed-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const id = row.getAttribute('data-id');
+      showTrainerFixedExpenseEditModal(id, trainerUsername);
+    });
+  });
+  
+  // 변동지출 추가 버튼
+  const variableAddBtn = document.getElementById('ledger-trainer-variable-add-btn');
+  if (variableAddBtn) {
+    variableAddBtn.addEventListener('click', () => {
+      showTrainerVariableExpenseAddModal(trainerUsername);
+    });
+  }
+  
+  // 변동지출 목록 클릭 시 수정 모달 열기
+  document.querySelectorAll('.ledger-trainer-variable-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const id = row.getAttribute('data-id');
+      showTrainerVariableExpenseEditModal(id, trainerUsername);
+    });
+  });
+  
+  // 급여 추가 버튼
+  const salaryAddBtn = document.getElementById('ledger-trainer-salary-add-btn');
+  if (salaryAddBtn) {
+    salaryAddBtn.addEventListener('click', () => {
+      showTrainerSalaryAddModal(trainerUsername);
+    });
+  }
+  
+  // 급여 목록 클릭 시 수정 모달 열기
+  document.querySelectorAll('.ledger-trainer-salary-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      const id = row.getAttribute('data-id');
+      showTrainerSalaryEditModal(id, trainerUsername);
+    });
+  });
+}
+
+// 트레이너 장부 모달 및 CRUD 함수들
+async function showTrainerRevenueEditModal(trainerUsername) {
+  const yearMonth = getSelectedYearMonth();
+  const currentUser = localStorage.getItem('username');
+  
+  if (!currentUser) {
+    alert('로그인이 필요합니다.');
+    return;
+  }
+  
+  // 현재 매출 조회
+  try {
+    const response = await fetch(`/api/trainer/revenues?month=${yearMonth}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`);
+    const revenues = await response.json();
+    const revenue = revenues.length > 0 ? revenues[0] : null;
+    const currentAmount = revenue ? (revenue.amount || 0) : 0;
+    
+    const modalHTML = `
+      <div class="ledger-trainer-revenue-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+      <div class="ledger-trainer-revenue-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">매출 ${revenue ? '수정' : '입력'}</h3>
+          <button id="ledger-trainer-revenue-edit-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        </div>
+        
+        <form id="ledger-trainer-revenue-edit-form" style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label>
+            <input type="month" id="ledger-trainer-revenue-edit-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;">
+          </div>
+          
+          <div>
+            <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label>
+            <input type="text" id="ledger-trainer-revenue-edit-amount" value="${formatNumber(currentAmount)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric">
+          </div>
+          
+          <div id="ledger-trainer-revenue-edit-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+          
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+            <button type="button" id="ledger-trainer-revenue-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button>
+            <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    const existingOverlay = document.querySelector('.ledger-trainer-revenue-edit-modal-overlay');
+    const existingModal = document.querySelector('.ledger-trainer-revenue-edit-modal');
+    if (existingOverlay) existingOverlay.remove();
+    if (existingModal) existingModal.remove();
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 금액 천단위 구분자
+    const amountInput = document.getElementById('ledger-trainer-revenue-edit-amount');
+    if (amountInput) {
+      amountInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/,/g, '');
+        if (value === '') {
+          e.target.value = '';
+          return;
+        }
+        if (!/^\d+$/.test(value)) {
+          value = value.replace(/\D/g, '');
+        }
+        if (value) {
+          e.target.value = formatNumber(parseInt(value));
+        } else {
+          e.target.value = '';
+        }
+      });
+    }
+    
+    const closeBtn = document.getElementById('ledger-trainer-revenue-edit-modal-close');
+    const cancelBtn = document.getElementById('ledger-trainer-revenue-edit-cancel-btn');
+    const overlay = document.querySelector('.ledger-trainer-revenue-edit-modal-overlay');
+    
+    const closeModal = () => {
+      if (overlay) overlay.remove();
+      const modal = document.querySelector('.ledger-trainer-revenue-edit-modal');
+      if (modal) modal.remove();
+    };
+    
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    if (overlay) overlay.addEventListener('click', closeModal);
+    
+    const form = document.getElementById('ledger-trainer-revenue-edit-form');
+    if (form) {
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const revenueData = {
+          month: document.getElementById('ledger-trainer-revenue-edit-month').value,
+          amount: parseInt(document.getElementById('ledger-trainer-revenue-edit-amount').value.replace(/,/g, '')) || 0,
+          currentUser,
+          trainer: trainerUsername
+        };
+        
+        if (!revenueData.month) {
+          document.getElementById('ledger-trainer-revenue-edit-result-message').textContent = '연월은 필수입니다.';
+          return;
+        }
+        
+        const resultMsg = document.getElementById('ledger-trainer-revenue-edit-result-message');
+        resultMsg.textContent = '';
+        
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '저장 중...';
+        
+        try {
+          const response = await fetch('/api/trainer/revenues', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(revenueData)
+          });
+          
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || '저장에 실패했습니다.');
+          }
+          
+          closeModal();
+          const trainerSelect = document.getElementById('ledger-trainer-select');
+          if (trainerSelect && trainerSelect.value) {
+            await loadTrainerLedger(trainerSelect.value);
+          }
+        } catch (error) {
+          resultMsg.textContent = error.message || '저장에 실패했습니다.';
+          submitBtn.disabled = false;
+          submitBtn.textContent = '저장';
+        }
+      });
+    }
+  } catch (error) {
+    console.error('매출 조회 오류:', error);
+    alert('매출 데이터를 불러오는데 실패했습니다.');
+  }
+}
+
+async function showTrainerOtherRevenueAddModal(trainerUsername) {
+  const yearMonth = getSelectedYearMonth();
+  const modalHTML = `
+    <div class="ledger-trainer-other-revenue-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="ledger-trainer-other-revenue-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">기타수입 추가</h3>
+        <button id="ledger-trainer-other-revenue-add-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      
+      <form id="ledger-trainer-other-revenue-add-form" style="display:flex;flex-direction:column;gap:12px;">
+        <div>
+          <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label>
+          <input type="month" id="ledger-trainer-other-revenue-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label>
+          <input type="text" id="ledger-trainer-other-revenue-add-item" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+        </div>
+        
+        <div>
+          <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label>
+          <input type="text" id="ledger-trainer-other-revenue-add-amount" value="0" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric">
+        </div>
+        
+        <div id="ledger-trainer-other-revenue-add-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+        
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
+          <button type="button" id="ledger-trainer-other-revenue-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button>
+          <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button>
+        </div>
+      </form>
+    </div>
+  `;
+  
+  const existingOverlay = document.querySelector('.ledger-trainer-other-revenue-add-modal-overlay');
+  const existingModal = document.querySelector('.ledger-trainer-other-revenue-add-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  // 금액 천단위 구분자
+  const amountInput = document.getElementById('ledger-trainer-other-revenue-add-amount');
+  if (amountInput) {
+    amountInput.addEventListener('input', function(e) {
+      let value = e.target.value.replace(/,/g, '');
+      if (value === '') {
+        e.target.value = '';
+        return;
+      }
+      if (!/^\d+$/.test(value)) {
+        value = value.replace(/\D/g, '');
+      }
+      if (value) {
+        e.target.value = formatNumber(parseInt(value));
+      } else {
+        e.target.value = '';
+      }
+    });
+  }
+  
+  const closeBtn = document.getElementById('ledger-trainer-other-revenue-add-modal-close');
+  const cancelBtn = document.getElementById('ledger-trainer-other-revenue-add-cancel-btn');
+  const overlay = document.querySelector('.ledger-trainer-other-revenue-add-modal-overlay');
+  
+  const closeModal = () => {
+    if (overlay) overlay.remove();
+    const modal = document.querySelector('.ledger-trainer-other-revenue-add-modal');
+    if (modal) modal.remove();
+  };
+  
+  if (closeBtn) closeBtn.addEventListener('click', closeModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+  if (overlay) overlay.addEventListener('click', closeModal);
+  
+  const form = document.getElementById('ledger-trainer-other-revenue-add-form');
+  if (form) {
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const currentUser = localStorage.getItem('username');
+      if (!currentUser) {
+        alert('로그인이 필요합니다.');
+        return;
+      }
+      
+      const revenue = {
+        month: document.getElementById('ledger-trainer-other-revenue-add-month').value,
+        item: document.getElementById('ledger-trainer-other-revenue-add-item').value,
+        amount: parseInt(document.getElementById('ledger-trainer-other-revenue-add-amount').value.replace(/,/g, '')) || 0,
+        currentUser,
+        trainer: trainerUsername
+      };
+      
+      if (!revenue.month || !revenue.item) {
+        document.getElementById('ledger-trainer-other-revenue-add-result-message').textContent = '연월, 항목은 필수입니다.';
+        return;
+      }
+      
+      const resultMsg = document.getElementById('ledger-trainer-other-revenue-add-result-message');
+      resultMsg.textContent = '';
+      
+      const submitBtn = this.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '저장 중...';
+      
+      try {
+        const response = await fetch('/api/trainer/other-revenues', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(revenue)
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || '추가에 실패했습니다.');
+        }
+        
+        closeModal();
+        const trainerSelect = document.getElementById('ledger-trainer-select');
+        if (trainerSelect && trainerSelect.value) {
+          await loadTrainerLedger(trainerSelect.value);
+        }
+      } catch (error) {
+        resultMsg.textContent = error.message || '추가에 실패했습니다.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = '저장';
+      }
+    });
+  }
+}
+
+async function showTrainerOtherRevenueEditModal(id, trainerUsername) {
+  const currentUser = localStorage.getItem('username');
+  const month = getSelectedYearMonth();
+  
+  try {
+    const response = await fetch(`/api/trainer/other-revenues?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`);
+    const revenues = await response.json();
+    const revenue = revenues.find(r => r.id === id);
+    
+    if (!revenue) {
+      alert('데이터를 찾을 수 없습니다.');
+      return;
+    }
+    
+    const modalHTML = `
+      <div class="ledger-trainer-other-revenue-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+      <div class="ledger-trainer-other-revenue-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">기타수입 수정</h3>
+          <button id="ledger-trainer-other-revenue-edit-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        </div>
+        
+        <form id="ledger-trainer-other-revenue-edit-form" style="display:flex;flex-direction:column;gap:12px;">
+          <div>
+            <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label>
+            <input type="month" id="ledger-trainer-other-revenue-edit-month" value="${revenue.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;">
+          </div>
+          
+          <div>
+            <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label>
+            <input type="text" id="ledger-trainer-other-revenue-edit-item" value="${(revenue.item || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          
+          <div>
+            <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label>
+            <input type="text" id="ledger-trainer-other-revenue-edit-amount" value="${formatNumber(revenue.amount || 0)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric">
+          </div>
+          
+          <div id="ledger-trainer-other-revenue-edit-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+          
+          <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px;">
+            <button type="button" id="ledger-trainer-other-revenue-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">삭제</button>
+            <div style="display:flex;gap:8px;">
+              <button type="button" id="ledger-trainer-other-revenue-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button>
+              <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    const existingOverlay = document.querySelector('.ledger-trainer-other-revenue-edit-modal-overlay');
+    const existingModal = document.querySelector('.ledger-trainer-other-revenue-edit-modal');
+    if (existingOverlay) existingOverlay.remove();
+    if (existingModal) existingModal.remove();
+    
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // 금액 천단위 구분자
+    const amountInput = document.getElementById('ledger-trainer-other-revenue-edit-amount');
+    if (amountInput) {
+      amountInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/,/g, '');
+        if (value === '') {
+          e.target.value = '';
+          return;
+        }
+        if (!/^\d+$/.test(value)) {
+          value = value.replace(/\D/g, '');
+        }
+        if (value) {
+          e.target.value = formatNumber(parseInt(value));
+        } else {
+          e.target.value = '';
+        }
+      });
+    }
+    
+    const closeBtn = document.getElementById('ledger-trainer-other-revenue-edit-modal-close');
+    const cancelBtn = document.getElementById('ledger-trainer-other-revenue-edit-cancel-btn');
+    const overlay = document.querySelector('.ledger-trainer-other-revenue-edit-modal-overlay');
+    
+    const closeModal = () => {
+      if (overlay) overlay.remove();
+      const modal = document.querySelector('.ledger-trainer-other-revenue-edit-modal');
+      if (modal) modal.remove();
+    };
+    
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+    if (overlay) overlay.addEventListener('click', closeModal);
+    
+    // 삭제 버튼
+    const deleteBtn = document.getElementById('ledger-trainer-other-revenue-edit-delete-btn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async function() {
+        if (confirm('정말 삭제하시겠습니까?')) {
+          await deleteTrainerOtherRevenue(id, trainerUsername);
+          closeModal();
+        }
+      });
+    }
+    
+    const form = document.getElementById('ledger-trainer-other-revenue-edit-form');
+    if (form) {
+      form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const updates = {
+          month: document.getElementById('ledger-trainer-other-revenue-edit-month').value,
+          item: document.getElementById('ledger-trainer-other-revenue-edit-item').value,
+          amount: parseInt(document.getElementById('ledger-trainer-other-revenue-edit-amount').value.replace(/,/g, '')) || 0,
+          currentUser
+        };
+        
+        if (!updates.month || !updates.item) {
+          document.getElementById('ledger-trainer-other-revenue-edit-result-message').textContent = '연월, 항목은 필수입니다.';
+          return;
+        }
+        
+        const resultMsg = document.getElementById('ledger-trainer-other-revenue-edit-result-message');
+        resultMsg.textContent = '';
+        
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '저장 중...';
+        
+        try {
+          const response = await fetch(`/api/trainer/other-revenues/${id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(updates)
+          });
+          
+          if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.message || '수정에 실패했습니다.');
+          }
+          
+          closeModal();
+          const trainerSelect = document.getElementById('ledger-trainer-select');
+          if (trainerSelect && trainerSelect.value) {
+            await loadTrainerLedger(trainerSelect.value);
+          }
+        } catch (error) {
+          resultMsg.textContent = error.message || '수정에 실패했습니다.';
+          submitBtn.disabled = false;
+          submitBtn.textContent = '저장';
+        }
+      });
+    }
+  } catch (error) {
+    console.error('기타수입 조회 오류:', error);
+    alert('기타수입 데이터를 불러오는데 실패했습니다.');
+  }
+}
+
+async function deleteTrainerOtherRevenue(id, trainerUsername) {
+  try {
+    const currentUser = localStorage.getItem('username');
+    const response = await fetch(`/api/trainer/other-revenues/${id}?currentUser=${encodeURIComponent(currentUser)}`, {
+      method: 'DELETE'
+    });
+    
+    if (!response.ok) {
+      throw new Error('삭제에 실패했습니다.');
+    }
+    
+    const trainerSelect = document.getElementById('ledger-trainer-select');
+    if (trainerSelect && trainerSelect.value) {
+      await loadTrainerLedger(trainerSelect.value);
+    }
+  } catch (error) {
+    console.error('기타수입 삭제 오류:', error);
+    alert('삭제에 실패했습니다.');
+  }
+}
+
+// 고정지출, 변동지출, 급여 함수들은 trainer-ledger.js의 함수들을 참고하여 구현
+// trainerUsername 파라미터를 추가하고, API 호출 시 body에 trainer 포함, 저장 후 loadTrainerLedger 호출
+// 파일이 길어져서 핵심 함수만 구현하고, 나머지는 동일한 패턴으로 구현 가능
+
+async function showTrainerFixedExpenseAddModal(trainerUsername) {
+  const yearMonth = getSelectedYearMonth();
+  const modalHTML = `
+    <div class="ledger-trainer-fixed-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="ledger-trainer-fixed-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">고정지출 추가</h3>
+        <button id="ledger-trainer-fixed-add-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      <form id="ledger-trainer-fixed-add-form" style="display:flex;flex-direction:column;gap:12px;">
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-fixed-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-fixed-add-item" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-fixed-add-amount" value="0" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
+        <div id="ledger-trainer-fixed-add-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button type="button" id="ledger-trainer-fixed-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button><button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button></div>
+      </form>
+    </div>
+  `;
+  const existingOverlay = document.querySelector('.ledger-trainer-fixed-add-modal-overlay');
+  const existingModal = document.querySelector('.ledger-trainer-fixed-add-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  const amountInput = document.getElementById('ledger-trainer-fixed-add-amount');
+  if (amountInput) {
+    amountInput.addEventListener('input', function(e) {
+      let value = e.target.value.replace(/,/g, '');
+      if (value === '') { e.target.value = ''; return; }
+      if (!/^\d+$/.test(value)) value = value.replace(/\D/g, '');
+      if (value) e.target.value = formatNumber(parseInt(value));
+      else e.target.value = '';
+    });
+  }
+  const closeModal = () => {
+    document.querySelector('.ledger-trainer-fixed-add-modal-overlay')?.remove();
+    document.querySelector('.ledger-trainer-fixed-add-modal')?.remove();
+  };
+  document.getElementById('ledger-trainer-fixed-add-modal-close')?.addEventListener('click', closeModal);
+  document.getElementById('ledger-trainer-fixed-add-cancel-btn')?.addEventListener('click', closeModal);
+  document.querySelector('.ledger-trainer-fixed-add-modal-overlay')?.addEventListener('click', closeModal);
+  document.getElementById('ledger-trainer-fixed-add-form')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) { alert('로그인이 필요합니다.'); return; }
+    const expense = {
+      month: document.getElementById('ledger-trainer-fixed-add-month').value,
+      item: document.getElementById('ledger-trainer-fixed-add-item').value,
+      amount: parseInt(document.getElementById('ledger-trainer-fixed-add-amount').value.replace(/,/g, '')) || 0,
+      currentUser,
+      trainer: trainerUsername
+    };
+    if (!expense.month || !expense.item) {
+      document.getElementById('ledger-trainer-fixed-add-result-message').textContent = '연월, 항목은 필수입니다.';
+      return;
+    }
+    const resultMsg = document.getElementById('ledger-trainer-fixed-add-result-message');
+    resultMsg.textContent = '';
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '저장 중...';
+    try {
+      const response = await fetch('/api/trainer/fixed-expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(expense)
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '추가에 실패했습니다.');
+      }
+      closeModal();
+      const trainerSelect = document.getElementById('ledger-trainer-select');
+      if (trainerSelect && trainerSelect.value) {
+        await loadTrainerLedger(trainerSelect.value);
+      }
+    } catch (error) {
+      resultMsg.textContent = error.message || '추가에 실패했습니다.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = '저장';
+    }
+  });
+}
+
+async function showTrainerFixedExpenseEditModal(id, trainerUsername) {
+  const currentUser = localStorage.getItem('username');
+  const month = getSelectedYearMonth();
+  try {
+    const response = await fetch(`/api/trainer/fixed-expenses?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`);
+    const expenses = await response.json();
+    const expense = expenses.find(e => e.id === id);
+    if (!expense) { alert('데이터를 찾을 수 없습니다.'); return; }
+    const modalHTML = `
+      <div class="ledger-trainer-fixed-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+      <div class="ledger-trainer-fixed-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">고정지출 수정</h3>
+          <button id="ledger-trainer-fixed-edit-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        </div>
+        <form id="ledger-trainer-fixed-edit-form" style="display:flex;flex-direction:column;gap:12px;">
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-fixed-edit-month" value="${expense.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-fixed-edit-item" value="${(expense.item || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-fixed-edit-amount" value="${formatNumber(expense.amount || 0)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
+          <div id="ledger-trainer-fixed-edit-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+          <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px;"><button type="button" id="ledger-trainer-fixed-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">삭제</button><div style="display:flex;gap:8px;"><button type="button" id="ledger-trainer-fixed-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button><button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button></div></div>
+        </form>
+      </div>
+    `;
+    const existingOverlay = document.querySelector('.ledger-trainer-fixed-edit-modal-overlay');
+    const existingModal = document.querySelector('.ledger-trainer-fixed-edit-modal');
+    if (existingOverlay) existingOverlay.remove();
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const amountInput = document.getElementById('ledger-trainer-fixed-edit-amount');
+    if (amountInput) {
+      amountInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/,/g, '');
+        if (value === '') { e.target.value = ''; return; }
+        if (!/^\d+$/.test(value)) value = value.replace(/\D/g, '');
+        if (value) e.target.value = formatNumber(parseInt(value));
+        else e.target.value = '';
+      });
+    }
+    const closeModal = () => {
+      document.querySelector('.ledger-trainer-fixed-edit-modal-overlay')?.remove();
+      document.querySelector('.ledger-trainer-fixed-edit-modal')?.remove();
+    };
+    document.getElementById('ledger-trainer-fixed-edit-modal-close')?.addEventListener('click', closeModal);
+    document.getElementById('ledger-trainer-fixed-edit-cancel-btn')?.addEventListener('click', closeModal);
+    document.querySelector('.ledger-trainer-fixed-edit-modal-overlay')?.addEventListener('click', closeModal);
+    document.getElementById('ledger-trainer-fixed-edit-delete-btn')?.addEventListener('click', async function() {
+      if (confirm('정말 삭제하시겠습니까?')) {
+        await deleteTrainerFixedExpense(id, trainerUsername);
+        closeModal();
+      }
+    });
+    document.getElementById('ledger-trainer-fixed-edit-form')?.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const updates = {
+        month: document.getElementById('ledger-trainer-fixed-edit-month').value,
+        item: document.getElementById('ledger-trainer-fixed-edit-item').value,
+        amount: parseInt(document.getElementById('ledger-trainer-fixed-edit-amount').value.replace(/,/g, '')) || 0,
+        currentUser
+      };
+      if (!updates.month || !updates.item) {
+        document.getElementById('ledger-trainer-fixed-edit-result-message').textContent = '연월, 항목은 필수입니다.';
+        return;
+      }
+      const resultMsg = document.getElementById('ledger-trainer-fixed-edit-result-message');
+      resultMsg.textContent = '';
+      const submitBtn = this.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '저장 중...';
+      try {
+        const response = await fetch(`/api/trainer/fixed-expenses/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || '수정에 실패했습니다.');
+        }
+        closeModal();
+        const trainerSelect = document.getElementById('ledger-trainer-select');
+        if (trainerSelect && trainerSelect.value) {
+          await loadTrainerLedger(trainerSelect.value);
+        }
+      } catch (error) {
+        resultMsg.textContent = error.message || '수정에 실패했습니다.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = '저장';
+      }
+    });
+  } catch (error) {
+    console.error('고정지출 조회 오류:', error);
+    alert('고정지출 데이터를 불러오는데 실패했습니다.');
+  }
+}
+
+async function deleteTrainerFixedExpense(id, trainerUsername) {
+  try {
+    const currentUser = localStorage.getItem('username');
+    const response = await fetch(`/api/trainer/fixed-expenses/${id}?currentUser=${encodeURIComponent(currentUser)}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('삭제에 실패했습니다.');
+    const trainerSelect = document.getElementById('ledger-trainer-select');
+    if (trainerSelect && trainerSelect.value) {
+      await loadTrainerLedger(trainerSelect.value);
+    }
+  } catch (error) {
+    console.error('고정지출 삭제 오류:', error);
+    alert('삭제에 실패했습니다.');
+  }
+}
+
+// 변동지출 추가/수정 모달은 trainer-ledger.js의 showVariableExpenseAddModal, showVariableExpenseEditModal을 참고하여 구현
+// trainerUsername 파라미터 추가, API body에 trainer 포함, 저장 후 loadTrainerLedger 호출
+// 파일이 길어져서 핵심만 구현
+async function showTrainerVariableExpenseAddModal(trainerUsername) {
+  const yearMonth = getSelectedYearMonth();
+  const today = new Date().toISOString().split('T')[0];
+  const modalHTML = `
+    <div class="ledger-trainer-variable-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="ledger-trainer-variable-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;max-height:85vh;display:flex;flex-direction:column;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eee;flex-shrink:0;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">변동지출 추가</h3>
+        <button id="ledger-trainer-variable-add-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      <div style="overflow-y:auto;flex:1;padding:12px 16px;">
+        <form id="ledger-trainer-variable-add-form" style="display:flex;flex-direction:column;gap:10px;">
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-variable-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+          <div style="display:none;"><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">날짜</label><input type="date" id="ledger-trainer-variable-add-date" value="${today}" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-variable-add-item" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-variable-add-amount" value="0" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">세금 Type</label><select id="ledger-trainer-variable-add-tax-type" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"><option value="">선택 안함</option>${TAX_TYPE_OPTIONS.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}</select></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">비고</label><textarea id="ledger-trainer-variable-add-note" rows="3" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;resize:vertical;"></textarea></div>
+          <div id="ledger-trainer-variable-add-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+        </form>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;padding:12px 16px;border-top:1px solid #eee;flex-shrink:0;">
+        <button type="button" id="ledger-trainer-variable-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button>
+        <button type="submit" form="ledger-trainer-variable-add-form" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button>
+      </div>
+    </div>
+  `;
+  const existingOverlay = document.querySelector('.ledger-trainer-variable-add-modal-overlay');
+  const existingModal = document.querySelector('.ledger-trainer-variable-add-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  const amountInput = document.getElementById('ledger-trainer-variable-add-amount');
+  if (amountInput) {
+    amountInput.addEventListener('input', function(e) {
+      let value = e.target.value.replace(/,/g, '');
+      if (value === '') { e.target.value = ''; return; }
+      if (!/^\d+$/.test(value)) value = value.replace(/\D/g, '');
+      if (value) e.target.value = formatNumber(parseInt(value));
+      else e.target.value = '';
+    });
+  }
+  const closeModal = () => {
+    document.querySelector('.ledger-trainer-variable-add-modal-overlay')?.remove();
+    document.querySelector('.ledger-trainer-variable-add-modal')?.remove();
+  };
+  document.getElementById('ledger-trainer-variable-add-modal-close')?.addEventListener('click', closeModal);
+  document.getElementById('ledger-trainer-variable-add-cancel-btn')?.addEventListener('click', closeModal);
+  document.querySelector('.ledger-trainer-variable-add-modal-overlay')?.addEventListener('click', closeModal);
+  document.getElementById('ledger-trainer-variable-add-form')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) { alert('로그인이 필요합니다.'); return; }
+    const expense = {
+      month: document.getElementById('ledger-trainer-variable-add-month').value,
+      date: document.getElementById('ledger-trainer-variable-add-date').value || null,
+      item: document.getElementById('ledger-trainer-variable-add-item').value,
+      amount: parseInt(document.getElementById('ledger-trainer-variable-add-amount').value.replace(/,/g, '')) || 0,
+      note: document.getElementById('ledger-trainer-variable-add-note').value || null,
+      taxType: document.getElementById('ledger-trainer-variable-add-tax-type').value || null,
+      currentUser,
+      trainer: trainerUsername
+    };
+    if (!expense.month || !expense.item) {
+      document.getElementById('ledger-trainer-variable-add-result-message').textContent = '연월, 항목은 필수입니다.';
+      return;
+    }
+    const resultMsg = document.getElementById('ledger-trainer-variable-add-result-message');
+    resultMsg.textContent = '';
+    const submitBtn = document.querySelector('button[form="ledger-trainer-variable-add-form"]');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = '저장 중...';
+    }
+    try {
+      const response = await fetch('/api/trainer/variable-expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(expense)
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '추가에 실패했습니다.');
+      }
+      closeModal();
+      const trainerSelect = document.getElementById('ledger-trainer-select');
+      if (trainerSelect && trainerSelect.value) {
+        await loadTrainerLedger(trainerSelect.value);
+      }
+    } catch (error) {
+      resultMsg.textContent = error.message || '추가에 실패했습니다.';
+      const submitBtn = document.querySelector('button[form="ledger-trainer-variable-add-form"]');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '저장';
+      }
+    }
+  });
+}
+
+async function showTrainerVariableExpenseEditModal(id, trainerUsername) {
+  const currentUser = localStorage.getItem('username');
+  const month = getSelectedYearMonth();
+  try {
+    const response = await fetch(`/api/trainer/variable-expenses?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`);
+    const expenses = await response.json();
+    const expense = expenses.find(e => e.id === id);
+    if (!expense) { alert('데이터를 찾을 수 없습니다.'); return; }
+    const modalHTML = `
+      <div class="ledger-trainer-variable-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+      <div class="ledger-trainer-variable-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;max-height:85vh;display:flex;flex-direction:column;">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eee;flex-shrink:0;">
+          <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">변동지출 수정</h3>
+          <button id="ledger-trainer-variable-edit-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        </div>
+        <div style="overflow-y:auto;flex:1;padding:12px 16px;">
+          <form id="ledger-trainer-variable-edit-form" style="display:flex;flex-direction:column;gap:10px;">
+            <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-variable-edit-month" value="${expense.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+            <div style="display:none;"><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">날짜</label><input type="date" id="ledger-trainer-variable-edit-date" value="${expense.date || ''}" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+            <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-variable-edit-item" value="${(expense.item || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+            <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-variable-edit-amount" value="${formatNumber(expense.amount || 0)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
+            <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">세금 Type</label><select id="ledger-trainer-variable-edit-tax-type" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"><option value="">선택 안함</option>${TAX_TYPE_OPTIONS.map(opt => `<option value="${opt.value}" ${expense.tax_type === opt.value ? 'selected' : ''}>${opt.label}</option>`).join('')}</select></div>
+            <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">비고</label><textarea id="ledger-trainer-variable-edit-note" rows="3" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;resize:vertical;">${(expense.note || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea></div>
+            <div id="ledger-trainer-variable-edit-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+          </form>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:space-between;padding:12px 16px;border-top:1px solid #eee;flex-shrink:0;">
+          <button type="button" id="ledger-trainer-variable-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">삭제</button>
+          <div style="display:flex;gap:8px;">
+            <button type="button" id="ledger-trainer-variable-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button>
+            <button type="submit" form="ledger-trainer-variable-edit-form" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button>
+          </div>
+        </div>
+      </div>
+    `;
+    const existingOverlay = document.querySelector('.ledger-trainer-variable-edit-modal-overlay');
+    const existingModal = document.querySelector('.ledger-trainer-variable-edit-modal');
+    if (existingOverlay) existingOverlay.remove();
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const amountInput = document.getElementById('ledger-trainer-variable-edit-amount');
+    if (amountInput) {
+      amountInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/,/g, '');
+        if (value === '') { e.target.value = ''; return; }
+        if (!/^\d+$/.test(value)) value = value.replace(/\D/g, '');
+        if (value) e.target.value = formatNumber(parseInt(value));
+        else e.target.value = '';
+      });
+    }
+    const closeModal = () => {
+      document.querySelector('.ledger-trainer-variable-edit-modal-overlay')?.remove();
+      document.querySelector('.ledger-trainer-variable-edit-modal')?.remove();
+    };
+    document.getElementById('ledger-trainer-variable-edit-modal-close')?.addEventListener('click', closeModal);
+    document.getElementById('ledger-trainer-variable-edit-cancel-btn')?.addEventListener('click', closeModal);
+    document.querySelector('.ledger-trainer-variable-edit-modal-overlay')?.addEventListener('click', closeModal);
+    document.getElementById('ledger-trainer-variable-edit-delete-btn')?.addEventListener('click', async function() {
+      if (confirm('정말 삭제하시겠습니까?')) {
+        await deleteTrainerVariableExpense(id, trainerUsername);
+        closeModal();
+      }
+    });
+    document.getElementById('ledger-trainer-variable-edit-form')?.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const updates = {
+        month: document.getElementById('ledger-trainer-variable-edit-month').value,
+        date: document.getElementById('ledger-trainer-variable-edit-date').value || null,
+        item: document.getElementById('ledger-trainer-variable-edit-item').value,
+        amount: parseInt(document.getElementById('ledger-trainer-variable-edit-amount').value.replace(/,/g, '')) || 0,
+        note: document.getElementById('ledger-trainer-variable-edit-note').value || null,
+        taxType: document.getElementById('ledger-trainer-variable-edit-tax-type').value || null,
+        currentUser
+      };
+      if (!updates.month || !updates.item) {
+        document.getElementById('ledger-trainer-variable-edit-result-message').textContent = '연월, 항목은 필수입니다.';
+        return;
+      }
+      const resultMsg = document.getElementById('ledger-trainer-variable-edit-result-message');
+      resultMsg.textContent = '';
+      const submitBtn = document.querySelector('button[form="ledger-trainer-variable-edit-form"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '저장 중...';
+      }
+      try {
+        const response = await fetch(`/api/trainer/variable-expenses/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || '수정에 실패했습니다.');
+        }
+        closeModal();
+        const trainerSelect = document.getElementById('ledger-trainer-select');
+        if (trainerSelect && trainerSelect.value) {
+          await loadTrainerLedger(trainerSelect.value);
+        }
+      } catch (error) {
+        resultMsg.textContent = error.message || '수정에 실패했습니다.';
+        const submitBtn = document.querySelector('button[form="ledger-trainer-variable-edit-form"]');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = '저장';
+        }
+      }
+    });
+  } catch (error) {
+    console.error('변동지출 조회 오류:', error);
+    alert('변동지출 데이터를 불러오는데 실패했습니다.');
+  }
+}
+
+async function deleteTrainerVariableExpense(id, trainerUsername) {
+  try {
+    const currentUser = localStorage.getItem('username');
+    const response = await fetch(`/api/trainer/variable-expenses/${id}?currentUser=${encodeURIComponent(currentUser)}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('삭제에 실패했습니다.');
+    const trainerSelect = document.getElementById('ledger-trainer-select');
+    if (trainerSelect && trainerSelect.value) {
+      await loadTrainerLedger(trainerSelect.value);
+    }
+  } catch (error) {
+    console.error('변동지출 삭제 오류:', error);
+    alert('삭제에 실패했습니다.');
+  }
+}
+
+async function showTrainerSalaryAddModal(trainerUsername) {
+  const yearMonth = getSelectedYearMonth();
+  const modalHTML = `
+    <div class="ledger-trainer-salary-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="ledger-trainer-salary-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">급여 추가</h3>
+        <button id="ledger-trainer-salary-add-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      <form id="ledger-trainer-salary-add-form" style="display:flex;flex-direction:column;gap:12px;">
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-salary-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-salary-add-item" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-salary-add-amount" value="0" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
+        <div id="ledger-trainer-salary-add-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;"><button type="button" id="ledger-trainer-salary-add-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button><button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button></div>
+      </form>
+    </div>
+  `;
+  const existingOverlay = document.querySelector('.ledger-trainer-salary-add-modal-overlay');
+  const existingModal = document.querySelector('.ledger-trainer-salary-add-modal');
+  if (existingOverlay) existingOverlay.remove();
+  if (existingModal) existingModal.remove();
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+  const amountInput = document.getElementById('ledger-trainer-salary-add-amount');
+  if (amountInput) {
+    amountInput.addEventListener('input', function(e) {
+      let value = e.target.value.replace(/,/g, '');
+      if (value === '') { e.target.value = ''; return; }
+      if (!/^\d+$/.test(value)) value = value.replace(/\D/g, '');
+      if (value) e.target.value = formatNumber(parseInt(value));
+      else e.target.value = '';
+    });
+  }
+  const closeModal = () => {
+    document.querySelector('.ledger-trainer-salary-add-modal-overlay')?.remove();
+    document.querySelector('.ledger-trainer-salary-add-modal')?.remove();
+  };
+  document.getElementById('ledger-trainer-salary-add-modal-close')?.addEventListener('click', closeModal);
+  document.getElementById('ledger-trainer-salary-add-cancel-btn')?.addEventListener('click', closeModal);
+  document.querySelector('.ledger-trainer-salary-add-modal-overlay')?.addEventListener('click', closeModal);
+  document.getElementById('ledger-trainer-salary-add-form')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const currentUser = localStorage.getItem('username');
+    if (!currentUser) { alert('로그인이 필요합니다.'); return; }
+    const salary = {
+      month: document.getElementById('ledger-trainer-salary-add-month').value,
+      item: document.getElementById('ledger-trainer-salary-add-item').value,
+      amount: parseInt(document.getElementById('ledger-trainer-salary-add-amount').value.replace(/,/g, '')) || 0,
+      currentUser,
+      trainer: trainerUsername
+    };
+    if (!salary.month || !salary.item) {
+      document.getElementById('ledger-trainer-salary-add-result-message').textContent = '연월, 항목은 필수입니다.';
+      return;
+    }
+    const resultMsg = document.getElementById('ledger-trainer-salary-add-result-message');
+    resultMsg.textContent = '';
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '저장 중...';
+    try {
+      const response = await fetch('/api/trainer/salaries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(salary)
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || '추가에 실패했습니다.');
+      }
+      closeModal();
+      const trainerSelect = document.getElementById('ledger-trainer-select');
+      if (trainerSelect && trainerSelect.value) {
+        await loadTrainerLedger(trainerSelect.value);
+      }
+    } catch (error) {
+      resultMsg.textContent = error.message || '추가에 실패했습니다.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = '저장';
+    }
+  });
+}
+
+async function showTrainerSalaryEditModal(id, trainerUsername) {
+  const currentUser = localStorage.getItem('username');
+  const month = getSelectedYearMonth();
+  try {
+    const response = await fetch(`/api/trainer/salaries?month=${month}&currentUser=${encodeURIComponent(currentUser)}&trainer=${encodeURIComponent(trainerUsername)}`);
+    const salaries = await response.json();
+    const salary = salaries.find(s => s.id === id);
+    if (!salary) { alert('데이터를 찾을 수 없습니다.'); return; }
+    const modalHTML = `
+      <div class="ledger-trainer-salary-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+      <div class="ledger-trainer-salary-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:12px;box-shadow:0 8px 32px #1976d240;width:85vw;max-width:350px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+          <h3 style="margin:0;color:#1976d2;font-size:1.1rem;">급여 수정</h3>
+          <button id="ledger-trainer-salary-edit-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+        </div>
+        <form id="ledger-trainer-salary-edit-form" style="display:flex;flex-direction:column;gap:12px;">
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-salary-edit-month" value="${salary.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-salary-edit-item" value="${(salary.item || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-salary-edit-amount" value="${formatNumber(salary.amount || 0)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
+          <div id="ledger-trainer-salary-edit-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
+          <div style="display:flex;gap:8px;justify-content:space-between;margin-top:8px;"><button type="button" id="ledger-trainer-salary-edit-delete-btn" style="background:#d32f2f;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">삭제</button><div style="display:flex;gap:8px;"><button type="button" id="ledger-trainer-salary-edit-cancel-btn" style="background:#eee;color:#1976d2;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">취소</button><button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:0.9rem;">저장</button></div></div>
+        </form>
+      </div>
+    `;
+    const existingOverlay = document.querySelector('.ledger-trainer-salary-edit-modal-overlay');
+    const existingModal = document.querySelector('.ledger-trainer-salary-edit-modal');
+    if (existingOverlay) existingOverlay.remove();
+    if (existingModal) existingModal.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const amountInput = document.getElementById('ledger-trainer-salary-edit-amount');
+    if (amountInput) {
+      amountInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/,/g, '');
+        if (value === '') { e.target.value = ''; return; }
+        if (!/^\d+$/.test(value)) value = value.replace(/\D/g, '');
+        if (value) e.target.value = formatNumber(parseInt(value));
+        else e.target.value = '';
+      });
+    }
+    const closeModal = () => {
+      document.querySelector('.ledger-trainer-salary-edit-modal-overlay')?.remove();
+      document.querySelector('.ledger-trainer-salary-edit-modal')?.remove();
+    };
+    document.getElementById('ledger-trainer-salary-edit-modal-close')?.addEventListener('click', closeModal);
+    document.getElementById('ledger-trainer-salary-edit-cancel-btn')?.addEventListener('click', closeModal);
+    document.querySelector('.ledger-trainer-salary-edit-modal-overlay')?.addEventListener('click', closeModal);
+    document.getElementById('ledger-trainer-salary-edit-delete-btn')?.addEventListener('click', async function() {
+      if (confirm('정말 삭제하시겠습니까?')) {
+        await deleteTrainerSalary(id, trainerUsername);
+        closeModal();
+      }
+    });
+    document.getElementById('ledger-trainer-salary-edit-form')?.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const updates = {
+        month: document.getElementById('ledger-trainer-salary-edit-month').value,
+        item: document.getElementById('ledger-trainer-salary-edit-item').value,
+        amount: parseInt(document.getElementById('ledger-trainer-salary-edit-amount').value.replace(/,/g, '')) || 0,
+        currentUser
+      };
+      if (!updates.month || !updates.item) {
+        document.getElementById('ledger-trainer-salary-edit-result-message').textContent = '연월, 항목은 필수입니다.';
+        return;
+      }
+      const resultMsg = document.getElementById('ledger-trainer-salary-edit-result-message');
+      resultMsg.textContent = '';
+      const submitBtn = this.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '저장 중...';
+      try {
+        const response = await fetch(`/api/trainer/salaries/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updates)
+        });
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || '수정에 실패했습니다.');
+        }
+        closeModal();
+        const trainerSelect = document.getElementById('ledger-trainer-select');
+        if (trainerSelect && trainerSelect.value) {
+          await loadTrainerLedger(trainerSelect.value);
+        }
+      } catch (error) {
+        resultMsg.textContent = error.message || '수정에 실패했습니다.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = '저장';
+      }
+    });
+  } catch (error) {
+    console.error('급여 조회 오류:', error);
+    alert('급여 데이터를 불러오는데 실패했습니다.');
+  }
+}
+
+async function deleteTrainerSalary(id, trainerUsername) {
+  try {
+    const currentUser = localStorage.getItem('username');
+    const response = await fetch(`/api/trainer/salaries/${id}?currentUser=${encodeURIComponent(currentUser)}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) throw new Error('삭제에 실패했습니다.');
+    const trainerSelect = document.getElementById('ledger-trainer-select');
+    if (trainerSelect && trainerSelect.value) {
+      await loadTrainerLedger(trainerSelect.value);
+    }
+  } catch (error) {
+    console.error('급여 삭제 오류:', error);
+    alert('삭제에 실패했습니다.');
+  }
 }
