@@ -401,16 +401,15 @@ let calState = {
     today: null, 
     viewMode: 'month', 
     weekStartDate: null, 
-    initialWeekScroll: false, 
+    scrollTargetDate: null,  // 스크롤할 날짜 (YYYY-MM-DD 형식, null이면 스크롤 안함) - 한국시간 기준
     savedScrollPosition: null, 
-    scrollToDate: null,
     // 세션 데이터 캐시
     sessionsCache: {
         allSessions: null,        // 전체 세션 캐시
         lastFetchTime: null,      // 마지막 조회 시간
         dateCache: {}             // 날짜별 세션 캐시 { '2026-01-26': { sessions: [...], timestamp: ... }, ... }
     }
-}; // 'month' or 'week', weekStartDate는 주간보기에서 현재 주의 시작일(일요일), scrollToDate는 날짜 클릭 시 스크롤할 날짜
+}; // 'month' or 'week', weekStartDate는 주간보기에서 현재 주의 시작일(일요일), scrollTargetDate는 스크롤할 날짜
 
 // 캐시 TTL (Time To Live) - 5분
 const SESSIONS_CACHE_TTL = 5 * 60 * 1000; // 5분 (밀리초)
@@ -466,6 +465,45 @@ function invalidateSessionsCache(date = null) {
         cache.allSessions = null;
         cache.lastFetchTime = null;
         cache.dateCache = {};
+    }
+}
+
+// 한국시간(UTC+9) 기준으로 오늘 날짜 문자열 반환 (YYYY-MM-DD)
+function getKoreaTodayString() {
+    const now = new Date();
+    // UTC 시간에 9시간을 더해서 한국시간으로 변환
+    const koreaTime = new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + (9 * 60 * 60 * 1000));
+    const year = koreaTime.getUTCFullYear();
+    const month = String(koreaTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(koreaTime.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// 날짜가 현재 주간보기의 주 내에 있는지 확인 (한국시간 기준)
+function isDateInCurrentWeek(dateStr) {
+    // 주간보기가 아니면 false 반환
+    if (calState.viewMode !== 'week' || !calState.weekStartDate) {
+        return false;
+    }
+    
+    try {
+        // 한국시간 기준으로 날짜 파싱
+        const targetDate = new Date(dateStr + 'T00:00:00+09:00');
+        const weekStart = new Date(calState.weekStartDate + 'T00:00:00+09:00');
+        
+        if (isNaN(targetDate.getTime()) || isNaN(weekStart.getTime())) {
+            return false;
+        }
+        
+        // 주의 시작일(일요일)부터 6일 후(토요일)까지
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
+        
+        return targetDate >= weekStart && targetDate <= weekEnd;
+    } catch (e) {
+        console.error('[isDateInCurrentWeek] Error:', e);
+        return false;
     }
 }
 
@@ -532,6 +570,11 @@ export async function renderSessionCalendar(container) {
         }
         
         calState.weekStartDate = null;
+        
+        // 주간보기 진입 시 오늘 날짜로 스크롤 설정 (한국시간 기준)
+        if (calState.viewMode === 'week') {
+            calState.scrollTargetDate = getKoreaTodayString();
+        }
     }
     
     // 초기 상태 유효성 검사
@@ -1326,17 +1369,13 @@ async function renderCalUI(container, forceDate) {
               document.getElementById('tmc-repeat-checkbox').checked = false;
               document.getElementById('tmc-repeat-count-label').style.opacity = '0';
               document.getElementById('tmc-repeat-count-label').style.height = '0';
-              renderCalUI(container, dd); // 세션 추가 후 갱신
               
-              // 주간보기일 때 저장된 세션 날짜로 스크롤 (입력한 날짜 사용)
-              if (calState.viewMode === 'week' && sessionDate) {
-                setTimeout(() => {
-                  const dateHeader = container.querySelector(`[data-date-header="${sessionDate}"]`);
-                  if (dateHeader) {
-                    dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }, 200);
+              // 주간보기일 때 세션 날짜로 스크롤 (이번주 내의 날짜인 경우만)
+              if (calState.viewMode === 'week' && sessionDate && isDateInCurrentWeek(sessionDate)) {
+                calState.scrollTargetDate = sessionDate;
               }
+              
+              renderCalUI(container, dd); // 세션 추가 후 갱신
               
               setTimeout(() => {
                 closeSessionModal();
@@ -1391,17 +1430,12 @@ async function renderCalUI(container, forceDate) {
               document.getElementById('tmc-30min-repeat-checkbox').checked = false;
               document.getElementById('tmc-30min-repeat-count-label').style.opacity = '0';
               document.getElementById('tmc-30min-repeat-count-label').style.height = '0';
-              renderCalUI(container, dd); // 세션 추가 후 갱신
-              
-              // 주간보기일 때 저장된 세션 날짜로 스크롤 (입력한 날짜 사용)
-              if (calState.viewMode === 'week' && sessionDate30min) {
-                setTimeout(() => {
-                  const dateHeader = container.querySelector(`[data-date-header="${sessionDate30min}"]`);
-                  if (dateHeader) {
-                    dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }, 200);
+              // 주간보기일 때 세션 날짜로 스크롤 (이번주 내의 날짜인 경우만)
+              if (calState.viewMode === 'week' && sessionDate30min && isDateInCurrentWeek(sessionDate30min)) {
+                calState.scrollTargetDate = sessionDate30min;
               }
+              
+              renderCalUI(container, dd); // 세션 추가 후 갱신
               
               setTimeout(() => {
                 closeSessionModal();
@@ -1437,8 +1471,8 @@ async function renderCalUI(container, forceDate) {
                     const month = String(weekStart.getMonth() + 1).padStart(2, '0');
                     const day = String(weekStart.getDate()).padStart(2, '0');
                     calState.weekStartDate = `${year}-${month}-${day}`;
-                    // 주간보기 진입 시 오늘 날짜로 스크롤 플래그 설정
-                    calState.initialWeekScroll = true;
+                    // 주간보기 진입 시 오늘 날짜로 스크롤 설정 (한국시간 기준)
+                    calState.scrollTargetDate = getKoreaTodayString();
                 } else {
                     // 월간보기로 전환 시 오늘 날짜로 초기화
                     const today = new Date();
@@ -1446,7 +1480,7 @@ async function renderCalUI(container, forceDate) {
                     calState.month = today.getMonth() + 1;
                     calState.today = today.getDate();
                     calState.weekStartDate = null;
-                    calState.initialWeekScroll = false; // 월간보기로 전환 시 플래그 초기화
+                    calState.scrollTargetDate = null; // 월간보기로 전환 시 스크롤 타겟 초기화
                 }
                 renderCalUI(container);
             };
@@ -1468,6 +1502,17 @@ async function renderCalUI(container, forceDate) {
                     const newWeekStartDate = formatDateString(weekStart);
                     if (newWeekStartDate) {
                         calState.weekStartDate = newWeekStartDate;
+                        
+                        // 선택된 날짜(calState.today 인덱스) 기준으로 스크롤 설정
+                        if (calState.today !== null && calState.today >= 0 && calState.today <= 6) {
+                            const selectedDate = new Date(weekStart);
+                            selectedDate.setDate(weekStart.getDate() + calState.today);
+                            const selectedDateStr = formatDateString(selectedDate);
+                            if (selectedDateStr) {
+                                calState.scrollTargetDate = selectedDateStr;
+                            }
+                        }
+                        
                         renderCalUI(container);
                     } else {
                         console.error('[Week Nav] Failed to format date after prev week');
@@ -1488,6 +1533,17 @@ async function renderCalUI(container, forceDate) {
                     const newWeekStartDate = formatDateString(weekStart);
                     if (newWeekStartDate) {
                         calState.weekStartDate = newWeekStartDate;
+                        
+                        // 선택된 날짜(calState.today 인덱스) 기준으로 스크롤 설정
+                        if (calState.today !== null && calState.today >= 0 && calState.today <= 6) {
+                            const selectedDate = new Date(weekStart);
+                            selectedDate.setDate(weekStart.getDate() + calState.today);
+                            const selectedDateStr = formatDateString(selectedDate);
+                            if (selectedDateStr) {
+                                calState.scrollTargetDate = selectedDateStr;
+                            }
+                        }
+                        
                         renderCalUI(container);
                     } else {
                         console.error('[Week Nav] Failed to format date after next week');
@@ -1562,32 +1618,11 @@ async function renderCalUI(container, forceDate) {
                         calState.today = clickedDate.getDay();
                     }
                     
-                    // initialWeekScroll 플래그를 false로 설정하여 오늘 날짜로 스크롤하는 로직이 실행되지 않도록 함
-                    calState.initialWeekScroll = false;
-                    // 날짜 클릭 스크롤을 위한 플래그 설정
-                    calState.scrollToDate = dataDate;
+                    // 날짜 클릭 시 해당 날짜로 스크롤 설정
+                    calState.scrollTargetDate = dataDate;
                     
                     // 해당 날짜의 세션 카드 영역으로 스크롤
-                    // renderCalUI 완료를 기다린 후 스크롤
-                    renderCalUI(container).then(() => {
-                        // DOM 렌더링 완료 확인 (재시도 로직 포함)
-                        const scrollToDateHeader = (retryCount = 0) => {
-                            const dateHeader = container.querySelector(`[data-date-header="${dataDate}"]`);
-                            if (dateHeader && dateHeader.offsetTop > 0) {
-                                // DOM이 준비되었고 dateHeader가 정상적으로 렌더링됨
-                                dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                                calState.scrollToDate = null; // 스크롤 완료 후 플래그 제거
-                            } else if (retryCount < 10) {
-                                // 아직 DOM이 준비되지 않았으면 재시도 (50ms 간격)
-                                setTimeout(() => scrollToDateHeader(retryCount + 1), 50);
-                            } else {
-                                // 최대 재시도 횟수 초과
-                                calState.scrollToDate = null;
-                            }
-                        };
-                        // 초기 시도 (100ms 후)
-                        setTimeout(() => scrollToDateHeader(0), 100);
-                    });
+                    renderCalUI(container);
                 }
               } else {
                 // 월간보기: 기존 로직
@@ -1654,11 +1689,32 @@ async function renderCalUI(container, forceDate) {
           };
         });
         
-        // 저장된 스크롤 위치 복원 (세션 카드 클릭 후 모달 닫힌 경우)
-        // 단, 날짜 클릭 스크롤 중이면 실행하지 않음
-        if (calState.scrollToDate) {
-          // 날짜 클릭 스크롤이 예정되어 있으면 스킵 (날짜 클릭 스크롤이 우선)
+        // 통합 스크롤 로직
+        // 1순위: scrollTargetDate (주간보기 진입, 날짜 클릭, 세션 추가/수정/삭제) - 한국시간 기준
+        // 2순위: savedScrollPosition (세션 카드 클릭 후 모달 닫힌 경우)
+        if (calState.scrollTargetDate) {
+          const targetDate = calState.scrollTargetDate;
+          // 스크롤 실행 후 초기화 (중복 실행 방지)
+          calState.scrollTargetDate = null;
+          
+          const sessionList = container.querySelector('.tmc-session-list');
+          if (sessionList) {
+            // DOM 렌더링 완료 확인 (재시도 로직 포함)
+            const scrollToTarget = (retryCount = 0) => {
+              const dateHeader = container.querySelector(`[data-date-header="${targetDate}"]`);
+              if (dateHeader && dateHeader.offsetTop > 0) {
+                // DOM이 준비되었고 dateHeader가 정상적으로 렌더링됨
+                dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              } else if (retryCount < 10) {
+                // 아직 DOM이 준비되지 않았으면 재시도 (50ms 간격)
+                setTimeout(() => scrollToTarget(retryCount + 1), 50);
+              }
+            };
+            // 초기 시도 (100ms 후)
+            setTimeout(() => scrollToTarget(0), 100);
+          }
         } else if (calState.savedScrollPosition !== undefined && calState.savedScrollPosition !== null) {
+          // 저장된 스크롤 위치 복원 (세션 카드 클릭 후 모달 닫힌 경우)
           const sessionList = container.querySelector('.tmc-session-list');
           if (sessionList) {
             // DOM 업데이트 후 스크롤 복원
@@ -1666,33 +1722,6 @@ async function renderCalUI(container, forceDate) {
               sessionList.scrollTop = calState.savedScrollPosition;
               calState.savedScrollPosition = null; // 복원 후 초기화
             }, 100);
-          }
-        } else if (calState.viewMode === 'week' && calState.initialWeekScroll === true) {
-          // 주간보기 진입 시 오늘 날짜로 자동 스크롤 (한 번만 실행)
-          // 플래그를 먼저 false로 설정하여 중복 실행 방지
-          calState.initialWeekScroll = false;
-          
-          const today = new Date();
-          const year = today.getFullYear();
-          const month = String(today.getMonth() + 1).padStart(2, '0');
-          const day = String(today.getDate()).padStart(2, '0');
-          const todayDateStr = `${year}-${month}-${day}`;
-          
-          const sessionList = container.querySelector('.tmc-session-list');
-          if (sessionList) {
-            // DOM 렌더링 완료 확인 (재시도 로직 포함)
-            const scrollToToday = (retryCount = 0) => {
-              const dateHeader = container.querySelector(`[data-date-header="${todayDateStr}"]`);
-              if (dateHeader && dateHeader.offsetTop > 0) {
-                // DOM이 준비되었고 dateHeader가 정상적으로 렌더링됨
-                dateHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              } else if (retryCount < 10) {
-                // 아직 DOM이 준비되지 않았으면 재시도 (50ms 간격)
-                setTimeout(() => scrollToToday(retryCount + 1), 50);
-              }
-            };
-            // 초기 시도 (100ms 후)
-            setTimeout(() => scrollToToday(0), 100);
           }
         }
       } catch (e) {
@@ -3066,6 +3095,11 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
               // 세션 수정 성공 시 캐시 무효화
               invalidateSessionsCache();
               
+              // 주간보기일 때 수정된 세션 날짜로 스크롤 (이번주 내의 날짜인 경우만)
+              if (calState.viewMode === 'week' && data.date && isDateInCurrentWeek(data.date)) {
+                calState.scrollTargetDate = data.date;
+              }
+              
               resultDiv.className = 'tmc-modal-result success';
               resultDiv.innerText = result.message;
               setTimeout(() => { 
@@ -3098,11 +3132,21 @@ function showAttendModal(sessionId, container, hasNoRemaining = false) {
       resultDiv.className = 'tmc-modal-result';
       resultDiv.innerText = '처리 중...';
       try {
+        // 삭제 전에 세션 날짜 확인
+        const sessionRes = await fetch(`/api/sessions/${sessionId}`);
+        const sessionData = await sessionRes.ok ? await sessionRes.json() : null;
+        const sessionDate = sessionData ? sessionData.date : null;
+        
         const res = await fetch(`/api/sessions/${sessionId}`, { method: 'DELETE' });
         const result = await res.json();
         if (res.ok) {
           // 세션 삭제 성공 시 캐시 무효화
           invalidateSessionsCache();
+          
+          // 주간보기일 때 삭제된 세션 날짜로 스크롤 (이번주 내의 날짜인 경우만)
+          if (calState.viewMode === 'week' && sessionDate && isDateInCurrentWeek(sessionDate)) {
+            calState.scrollTargetDate = sessionDate;
+          }
           
           resultDiv.className = 'tmc-modal-result success';
           resultDiv.innerText = result.message;
