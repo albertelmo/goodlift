@@ -540,9 +540,13 @@ async function render(records) {
             dateComments.forEach(comment => {
                 let commentTime = '';
                 if (comment.created_at) {
-                    const commentDate = new Date(comment.created_at);
-                    const hours = commentDate.getHours();
-                    const minutes = String(commentDate.getMinutes()).padStart(2, '0');
+                    // UTC 시간을 한국시간(KST, UTC+9)으로 변환
+                    const utcDate = new Date(comment.created_at);
+                    // 한국시간으로 변환 (UTC+9)
+                    const koreanTime = new Date(utcDate.getTime() + (9 * 60 * 60 * 1000));
+                    // UTC 메서드를 사용하여 변환된 시간의 시/분 추출
+                    const hours = koreanTime.getUTCHours();
+                    const minutes = String(koreanTime.getUTCMinutes()).padStart(2, '0');
                     const ampm = hours >= 12 ? 'PM' : 'AM';
                     const displayHours = hours % 12 || 12;
                     commentTime = `${displayHours}:${minutes} ${ampm}`;
