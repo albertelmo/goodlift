@@ -174,7 +174,9 @@ const addComment = async (commentData) => {
         updated_at
       ) VALUES ($1, $2, $3, $4, $5, NOW() AT TIME ZONE 'Asia/Seoul', NOW() AT TIME ZONE 'Asia/Seoul')
       RETURNING 
-        id, app_user_id, workout_date, trainer_username, trainer_name, comment, created_at, updated_at
+        id, app_user_id, workout_date, trainer_username, trainer_name, comment, 
+        created_at AT TIME ZONE 'Asia/Seoul' as created_at, 
+        updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
     `;
     const values = [
       commentData.app_user_id,
@@ -196,7 +198,9 @@ const getComments = async (appUserId, filters = {}) => {
   try {
     let query = `
       SELECT 
-        id, app_user_id, workout_date, trainer_username, trainer_name, comment, created_at, updated_at
+        id, app_user_id, workout_date, trainer_username, trainer_name, comment, 
+        created_at AT TIME ZONE 'Asia/Seoul' as created_at, 
+        updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
       FROM workout_trainer_comments
       WHERE app_user_id = $1
     `;
@@ -243,7 +247,9 @@ const getCommentById = async (commentId) => {
   try {
     const query = `
       SELECT 
-        id, app_user_id, workout_date, trainer_username, trainer_name, comment, created_at, updated_at
+        id, app_user_id, workout_date, trainer_username, trainer_name, comment, 
+        created_at AT TIME ZONE 'Asia/Seoul' as created_at, 
+        updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
       FROM workout_trainer_comments
       WHERE id = $1
     `;
@@ -265,7 +271,9 @@ const updateComment = async (commentId, commentData) => {
         updated_at = NOW() AT TIME ZONE 'Asia/Seoul'
       WHERE id = $2
       RETURNING 
-        id, app_user_id, workout_date, trainer_username, trainer_name, comment, created_at, updated_at
+        id, app_user_id, workout_date, trainer_username, trainer_name, comment, 
+        created_at AT TIME ZONE 'Asia/Seoul' as created_at, 
+        updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
     `;
     const result = await pool.query(query, [commentData.comment, commentId]);
     return result.rows[0] || null;
