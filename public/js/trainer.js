@@ -330,9 +330,7 @@ export async function renderMyMembers(container, username, statusFilter = '유�
     html += '<div style="display:flex;gap:6px;align-items:center;">';
     const filterOptions = [
         { value: '전체', label: '전체' },
-        { value: '유효', label: '유효' },
-        { value: '만료', label: '만료' },
-        { value: '정지', label: '정지' }
+        { value: '유효', label: '유효' }
     ];
     filterOptions.forEach(option => {
         const isActive = statusFilter === option.value;
@@ -341,19 +339,28 @@ export async function renderMyMembers(container, username, statusFilter = '유�
             : 'background:#fff;color:#666;border-color:#e0e0e0;';
         html += `<button class="tmc-member-filter-btn" 
                     data-filter="${option.value}"
-                    style="padding:4px 12px;border-radius:16px;border:1px solid;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.2s;height:28px;box-sizing:border-box;${activeStyle}"
+                    style="padding:4px 12px;border-radius:16px;border:1px solid;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.2s;height:28px;box-sizing:border-box;line-height:normal;display:flex;align-items:center;justify-content:center;${activeStyle}"
                     onmouseover="${!isActive ? "this.style.background='#f5f5f5';this.style.borderColor='#d0d0d0';" : ''}"
                     onmouseout="${!isActive ? "this.style.background='#fff';this.style.borderColor='#e0e0e0';" : ''}">
                 ${option.label}
             </button>`;
     });
     html += '</div>';
+    html += '<div style="display:flex;gap:8px;align-items:center;">';
     html += `<input type="search" 
                 id="tmc-member-search" 
                 placeholder="회원 검색..." 
-                style="padding:4px 12px;border-radius:16px;border:1px solid #e0e0e0;font-size:0.8rem;width:100px;height:28px;outline:none;transition:all 0.2s;box-sizing:border-box;"
+                style="padding:4px 12px;border-radius:16px;border:1px solid #e0e0e0;font-size:0.8rem;width:100px;height:28px;outline:none;transition:all 0.2s;box-sizing:border-box;line-height:normal;"
                 onfocus="this.style.borderColor='#667eea';this.style.boxShadow='0 0 0 2px rgba(102,126,234,0.1)';"
                 onblur="this.style.borderColor='#e0e0e0';this.style.boxShadow='none';">`;
+    // 회원 추가 버튼 (수습 트레이너는 숨김)
+    html += `<button id="tmc-member-add-btn" 
+                style="padding:4px 12px;border-radius:16px;border:1px solid #667eea;background:#667eea;color:#fff;font-size:0.8rem;font-weight:500;cursor:pointer;transition:all 0.2s;height:28px;box-sizing:border-box;white-space:nowrap;line-height:normal;display:flex;align-items:center;justify-content:center;"
+                onmouseover="this.style.background='#5568d3';this.style.borderColor='#5568d3';" 
+                onmouseout="this.style.background='#667eea';this.style.borderColor='#667eea';">
+                + 회원 추가
+            </button>`;
+    html += '</div>';
     html += '</div>';
     
     // 회원 리스트 영역 초기화 (로딩 메시지 없이 바로 렌더링)
@@ -368,6 +375,9 @@ export async function renderMyMembers(container, username, statusFilter = '유�
     if (searchInput && searchQuery) {
         searchInput.value = searchQuery;
     }
+    
+    // 회원 추가 버튼 이벤트 리스너 추가 (수습 트레이너는 숨김)
+    setupMemberAddButton(container, username, statusFilter, searchQuery);
     
     try {
         const res = await fetch('/api/members');
@@ -594,6 +604,33 @@ async function getCachedCurrentTrainer(username) {
     return trainer;
 }
 
+// 회원 추가 버튼 이벤트 설정
+async function setupMemberAddButton(container, username, statusFilter, searchQuery) {
+    const addBtn = container.querySelector('#tmc-member-add-btn');
+    if (!addBtn) return;
+    
+    // 트레이너의 probation 상태 확인 (캐시 사용)
+    try {
+        const trainer = await getCachedCurrentTrainer(username);
+        
+        if (trainer && trainer.probation === 'on') {
+            // 수습 트레이너인 경우 버튼 숨김
+            addBtn.style.display = 'none';
+            return;
+        }
+    } catch (error) {
+        console.error('트레이너 정보 조회 오류:', error);
+        // 오류 발생 시 버튼 숨김
+        addBtn.style.display = 'none';
+        return;
+    }
+    
+    // 버튼 클릭 이벤트
+    addBtn.onclick = function() {
+        showMemberAddModal(container, username, statusFilter, searchQuery);
+    };
+}
+
 // 회원 카드 클릭 이벤트 설정
 function setupMemberCardClickEvents(container, username, statusFilter, searchQuery, membersData) {
     const memberCards = container.querySelectorAll('.tmc-member-card');
@@ -749,6 +786,199 @@ async function showMemberEditModal(member, container, username, statusFilter, se
       } catch {
         resultDiv.style.color = '#d32f2f';
         resultDiv.innerText = '수정에 실패했습니다.';
+      }
+    };
+    
+    // 바깥 클릭 시 닫기
+    let isDragging = false;
+    let startX, startY;
+    
+    modalBg.addEventListener('mousedown', function(e) {
+      if (e.target === modalBg) {
+        startX = e.clientX;
+        startY = e.clientY;
+        isDragging = false;
+      }
+    });
+    
+    modalBg.addEventListener('mousemove', function(e) {
+      if (startX !== undefined && startY !== undefined) {
+        const deltaX = Math.abs(e.clientX - startX);
+        const deltaY = Math.abs(e.clientY - startY);
+        if (deltaX > 5 || deltaY > 5) {
+          isDragging = true;
+        }
+      }
+    });
+    
+    modalBg.addEventListener('mouseup', function(e) {
+      if (e.target === modalBg && !isDragging && startX !== undefined && startY !== undefined) {
+        const deltaX = Math.abs(e.clientX - startX);
+        const deltaY = Math.abs(e.clientY - startY);
+        if (deltaX < 5 && deltaY < 5) {
+          modalBg.style.display = 'none';
+          modalBg.innerHTML = '';
+        }
+      }
+      startX = undefined;
+      startY = undefined;
+      isDragging = false;
+    });
+}
+
+// 회원 추가 모달 표시
+async function showMemberAddModal(container, username, statusFilter, searchQuery) {
+    // 모달 배경 생성 (없으면)
+    let modalBg = document.getElementById('tmc-member-add-modal-bg');
+    if (!modalBg) {
+        modalBg = document.createElement('div');
+        modalBg.id = 'tmc-member-add-modal-bg';
+        modalBg.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;';
+        document.body.appendChild(modalBg);
+    }
+    
+    // 트레이너 목록과 센터 목록 병렬 조회 (캐시 사용)
+    const [trainers, centers] = await Promise.all([
+        getCachedTrainers(),
+        getCachedCenters()
+    ]);
+    
+    // 한국 시간 기준 오늘 날짜
+    const getKoreanDate = () => {
+        const now = new Date();
+        const koreanTime = new Date(now.getTime() + (9 * 60 * 60 * 1000)); // UTC+9
+        return koreanTime.toISOString().slice(0, 10);
+    };
+    
+    modalBg.style.display = 'block';
+    modalBg.innerHTML = `
+      <div id="tmc-member-add-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:18px 16px;z-index:1002;min-width:300px;max-width:96vw;max-height:90vh;overflow-y:auto;">
+        <h3 style="color:var(--primary);margin-top:0;margin-bottom:14px;font-size:1.1rem;">회원 추가</h3>
+        <form id="tmc-member-add-form">
+          <div style="margin-bottom:8px;">
+            <b style="font-size:0.9rem;">이름 <span style="color:#d32f2f;">*</span></b><br>
+            <input type="text" name="name" required 
+                   style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:6px;margin-top:1px;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div style="margin-bottom:8px;">
+            <b style="font-size:0.9rem;">성별 <span style="color:#d32f2f;">*</span></b><br>
+            <select name="gender" required 
+                    style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:6px;margin-top:1px;font-size:0.9rem;box-sizing:border-box;">
+              <option value="">선택</option>
+              <option value="male">남성</option>
+              <option value="female">여성</option>
+            </select>
+          </div>
+          <div style="margin-bottom:8px;">
+            <b style="font-size:0.9rem;">전화번호 <span style="color:#d32f2f;">*</span></b><br>
+            <input type="tel" name="phone" required pattern="[0-9\-]+" placeholder="010-1234-5678"
+                   style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:6px;margin-top:1px;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div style="margin-bottom:8px;">
+            <b style="font-size:0.9rem;">담당 트레이너 <span style="color:#d32f2f;">*</span></b><br>
+            <select name="trainer" required id="tmc-add-trainer-select"
+                    style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:6px;margin-top:1px;font-size:0.9rem;box-sizing:border-box;">
+              <option value="">선택</option>
+            </select>
+          </div>
+          <div style="margin-bottom:8px;">
+            <b style="font-size:0.9rem;">센터 <span style="color:#d32f2f;">*</span></b><br>
+            <select name="center" required id="tmc-add-center-select"
+                    style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:6px;margin-top:1px;font-size:0.9rem;box-sizing:border-box;">
+              <option value="">선택</option>
+            </select>
+          </div>
+          <div style="margin-bottom:8px;">
+            <b style="font-size:0.9rem;">등록일 <span style="color:#d32f2f;">*</span></b><br>
+            <input type="date" name="regdate" required id="tmc-add-regdate"
+                   style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:6px;margin-top:1px;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div style="margin-bottom:8px;">
+            <b style="font-size:0.9rem;">세션 수 <span style="color:#d32f2f;">*</span></b><br>
+            <input type="number" name="sessions" min="0" required value="0"
+                   style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:6px;margin-top:1px;font-size:0.9rem;box-sizing:border-box;">
+          </div>
+          <div id="tmc-add-modal-result" style="min-height:18px;margin-bottom:6px;color:#1976d2;font-size:0.85rem;"></div>
+          <div style="display:flex;gap:10px;justify-content:flex-end;">
+            <button type="submit" id="tmc-add-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;padding:6px;font-size:0.9rem;">추가</button>
+            <button type="button" id="tmc-add-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;padding:6px;font-size:0.9rem;">닫기</button>
+          </div>
+        </form>
+      </div>
+    `;
+    
+    // 오늘 날짜 기본값 설정
+    document.getElementById('tmc-add-regdate').value = getKoreanDate();
+    
+    // 담당 트레이너 드롭다운 로딩 (현재 트레이너를 기본값으로 설정)
+    const trainerSel = document.getElementById('tmc-add-trainer-select');
+    trainerSel.innerHTML = '<option value="">선택</option>' + trainers.map(t=>{
+        const isSelected = t.username === username ? ' selected' : '';
+        return `<option value="${t.username}"${isSelected}>${t.name}</option>`;
+    }).join('');
+    
+    // 센터 드롭다운 로딩
+    const centerSel = document.getElementById('tmc-add-center-select');
+    const userRole = localStorage.getItem('role');
+    const userCenter = localStorage.getItem('center');
+    
+    if (userRole === 'center' && userCenter) {
+      // 센터관리자인 경우 자신의 센터로 고정
+      centerSel.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
+      centerSel.disabled = true;
+      centerSel.style.backgroundColor = '#f5f5f5';
+      centerSel.style.color = '#666';
+    } else {
+      // 관리자나 트레이너인 경우 모든 센터 선택 가능
+      centerSel.innerHTML = '<option value="">선택</option>' + centers.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+    }
+    
+    // 닫기 버튼
+    document.getElementById('tmc-add-modal-cancel').onclick = function() {
+      modalBg.style.display = 'none';
+      modalBg.innerHTML = '';
+    };
+    
+    // 폼 제출 이벤트
+    document.getElementById('tmc-member-add-form').onsubmit = async function(e) {
+      e.preventDefault();
+      const form = e.target;
+      const data = Object.fromEntries(new FormData(form));
+      data.sessions = Number(data.sessions);
+      
+      // 센터관리자인 경우 센터 정보 강제 추가
+      if (userRole === 'center' && userCenter) {
+        data.center = userCenter;
+      }
+      
+      const resultDiv = document.getElementById('tmc-add-modal-result');
+      resultDiv.style.color = '#1976d2';
+      resultDiv.innerText = '처리 중...';
+      
+      try {
+        const res = await fetch('/api/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        
+        if (res.ok) {
+          resultDiv.style.color = '#1976d2';
+          resultDiv.innerText = '회원이 추가되었습니다.';
+          setTimeout(() => {
+            modalBg.style.display = 'none';
+            modalBg.innerHTML = '';
+            // 회원 목록 새로고침
+            renderMyMembers(container, username, statusFilter, searchQuery);
+          }, 900);
+        } else {
+          resultDiv.style.color = '#d32f2f';
+          resultDiv.innerText = result.message || '회원 추가에 실패했습니다.';
+        }
+      } catch (error) {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = '회원 추가에 실패했습니다.';
       }
     };
     
