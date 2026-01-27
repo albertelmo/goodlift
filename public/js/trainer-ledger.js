@@ -134,6 +134,18 @@ async function render(container) {
       
       <div id="trainer-ledger-loading" style="text-align:center;padding:40px;color:#888;display:none;">데이터를 불러오는 중...</div>
       
+      <!-- 계산식 표시 -->
+      <div id="trainer-ledger-calculation" style="background:#f5f5f5;border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:16px;">
+        <div style="font-size:0.9rem;line-height:1.8;color:#333;">
+          <div>총 수입: <span id="trainer-ledger-calc-total-revenue" style="font-weight:600;color:#1976d2;">0원</span></div>
+          <div>- 카드수수료: <span id="trainer-ledger-calc-card-fee" style="font-weight:600;color:#d32f2f;">0원</span> <span style="color:#666;font-size:0.8rem;">(매출의 1%)</span></div>
+          <div>- 지출: <span id="trainer-ledger-calc-total-expense" style="font-weight:600;color:#d32f2f;">0원</span> <span style="color:#666;font-size:0.8rem;">(지출총합)</span></div>
+          <div style="margin-top:8px;padding-top:8px;border-top:2px solid #ddd;font-size:1rem;font-weight:700;color:#1976d2;">
+            = <span id="trainer-ledger-calc-result" style="font-size:1.1rem;">0원</span>
+          </div>
+        </div>
+      </div>
+      
       <!-- 매출 섹션 -->
       <div style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -343,6 +355,9 @@ async function loadLedgerData() {
     // 총 수입 계산 및 표시
     renderTotalRevenue(revenues, otherRevenues);
     
+    // 계산식 렌더링
+    renderCalculation(revenues, otherRevenues, fixedExpenses, variableExpenses, salaries);
+    
     // 고정지출 렌더링
     renderFixedExpenses(fixedExpenses);
     
@@ -401,20 +416,8 @@ function renderFixedExpenses(expenses) {
   const listEl = document.getElementById('trainer-ledger-fixed-list');
   if (!listEl) return;
   
-  // 전체 총합 계산
-  const grandTotal = expenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
-  
-  // 제목 업데이트
-  const titleEl = document.getElementById('trainer-ledger-fixed-title');
-  if (titleEl) {
-    titleEl.innerHTML = `고정지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
-  }
-  
   if (expenses.length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">등록된 고정지출이 없습니다.</div>';
-    if (titleEl) {
-      titleEl.innerHTML = `고정지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: 0원)</span>`;
-    }
     return;
   }
   
@@ -459,20 +462,8 @@ function renderVariableExpenses(expenses) {
   const listEl = document.getElementById('trainer-ledger-variable-list');
   if (!listEl) return;
   
-  // 전체 총합 계산
-  const grandTotal = expenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
-  
-  // 제목 업데이트
-  const titleEl = document.getElementById('trainer-ledger-variable-title');
-  if (titleEl) {
-    titleEl.innerHTML = `변동지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
-  }
-  
   if (expenses.length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">등록된 변동지출이 없습니다.</div>';
-    if (titleEl) {
-      titleEl.innerHTML = `변동지출 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: 0원)</span>`;
-    }
     return;
   }
   
@@ -517,20 +508,8 @@ function renderSalaries(salaries) {
   const listEl = document.getElementById('trainer-ledger-salary-list');
   if (!listEl) return;
   
-  // 전체 총합 계산
-  const grandTotal = salaries.reduce((sum, s) => sum + (parseInt(s.amount) || 0), 0);
-  
-  // 제목 업데이트
-  const titleEl = document.getElementById('trainer-ledger-salary-title');
-  if (titleEl) {
-    titleEl.innerHTML = `급여 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: ${formatNumber(grandTotal)}원)</span>`;
-  }
-  
   if (salaries.length === 0) {
     listEl.innerHTML = '<div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">등록된 급여가 없습니다.</div>';
-    if (titleEl) {
-      titleEl.innerHTML = `급여 <span style="color:#666;font-size:0.85rem;font-weight:normal;">(합계: 0원)</span>`;
-    }
     return;
   }
   
@@ -1590,6 +1569,41 @@ function renderTotalRevenue(revenues, otherRevenues) {
   const total = revenueAmount + otherRevenueTotal;
   
   totalEl.textContent = `${formatNumber(total)}원`;
+}
+
+// 계산식 렌더링
+function renderCalculation(revenues, otherRevenues, fixedExpenses, variableExpenses, salaries) {
+  // 총 수입 계산
+  const revenueAmount = revenues.length > 0 ? (revenues[0].amount || 0) : 0;
+  const otherRevenueTotal = otherRevenues.reduce((sum, r) => sum + (parseInt(r.amount) || 0), 0);
+  const totalRevenue = revenueAmount + otherRevenueTotal;
+  
+  // 카드수수료 계산 (매출의 1%)
+  const cardFee = Math.floor(revenueAmount * 0.01);
+  
+  // 지출 총합 계산
+  const fixedTotal = fixedExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  const variableTotal = variableExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
+  const salaryTotal = salaries.reduce((sum, s) => sum + (parseInt(s.amount) || 0), 0);
+  const totalExpense = fixedTotal + variableTotal + salaryTotal;
+  
+  // 최종 결과 계산
+  const result = totalRevenue - cardFee - totalExpense;
+  
+  // 표시
+  const totalRevenueEl = document.getElementById('trainer-ledger-calc-total-revenue');
+  const cardFeeEl = document.getElementById('trainer-ledger-calc-card-fee');
+  const totalExpenseEl = document.getElementById('trainer-ledger-calc-total-expense');
+  const resultEl = document.getElementById('trainer-ledger-calc-result');
+  
+  if (totalRevenueEl) totalRevenueEl.textContent = `${formatNumber(totalRevenue)}원`;
+  if (cardFeeEl) cardFeeEl.textContent = `${formatNumber(cardFee)}원`;
+  if (totalExpenseEl) totalExpenseEl.textContent = `${formatNumber(totalExpense)}원`;
+  if (resultEl) {
+    resultEl.textContent = `${formatNumber(result)}원`;
+    // 결과가 음수면 빨간색, 양수면 파란색
+    resultEl.style.color = result < 0 ? '#d32f2f' : '#1976d2';
+  }
 }
 
 // 매출 수정 모달
