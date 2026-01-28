@@ -277,40 +277,7 @@ const addConsultationRecord = async (recordData) => {
     
     if (!row) return null;
     
-    // 타임스탬프를 ISO 문자열로 변환 (AT TIME ZONE으로 이미 한국 시간으로 변환됨)
-    if (row.created_at) {
-      try {
-        const date = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          const seconds = String(date.getSeconds()).padStart(2, '0');
-          row.created_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-        }
-      } catch (error) {
-        console.error('[PostgreSQL] created_at 변환 오류:', error, row.created_at);
-      }
-    }
-    if (row.updated_at) {
-      try {
-        const date = row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          const seconds = String(date.getSeconds()).padStart(2, '0');
-          row.updated_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-        }
-      } catch (error) {
-        console.error('[PostgreSQL] updated_at 변환 오류:', error, row.updated_at);
-      }
-    }
-    
+    // PostgreSQL에서 이미 한국 시간으로 변환되어 반환됨 (식단 코멘트와 동일한 방식)
     return row;
   } catch (error) {
     console.error('[PostgreSQL] 상담기록 추가 오류:', error);
@@ -364,45 +331,8 @@ const getConsultationRecords = async (filters = {}) => {
     
     const result = await pool.query(query, values);
     
-    // 결과 정규화: 타임스탬프를 ISO 문자열로 변환 (AT TIME ZONE으로 이미 한국 시간으로 변환됨)
-    const normalizedRows = result.rows.map(row => {
-      if (row.created_at) {
-        try {
-          const date = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
-          if (!isNaN(date.getTime())) {
-            // SQL에서 이미 한국 시간으로 변환되었으므로, 그대로 ISO 문자열로 변환 (한국 시간대 오프셋 포함)
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
-            row.created_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-          }
-        } catch (error) {
-          console.error('[PostgreSQL] created_at 변환 오류:', error, row.created_at);
-        }
-      }
-      if (row.updated_at) {
-        try {
-          const date = row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at);
-          if (!isNaN(date.getTime())) {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const day = String(date.getDate()).padStart(2, '0');
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
-            row.updated_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-          }
-        } catch (error) {
-          console.error('[PostgreSQL] updated_at 변환 오류:', error, row.updated_at);
-        }
-      }
-      return row;
-    });
-    
-    return normalizedRows;
+    // PostgreSQL에서 이미 한국 시간으로 변환되어 반환됨 (식단 코멘트와 동일한 방식)
+    return result.rows;
   } catch (error) {
     console.error('[PostgreSQL] 상담기록 목록 조회 오류:', error);
     throw error;
@@ -451,40 +381,7 @@ const getConsultationRecordById = async (id) => {
       }
     }
     
-    // 타임스탬프를 ISO 문자열로 변환 (AT TIME ZONE으로 이미 한국 시간으로 변환됨)
-    if (row.created_at) {
-      try {
-        const date = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          const seconds = String(date.getSeconds()).padStart(2, '0');
-          row.created_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-        }
-      } catch (error) {
-        console.error('[PostgreSQL] created_at 변환 오류:', error, row.created_at);
-      }
-    }
-    if (row.updated_at) {
-      try {
-        const date = row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          const seconds = String(date.getSeconds()).padStart(2, '0');
-          row.updated_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-        }
-      } catch (error) {
-        console.error('[PostgreSQL] updated_at 변환 오류:', error, row.updated_at);
-      }
-    }
-    
+    // PostgreSQL의 TO_CHAR로 이미 ISO 문자열 형식으로 변환되었으므로 정규화 불필요
     return row;
   } catch (error) {
     console.error('[PostgreSQL] 상담기록 단건 조회 오류:', error);
@@ -557,40 +454,7 @@ const updateConsultationRecord = async (id, updates) => {
       }
     }
     
-    // 타임스탬프를 ISO 문자열로 변환 (AT TIME ZONE으로 이미 한국 시간으로 변환됨)
-    if (row.created_at) {
-      try {
-        const date = row.created_at instanceof Date ? row.created_at : new Date(row.created_at);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          const seconds = String(date.getSeconds()).padStart(2, '0');
-          row.created_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-        }
-      } catch (error) {
-        console.error('[PostgreSQL] created_at 변환 오류:', error, row.created_at);
-      }
-    }
-    if (row.updated_at) {
-      try {
-        const date = row.updated_at instanceof Date ? row.updated_at : new Date(row.updated_at);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const month = String(date.getMonth() + 1).padStart(2, '0');
-          const day = String(date.getDate()).padStart(2, '0');
-          const hours = String(date.getHours()).padStart(2, '0');
-          const minutes = String(date.getMinutes()).padStart(2, '0');
-          const seconds = String(date.getSeconds()).padStart(2, '0');
-          row.updated_at = `${year}-${month}-${day}T${hours}:${minutes}:${seconds}+09:00`;
-        }
-      } catch (error) {
-        console.error('[PostgreSQL] updated_at 변환 오류:', error, row.updated_at);
-      }
-    }
-    
+    // PostgreSQL에서 이미 한국 시간으로 변환되어 반환됨 (식단 코멘트와 동일한 방식)
     return row;
   } catch (error) {
     console.error('[PostgreSQL] 상담기록 수정 오류:', error);
