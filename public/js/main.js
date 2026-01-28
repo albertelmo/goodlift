@@ -523,15 +523,15 @@ window.addEventListener('DOMContentLoaded', function() {
 // 역할별 탭 및 내용 정의
 const adminTabs = [
     { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
-    { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
-    { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: '🎯 상담', id: 'Trial', content: '<div id="trial-root"></div>' },
+    { label: '🔄 재등록', id: 'Renew', content: '<div id="renew-root"></div>' },
     { label: '💵 매출', id: 'Sales', content: '<div id="sales-root"></div>' },
     { label: '📈 전략', id: 'Strategy', content: '<div id="strategy-root"></div>' }
 ];
 
 const adminHamburgerItems = [
-    { label: '🎯 상담', id: 'Trial', content: '<div id="trial-root"></div>' },
-    { label: '🔄 재등록', id: 'Renew', content: '<div id="renew-root"></div>' },
+    { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
+    { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
     { label: '💰 지출', id: 'Expense', content: '<div id="expense-root"></div>' },
     { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
     { label: '💾 DB', id: 'Database', content: '<div id="database-root"></div>' },

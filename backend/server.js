@@ -4765,6 +4765,13 @@ app.patch('/api/renewals/:id', async (req, res) => {
       return res.status(400).json({ message: '회원별 상태를 입력해주세요.' });
     }
     
+    // 1. 기존 재등록 데이터 조회 (변경 전 상태 확인)
+    const oldRenewal = await renewalsDB.getRenewalById(id);
+    if (!oldRenewal) {
+      return res.status(404).json({ message: 'Renewal을 찾을 수 없습니다.' });
+    }
+    const oldStatuses = oldRenewal.status || {};
+    
     const updates = {
       member_names: member_names,
       expected_sessions: expected_sessions, // { "회원1": 10, "회원2": 20 } 형식
@@ -4772,7 +4779,52 @@ app.patch('/api/renewals/:id', async (req, res) => {
       status: status // { "회원1": "완료", "회원2": "예상" } 형식
     };
     
+    // 2. 재등록 데이터 업데이트
     const renewal = await renewalsDB.updateRenewal(id, updates);
+    
+    // 3. 상태 변경 감지 및 회원 정보 업데이트
+    const newStatuses = updates.status || {};
+    const expiredMembers = []; // "만료"로 변경된 회원
+    const validMembers = [];    // "만료"에서 다른 상태로 변경된 회원
+    
+    for (const memberName in newStatuses) {
+      const oldStatus = oldStatuses[memberName] || '예상';
+      const newStatus = newStatuses[memberName];
+      
+      // 케이스 1: 이전 상태가 "만료"가 아니고, 새 상태가 "만료"인 경우
+      if (oldStatus !== '만료' && newStatus === '만료') {
+        expiredMembers.push(memberName);
+      }
+      // 케이스 2: 이전 상태가 "만료"이고, 새 상태가 "만료"가 아닌 경우
+      else if (oldStatus === '만료' && newStatus !== '만료') {
+        validMembers.push(memberName);
+      }
+    }
+    
+    // 4-1. "만료"로 변경된 회원들의 상태를 "만료"로 업데이트
+    if (expiredMembers.length > 0) {
+      for (const memberName of expiredMembers) {
+        try {
+          await membersDB.updateMember(memberName, { status: '만료' });
+        } catch (error) {
+          console.error(`[Renewal] 회원 "${memberName}" 상태 업데이트 실패:`, error);
+          // 회원 정보 업데이트 실패해도 재등록 업데이트는 성공으로 처리
+        }
+      }
+    }
+    
+    // 4-2. "만료"에서 다른 상태로 변경된 회원들의 상태를 "유효"로 업데이트
+    if (validMembers.length > 0) {
+      for (const memberName of validMembers) {
+        try {
+          await membersDB.updateMember(memberName, { status: '유효' });
+        } catch (error) {
+          console.error(`[Renewal] 회원 "${memberName}" 상태 업데이트 실패:`, error);
+          // 회원 정보 업데이트 실패해도 재등록 업데이트는 성공으로 처리
+        }
+      }
+    }
+    
     res.json({ message: '재등록 현황이 수정되었습니다.', renewal });
   } catch (error) {
     console.error('[API] Renewal 수정 오류:', error);

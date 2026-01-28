@@ -2127,6 +2127,13 @@ async function loadTrainerList() {
       option.textContent = trainer.name || trainer.username;
       select.appendChild(option);
     });
+    
+    // 첫 번째 트레이너가 있으면 자동으로 선택하고 장부 로드
+    if (ledgerTrainers.length > 0) {
+      const firstTrainer = ledgerTrainers[0];
+      select.value = firstTrainer.username;
+      await loadTrainerLedger(firstTrainer.username);
+    }
   } catch (error) {
     console.error('트레이너 목록 로드 오류:', error);
   }
