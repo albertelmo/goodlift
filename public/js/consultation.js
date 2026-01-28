@@ -404,10 +404,25 @@ async function loadConsultationList() {
             
             // 목록 렌더링
             tbody.innerHTML = records.map(record => {
-                // 백엔드에서 한국 시간대 ISO 문자열로 반환되므로 직접 파싱
-                const date = new Date(record.created_at);
-                const dateStr = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-                const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+                // 백엔드에서 한국 시간대 ISO 문자열로 반환됨 (예: "2024-01-15T14:30:00+09:00")
+                // ISO 문자열에서 직접 시간 정보 추출 (브라우저 로컬 시간대 변환 방지)
+                let dateStr = '';
+                let timeStr = '';
+                if (record.created_at) {
+                    // ISO 문자열 형식: "YYYY-MM-DDTHH:mm:ss+09:00" 또는 "YYYY-MM-DDTHH:mm:ssZ"
+                    const isoMatch = record.created_at.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+                    if (isoMatch) {
+                        // 년, 월, 일, 시, 분을 직접 추출 (이미 한국 시간으로 변환된 값)
+                        const [, year, month, day, hours, minutes] = isoMatch;
+                        dateStr = `${month}-${day}`;
+                        timeStr = `${hours}:${minutes}`;
+                    } else {
+                        // ISO 형식이 아닌 경우 fallback (기존 방식)
+                        const date = new Date(record.created_at);
+                        dateStr = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+                        timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+                    }
+                }
                 const dateTimeStr = `${dateStr} ${timeStr}`;
                 const trainerName = trainerNameMap[record.trainer_username] || record.trainer_username;
                 
