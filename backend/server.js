@@ -6776,23 +6776,55 @@ app.delete('/api/consultation-records/:id', async (req, res) => {
             return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
         }
         
-        // 삭제 전에 동영상 파일도 삭제
+        // 삭제 전에 동영상 및 사진 폴더도 삭제
         const consultation = await consultationRecordsDB.getConsultationRecordById(id);
-        if (consultation && consultation.video_urls) {
-            const videos = Array.isArray(consultation.video_urls) 
-                ? consultation.video_urls 
-                : (typeof consultation.video_urls === 'string' ? JSON.parse(consultation.video_urls) : []);
-            
-            for (const video of videos) {
-                try {
-                    // URL이 /uploads/... 형식이므로 UPLOADS_DIR 기준으로 경로 변환
-                    const urlPath = video.url.replace(/^\/uploads\//, '');
-                    const filePath = path.join(UPLOADS_DIR, urlPath);
-                    if (fs.existsSync(filePath)) {
-                        fs.unlinkSync(filePath);
+        
+        if (consultation) {
+            // 동영상 폴더 삭제 (파일 URL에서 폴더 경로 추출)
+            if (consultation.video_urls) {
+                const videos = Array.isArray(consultation.video_urls) 
+                    ? consultation.video_urls 
+                    : (typeof consultation.video_urls === 'string' ? JSON.parse(consultation.video_urls) : []);
+                
+                if (videos.length > 0) {
+                    try {
+                        // 첫 번째 동영상 URL에서 폴더 경로 추출
+                        // URL 형식: /uploads/consultation-videos/{year}/{month}/{consultation_id}/{filename}
+                        const firstVideoUrl = videos[0].url;
+                        const urlPath = firstVideoUrl.replace(/^\/uploads\//, '');
+                        const filePath = path.join(UPLOADS_DIR, urlPath);
+                        const videoDir = path.dirname(filePath); // 파일이 있는 폴더
+                        
+                        if (fs.existsSync(videoDir)) {
+                            fs.rmSync(videoDir, { recursive: true, force: true });
+                        }
+                    } catch (fileError) {
+                        console.error('[API] 동영상 폴더 삭제 오류:', fileError);
                     }
-                } catch (fileError) {
-                    console.error('[API] 동영상 파일 삭제 오류:', fileError);
+                }
+            }
+            
+            // 사진 폴더 삭제 (파일 URL에서 폴더 경로 추출)
+            if (consultation.image_urls) {
+                const images = Array.isArray(consultation.image_urls) 
+                    ? consultation.image_urls 
+                    : (typeof consultation.image_urls === 'string' ? JSON.parse(consultation.image_urls) : []);
+                
+                if (images.length > 0) {
+                    try {
+                        // 첫 번째 사진 URL에서 폴더 경로 추출
+                        // URL 형식: /uploads/consultation-images/{year}/{month}/{consultation_id}/{filename}
+                        const firstImageUrl = images[0].url;
+                        const urlPath = firstImageUrl.replace(/^\/uploads\//, '');
+                        const filePath = path.join(UPLOADS_DIR, urlPath);
+                        const imageDir = path.dirname(filePath); // 파일이 있는 폴더
+                        
+                        if (fs.existsSync(imageDir)) {
+                            fs.rmSync(imageDir, { recursive: true, force: true });
+                        }
+                    } catch (fileError) {
+                        console.error('[API] 사진 폴더 삭제 오류:', fileError);
+                    }
                 }
             }
         }
