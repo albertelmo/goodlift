@@ -69,7 +69,8 @@ async function switchToAppUserView() {
                 username: originalUsername || 'trainer',
                 name: originalName || '트레이너',
                 phone: '',
-                member_name: null
+                member_name: null,
+                isTrainer: true
             };
             showAppUserSection(fakeAppUserData);
         }
@@ -81,7 +82,8 @@ async function switchToAppUserView() {
             username: originalUsername || 'trainer',
             name: originalName || '트레이너',
             phone: '',
-            member_name: null
+            member_name: null,
+            isTrainer: true
         };
         showAppUserSection(fakeAppUserData);
     }

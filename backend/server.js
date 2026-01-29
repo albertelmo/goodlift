@@ -2373,6 +2373,11 @@ app.get('/api/member-activity-logs', async (req, res) => {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
         }
         
+        // 트레이너 임시 ID인 경우 빈 데이터 반환
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json({ logs: [], unreadCount: 0 });
+        }
+        
         const filters = {};
         if (unread_only === 'true') {
             filters.unread_only = true;
@@ -2407,6 +2412,10 @@ app.patch('/api/member-activity-logs/:id/read', async (req, res) => {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
         }
         
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 회원 로그를 처리할 수 없습니다.' });
+        }
+        
         const result = await memberActivityLogsDB.markAsRead(id, app_user_id);
         
         if (!result) {
@@ -2427,6 +2436,10 @@ app.patch('/api/member-activity-logs/read-all', async (req, res) => {
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 회원 로그를 처리할 수 없습니다.' });
         }
         
         const result = await memberActivityLogsDB.markAllAsRead(app_user_id);

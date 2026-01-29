@@ -1073,6 +1073,8 @@ async function showMemberAddModal(container, username, statusFilter, searchQuery
     });
 }
 
+const SORT_INCOMPLETE_FIRST_DEFAULT = false;
+
 let calState = { 
     year: null, 
     month: null, 
@@ -1081,6 +1083,7 @@ let calState = {
     weekStartDate: null, 
     scrollTargetDate: null,  // 스크롤할 날짜 (YYYY-MM-DD 형식, null이면 스크롤 안함) - 한국시간 기준
     savedScrollPosition: null, 
+    sortIncompleteFirst: SORT_INCOMPLETE_FIRST_DEFAULT,
     // 세션 데이터 캐시
     sessionsCache: {
         allSessions: null,        // 전체 세션 캐시
@@ -1558,6 +1561,24 @@ async function renderCalUI(container, forceDate) {
             isPastDate
           };
         });
+
+        const sortSessionsByCompletion = (list) => {
+          if (!calState.sortIncompleteFirst) {
+            return [...list].sort((a, b) => a.time.localeCompare(b.time));
+          }
+          return [...list].sort((a, b) => {
+            const aDone = a.status === '완료';
+            const bDone = b.status === '완료';
+            if (aDone !== bDone) {
+              return aDone ? 1 : -1;
+            }
+            return a.time.localeCompare(b.time);
+          });
+        };
+
+        const orderedSessions = calState.viewMode === 'month'
+          ? sortSessionsByCompletion(sessionsWithMemberInfo)
+          : sessionsWithMemberInfo;
         
         // 주간보기/월간보기 버튼 텍스트 결정
         const viewButtonText = calState.viewMode === 'month' ? '주간보기' : '월간보기';
@@ -1588,12 +1609,12 @@ async function renderCalUI(container, forceDate) {
             </div>
             <div class="tmc-session-list">`;
         
-        if (sessionsWithMemberInfo.length) {
+        if (orderedSessions.length) {
           // 주간보기일 때는 날짜별로 그룹화
           if (calState.viewMode === 'week') {
             // 날짜별로 그룹화
             const sessionsByDate = {};
-            sessionsWithMemberInfo.forEach(s => {
+            orderedSessions.forEach(s => {
               const sessionDate = s.date.split('T')[0]; // YYYY-MM-DD
               if (!sessionsByDate[sessionDate]) {
                 sessionsByDate[sessionDate] = [];
@@ -1614,7 +1635,7 @@ async function renderCalUI(container, forceDate) {
               html += `<div class="tmc-session-date-header" data-date-header="${dateStr}">${month}월 ${day}일 (${dayOfWeek})</div>`;
               
               // 해당 날짜의 세션들 렌더링
-              sessionsByDate[dateStr].forEach(s => {
+              sortSessionsByCompletion(sessionsByDate[dateStr]).forEach(s => {
                 let itemClass = 'tmc-session-item';
                 if (s.status === '완료') itemClass += ' done';
                 // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
@@ -1646,7 +1667,7 @@ async function renderCalUI(container, forceDate) {
             });
           } else {
             // 월간보기: 기존 로직 (날짜 헤더 없이)
-            sessionsWithMemberInfo.forEach(s => {
+            orderedSessions.forEach(s => {
               let itemClass = 'tmc-session-item';
               if (s.status === '완료') itemClass += ' done';
               // 완료되지 않은 세션에만 잔여세션 부족 스타일 적용
@@ -2313,18 +2334,39 @@ async function renderCalUI(container, forceDate) {
         // 모바일 스와이프 이벤트(좌우) - 세션카드 영역 제외, 주간보기에서는 비활성화
         if (calState.viewMode === 'month') {
             let startX = null;
+            let startY = null;
+            let isHorizontalSwipe = false;
             const calWrap = container.querySelector('.trainer-mobile-cal-wrap');
             const sessionList = container.querySelector('.tmc-session-list');
+            const minSwipeDistance = 60;
+            const horizontalRatio = 1.5;
             calWrap.addEventListener('touchstart', e => {
                 if (sessionList.contains(e.target)) return;
-                if (e.touches.length === 1) startX = e.touches[0].clientX;
+                if (e.touches.length === 1) {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                    isHorizontalSwipe = false;
+                }
+            });
+            calWrap.addEventListener('touchmove', e => {
+                if (sessionList.contains(e.target)) return;
+                if (startX === null || startY === null) return;
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                const dx = Math.abs(currentX - startX);
+                const dy = Math.abs(currentY - startY);
+                if (dx > 10 || dy > 10) {
+                    isHorizontalSwipe = dx > dy * horizontalRatio;
+                }
             });
             calWrap.addEventListener('touchend', e => {
                 if (sessionList.contains(e.target)) return;
-                if (startX === null) return;
+                if (startX === null || startY === null) return;
                 const endX = e.changedTouches[0].clientX;
+                const endY = e.changedTouches[0].clientY;
                 const dx = endX - startX;
-                if (Math.abs(dx) > 40) {
+                const dy = endY - startY;
+                if (Math.abs(dx) > minSwipeDistance && Math.abs(dx) > Math.abs(dy) * horizontalRatio && isHorizontalSwipe) {
                     if (dx < 0) {
                         // 다음달로 이동 (안전한 월 변경)
                         if (calState.month === 12) {
@@ -2350,6 +2392,8 @@ async function renderCalUI(container, forceDate) {
                     }
                 }
                 startX = null;
+                startY = null;
+                isHorizontalSwipe = false;
             });
         }
         // 세션카드 클릭 시 출석체크 모달
