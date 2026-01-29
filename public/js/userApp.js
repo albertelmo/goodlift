@@ -9,7 +9,7 @@ function render(container) {
   
     container.innerHTML = `
     <div style="padding:12px;">
-      <h3 style="margin-top:0;margin-bottom:12px;color:#1976d2;font-size:1rem;">📱 유저앱 관리</h3>
+      <h3 id="user-app-title" style="margin-top:0;margin-bottom:12px;color:#1976d2;font-size:1rem;cursor:pointer;user-select:none;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">📱 유저앱 관리</h3>
       
       <!-- 활성 통계 섹션 -->
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
@@ -111,6 +111,13 @@ function render(container) {
 }
 
 function setupEventListeners(container) {
+  const title = container.querySelector('#user-app-title');
+  if (title) {
+    title.addEventListener('click', () => {
+      loadData();
+    });
+  }
+
   // 회원 추가 버튼
   const addMemberBtn = container.querySelector('#user-app-member-add-btn');
   if (addMemberBtn) {
