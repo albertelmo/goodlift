@@ -3,10 +3,12 @@
 import { init as initLayout } from './layout.js';
 import { init as initDashboard } from './dashboard.js';
 import { escapeHtml } from './utils.js';
-import { updateAppUser, get } from './api.js';
+import { updateAppUser, get, postAppUserPing } from './api.js';
 
 let currentUser = null;
 let currentScreen = 'home';
+let lastPingAt = 0;
+const APP_USER_PING_INTERVAL = 5 * 60 * 1000;
 
 // currentUser를 export하여 다른 모듈에서 사용할 수 있도록 함
 export function getCurrentUser() {
@@ -62,7 +64,35 @@ export function showAppUserSection(appUserData) {
     
     // 홈 화면 초기화
     initDashboard(appUserData);
+    
+    // 접속 핑 (활성 통계용)
+    scheduleAppUserPing(true);
 }
+
+/**
+ * 앱 유저 접속 핑 (주기 제한)
+ */
+function scheduleAppUserPing(force = false) {
+    if (!currentUser?.id) return;
+    const now = Date.now();
+    if (!force && now - lastPingAt < APP_USER_PING_INTERVAL) {
+        return;
+    }
+    lastPingAt = now;
+    postAppUserPing(currentUser.id).catch(error => {
+        console.error('[AppUser Ping] 오류:', error);
+    });
+}
+
+// 화면 포커스/가시성 변화 시 핑
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        scheduleAppUserPing();
+    }
+});
+window.addEventListener('focus', () => {
+    scheduleAppUserPing();
+});
 
 /**
  * 화면 이동

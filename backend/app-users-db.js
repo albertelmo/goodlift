@@ -32,7 +32,8 @@ const createAppUsersTable = async () => {
           is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          last_login_at TIMESTAMP
+          last_login_at TIMESTAMP,
+          last_seen_at TIMESTAMP
         )
       `;
       await pool.query(createQuery);
@@ -92,6 +93,19 @@ const migrateAppUsersTable = async () => {
     if (checkLastLoginAtResult.rows.length === 0) {
       await pool.query(`ALTER TABLE app_users ADD COLUMN last_login_at TIMESTAMP`);
       console.log('[PostgreSQL] last_login_at 컬럼이 추가되었습니다.');
+    }
+    
+    // last_seen_at 컬럼 확인 및 추가
+    const checkLastSeenAtQuery = `
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'app_users' AND column_name = 'last_seen_at'
+    `;
+    const checkLastSeenAtResult = await pool.query(checkLastSeenAtQuery);
+    
+    if (checkLastSeenAtResult.rows.length === 0) {
+      await pool.query(`ALTER TABLE app_users ADD COLUMN last_seen_at TIMESTAMP`);
+      console.log('[PostgreSQL] last_seen_at 컬럼이 추가되었습니다.');
     }
     
     // trainer 컬럼 확인 및 추가
@@ -179,7 +193,7 @@ const getAppUsers = async (filters = {}) => {
     let query = `
       SELECT 
         id, username, name, phone, member_name, trainer, is_trainer, is_active,
-        created_at, updated_at, last_login_at
+        created_at, updated_at, last_login_at, last_seen_at
       FROM app_users
     `;
     const params = [];
@@ -223,7 +237,7 @@ const getAppUserById = async (id) => {
     const query = `
       SELECT 
         id, username, name, phone, member_name, trainer, is_trainer, is_active,
-        created_at, updated_at, last_login_at
+        created_at, updated_at, last_login_at, last_seen_at
       FROM app_users 
       WHERE id = $1
     `;
@@ -274,7 +288,7 @@ const getAppUserByUsername = async (username) => {
     const query = `
       SELECT 
         id, username, password_hash, name, phone, member_name, trainer, is_trainer, is_active,
-        created_at, updated_at, last_login_at
+        created_at, updated_at, last_login_at, last_seen_at
       FROM app_users 
       WHERE username = $1
     `;
@@ -366,7 +380,7 @@ const updateAppUser = async (id, updates) => {
       UPDATE app_users 
       SET ${fields.join(', ')}
       WHERE id = $${paramIndex}
-      RETURNING id, username, name, phone, member_name, trainer, is_trainer, is_active, created_at, updated_at, last_login_at
+      RETURNING id, username, name, phone, member_name, trainer, is_trainer, is_active, created_at, updated_at, last_login_at, last_seen_at
     `;
     
     const result = await pool.query(query, values);
@@ -427,6 +441,29 @@ const updateLastLogin = async (username) => {
   }
 };
 
+// 마지막 접속 시각 업데이트
+const updateLastSeen = async (id) => {
+  try {
+    const query = `
+      UPDATE app_users 
+      SET last_seen_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+      RETURNING id, username, last_seen_at
+    `;
+    
+    const result = await pool.query(query, [id]);
+    
+    if (result.rows.length === 0) {
+      throw new Error('앱 유저를 찾을 수 없습니다.');
+    }
+    
+    return result.rows[0];
+  } catch (error) {
+    console.error('[PostgreSQL] 마지막 접속 시각 업데이트 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -447,5 +484,6 @@ module.exports = {
   updateAppUser,
   deleteAppUser,
   updateLastLogin,
+  updateLastSeen,
   pool
 };

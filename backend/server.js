@@ -35,6 +35,7 @@ const userSettingsDB = require('./app-user-settings-db');
 const dietRecordsDB = require('./diet-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
+const appUserActivityEventsDB = require('./app-user-activity-events-db');
 const workoutTrainerCommentsDB = require('./workout-trainer-comments-db');
 const consultationRecordsDB = require('./consultation-records-db');
 const consultationSharesDB = require('./consultation-shares-db');
@@ -200,6 +201,48 @@ async function createActivityLogForMember(appUserId, activityType, message, reco
     // 로그 생성 실패해도 주요 기능에는 영향 없도록 에러만 기록
     console.error('[Activity Log] 회원 활동 로그 생성 실패:', error);
   }
+}
+
+// 앱 유저 활동 이벤트 기록
+async function logAppUserActivityEvent({ eventType, actorAppUserId, subjectAppUserId = null, source = null, meta = null }) {
+  try {
+    if (!actorAppUserId || !eventType) return;
+    
+    const actor = await appUsersDB.getAppUserById(actorAppUserId);
+    if (!actor) return;
+    
+    const actorRole = actor.is_trainer ? 'trainer' : 'member';
+    let finalSource = source;
+    if (!finalSource) {
+      if (subjectAppUserId && actorAppUserId !== subjectAppUserId) {
+        finalSource = actorRole === 'trainer' ? 'trainer_proxy' : 'proxy';
+      } else {
+        finalSource = 'self';
+      }
+    }
+    
+    await appUserActivityEventsDB.addActivityEvent({
+      actor_app_user_id: actorAppUserId,
+      subject_app_user_id: subjectAppUserId,
+      actor_role: actorRole,
+      event_type: eventType,
+      source: finalSource,
+      meta
+    });
+  } catch (error) {
+    console.error('[Activity Event] 이벤트 기록 실패:', error);
+  }
+}
+
+function normalizeDateString(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return value.split('T')[0];
+  }
+  if (value instanceof Date) {
+    return value.toISOString().split('T')[0];
+  }
+  return String(value).split('T')[0];
 }
 
 // 트레이너별 시간대별 센터 매핑 함수
@@ -520,6 +563,7 @@ trainerRevenueDB.initializeDatabase();
 (async () => {
     await appUsersDB.initializeDatabase();
     await syncTrainersToAppUsers();
+    await appUserActivityEventsDB.initializeDatabase();
 })();
 workoutTypesDB.initializeDatabase(); // workout_types 테이블을 먼저 생성해야 함
 workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
@@ -1123,6 +1167,12 @@ app.post('/api/login', async (req, res) => {
         
         // 마지막 로그인 시각 업데이트
         await appUsersDB.updateLastLogin(username);
+        await logAppUserActivityEvent({
+            eventType: 'login',
+            actorAppUserId: appUser.id,
+            subjectAppUserId: appUser.id,
+            source: 'self'
+        });
         
         // 트레이너 여부 확인 (accounts.json에서 확인)
         let isTrainer = false;
@@ -1241,6 +1291,100 @@ app.get('/api/app-users/:id', async (req, res) => {
     } catch (error) {
         console.error('[API] 앱 유저 조회 오류:', error);
         res.status(500).json({ message: '앱 유저 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 앱 유저 접속 핑 (MAU/활성 통계용)
+app.post('/api/app-user/ping', async (req, res) => {
+    try {
+        const { app_user_id } = req.body;
+        
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        await appUsersDB.updateLastSeen(app_user_id);
+        await logAppUserActivityEvent({
+            eventType: 'app_open',
+            actorAppUserId: app_user_id,
+            subjectAppUserId: app_user_id,
+            source: 'self'
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[API] 앱 유저 핑 오류:', error);
+        res.status(500).json({ message: '앱 유저 핑 처리 중 오류가 발생했습니다.' });
+    }
+});
+
+// 앱 유저 활동 통계 조회
+app.get('/api/app-user-activity-stats', async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: 'startDate와 endDate가 필요합니다.' });
+        }
+        
+        const rows = await appUserActivityEventsDB.getActivityStatsByDateRange(startDate, endDate);
+        const workoutDistinctCounts = await appUserActivityEventsDB.getWorkoutDistinctDateCountsByDateRange(startDate, endDate);
+        
+        const findRow = (eventType, actorRole, source) => rows.find(row =>
+            row.event_type === eventType &&
+            row.actor_role === actorRole &&
+            row.source === source
+        );
+        
+        const memberAppOpen = findRow('app_open', 'member', 'self');
+        const memberLogin = findRow('login', 'member', 'self');
+        const trainerAppOpen = findRow('app_open', 'trainer', 'self');
+        const trainerLogin = findRow('login', 'trainer', 'self');
+        const memberWorkoutSelf = findRow('workout_create', 'member', 'self');
+        const trainerWorkoutProxy = findRow('workout_create', 'trainer', 'trainer_proxy');
+        const workoutDistinctFind = (actorRole, source) => workoutDistinctCounts.find(row =>
+            row.actor_role === actorRole && row.source === source
+        );
+        const workoutSelfDistinct = workoutDistinctFind('member', 'self');
+        const workoutProxyDistinct = workoutDistinctFind('trainer', 'trainer_proxy');
+        const memberDietSelf = findRow('diet_create', 'member', 'self');
+        const trainerDietProxy = findRow('diet_create', 'trainer', 'trainer_proxy');
+        const trainerWorkoutComments = findRow('workout_comment_create', 'trainer', 'trainer_proxy');
+        const memberDietComments = findRow('diet_comment_create', 'member', 'self');
+        const trainerDietComments = findRow('diet_comment_create', 'trainer', 'trainer_proxy');
+        
+        res.json({
+            range: { startDate, endDate },
+            summary: {
+                members: {
+                    appOpenUsers: Number(memberAppOpen?.actor_count || 0),
+                    loginUsers: Number(memberLogin?.actor_count || 0),
+                    workoutSelfUsers: Number(memberWorkoutSelf?.subject_count || 0),
+                    workoutProxyUsers: Number(trainerWorkoutProxy?.subject_count || 0),
+                    dietSelfUsers: Number(memberDietSelf?.subject_count || 0),
+                    dietProxyUsers: Number(trainerDietProxy?.subject_count || 0)
+                },
+                trainers: {
+                    appOpenUsers: Number(trainerAppOpen?.actor_count || 0),
+                    loginUsers: Number(trainerLogin?.actor_count || 0),
+                    workoutProxyActors: Number(trainerWorkoutProxy?.actor_count || 0),
+                    dietProxyActors: Number(trainerDietProxy?.actor_count || 0)
+                },
+                counts: {
+                    workoutSelf: Number(workoutSelfDistinct?.event_count || 0),
+                    workoutProxy: Number(workoutProxyDistinct?.event_count || 0),
+                    dietSelf: Number(memberDietSelf?.event_count || 0),
+                    dietProxy: Number(trainerDietProxy?.event_count || 0),
+                    workoutComments: Number(trainerWorkoutComments?.event_count || 0),
+                    dietCommentsMember: Number(memberDietComments?.event_count || 0),
+                    dietCommentsTrainer: Number(trainerDietComments?.event_count || 0)
+                }
+            },
+            rows
+        });
+    } catch (error) {
+        console.error('[API] 앱 유저 활동 통계 조회 오류:', error);
+        res.status(500).json({ message: '앱 유저 활동 통계를 불러오지 못했습니다.' });
     }
 });
 
@@ -1541,7 +1685,7 @@ app.get('/api/workout-records/:id', async (req, res) => {
 // 운동기록 일괄 추가
 app.post('/api/workout-records/batch', async (req, res) => {
     try {
-        const { app_user_id, workout_records, trainer_username, trainer_name } = req.body;
+        const { app_user_id, workout_records, trainer_username, trainer_name, actor_app_user_id } = req.body;
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
@@ -1575,8 +1719,23 @@ app.post('/api/workout-records/batch', async (req, res) => {
             }
         }
         
+        const actorAppUserId = actor_app_user_id || app_user_id;
+        
         // 일괄 추가
         const records = await workoutRecordsDB.addWorkoutRecordsBatch(workoutDataArray);
+        
+        // 활동 이벤트 기록 (운동기록 생성)
+        records.forEach(record => {
+            logAppUserActivityEvent({
+                eventType: 'workout_create',
+                actorAppUserId: actorAppUserId,
+                subjectAppUserId: app_user_id,
+                meta: {
+                    record_id: record.id,
+                    workout_date: normalizeDateString(record.workout_date)
+                }
+            });
+        });
         
         // 같은 날짜의 기록들을 그룹화하여 로그 생성 (각 날짜별로 1개만)
         const dateToRecordMap = new Map();
@@ -1638,7 +1797,7 @@ app.post('/api/workout-records/batch', async (req, res) => {
 // 운동기록 단일 추가 (하위 호환성 유지)
 app.post('/api/workout-records', async (req, res) => {
     try {
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, trainer_username, trainer_name } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, trainer_username, trainer_name, actor_app_user_id } = req.body;
         
         if (!app_user_id || !workout_date) {
             return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
@@ -1661,6 +1820,17 @@ app.post('/api/workout-records', async (req, res) => {
         };
         
         const record = await workoutRecordsDB.addWorkoutRecord(workoutData);
+        const actorAppUserId = actor_app_user_id || app_user_id;
+        
+        logAppUserActivityEvent({
+            eventType: 'workout_create',
+            actorAppUserId: actorAppUserId,
+            subjectAppUserId: app_user_id,
+            meta: {
+                record_id: record.id,
+                workout_date: normalizeDateString(workout_date)
+            }
+        });
         
         // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
         createActivityLogForTrainer(
@@ -1938,7 +2108,7 @@ app.get('/api/diet-records/:id', async (req, res) => {
 // 식단기록 추가 (이미지 업로드 지원)
 app.post('/api/diet-records', imageUpload.single('image'), async (req, res) => {
     try {
-        const { app_user_id, meal_date, meal_time, meal_type, notes } = req.body;
+        const { app_user_id, meal_date, meal_time, meal_type, notes, actor_app_user_id, actor_username } = req.body;
         
         if (!app_user_id || !meal_date) {
             return res.status(400).json({ message: '앱 유저 ID와 식사 날짜가 필요합니다.' });
@@ -1988,6 +2158,24 @@ app.post('/api/diet-records', imageUpload.single('image'), async (req, res) => {
             // 업데이트된 레코드 조회
             const record = await dietRecordsDB.getDietRecordById(tempRecord.id, app_user_id);
             
+            let actorAppUserId = actor_app_user_id || app_user_id;
+            if (actor_username && (!actor_app_user_id || actor_app_user_id === app_user_id)) {
+                const actorUser = await appUsersDB.getAppUserByUsername(actor_username);
+                if (actorUser && actorUser.is_trainer) {
+                    actorAppUserId = actorUser.id;
+                }
+            }
+            
+            logAppUserActivityEvent({
+                eventType: 'diet_create',
+                actorAppUserId: actorAppUserId,
+                subjectAppUserId: app_user_id,
+                meta: {
+                    record_id: record.id,
+                    meal_date: meal_date
+                }
+            });
+            
             // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
             createActivityLogForTrainer(
                 app_user_id, 
@@ -2009,6 +2197,23 @@ app.post('/api/diet-records', imageUpload.single('image'), async (req, res) => {
             };
             
             const record = await dietRecordsDB.addDietRecord(dietData);
+            let actorAppUserId = actor_app_user_id || app_user_id;
+            if (actor_username && (!actor_app_user_id || actor_app_user_id === app_user_id)) {
+                const actorUser = await appUsersDB.getAppUserByUsername(actor_username);
+                if (actorUser && actorUser.is_trainer) {
+                    actorAppUserId = actorUser.id;
+                }
+            }
+            
+            logAppUserActivityEvent({
+                eventType: 'diet_create',
+                actorAppUserId: actorAppUserId,
+                subjectAppUserId: app_user_id,
+                meta: {
+                    record_id: record.id,
+                    meal_date: meal_date
+                }
+            });
             
             // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
             createActivityLogForTrainer(
@@ -2355,6 +2560,27 @@ app.post('/api/diet-records/:id/comments', async (req, res) => {
         const record = await dietRecordsDB.getDietRecordById(id);
         
         if (record && record.app_user_id) {
+            let actorAppUserId = null;
+            if (commenter_type === 'user') {
+                actorAppUserId = commenter_id;
+            } else if (commenter_type === 'trainer') {
+                const trainerUser = await appUsersDB.getAppUserByUsername(commenter_id);
+                actorAppUserId = trainerUser?.id || null;
+            }
+            
+            if (actorAppUserId) {
+                await logAppUserActivityEvent({
+                    eventType: 'diet_comment_create',
+                    actorAppUserId,
+                    subjectAppUserId: record.app_user_id,
+                    source: commenter_type === 'trainer' ? 'trainer_proxy' : 'self',
+                    meta: {
+                        diet_record_id: id,
+                        meal_date: record.meal_date
+                    }
+                });
+            }
+            
             // 회원이 코멘트를 남긴 경우 트레이너에게 로그 생성
             if (commenter_type === 'user') {
                 await createActivityLogForTrainer(
@@ -2479,6 +2705,20 @@ app.post('/api/workout-records/:appUserId/comments', async (req, res) => {
             comment
         };
         const savedComment = await workoutTrainerCommentsDB.addComment(commentData);
+        
+        const trainerUser = await appUsersDB.getAppUserByUsername(trainer_username);
+        if (trainerUser?.id) {
+            await logAppUserActivityEvent({
+                eventType: 'workout_comment_create',
+                actorAppUserId: trainerUser.id,
+                subjectAppUserId: appUserId,
+                source: 'trainer_proxy',
+                meta: {
+                    workout_comment_id: savedComment.id,
+                    workout_date
+                }
+            });
+        }
         
         // 회원 활동 로그 생성 (알림) - 운동기록 생성과 동일한 방식
         createActivityLogForMember(

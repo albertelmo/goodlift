@@ -200,6 +200,14 @@ export async function post(endpoint, data) {
 }
 
 /**
+ * 앱 유저 접속 핑 (활성 통계용)
+ */
+export async function postAppUserPing(appUserId) {
+    if (!appUserId) return null;
+    return post('/app-user/ping', { app_user_id: appUserId });
+}
+
+/**
  * PATCH 요청
  */
 export async function patch(endpoint, data) {
@@ -260,8 +268,11 @@ export async function getWorkoutRecordById(id, appUserId) {
  * 운동기록 추가 (캐시 무효화 포함)
  */
 export async function addWorkoutRecord(data) {
+    const actorAppUserId = data?.actor_app_user_id || localStorage.getItem('appUserId');
+    const body = actorAppUserId ? { ...data, actor_app_user_id: actorAppUserId } : data;
+    
     // 트레이너 정보는 서버에서 자동으로 확인하여 처리
-    const result = await post('/workout-records', data);
+    const result = await post('/workout-records', body);
     
     // 해당 사용자의 운동기록 캐시 무효화 (일반 조회 + 캘린더 조회)
     if (data.app_user_id) {
@@ -288,6 +299,11 @@ export async function addWorkoutRecordsBatch(appUserId, workoutRecordsArray, cur
         app_user_id: appUserId,
         workout_records: workoutRecordsArray
     };
+    
+    const actorAppUserId = currentUser?.id || localStorage.getItem('appUserId');
+    if (actorAppUserId) {
+        body.actor_app_user_id = actorAppUserId;
+    }
     
     // 트레이너가 회원에게 접속한 상태인 경우 trainer_username 전달
     if (connectedMemberAppUserId && connectedMemberAppUserId === appUserId && currentUsername && isTrainer) {
@@ -460,6 +476,14 @@ export async function getDietRecordById(id, appUserId) {
  * 식단기록 추가 (이미지 업로드 지원)
  */
 export async function addDietRecord(formData) {
+    const actorAppUserId = localStorage.getItem('appUserId');
+    if (actorAppUserId && !formData.get('actor_app_user_id')) {
+        formData.append('actor_app_user_id', actorAppUserId);
+    }
+    const actorUsername = localStorage.getItem('appUsername');
+    if (actorUsername && !formData.get('actor_username')) {
+        formData.append('actor_username', actorUsername);
+    }
     const result = await postFormData('/diet-records', formData);
     
     // 해당 사용자의 식단기록 캐시 무효화

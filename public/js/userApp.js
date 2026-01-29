@@ -7,9 +7,30 @@ export const userApp = {
 function render(container) {
   if (!container) return;
   
-  container.innerHTML = `
+    container.innerHTML = `
     <div style="padding:12px;">
       <h3 style="margin-top:0;margin-bottom:12px;color:#1976d2;font-size:1rem;">📱 유저앱 관리</h3>
+      
+      <!-- 활성 통계 섹션 -->
+      <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+          <h4 style="margin:0;color:#333;font-size:0.9rem;">활성 통계</h4>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <button class="user-app-activity-range-btn" data-range="7" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">최근 7일</button>
+            <button class="user-app-activity-range-btn" data-range="30" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">최근 30일</button>
+            <button class="user-app-activity-range-btn" data-range="90" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">최근 90일</button>
+            <input type="date" id="user-app-activity-start" style="padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:0.7rem;">
+            <span style="font-size:0.7rem;color:#666;">~</span>
+            <input type="date" id="user-app-activity-end" style="padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:0.7rem;">
+            <button id="user-app-activity-refresh-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">
+              조회
+            </button>
+          </div>
+        </div>
+        <div id="user-app-activity-stats" style="background:#fff;border-radius:4px;padding:8px;">
+          <div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">불러오는 중...</div>
+        </div>
+      </div>
       
       <!-- 회원 관리 섹션 -->
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
@@ -131,10 +152,28 @@ function setupEventListeners(container) {
       }
     });
   }
+  
+  const refreshBtn = container.querySelector('#user-app-activity-refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      setActiveRangeButton(null);
+      loadActivityStats();
+    });
+  }
+  
+  container.querySelectorAll('.user-app-activity-range-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const range = parseInt(btn.getAttribute('data-range'), 10);
+      setActivityDateRange(range);
+      setActiveRangeButton(range);
+      loadActivityStats();
+    });
+  });
 }
 
 async function loadData() {
   await Promise.all([
+    loadActivityStats(),
     loadMembers(),
     loadWorkoutTypes(),
     loadCategories(1),
@@ -142,6 +181,98 @@ async function loadData() {
     loadCategories(3),
     loadCategories(4)
   ]);
+}
+
+function getDateString(date) {
+  return date.toISOString().split('T')[0];
+}
+
+function setActivityDateRange(days) {
+  const endInput = document.getElementById('user-app-activity-end');
+  const startInput = document.getElementById('user-app-activity-start');
+  if (!endInput || !startInput) return;
+  
+  const endDate = new Date();
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - (days - 1));
+  
+  endInput.value = getDateString(endDate);
+  startInput.value = getDateString(startDate);
+}
+
+function setActiveRangeButton(range) {
+  document.querySelectorAll('.user-app-activity-range-btn').forEach(btn => {
+    const isActive = range !== null && parseInt(btn.getAttribute('data-range'), 10) === range;
+    if (isActive) {
+      btn.style.background = '#e3f2fd';
+      btn.style.borderColor = '#1976d2';
+      btn.style.color = '#1976d2';
+      btn.style.fontWeight = '600';
+    } else {
+      btn.style.background = '#fff';
+      btn.style.borderColor = '#1976d2';
+      btn.style.color = '#1976d2';
+      btn.style.fontWeight = 'normal';
+    }
+  });
+}
+
+async function loadActivityStats() {
+  const container = document.getElementById('user-app-activity-stats');
+  const startInput = document.getElementById('user-app-activity-start');
+  const endInput = document.getElementById('user-app-activity-end');
+  if (!container || !startInput || !endInput) return;
+  
+  if (!startInput.value || !endInput.value) {
+    setActivityDateRange(30);
+    setActiveRangeButton(30);
+  }
+  
+  const startDate = startInput.value;
+  const endDate = endInput.value;
+  
+  container.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">불러오는 중...</div>';
+  
+  try {
+    const response = await fetch(`/api/app-user-activity-stats?startDate=${startDate}&endDate=${endDate}`);
+    if (!response.ok) throw new Error('활성 통계 조회 실패');
+    const data = await response.json();
+    
+    const members = data.summary?.members || {};
+    const trainers = data.summary?.trainers || {};
+    const counts = data.summary?.counts || {};
+    
+    container.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:8px;">
+        <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
+          <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">회원 활성</div>
+          <div style="font-size:0.75rem;color:#555;">접속(앱오픈): <strong>${members.appOpenUsers || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">로그인: <strong>${members.loginUsers || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">운동(직접): <strong>${members.workoutSelfUsers || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">운동(대리): <strong>${members.workoutProxyUsers || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">식단(직접): <strong>${members.dietSelfUsers || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">식단(대리): <strong>${members.dietProxyUsers || 0}</strong></div>
+        </div>
+        <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
+          <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">트레이너 활성</div>
+          <div style="font-size:0.75rem;color:#555;">접속(앱오픈): <strong>${trainers.appOpenUsers || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">로그인: <strong>${trainers.loginUsers || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">운동 대리 입력자: <strong>${trainers.workoutProxyActors || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">식단 대리 입력자: <strong>${trainers.dietProxyActors || 0}</strong></div>
+        </div>
+        <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
+          <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">기록 건수</div>
+          <div style="font-size:0.75rem;color:#555;">운동(직접/대리): <strong>${counts.workoutSelf || 0}</strong> / <strong>${counts.workoutProxy || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">식단(직접/대리): <strong>${counts.dietSelf || 0}</strong> / <strong>${counts.dietProxy || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">운동 코멘트: <strong>${counts.workoutComments || 0}</strong></div>
+          <div style="font-size:0.75rem;color:#555;">식단 코멘트(회원/트레이너): <strong>${counts.dietCommentsMember || 0}</strong> / <strong>${counts.dietCommentsTrainer || 0}</strong></div>
+        </div>
+      </div>
+    `;
+  } catch (error) {
+    console.error('활성 통계 조회 오류:', error);
+    container.innerHTML = '<div style="text-align:center;padding:12px;color:#d32f2f;font-size:0.75rem;">활성 통계를 불러오지 못했습니다.</div>';
+  }
 }
 
 async function loadMembers() {

@@ -2,6 +2,7 @@
 
 import { formatDate, getToday, escapeHtml } from '../utils.js';
 import { addDietRecord } from '../api.js';
+import { getCurrentUser } from '../index.js';
 
 let selectedImageFile = null;
 let imagePreviewUrl = null;
@@ -315,11 +316,18 @@ export async function showDietAddModal(appUserId, selectedDate = null, onSuccess
         
         try {
             const formData = new FormData();
+            const currentUser = getCurrentUser();
             
             // 기본 필드 추가
             formData.append('app_user_id', appUserId);
             formData.append('meal_date', document.getElementById('diet-meal-date').value);
             formData.append('meal_time', document.getElementById('diet-meal-time').value || null);
+            if (currentUser?.id) {
+                formData.append('actor_app_user_id', currentUser.id);
+            }
+            if (currentUser?.username) {
+                formData.append('actor_username', currentUser.username);
+            }
             
             // 식사 구분 라디오 버튼 처리 (필수 항목)
             const mealTypeRadio = form.querySelector('input[name="meal_type"]:checked');
