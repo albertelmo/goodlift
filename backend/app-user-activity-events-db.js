@@ -144,6 +144,64 @@ const getWorkoutDistinctDateCountsByDateRange = async (startDate, endDate) => {
   }
 };
 
+// 활동 이벤트 상세 조회
+const getActivityEventsByDateRange = async (startDate, endDate, filters = {}) => {
+  try {
+    const conditions = [
+      `e.event_at >= $1::date`,
+      `e.event_at < ($2::date + INTERVAL '1 day')`
+    ];
+    const params = [startDate, endDate];
+    let paramIndex = 3;
+    
+    if (filters.eventType) {
+      conditions.push(`e.event_type = $${paramIndex++}`);
+      params.push(filters.eventType);
+    }
+    if (filters.actorRole) {
+      conditions.push(`e.actor_role = $${paramIndex++}`);
+      params.push(filters.actorRole);
+    }
+    if (filters.source) {
+      conditions.push(`e.source = $${paramIndex++}`);
+      params.push(filters.source);
+    }
+    
+    const limit = Number.isFinite(filters.limit) ? filters.limit : 200;
+    const offset = Number.isFinite(filters.offset) ? filters.offset : 0;
+    params.push(limit, offset);
+    
+    const query = `
+      SELECT 
+        e.id,
+        e.event_type,
+        e.actor_role,
+        e.source,
+        e.event_at,
+        e.meta,
+        e.actor_app_user_id,
+        e.subject_app_user_id,
+        actor.username AS actor_username,
+        actor.name AS actor_name,
+        subject.username AS subject_username,
+        subject.name AS subject_name
+      FROM app_user_activity_events e
+      LEFT JOIN app_users actor ON actor.id = e.actor_app_user_id
+      LEFT JOIN app_users subject ON subject.id = e.subject_app_user_id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY e.event_at DESC
+      LIMIT $${paramIndex++}
+      OFFSET $${paramIndex++}
+    `;
+    
+    const result = await pool.query(query, params);
+    return result.rows;
+  } catch (error) {
+    console.error('[PostgreSQL] 활동 이벤트 상세 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -158,5 +216,6 @@ module.exports = {
   initializeDatabase,
   addActivityEvent,
   getActivityStatsByDateRange,
-  getWorkoutDistinctDateCountsByDateRange
+  getWorkoutDistinctDateCountsByDateRange,
+  getActivityEventsByDateRange
 };

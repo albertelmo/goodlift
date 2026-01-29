@@ -253,32 +253,147 @@ async function loadActivityStats() {
       <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:8px;">
         <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
           <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">회원 활성</div>
-          <div style="font-size:0.75rem;color:#555;">접속(앱오픈): <strong>${members.appOpenUsers || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">로그인: <strong>${members.loginUsers || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">운동(직접): <strong>${members.workoutSelfUsers || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">운동(대리): <strong>${members.workoutProxyUsers || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">식단(직접): <strong>${members.dietSelfUsers || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">식단(대리): <strong>${members.dietProxyUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="회원 접속(앱오픈)" data-event-type="app_open" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">접속(앱오픈): <strong>${members.appOpenUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="회원 로그인" data-event-type="login" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">로그인: <strong>${members.loginUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="회원 운동(직접)" data-event-type="workout_create" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">운동(직접): <strong>${members.workoutSelfUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="회원 운동(대리)" data-event-type="workout_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">운동(대리): <strong>${members.workoutProxyUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="회원 식단(직접)" data-event-type="diet_create" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">식단(직접): <strong>${members.dietSelfUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="회원 식단(대리)" data-event-type="diet_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">식단(대리): <strong>${members.dietProxyUsers || 0}</strong></div>
         </div>
         <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
           <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">트레이너 활성</div>
-          <div style="font-size:0.75rem;color:#555;">접속(앱오픈): <strong>${trainers.appOpenUsers || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">로그인: <strong>${trainers.loginUsers || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">운동 대리 입력자: <strong>${trainers.workoutProxyActors || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">식단 대리 입력자: <strong>${trainers.dietProxyActors || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="트레이너 접속(앱오픈)" data-event-type="app_open" data-actor-role="trainer" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">접속(앱오픈): <strong>${trainers.appOpenUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="트레이너 로그인" data-event-type="login" data-actor-role="trainer" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">로그인: <strong>${trainers.loginUsers || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="트레이너 운동 대리 입력" data-event-type="workout_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">운동 대리 입력자: <strong>${trainers.workoutProxyActors || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="트레이너 식단 대리 입력" data-event-type="diet_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">식단 대리 입력자: <strong>${trainers.dietProxyActors || 0}</strong></div>
         </div>
         <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
           <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">기록 건수</div>
-          <div style="font-size:0.75rem;color:#555;">운동(직접/대리): <strong>${counts.workoutSelf || 0}</strong> / <strong>${counts.workoutProxy || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">식단(직접/대리): <strong>${counts.dietSelf || 0}</strong> / <strong>${counts.dietProxy || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">운동 코멘트: <strong>${counts.workoutComments || 0}</strong></div>
-          <div style="font-size:0.75rem;color:#555;">식단 코멘트(회원/트레이너): <strong>${counts.dietCommentsMember || 0}</strong> / <strong>${counts.dietCommentsTrainer || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="운동 건수(직접)" data-event-type="workout_create" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">운동(직접): <strong>${counts.workoutSelf || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="운동 건수(대리)" data-event-type="workout_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">운동(대리): <strong>${counts.workoutProxy || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="식단 건수(직접)" data-event-type="diet_create" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">식단(직접): <strong>${counts.dietSelf || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="식단 건수(대리)" data-event-type="diet_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">식단(대리): <strong>${counts.dietProxy || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="운동 코멘트" data-event-type="workout_comment_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">운동 코멘트: <strong>${counts.workoutComments || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="식단 코멘트(회원)" data-event-type="diet_comment_create" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">식단 코멘트(회원): <strong>${counts.dietCommentsMember || 0}</strong></div>
+          <div class="user-app-activity-item" data-label="식단 코멘트(트레이너)" data-event-type="diet_comment_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">식단 코멘트(트레이너): <strong>${counts.dietCommentsTrainer || 0}</strong></div>
         </div>
       </div>
     `;
+    
+    setupActivityStatClickHandlers();
   } catch (error) {
     console.error('활성 통계 조회 오류:', error);
     container.innerHTML = '<div style="text-align:center;padding:12px;color:#d32f2f;font-size:0.75rem;">활성 통계를 불러오지 못했습니다.</div>';
+  }
+}
+
+function setupActivityStatClickHandlers() {
+  const container = document.getElementById('user-app-activity-stats');
+  if (!container) return;
+  
+  container.querySelectorAll('.user-app-activity-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const label = item.getAttribute('data-label') || '활동 상세';
+      const eventType = item.getAttribute('data-event-type');
+      const actorRole = item.getAttribute('data-actor-role');
+      const source = item.getAttribute('data-source');
+      showActivityEventsModal({ label, eventType, actorRole, source });
+    });
+  });
+}
+
+async function showActivityEventsModal({ label, eventType, actorRole, source }) {
+  const startInput = document.getElementById('user-app-activity-start');
+  const endInput = document.getElementById('user-app-activity-end');
+  if (!startInput || !endInput) return;
+  
+  const startDate = startInput.value;
+  const endDate = endInput.value;
+  if (!startDate || !endDate) return;
+  
+  const modalBg = document.createElement('div');
+  modalBg.className = 'modal-bg';
+  modalBg.style.cssText = 'position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
+  
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:9px;border-radius:6px;width:88vw;max-width:520px;max-height:70vh;overflow-y:auto;font-size:0.66rem;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <h3 style="margin:0;color:#1976d2;font-size:0.83rem;">${escapeHtml(label)}</h3>
+      <button class="activity-modal-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div style="color:#666;font-size:0.68rem;margin-bottom:4px;">${escapeHtml(startDate)} ~ ${escapeHtml(endDate)}</div>
+    <div id="activity-events-loading" style="text-align:center;padding:8px;color:#888;font-size:0.6rem;">불러오는 중...</div>
+    <div id="activity-events-content"></div>
+  `;
+  
+  document.body.appendChild(modalBg);
+  document.body.appendChild(modal);
+  
+  const closeModal = () => {
+    modalBg.remove();
+    modal.remove();
+  };
+  modalBg.addEventListener('click', closeModal);
+  modal.querySelector('.activity-modal-close').addEventListener('click', closeModal);
+  
+  try {
+    const params = new URLSearchParams({
+      startDate,
+      endDate,
+      eventType,
+      actorRole,
+      source,
+      limit: '200'
+    });
+    const response = await fetch(`/api/app-user-activity-events?${params.toString()}`);
+    if (!response.ok) throw new Error('활동 이벤트 조회 실패');
+    const data = await response.json();
+    const events = data.events || [];
+    
+    const content = modal.querySelector('#activity-events-content');
+    const loading = modal.querySelector('#activity-events-loading');
+    if (loading) loading.remove();
+    
+    if (events.length === 0) {
+      content.innerHTML = '<div style="text-align:center;padding:16px;color:#888;">데이터가 없습니다.</div>';
+      return;
+    }
+    
+    const rowsHtml = events.map(ev => {
+      const date = new Date(ev.event_at);
+      const dateText = isNaN(date.getTime()) ? '-' : date.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const actorText = ev.actor_name ? `${ev.actor_name} (${ev.actor_username || '-'})` : (ev.actor_username || '-');
+      const subjectText = ev.subject_name ? `${ev.subject_name} (${ev.subject_username || '-'})` : (ev.subject_username || '-');
+      return `
+        <tr style="border-bottom:1px solid #eee;">
+          <td style="padding:3px 4px;white-space:nowrap;font-size:0.64rem;">${escapeHtml(dateText)}</td>
+          <td style="padding:3px 4px;font-size:0.64rem;">${escapeHtml(actorText)}</td>
+          <td style="padding:3px 4px;font-size:0.64rem;">${escapeHtml(subjectText)}</td>
+        </tr>
+      `;
+    }).join('');
+    
+    content.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#f5f5f5;border-bottom:1px solid #ddd;">
+            <th style="padding:3px 4px;text-align:left;white-space:nowrap;font-size:0.72rem;">시간</th>
+            <th style="padding:3px 4px;text-align:left;font-size:0.72rem;">행위자</th>
+            <th style="padding:3px 4px;text-align:left;font-size:0.72rem;">대상 회원</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+  } catch (error) {
+    const content = modal.querySelector('#activity-events-content');
+    const loading = modal.querySelector('#activity-events-loading');
+    if (loading) loading.remove();
+    content.innerHTML = '<div style="text-align:center;padding:16px;color:#d32f2f;">데이터를 불러오지 못했습니다.</div>';
+    console.error('활동 이벤트 조회 오류:', error);
   }
 }
 

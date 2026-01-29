@@ -1388,6 +1388,30 @@ app.get('/api/app-user-activity-stats', async (req, res) => {
     }
 });
 
+// 앱 유저 활동 이벤트 상세 조회
+app.get('/api/app-user-activity-events', async (req, res) => {
+    try {
+        const { startDate, endDate, eventType, actorRole, source, limit, offset } = req.query;
+        
+        if (!startDate || !endDate) {
+            return res.status(400).json({ message: 'startDate와 endDate가 필요합니다.' });
+        }
+        
+        const events = await appUserActivityEventsDB.getActivityEventsByDateRange(startDate, endDate, {
+            eventType,
+            actorRole,
+            source,
+            limit: limit ? parseInt(limit, 10) : 200,
+            offset: offset ? parseInt(offset, 10) : 0
+        });
+        
+        res.json({ events });
+    } catch (error) {
+        console.error('[API] 앱 유저 활동 이벤트 조회 오류:', error);
+        res.status(500).json({ message: '앱 유저 활동 이벤트를 불러오지 못했습니다.' });
+    }
+});
+
 // 앱 유저 추가 (관리자용)
 app.post('/api/app-users', async (req, res) => {
     try {
