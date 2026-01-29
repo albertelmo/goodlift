@@ -333,6 +333,7 @@ function navigateDate(delta) {
       newDate.setDate(newDate.getDate() + (delta * 7));
       break;
     case 'month':
+      newDate.setDate(1);
       newDate.setMonth(newDate.getMonth() + delta);
       break;
   }

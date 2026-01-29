@@ -46,6 +46,7 @@ function updateDateDisplay() {
 
 function navigateDate(delta) {
   const newDate = new Date(currentDate);
+  newDate.setDate(1);
   newDate.setMonth(newDate.getMonth() + delta);
   currentDate = newDate;
   updateDateDisplay();

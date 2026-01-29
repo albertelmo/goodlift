@@ -102,6 +102,7 @@ function render(container) {
 
 function navigateDate(delta, container) {
   const newDate = new Date(currentDate);
+  newDate.setDate(1);
   newDate.setMonth(newDate.getMonth() + delta);
   currentDate = newDate;
   updateDateDisplay();

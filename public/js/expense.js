@@ -40,6 +40,7 @@ function updateExpenseDateDisplay() {
 // 날짜 네비게이션
 function navigateExpenseDate(delta) {
   const newDate = new Date(expenseCurrentDate);
+  newDate.setDate(1);
   newDate.setMonth(newDate.getMonth() + delta);
   expenseCurrentDate = newDate;
   updateExpenseDateDisplay();
