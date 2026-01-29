@@ -439,8 +439,7 @@ function calculateDateRange() {
     case 'month':
       // 월의 시작과 끝
       startDate.setDate(1);
-      endDate.setMonth(endDate.getMonth() + 1);
-      endDate.setDate(0);
+      endDate = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 0);
       break;
   }
   
