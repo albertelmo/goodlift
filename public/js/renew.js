@@ -962,8 +962,19 @@ async function showRenewAddModal() {
         return;
       }
       
+      const sortedMembers = [...members].sort((a, b) => {
+        const remainA = Number(a.remainSessions);
+        const remainB = Number(b.remainSessions);
+        const safeRemainA = Number.isFinite(remainA) ? remainA : 0;
+        const safeRemainB = Number.isFinite(remainB) ? remainB : 0;
+        if (safeRemainA !== safeRemainB) {
+          return safeRemainA - safeRemainB;
+        }
+        return a.name.localeCompare(b.name, 'ko');
+      });
+      
       let html = '';
-      members.forEach(member => {
+      sortedMembers.forEach(member => {
         html += `
           <label style="display:flex;align-items:center;padding:8px;cursor:pointer;border-radius:4px;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#e3f2fd'" onmouseout="this.style.backgroundColor='transparent'">
             <input type="checkbox" class="renew-member-checkbox" value="${member.name}" style="margin-right:8px;width:18px;height:18px;cursor:pointer;">
