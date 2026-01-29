@@ -1802,6 +1802,58 @@ export function cleanup() {
 }
 
 /**
+ * 활동 로그 아이템 터치/클릭 이벤트 설정
+ * - 스크롤 제스처는 무시하고, 탭일 때만 클릭 처리
+ */
+function bindActivityLogItemEvents(item, handleLogClick, setupFlagName) {
+    if (!item || item[setupFlagName]) return;
+    
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchMoved = false;
+    const touchMoveThreshold = 8;
+    
+    item.addEventListener('click', () => {
+        if (item._lastTouchClickAt && Date.now() - item._lastTouchClickAt < 500) {
+            return;
+        }
+        handleLogClick(item);
+    });
+    
+    item.addEventListener('touchstart', (e) => {
+        const isUnread = item.classList.contains('app-activity-log-item-unread');
+        if (!isUnread) return;
+        const touch = e.touches[0];
+        if (!touch) return;
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        touchMoved = false;
+    }, { passive: true });
+    
+    item.addEventListener('touchmove', (e) => {
+        if (touchMoved) return;
+        const touch = e.touches[0];
+        if (!touch) return;
+        const dx = Math.abs(touch.clientX - touchStartX);
+        const dy = Math.abs(touch.clientY - touchStartY);
+        if (dx > touchMoveThreshold || dy > touchMoveThreshold) {
+            touchMoved = true;
+        }
+    }, { passive: true });
+    
+    item.addEventListener('touchend', async (e) => {
+        const isUnread = item.classList.contains('app-activity-log-item-unread');
+        if (!isUnread || touchMoved) return;
+        item._lastTouchClickAt = Date.now();
+        e.preventDefault();
+        e.stopPropagation();
+        await handleLogClick(item);
+    }, { passive: false });
+    
+    item[setupFlagName] = true;
+}
+
+/**
  * 회원 활동 로그 이벤트 설정
  */
 function setupMemberActivityLogEvents() {
@@ -1905,15 +1957,7 @@ function setupMemberActivityLogEvents() {
                     }
                 };
                 
-                item.addEventListener('click', () => handleLogClick(item));
-                item.addEventListener('touchstart', async (e) => {
-                    const isUnread = item.classList.contains('app-activity-log-item-unread');
-                    if (!isUnread) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    await handleLogClick(item);
-                }, { passive: false });
-                item._memberLogClickSetup = true;
+                bindActivityLogItemEvents(item, handleLogClick, '_memberLogClickSetup');
             }
         });
         
@@ -1982,21 +2026,7 @@ function setupMemberActivityLogEvents() {
     
     // 로그 아이템에 이벤트 리스너 등록 함수
     const setupLogItemEvents = (item) => {
-        if (!item || item._memberLogClickSetup) return;
-        
-        // click 이벤트
-        item.addEventListener('click', () => handleLogClick(item));
-        
-        // PWA 환경 대비: touchstart 이벤트에서 직접 처리
-        item.addEventListener('touchstart', async (e) => {
-            const isUnread = item.classList.contains('app-activity-log-item-unread');
-            if (!isUnread) return;
-            e.preventDefault(); // 기본 동작 방지
-            e.stopPropagation();
-            await handleLogClick(item);
-        }, { passive: false });
-        
-        item._memberLogClickSetup = true;
+        bindActivityLogItemEvents(item, handleLogClick, '_memberLogClickSetup');
     };
     
     // 현재 존재하는 로그 아이템에 이벤트 리스너 등록
@@ -2257,16 +2287,7 @@ function setupActivityLogEvents() {
                     }
                 };
                 
-                item.addEventListener('click', () => handleLogClick(item));
-                item.addEventListener('touchstart', async (e) => {
-                    const isUnread = item.classList.contains('app-activity-log-item-unread');
-                    if (!isUnread) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    await handleLogClick(item);
-                }, { passive: false });
-                
-                item._logClickSetup = true;
+                bindActivityLogItemEvents(item, handleLogClick, '_logClickSetup');
             }
         });
         
@@ -2390,21 +2411,7 @@ function setupActivityLogEvents() {
     
     // 로그 아이템에 이벤트 리스너 등록 함수
     const setupLogItemEvents = (item) => {
-        if (!item || item._logClickSetup) return;
-        
-        // click 이벤트
-        item.addEventListener('click', () => handleLogClick(item));
-        
-        // PWA 환경 대비: touchstart 이벤트에서 직접 처리
-        item.addEventListener('touchstart', async (e) => {
-            const isUnread = item.classList.contains('app-activity-log-item-unread');
-            if (!isUnread) return;
-            e.preventDefault(); // 기본 동작 방지
-            e.stopPropagation();
-            await handleLogClick(item);
-        }, { passive: false });
-        
-        item._logClickSetup = true;
+        bindActivityLogItemEvents(item, handleLogClick, '_logClickSetup');
     };
     
     // 현재 존재하는 로그 아이템에 이벤트 리스너 등록
