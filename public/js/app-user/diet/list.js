@@ -272,7 +272,7 @@ async function render(records) {
                                 ${allComments.length > 0 ? `
                                     <div class="app-diet-card-comments-section">
                                         ${allComments.map(comment => {
-                                            const commentText = escapeHtml(comment.comment_text);
+                                            const commentText = escapeHtml(comment.comment_text).replace(/\r?\n/g, '<br>');
                                             // 시간을 "11:11 AM" 형식으로 변환 (이미 한국 시간으로 저장됨)
                                             let commentTime = '';
                                             if (comment.created_at) {

@@ -23,7 +23,7 @@ const createTrainerActivityLogsTable = async () => {
           trainer_username VARCHAR(50) NOT NULL,
           member_name VARCHAR(100) NOT NULL,
           app_user_id UUID,
-          activity_type VARCHAR(20) NOT NULL CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'diet_comment_added', 'workout_recorded', 'workout_edited', 'workout_deleted')),
+          activity_type VARCHAR(40) NOT NULL CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'diet_comment_added', 'workout_recorded', 'workout_edited', 'workout_deleted', 'workout_comment_added')),
           activity_message TEXT NOT NULL,
           related_record_id UUID,
           record_date DATE,
@@ -49,9 +49,24 @@ const createTrainerActivityLogsTable = async () => {
   }
 };
 
-// 기존 테이블 마이그레이션 (record_date 컬럼 추가, activity_type에 diet_comment_added 추가, app_user_id 컬럼 추가)
+// 기존 테이블 마이그레이션 (record_date 컬럼 추가, activity_type에 diet_comment_added/workout_comment_added 추가, app_user_id 컬럼 추가, activity_type 길이 확장)
 const migrateTrainerActivityLogsTable = async () => {
   try {
+    // activity_type 컬럼 길이 확장 (workout_comment_added 대비)
+    const checkActivityTypeQuery = `
+      SELECT character_maximum_length
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'trainer_activity_logs'
+        AND column_name = 'activity_type'
+    `;
+    const activityTypeResult = await pool.query(checkActivityTypeQuery);
+    const currentLength = activityTypeResult.rows[0]?.character_maximum_length;
+    if (currentLength && currentLength < 40) {
+      await pool.query(`ALTER TABLE trainer_activity_logs ALTER COLUMN activity_type TYPE VARCHAR(40)`);
+      console.log('[PostgreSQL] activity_type 컬럼 길이가 확장되었습니다.');
+    }
+
     // record_date 컬럼 확인 및 추가
     const checkColumnQuery = `
       SELECT column_name 
@@ -84,7 +99,7 @@ const migrateTrainerActivityLogsTable = async () => {
       appUserIdColumnAdded = true;
     }
     
-    // activity_type CHECK 제약조건 확인 및 업데이트 (diet_comment_added 추가)
+    // activity_type CHECK 제약조건 확인 및 업데이트 (diet_comment_added/workout_comment_added 추가)
     try {
       // 기존 제약조건 확인 (더 정확한 방법)
       const constraintQuery = `
@@ -114,11 +129,11 @@ const migrateTrainerActivityLogsTable = async () => {
       if (activityTypeConstraint) {
         // 기존 제약조건 삭제
         await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}`);
-        // 새로운 제약조건 추가 (diet_comment_added 포함)
+        // 새로운 제약조건 추가 (diet_comment_added/workout_comment_added 포함)
         await pool.query(`
           ALTER TABLE trainer_activity_logs 
           ADD CONSTRAINT trainer_activity_logs_activity_type_check 
-          CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'diet_comment_added', 'workout_recorded', 'workout_edited', 'workout_deleted'))
+          CHECK (activity_type IN ('diet_recorded', 'diet_edited', 'diet_deleted', 'diet_comment_added', 'workout_recorded', 'workout_edited', 'workout_deleted', 'workout_comment_added'))
         `);
         console.log('[PostgreSQL] activity_type CHECK 제약조건이 업데이트되었습니다. (diet_comment_added 추가)');
       }

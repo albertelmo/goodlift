@@ -24,10 +24,14 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
     const dateObj = new Date(defaultDate);
     const dateDisplay = formatDateShort(dateObj);
     
-    // 현재 로그인한 트레이너 정보 가져오기
+    // 현재 로그인한 사용자 정보 (트레이너/회원)
     const currentUser = getCurrentUser();
-    const trainer_username = currentUser?.username || '';
-    const trainer_name = currentUser?.name || '';
+    const isTrainer = currentUser?.is_trainer === true || currentUser?.isTrainer === true;
+    const isViewingMember = Boolean(localStorage.getItem('connectedMemberAppUserId'));
+    const commenter_type = isTrainer ? 'trainer' : 'member';
+    const commenter_app_user_id = currentUser?.id || null;
+    const commenter_username = currentUser?.username || '';
+    const commenter_name = currentUser?.name || '';
     
     // 코멘트 목록 로드
     let comments = [];
@@ -56,12 +60,22 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
                 const displayHours = hours % 12 || 12;
                 commentTime = `${displayHours}:${minutes} ${ampm}`;
             }
-            const isMyComment = comment.trainer_username === trainer_username;
+            const isTrainerComment = comment.commenter_type === 'trainer';
+            const isMemberComment = !isTrainerComment;
+            const isMyComment = comment.commenter_type === commenter_type && (
+                (commenter_app_user_id && comment.commenter_app_user_id === commenter_app_user_id) ||
+                (isTrainerComment && commenter_username && comment.commenter_username === commenter_username)
+            );
+            const commenterLabel = isTrainerComment
+                ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '트레이너')} 트레이너`
+                : (isTrainer && isViewingMember
+                    ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '회원')} 회원님`
+                    : '나');
             
             return `
-                <div class="workout-comment-item" data-comment-id="${comment.id}">
+                <div class="workout-comment-item ${isMemberComment ? 'workout-comment-item-mine' : ''}" data-comment-id="${comment.id}">
                     <div class="workout-comment-header">
-                        <span class="workout-comment-trainer">${escapeHtml(comment.trainer_name || comment.trainer_username)} 트레이너</span>
+                        <span class="workout-comment-trainer">${commenterLabel}</span>
                         <span class="workout-comment-time">${commentTime}</span>
                     </div>
                     <div class="workout-comment-content">${escapeHtml(comment.comment)}</div>
@@ -122,19 +136,40 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
     }, 10);
     
     // 이벤트 리스너 설정
-    setupCommentModalEvents(modalBg, modal, appUserId, trainer_username, trainer_name, onSuccess);
+    setupCommentModalEvents(
+        modalBg,
+        modal,
+        appUserId,
+        {
+            commenter_type,
+            commenter_app_user_id,
+            commenter_username,
+            commenter_name,
+            isTrainer,
+            isViewingMember
+        },
+        onSuccess
+    );
 }
 
 /**
  * 코멘트 모달 이벤트 설정
  */
-function setupCommentModalEvents(modalBg, modal, appUserId, trainer_username, trainer_name, onSuccess) {
+function setupCommentModalEvents(modalBg, modal, appUserId, commenterInfo, onSuccess) {
     const closeBtn = modal.querySelector('#workout-comment-modal-close');
     const cancelBtn = modal.querySelector('#workout-comment-cancel-btn');
     const saveBtn = modal.querySelector('#workout-comment-save-btn');
     const dateInput = modal.querySelector('#workout-comment-date');
     const commentText = modal.querySelector('#workout-comment-text');
     const commentList = modal.querySelector('#workout-comment-list');
+    const {
+        commenter_type,
+        commenter_app_user_id,
+        commenter_username,
+        commenter_name,
+        isTrainer,
+        isViewingMember
+    } = commenterInfo;
     
     let editingCommentId = null;
     
@@ -186,12 +221,22 @@ function setupCommentModalEvents(modalBg, modal, appUserId, trainer_username, tr
                             const displayHours = hours % 12 || 12;
                             commentTime = `${displayHours}:${minutes} ${ampm}`;
                         }
-                        const isMyComment = comment.trainer_username === trainer_username;
+                        const isTrainerComment = comment.commenter_type === 'trainer';
+                        const isMemberComment = !isTrainerComment;
+                        const isMyComment = comment.commenter_type === commenter_type && (
+                            (commenter_app_user_id && comment.commenter_app_user_id === commenter_app_user_id) ||
+                            (isTrainerComment && commenter_username && comment.commenter_username === commenter_username)
+                        );
+                        const commenterLabel = isTrainerComment
+                            ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '트레이너')} 트레이너`
+                            : (isTrainer && isViewingMember
+                                ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '회원')} 회원님`
+                                : '나');
                         
                         return `
-                            <div class="workout-comment-item" data-comment-id="${comment.id}">
+                            <div class="workout-comment-item ${isMemberComment ? 'workout-comment-item-mine' : ''}" data-comment-id="${comment.id}">
                                 <div class="workout-comment-header">
-                                    <span class="workout-comment-trainer">${escapeHtml(comment.trainer_name || comment.trainer_username)} 트레이너</span>
+                                    <span class="workout-comment-trainer">${commenterLabel}</span>
                                     <span class="workout-comment-time">${commentTime}</span>
                                 </div>
                                 <div class="workout-comment-content">${escapeHtml(comment.comment)}</div>
@@ -207,7 +252,15 @@ function setupCommentModalEvents(modalBg, modal, appUserId, trainer_username, tr
                     : '<div class="workout-comment-empty">작성된 코멘트가 없습니다.</div>';
                 
                 commentList.innerHTML = commentsHtml;
-                setupCommentItemEvents(commentList, appUserId, trainer_username, dateInput, commentText, onSuccess, closeModal);
+                setupCommentItemEvents(
+                    commentList,
+                    appUserId,
+                    { commenter_type, commenter_app_user_id, commenter_username },
+                    dateInput,
+                    commentText,
+                    onSuccess,
+                    closeModal
+                );
             }
         } catch (error) {
             console.error('코멘트 조회 오류:', error);
@@ -237,7 +290,10 @@ function setupCommentModalEvents(modalBg, modal, appUserId, trainer_username, tr
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         comment,
-                        trainer_username
+                        commenter_type,
+                        commenter_app_user_id,
+                        commenter_username,
+                        commenter_name
                     })
                 });
                 
@@ -252,8 +308,10 @@ function setupCommentModalEvents(modalBg, modal, appUserId, trainer_username, tr
                     body: JSON.stringify({
                         workout_date: selectedDate,
                         comment,
-                        trainer_username,
-                        trainer_name
+                        commenter_type,
+                        commenter_app_user_id,
+                        commenter_username,
+                        commenter_name
                     })
                 });
                 
@@ -285,13 +343,22 @@ function setupCommentModalEvents(modalBg, modal, appUserId, trainer_username, tr
     });
     
     // 코멘트 아이템 이벤트 설정
-    setupCommentItemEvents(commentList, appUserId, trainer_username, dateInput, commentText, onSuccess, closeModal);
+    setupCommentItemEvents(
+        commentList,
+        appUserId,
+        { commenter_type, commenter_app_user_id, commenter_username },
+        dateInput,
+        commentText,
+        onSuccess,
+        closeModal
+    );
 }
 
 /**
  * 코멘트 아이템 이벤트 설정
  */
-function setupCommentItemEvents(commentList, appUserId, trainer_username, dateInput, commentText, onSuccess, closeModal) {
+function setupCommentItemEvents(commentList, appUserId, commenterInfo, dateInput, commentText, onSuccess, closeModal) {
+    const { commenter_type, commenter_app_user_id, commenter_username } = commenterInfo;
     // 수정 버튼
     commentList.querySelectorAll('.workout-comment-edit-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -331,7 +398,11 @@ function setupCommentItemEvents(commentList, appUserId, trainer_username, dateIn
                 const response = await fetch(`/api/workout-records/${appUserId}/comments/${commentId}`, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ trainer_username })
+                    body: JSON.stringify({
+                        commenter_type,
+                        commenter_app_user_id,
+                        commenter_username
+                    })
                 });
                 
                 if (!response.ok) {

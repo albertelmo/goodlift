@@ -219,7 +219,8 @@ async function render() {
                     <button class="app-diet-today-btn" id="diet-today-btn" title="오늘로 이동">오늘</button>
                 </div>
             </div>
-            <div id="diet-calendar-container"></div>
+        <div id="diet-calendar-container"></div>
+        <div class="app-diet-actions">
             ${backButton}
             ${!isReadOnly ? `
             <div class="app-diet-add-section">
@@ -232,6 +233,7 @@ async function render() {
                 </button>
             </div>
             ` : ''}
+        </div>
             <div id="diet-list-wrapper"></div>
         </div>
     `;

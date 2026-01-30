@@ -2,6 +2,7 @@
 
 import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText } from '../utils.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
+import { getCurrentUser } from '../index.js';
 
 let currentAppUserId = null;
 let currentRecords = [];
@@ -145,14 +146,6 @@ async function loadCommentsForDates(dates, additionalDates = []) {
             
             // 날짜별로 그룹화 (기존 데이터에 추가, 중복 제거)
             // formatDate 함수는 이미 상단에서 import되어 있음
-            console.group('📝 코멘트 로드');
-            console.log('로드된 코멘트 개수:', comments.length);
-            console.log('타겟 날짜:', allDates);
-            console.log('API 응답 코멘트:', comments.map(c => ({
-                id: c.id,
-                workout_date: c.workout_date,
-                comment: c.comment?.substring(0, 20) + '...'
-            })));
             
             // 특정 날짜만 다시 로드하는 경우, 해당 날짜의 기존 코멘트를 먼저 제거 (삭제된 코멘트 반영을 위해)
             if (allDates.length === 1) {
@@ -166,7 +159,6 @@ async function loadCommentsForDates(dates, additionalDates = []) {
                     normalizedTargetDate = normalizedTargetDate.split('T')[0];
                 }
                 // 해당 날짜의 기존 코멘트 제거
-                console.log('기존 코멘트 제거:', normalizedTargetDate, commentsByDate[normalizedTargetDate]);
                 delete commentsByDate[normalizedTargetDate];
             }
             
@@ -211,16 +203,6 @@ async function loadCommentsForDates(dates, additionalDates = []) {
                 }
             });
             
-            if (Object.keys(dateMapping).length > 0) {
-                console.log('날짜 정규화:', dateMapping);
-            }
-            console.log('저장된 코멘트 날짜:', Object.keys(commentsByDate));
-            console.log('날짜별 코멘트 개수:', Object.keys(commentsByDate).map(date => ({
-                date,
-                count: commentsByDate[date].length,
-                commentIds: commentsByDate[date].map(c => c.id)
-            })));
-            console.groupEnd();
             
             // 날짜별로 시간순 정렬 (오래된 것부터, 최신이 아래)
             Object.keys(commentsByDate).forEach(date => {
@@ -410,31 +392,6 @@ async function render(records) {
     
     const allDates = Array.from(allDatesSet).sort((a, b) => new Date(b) - new Date(a));
     
-    // 디버깅: 코멘트 관련 로그
-    console.group('📅 렌더링 날짜 수집');
-    console.log('현재 필터 날짜:', currentFilterDate || '(전체)');
-    console.log('운동기록 날짜 (workoutDates):', workoutDates);
-    console.log('코멘트 날짜 키:', Object.keys(commentsByDate));
-    console.log('코멘트 날짜별 상세:', Object.keys(commentsByDate).map(date => ({
-        date,
-        count: commentsByDate[date].length,
-        comments: commentsByDate[date].map(c => ({ id: c.id, workout_date: c.workout_date }))
-    })));
-    console.log('targetDatesForComments:', targetDatesForComments);
-    console.log('allDatesSet (정렬 전):', Array.from(allDatesSet));
-    console.log('최종 렌더링 날짜 (allDates):', allDates);
-    console.log('allDates 타입 확인:', allDates.map(d => ({ date: d, type: typeof d, isDate: d instanceof Date })));
-    console.groupEnd();
-    
-    // 디버깅: 날짜 중복 확인
-    if (allDates.length !== allDatesSet.size) {
-        console.warn('[Workout List] 날짜 중복 발견:', {
-            allDates,
-            allDatesSet: Array.from(allDatesSet),
-            workoutDates,
-            commentDates
-        });
-    }
     
         // 운동기록, 세션, 코멘트가 모두 없는 경우에만 빈 메시지 표시
         if (allDates.length === 0) {
@@ -517,25 +474,12 @@ async function render(records) {
         // commentsByDate는 정규화된 날짜(YYYY-MM-DD)로 저장되어 있음
         const dateComments = commentsByDate[normalizedDate] || commentsByDate[date] || [];
         
-        // 디버깅: 날짜별 코멘트 조회 로그
-        console.group(`🔍 날짜별 코멘트 조회: ${normalizedDate}`);
-        console.log('원본 날짜:', date);
-        console.log('정규화된 날짜:', normalizedDate);
-        console.log('commentsByDate 키 목록:', Object.keys(commentsByDate));
-        console.log(`commentsByDate[${normalizedDate}]:`, commentsByDate[normalizedDate]);
-        if (date !== normalizedDate) {
-            console.log(`commentsByDate[${date}]:`, commentsByDate[date]);
-        }
-        console.log('조회된 코멘트:', dateComments.length + '개');
-        if (dateComments.length > 0) {
-            console.log('코멘트 내용:', dateComments);
-        } else {
-            console.warn('⚠️ 코멘트가 없습니다!');
-        }
-        console.groupEnd();
         
         // 1. 날짜 섹션 위에 코멘트 렌더링 (있는 경우만)
         if (dateComments.length > 0) {
+            const currentUser = getCurrentUser();
+            const isTrainerViewer = currentUser?.is_trainer === true || currentUser?.isTrainer === true;
+            const isViewingMember = Boolean(localStorage.getItem('connectedMemberAppUserId'));
             html += `<div class="app-workout-card-comments-section" style="margin-bottom: 3px;">`;
             dateComments.forEach(comment => {
                 let commentTime = '';
@@ -551,12 +495,26 @@ async function render(records) {
                 
                 // 줄바꿈을 <br>로 변환 (XSS 방지를 위해 escapeHtml 먼저 적용)
                 const commentText = escapeHtml(comment.comment).replace(/\n/g, '<br>');
-                const trainerName = escapeHtml(comment.trainer_name || comment.trainer_username);
+                const isTrainerComment = comment.commenter_type === 'trainer';
+                const isMemberComment = !isTrainerComment;
+                const displayName = isTrainerComment
+                    ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '트레이너')} 트레이너`
+                    : (isTrainerViewer && isViewingMember
+                        ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '회원')} 회원님`
+                        : '나');
+                const wrapperClass = isMemberComment
+                    ? 'app-diet-card-comment-wrapper-mine'
+                    : 'app-diet-card-comment-wrapper-trainer';
+                const bubbleClass = isMemberComment
+                    ? 'app-diet-card-comment-bubble-mine'
+                    : 'app-diet-card-comment-bubble-trainer';
                 
                 html += `
-                    <div class="app-diet-card-comment-wrapper app-diet-card-comment-wrapper-trainer">
-                        <div class="app-diet-card-comment-trainer-name">${trainerName} 트레이너</div>
-                        <div class="app-diet-card-comment-bubble app-diet-card-comment-bubble-trainer">
+                    <div class="app-diet-card-comment-wrapper ${wrapperClass}">
+                        ${isMemberComment
+                            ? `<div class="app-diet-card-comment-user-name">${displayName}</div>`
+                            : `<div class="app-diet-card-comment-trainer-name">${displayName}</div>`}
+                        <div class="app-diet-card-comment-bubble ${bubbleClass}">
                             <div class="app-diet-card-comment-content">
                                 <div class="app-diet-card-comment-text">${commentText}</div>
                                 ${commentTime ? `<div class="app-diet-card-comment-time">${commentTime}</div>` : ''}
@@ -1027,7 +985,6 @@ async function showTimerModal(date) {
                 await render(currentRecords);
                 
                 // TODO: 타이머 시작 기능 구현
-                console.log('타이머 설정 저장 완료:', { useRest, minutes, seconds });
             } else {
                 alert('사용자 정보를 찾을 수 없습니다.');
             }

@@ -2,12 +2,63 @@
 
 import { init as initList } from './list.js';
 import { showWorkoutSelectModal, showTextRecordModal } from './add.js';
+import { getCurrentUser } from '../index.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
 
 let currentAppUserId = null;
 let isReadOnly = false;
 let lastButtonClickTime = 0; // 버튼 클릭 중복 방지용
 const BUTTON_CLICK_THROTTLE = 300; // 300ms 내 중복 클릭 방지
+const trainerNameCache = new Map();
+
+async function resolveTrainerName(trainerUsername) {
+    if (!trainerUsername) return null;
+    if (trainerNameCache.has(trainerUsername)) {
+        return trainerNameCache.get(trainerUsername);
+    }
+    try {
+        const response = await fetch(`/api/trainers?username=${encodeURIComponent(trainerUsername)}`);
+        if (response.ok) {
+            const trainers = await response.json();
+            const trainer = Array.isArray(trainers)
+                ? trainers.find(t => t.username === trainerUsername)
+                : trainers;
+            if (trainer?.name) {
+                trainerNameCache.set(trainerUsername, trainer.name);
+                return trainer.name;
+            }
+        }
+    } catch (error) {
+        // noop
+    }
+    trainerNameCache.set(trainerUsername, null);
+    return null;
+}
+
+async function resolveTrainerNameForMember(currentUser) {
+    if (!currentUser) return null;
+    if (currentUser.trainer) {
+        return resolveTrainerName(currentUser.trainer);
+    }
+
+    const memberName = currentUser.member_name || currentUser.name;
+    if (!memberName) return null;
+
+    try {
+        const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(memberName)}`);
+        if (membersResponse.ok) {
+            const members = await membersResponse.json();
+            const member = members.find(m => m.name === memberName);
+            if (member?.trainer) {
+                return resolveTrainerName(member.trainer);
+            }
+        }
+    } catch (error) {
+        // noop
+    }
+
+    return null;
+}
 
 /**
  * 운동기록 화면 초기화
@@ -377,6 +428,21 @@ async function render() {
     }
     // connectedMemberAppUserId가 있는 경우는 병렬 호출에서 처리하므로 여기서는 처리하지 않음
     
+    const currentUser = getCurrentUser();
+    const isTrainer = currentUser?.is_trainer === true || currentUser?.isTrainer === true;
+    const canLeaveComment = !isReadOnly && (connectedMemberAppUserId || !isTrainer);
+    const trainerUsername = currentUser?.trainer;
+    const isMemberView = !isTrainer && !connectedMemberAppUserId;
+    let commentButtonLabel = '💬 운동 코멘트 남기기';
+    if (canLeaveComment && isMemberView) {
+        commentButtonLabel = '💬 트레이너에게 말걸기';
+        if (trainerUsername) {
+            const cachedTrainerName = trainerNameCache.get(trainerUsername);
+            const displayName = cachedTrainerName || trainerUsername;
+            commentButtonLabel = `💬 ${displayName} 트레이너에게 말걸기`;
+        }
+    }
+
     // 뒤로가기 버튼 (트레이너 기록을 볼 때만 표시)
     const backButton = isReadOnly && viewingTrainerName ? `
         <div class="app-workout-add-section">
@@ -399,34 +465,50 @@ async function render() {
                 </div>
             </div>
             <div id="workout-calendar-container"></div>
-            ${backButton}
-            ${!isReadOnly ? `
-            <div class="app-workout-add-section">
-                <div style="display: flex; gap: 8px;">
-                    <button class="app-btn-primary app-btn-full" id="workout-add-btn" style="flex: 1;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        운동 선택하기
-                    </button>
-                    <button class="app-btn-secondary app-btn-full" id="workout-text-add-btn" style="flex: 1; white-space: nowrap;">
-                        📝 직접 기록하기
-                    </button>
+            <div class="app-workout-actions">
+                ${backButton}
+                ${!isReadOnly ? `
+                <div class="app-workout-add-section">
+                    <div style="display: flex; gap: 8px;">
+                        <button class="app-btn-primary app-btn-full" id="workout-add-btn" style="flex: 1;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            운동 선택하기
+                        </button>
+                        <button class="app-btn-secondary app-btn-full" id="workout-text-add-btn" style="flex: 1; white-space: nowrap;">
+                            📝 직접 기록하기
+                        </button>
+                    </div>
                 </div>
-            </div>
-            ` : ''}
-            ${!isReadOnly && connectedMemberAppUserId ? `
-            <div class="app-workout-add-section">
+                ` : ''}
+            ${canLeaveComment ? `
+                <div class="app-workout-add-section">
                 <button class="app-btn-secondary app-btn-full" id="workout-comment-btn">
-                    💬 운동 코멘트 남기기
+                    ${commentButtonLabel}
                 </button>
+                </div>
+                ` : ''}
             </div>
-            ` : ''}
             <div id="workout-list-wrapper"></div>
         </div>
     `;
     
+    if (canLeaveComment && isMemberView) {
+        const commentBtn = document.getElementById('workout-comment-btn');
+        if (commentBtn) {
+            const resolvePromise = trainerUsername
+                ? resolveTrainerName(trainerUsername)
+                : resolveTrainerNameForMember(currentUser);
+            resolvePromise.then(trainerName => {
+                if (trainerName) {
+                    commentBtn.textContent = `💬 ${trainerName} 트레이너에게 말걸기`;
+                }
+            });
+        }
+    }
+
     // 월 변경 감지를 위한 인터벌 (캘린더 스와이프 시 업데이트)
     setupMonthUpdateObserver();
     

@@ -59,7 +59,7 @@ export async function showDietDetailModal(appUserId, record, isReadOnly = false,
     
     // 코멘트 HTML 생성 (카드와 동일한 말풍선 스타일)
     const commentsHtml = comments.map(comment => {
-        const commentText = escapeHtml(comment.comment_text);
+        const commentText = escapeHtml(comment.comment_text).replace(/\r?\n/g, '<br>');
         // 시간을 "11:11 AM" 형식으로 변환 (이미 한국 시간으로 저장됨)
         let commentTime = '';
         if (comment.created_at) {
@@ -142,9 +142,9 @@ export async function showDietDetailModal(appUserId, record, isReadOnly = false,
                             
                             ${!isReadOnly ? `
                                 <div class="app-diet-comment-input">
-                                    <input type="text" id="diet-detail-comment-input" 
+                                    <textarea id="diet-detail-comment-input" 
                                            placeholder="코멘트를 입력하세요..." 
-                                           class="app-diet-comment-input-field">
+                                           class="app-diet-comment-input-field" rows="2"></textarea>
                                     <button type="button" class="app-btn-primary" id="diet-detail-comment-submit">전송</button>
                                 </div>
                             ` : ''}
@@ -382,11 +382,5 @@ export async function showDietDetailModal(appUserId, record, isReadOnly = false,
         };
         
         commentSubmitBtn.addEventListener('click', sendComment);
-        commentInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendComment();
-            }
-        });
     }
 }
