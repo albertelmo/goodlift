@@ -1074,6 +1074,7 @@ async function showMemberAddModal(container, username, statusFilter, searchQuery
 }
 
 const SORT_INCOMPLETE_FIRST_DEFAULT = false;
+const ENABLE_MONTH_SWIPE = false;
 
 let calState = { 
     year: null, 
@@ -1588,6 +1589,12 @@ async function renderCalUI(container, forceDate) {
             ? `<button class="tmc-week-nav-btn" id="tmc-week-prev-btn">지난주</button>
                <button class="tmc-week-nav-btn" id="tmc-week-next-btn">다음주</button>`
             : '';
+
+        // 월간보기 네비게이션 버튼
+        const monthNavButtons = calState.viewMode === 'month'
+            ? `<button class="tmc-week-nav-btn" id="tmc-month-prev-btn">이전월</button>
+               <button class="tmc-week-nav-btn" id="tmc-month-next-btn">다음월</button>`
+            : '';
         
         // 주간보기/월간보기 모두 캘린더 고정을 위한 클래스 추가
         const wrapClass = 'trainer-mobile-cal-wrap trainer-cal-fixed';
@@ -1599,6 +1606,7 @@ async function renderCalUI(container, forceDate) {
                     <span class="tmc-month">${calState.viewMode === 'week' ? getWeekRangeText() : `${yyyy}년 ${mmDisplay}월`}</span>
                     <div class="tmc-nav-buttons">
                         ${weekNavButtons}
+                        ${monthNavButtons}
                         <button class="tmc-view-toggle-btn" id="tmc-view-toggle-btn">${viewButtonText}</button>
                     </div>
                 </div>
@@ -2250,6 +2258,42 @@ async function renderCalUI(container, forceDate) {
                 }
             };
         }
+
+        // 월간보기 네비게이션 버튼 이벤트
+        const monthPrevBtn = container.querySelector('#tmc-month-prev-btn');
+        const monthNextBtn = container.querySelector('#tmc-month-next-btn');
+
+        if (monthPrevBtn) {
+            monthPrevBtn.onclick = function() {
+                if (calState.viewMode === 'month') {
+                    if (calState.month === 1) {
+                        calState.month = 12;
+                        calState.year--;
+                    } else {
+                        calState.month--;
+                    }
+                    adjustDateForMonthChange();
+                    calState.scrollTargetDate = null;
+                    renderCalUI(container);
+                }
+            };
+        }
+
+        if (monthNextBtn) {
+            monthNextBtn.onclick = function() {
+                if (calState.viewMode === 'month') {
+                    if (calState.month === 12) {
+                        calState.month = 1;
+                        calState.year++;
+                    } else {
+                        calState.month++;
+                    }
+                    adjustDateForMonthChange();
+                    calState.scrollTargetDate = null;
+                    renderCalUI(container);
+                }
+            };
+        }
         
         // 날짜 클릭 시 해당 날짜로 이동
         container.querySelectorAll('.tmc-cal-table td[data-day]').forEach(td => {
@@ -2332,7 +2376,7 @@ async function renderCalUI(container, forceDate) {
           };
         });
         // 모바일 스와이프 이벤트(좌우) - 세션카드 영역 제외, 주간보기에서는 비활성화
-        if (calState.viewMode === 'month') {
+        if (calState.viewMode === 'month' && ENABLE_MONTH_SWIPE) {
             let startX = null;
             let startY = null;
             let isHorizontalSwipe = false;
