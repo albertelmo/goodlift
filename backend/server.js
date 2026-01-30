@@ -1607,11 +1607,11 @@ app.post('/api/debug-log', async (req, res) => {
 });
 
 // PWA 버전 체크 API (30초 폴링 방식)
-// 서버 시작 시간을 버전으로 사용 (서버 재시작 시 자동으로 업데이트 감지)
-const SERVER_START_TIME = new Date().toISOString();
+// 환경 변수로 버전 관리: .env 파일에 PWA_VERSION=2026-01-31-v1 형식으로 설정
+const PWA_VERSION = process.env.PWA_VERSION || new Date().toISOString();
 app.get('/api/pwa/version', (req, res) => {
     res.json({ 
-        version: SERVER_START_TIME, // 서버 재시작 시 자동 변경됨
+        version: PWA_VERSION,
         timestamp: Date.now() 
     });
 });
@@ -9575,6 +9575,6 @@ app.listen(PORT, HOST, () => {
     console.log(`DEBUG_QUERIES: ${process.env.DEBUG_QUERIES === 'true' ? 'true' : 'false'}`);
     console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
     console.log('====================');
-    console.log('\n🔄 PWA 버전:', SERVER_START_TIME);
-    console.log('   (서버 재시작 시 자동으로 새 버전 감지됨)\n');
+    console.log('\n🔄 PWA 버전:', PWA_VERSION);
+    console.log(`   ${process.env.PWA_VERSION ? '(환경 변수에서 로드됨)' : '(기본값: 서버 시작 시간)'}\n`);
 });

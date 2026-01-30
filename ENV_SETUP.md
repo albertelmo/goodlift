@@ -10,6 +10,7 @@
 
 ### 선택적 환경 변수
 - `DATA_DIR`: 데이터 파일 디렉토리 경로 (기본값: `../data`)
+- `PWA_VERSION`: PWA 업데이트 버전 (기본값: 서버 시작 시간)
 - `EMAIL_HOST`: 이메일 SMTP 호스트 (기본값: `smtp.gmail.com`)
 - `EMAIL_PORT`: 이메일 SMTP 포트 (기본값: `587`)
 - `EMAIL_USER`: 이메일 계정
@@ -30,6 +31,7 @@ NODE_ENV=development
 
 # 선택적 설정
 DATA_DIR=./data
+PWA_VERSION=2026-01-31-v1
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
@@ -72,6 +74,7 @@ NODE_ENV=production
 필요한 경우 추가 환경 변수를 설정합니다:
 
 ```
+PWA_VERSION=2026-01-31-v1
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_USER=your-email@gmail.com
@@ -129,6 +132,22 @@ const SLOW_QUERY_THRESHOLD = parseInt(process.env.SLOW_QUERY_THRESHOLD || '100',
 // backend/server.js
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 ```
+
+### PWA 버전 관리
+```javascript
+// backend/server.js
+const PWA_VERSION = process.env.PWA_VERSION || new Date().toISOString();
+app.get('/api/pwa/version', (req, res) => {
+    res.json({ version: PWA_VERSION, timestamp: Date.now() });
+});
+```
+
+**PWA 업데이트 배포 방법**:
+1. `.env` 파일에서 `PWA_VERSION` 값 변경 (예: `PWA_VERSION=2026-01-31-v2`)
+2. 서버 재시작
+3. 30초 이내에 모든 클라이언트에 업데이트 알림 표시
+
+**참고**: `PWA_VERSION`을 설정하지 않으면 서버 시작 시간(ISO 형식)이 자동으로 사용됩니다.
 
 ## 🛠️ 문제 해결
 
