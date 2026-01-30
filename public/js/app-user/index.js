@@ -219,11 +219,15 @@ export function navigateToScreen(screen) {
                                     <div style="font-size: 16px; color: var(--app-text); font-weight: 500;" id="profile-trainer-name"></div>
                                 </div>
                                 ${currentUser.created_at ? `
-                                <div class="app-profile-info-item" style="padding: 12px 0;">
+                                <div class="app-profile-info-item" style="padding: 12px 0; border-bottom: 1px solid var(--app-border);">
                                     <label style="display: block; font-size: 12px; color: var(--app-text-muted); margin-bottom: 8px;">가입일</label>
                                     <input type="text" value="${new Date(currentUser.created_at).toLocaleDateString('ko-KR')}" disabled style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-bg); color: var(--app-text-muted); font-size: 16px; font-weight: 500; box-sizing: border-box;">
                                 </div>
                                 ` : ''}
+                                <div class="app-profile-info-item" style="padding: 12px 0;">
+                                    <div style="font-size: 12px; color: var(--app-text-muted); margin-bottom: 4px;">버전</div>
+                                    <div style="font-size: 14px; color: var(--app-text-muted); font-family: monospace;" id="app-version-display">불러오는 중...</div>
+                                </div>
                             </div>
                             
                             <div class="app-profile-password" style="background: var(--app-surface); border-radius: var(--app-radius); padding: 20px; margin-bottom: 16px;">
@@ -400,6 +404,33 @@ export function navigateToScreen(screen) {
                         }
                     })();
                 }
+                
+                // PWA 버전 정보 가져오기
+                (async () => {
+                    try {
+                        const response = await fetch('/api/pwa/version');
+                        const data = await response.json();
+                        const versionEl = profileContainer.querySelector('#app-version-display');
+                        if (versionEl && data.version) {
+                            // 버전 포맷팅: ISO 타임스탬프면 초.밀리초Z만 표시, 아니면 그대로 표시
+                            let displayVersion = data.version;
+                            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(data.version)) {
+                                // ISO 형식 (2026-01-30T23:53:04.958Z) → 04.958Z만 추출
+                                const match = data.version.match(/:(\d{2}\.\d{3}Z)$/);
+                                if (match) {
+                                    displayVersion = match[1];
+                                }
+                            }
+                            versionEl.textContent = displayVersion;
+                        }
+                    } catch (error) {
+                        console.error('버전 정보 조회 오류:', error);
+                        const versionEl = profileContainer.querySelector('#app-version-display');
+                        if (versionEl) {
+                            versionEl.textContent = '알 수 없음';
+                        }
+                    }
+                })();
             }
             break;
         default:
