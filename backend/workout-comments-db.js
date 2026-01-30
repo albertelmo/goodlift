@@ -136,7 +136,6 @@ const migrateFromTrainerComments = async () => {
       ON CONFLICT (id) DO NOTHING
     `;
     await pool.query(migrateQuery);
-    console.log('[PostgreSQL] workout_trainer_comments 데이터가 workout_comments로 마이그레이션되었습니다.');
   } catch (error) {
     console.error('[PostgreSQL] 운동 코멘트 데이터 마이그레이션 오류:', error);
     throw error;

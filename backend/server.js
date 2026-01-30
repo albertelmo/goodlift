@@ -1350,6 +1350,7 @@ app.get('/api/app-user-activity-stats', async (req, res) => {
         const memberDietSelf = findRow('diet_create', 'member', 'self');
         const trainerDietProxy = findRow('diet_create', 'trainer', 'trainer_proxy');
         const trainerWorkoutComments = findRow('workout_comment_create', 'trainer', 'trainer_proxy');
+        const memberWorkoutComments = findRow('workout_comment_create', 'member', 'self');
         const memberDietComments = findRow('diet_comment_create', 'member', 'self');
         const trainerDietComments = findRow('diet_comment_create', 'trainer', 'trainer_proxy');
         
@@ -1362,7 +1363,9 @@ app.get('/api/app-user-activity-stats', async (req, res) => {
                     workoutSelfUsers: Number(memberWorkoutSelf?.subject_count || 0),
                     workoutProxyUsers: Number(trainerWorkoutProxy?.subject_count || 0),
                     dietSelfUsers: Number(memberDietSelf?.subject_count || 0),
-                    dietProxyUsers: Number(trainerDietProxy?.subject_count || 0)
+                    dietProxyUsers: Number(trainerDietProxy?.subject_count || 0),
+                    workoutCommentUsers: Number(memberWorkoutComments?.actor_count || 0),
+                    dietCommentUsers: Number(memberDietComments?.actor_count || 0)
                 },
                 trainers: {
                     appOpenUsers: Number(trainerAppOpen?.actor_count || 0),
@@ -1375,7 +1378,8 @@ app.get('/api/app-user-activity-stats', async (req, res) => {
                     workoutProxy: Number(workoutProxyDistinct?.event_count || 0),
                     dietSelf: Number(memberDietSelf?.event_count || 0),
                     dietProxy: Number(trainerDietProxy?.event_count || 0),
-                    workoutComments: Number(trainerWorkoutComments?.event_count || 0),
+                    workoutCommentsTrainer: Number(trainerWorkoutComments?.event_count || 0),
+                    workoutCommentsMember: Number(memberWorkoutComments?.event_count || 0),
                     dietCommentsMember: Number(memberDietComments?.event_count || 0),
                     dietCommentsTrainer: Number(trainerDietComments?.event_count || 0)
                 }
@@ -1744,6 +1748,17 @@ app.post('/api/workout-records/batch', async (req, res) => {
         }
         
         const actorAppUserId = actor_app_user_id || app_user_id;
+        let isTrainerActor = Boolean(trainer_username);
+        if (!isTrainerActor && actorAppUserId && actorAppUserId !== app_user_id) {
+            try {
+                const actorUser = await appUsersDB.getAppUserById(actorAppUserId);
+                if (actorUser?.is_trainer) {
+                    isTrainerActor = true;
+                }
+            } catch (e) {
+                // noop
+            }
+        }
         
         // 일괄 추가
         const records = await workoutRecordsDB.addWorkoutRecordsBatch(workoutDataArray);
@@ -1787,14 +1802,16 @@ app.post('/api/workout-records/batch', async (req, res) => {
         
         // 각 날짜별로 로그 생성 (비동기, 실패해도 영향 없음)
         for (const [dateStr, record] of dateToRecordMap.entries()) {
-            // 트레이너 활동 로그 생성 (항상 생성)
-            createActivityLogForTrainer(
-                app_user_id, 
-                'workout_recorded', 
-                '운동기록이 등록되었습니다.', 
-                record.id,
-                dateStr
-            ).catch(err => console.error('[Activity Log] 트레이너 로그 생성 실패:', err));
+            // 회원이 직접 등록한 경우에만 트레이너 활동 로그 생성
+            if (!isTrainerActor) {
+                createActivityLogForTrainer(
+                    app_user_id, 
+                    'workout_recorded', 
+                    '운동기록이 등록되었습니다.', 
+                    record.id,
+                    dateStr
+                ).catch(err => console.error('[Activity Log] 트레이너 로그 생성 실패:', err));
+            }
             
             // 트레이너가 생성한 경우에만 회원 활동 로그 생성
             // trainer_username이 있을 때만 생성 (회원이 직접 등록한 경우는 생성하지 않음)
@@ -1845,6 +1862,17 @@ app.post('/api/workout-records', async (req, res) => {
         
         const record = await workoutRecordsDB.addWorkoutRecord(workoutData);
         const actorAppUserId = actor_app_user_id || app_user_id;
+        let isTrainerActor = Boolean(trainer_username);
+        if (!isTrainerActor && actorAppUserId && actorAppUserId !== app_user_id) {
+            try {
+                const actorUser = await appUsersDB.getAppUserById(actorAppUserId);
+                if (actorUser?.is_trainer) {
+                    isTrainerActor = true;
+                }
+            } catch (e) {
+                // noop
+            }
+        }
         
         logAppUserActivityEvent({
             eventType: 'workout_create',
@@ -1856,14 +1884,16 @@ app.post('/api/workout-records', async (req, res) => {
             }
         });
         
-        // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
-        createActivityLogForTrainer(
-            app_user_id, 
-            'workout_recorded', 
-            '운동기록이 등록되었습니다.', 
-            record.id,
-            workout_date
-        ).catch(err => console.error('[Activity Log]', err));
+        // 회원이 직접 등록한 경우에만 트레이너 활동 로그 생성
+        if (!isTrainerActor) {
+            createActivityLogForTrainer(
+                app_user_id, 
+                'workout_recorded', 
+                '운동기록이 등록되었습니다.', 
+                record.id,
+                workout_date
+            ).catch(err => console.error('[Activity Log]', err));
+        }
         
         // 트레이너가 생성한 경우 회원 활동 로그 생성
         if (trainer_username) {
@@ -2200,14 +2230,16 @@ app.post('/api/diet-records', imageUpload.single('image'), async (req, res) => {
                 }
             });
             
-            // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
-            createActivityLogForTrainer(
-                app_user_id, 
-                'diet_recorded', 
-                '식단기록이 등록되었습니다.', 
-                record.id,
-                meal_date
-            ).catch(err => console.error('[Activity Log]', err));
+            const isTrainerActor = actorAppUserId && actorAppUserId !== app_user_id;
+            if (!isTrainerActor) {
+                createActivityLogForTrainer(
+                    app_user_id, 
+                    'diet_recorded', 
+                    '식단기록이 등록되었습니다.', 
+                    record.id,
+                    meal_date
+                ).catch(err => console.error('[Activity Log]', err));
+            }
             
             res.status(201).json(record);
         } else {
@@ -2239,14 +2271,16 @@ app.post('/api/diet-records', imageUpload.single('image'), async (req, res) => {
                 }
             });
             
-            // 트레이너 활동 로그 생성 (비동기, 실패해도 영향 없음)
-            createActivityLogForTrainer(
-                app_user_id, 
-                'diet_recorded', 
-                '식단기록이 등록되었습니다.', 
-                record.id,
-                meal_date
-            ).catch(err => console.error('[Activity Log]', err));
+            const isTrainerActor = actorAppUserId && actorAppUserId !== app_user_id;
+            if (!isTrainerActor) {
+                createActivityLogForTrainer(
+                    app_user_id, 
+                    'diet_recorded', 
+                    '식단기록이 등록되었습니다.', 
+                    record.id,
+                    meal_date
+                ).catch(err => console.error('[Activity Log]', err));
+            }
             
             res.status(201).json(record);
         }
