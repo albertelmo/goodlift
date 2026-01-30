@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
 const basePool = new Pool({
@@ -114,9 +115,12 @@ const createWorkoutRecordsTable = async () => {
       
       console.log('[PostgreSQL] workout_records 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] workout_records 테이블이 이미 존재합니다.');
-      // 기존 테이블 마이그레이션
-      await migrateWorkoutRecordsTable();
+      // 기존 테이블 마이그레이션 - 추적 시스템 사용
+      await runMigration(
+        'migrate_workout_records_structure_20250131',
+        '운동 기록 테이블 데이터 구조 마이그레이션 (sets, reps, weight 등)',
+        migrateWorkoutRecordsTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 테이블 생성 오류:', error);
@@ -163,8 +167,6 @@ const createWorkoutRecordSetsTable = async () => {
       `);
       
       console.log('[PostgreSQL] workout_record_sets 테이블이 생성되었습니다.');
-    } else {
-      console.log('[PostgreSQL] workout_record_sets 테이블이 이미 존재합니다.');
     }
   } catch (error) {
     console.error('[PostgreSQL] workout_record_sets 테이블 생성 오류:', error);

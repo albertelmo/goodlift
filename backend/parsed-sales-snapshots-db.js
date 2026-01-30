@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성
 const pool = new Pool({
@@ -52,9 +53,12 @@ const createParsedSalesSnapshotsTable = async () => {
       
       console.log('[PostgreSQL] Parsed Sales Snapshots 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] Parsed Sales Snapshots 테이블이 이미 존재합니다.');
       // 기존 테이블 마이그레이션
-      await migrateParsedSalesSnapshotsTable();
+      await runMigration(
+        'migrate_parsed_sales_snapshots_20250131',
+        'Parsed Sales Snapshots 테이블 마이그레이션',
+        migrateParsedSalesSnapshotsTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] Parsed Sales Snapshots 테이블 생성 오류:', error);

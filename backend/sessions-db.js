@@ -368,8 +368,6 @@ const migrate30minField = async () => {
       `;
       await pool.query(alterQuery);
       console.log('[Migration] 30min 컬럼이 추가되었습니다.');
-    } else {
-      console.log('[Migration] 30min 컬럼이 이미 존재합니다.');
     }
   } catch (error) {
     console.error('[Migration] 30min 컬럼 마이그레이션 오류:', error);

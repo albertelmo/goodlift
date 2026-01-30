@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
 const basePool = new Pool({
@@ -87,9 +88,12 @@ const createWorkoutTrainerCommentsTable = async () => {
       
       console.log('[PostgreSQL] workout_trainer_comments 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] workout_trainer_comments 테이블이 이미 존재합니다.');
       // 기존 테이블 마이그레이션
-      await migrateWorkoutTrainerCommentsTable();
+      await runMigration(
+        'add_columns_to_workout_trainer_comments_20250131',
+        '트레이너 운동 코멘트 테이블에 center, username_alias 컬럼 추가',
+        migrateWorkoutTrainerCommentsTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 운동 코멘트 테이블 생성 오류:', error);

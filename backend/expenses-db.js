@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
 const pool = new Pool({
@@ -37,7 +38,6 @@ const createExpensesTable = async () => {
       await pool.query("SET client_encoding TO 'UTF8'");
       console.log('[PostgreSQL] 지출 내역 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 지출 내역 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
       await addExpenseColumnsIfNotExists();
     }

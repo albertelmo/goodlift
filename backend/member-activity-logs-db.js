@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
 const pool = new Pool({
@@ -39,9 +40,12 @@ const createMemberActivityLogsTable = async () => {
       
       console.log('[PostgreSQL] member_activity_logs 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] member_activity_logs 테이블이 이미 존재합니다.');
       // 기존 테이블 마이그레이션
-      await migrateMemberActivityLogsTable();
+      await runMigration(
+        'migrate_member_activity_logs_20250131',
+        '회원 활동 로그 테이블 activity_type 길이 확장 (VARCHAR(20) → VARCHAR(50))',
+        migrateMemberActivityLogsTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 회원 활동 로그 테이블 생성 오류:', error);

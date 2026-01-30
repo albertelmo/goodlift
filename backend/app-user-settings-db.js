@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
 const pool = new Pool({
@@ -38,9 +39,12 @@ const createAppUserSettingsTable = async () => {
       
       console.log('[PostgreSQL] app_user_settings 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] app_user_settings 테이블이 이미 존재합니다.');
       // 기존 테이블 마이그레이션 (구버전 구조가 있을 경우)
-      await migrateAppUserSettingsTable();
+      await runMigration(
+        'add_columns_to_app_user_settings_20250131',
+        '앱 유저 설정 테이블에 show_trainer_comment_on_workout_tab 컬럼 추가',
+        migrateAppUserSettingsTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 앱 유저 설정 테이블 생성 오류:', error);

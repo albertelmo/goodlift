@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 const bcrypt = require('bcrypt');
 
 // PostgreSQL 연결 풀 생성 (기존 DB와 동일한 연결 사용)
@@ -40,8 +41,6 @@ const createElmoUsersTable = async () => {
       await createElmoUsersIndexes();
       
       console.log('[PostgreSQL] Elmo 사용자 테이블이 생성되었습니다.');
-    } else {
-      console.log('[PostgreSQL] Elmo 사용자 테이블이 이미 존재합니다.');
     }
   } catch (error) {
     console.error('[PostgreSQL] Elmo 사용자 테이블 생성 오류:', error);
@@ -356,7 +355,11 @@ const deleteElmoUser = async (userId) => {
 const initializeDatabase = async () => {
   try {
     await createElmoUsersTable();
-    await migrateElmoUsersTable();  // 마이그레이션 추가
+    await runMigration(
+      'add_role_to_elmo_users_20250131',
+      'Elmo 사용자 테이블에 role 컬럼 추가',
+      migrateElmoUsersTable
+    );
     await createElmoUsersRoleIndex();  // 인덱스 추가
     console.log('[PostgreSQL] Elmo 사용자 데이터베이스 초기화 완료');
   } catch (error) {

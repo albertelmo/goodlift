@@ -37,8 +37,6 @@ const createAppUserFavoriteWorkoutsTable = async () => {
       await createFavoriteWorkoutsIndexes();
       
       console.log('[PostgreSQL] app_user_favorite_workouts 테이블이 생성되었습니다.');
-    } else {
-      console.log('[PostgreSQL] app_user_favorite_workouts 테이블이 이미 존재합니다.');
     }
   } catch (error) {
     console.error('[PostgreSQL] 앱 유저 즐겨찾기 운동 테이블 생성 오류:', error);

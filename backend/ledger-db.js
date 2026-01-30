@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성
 const pool = new Pool({
@@ -38,9 +39,12 @@ const createFixedExpenseTable = async () => {
       
       console.log('[PostgreSQL] 고정지출 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 고정지출 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
-      await migrateFixedExpenseTable();
+      await runMigration(
+        'add_columns_to_fixed_expenses_20250131',
+        '고정지출 테이블에 tax_type, start_date, end_date 컬럼 추가',
+        migrateFixedExpenseTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 고정지출 테이블 생성 오류:', error);
@@ -185,9 +189,12 @@ const createVariableExpenseTable = async () => {
       
       console.log('[PostgreSQL] 변동지출 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 변동지출 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
-      await migrateVariableExpenseTable();
+      await runMigration(
+        'add_columns_to_variable_expenses_20250131',
+        '변동지출 테이블에 tax_type, updated_at 컬럼 추가',
+        migrateVariableExpenseTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 변동지출 테이블 생성 오류:', error);
@@ -634,9 +641,12 @@ const createSalaryTable = async () => {
       
       console.log('[PostgreSQL] 급여 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 급여 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
-      await migrateSalaryTable();
+      await runMigration(
+        'add_updated_at_to_salary_20250131',
+        '급여 테이블에 updated_at 컬럼 추가',
+        migrateSalaryTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 급여 테이블 생성 오류:', error);
@@ -902,9 +912,12 @@ const createSettlementTable = async () => {
       
       console.log('[PostgreSQL] 정산 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 정산 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
-      await migrateSettlementTable();
+      await runMigration(
+        'migrate_settlement_20250131',
+        '정산 테이블 마이그레이션',
+        migrateSettlementTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 정산 테이블 생성 오류:', error);

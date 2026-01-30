@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 const { v4: uuidv4 } = require('uuid');
 
 // PostgreSQL 연결 풀 생성
@@ -61,9 +62,12 @@ const createMetricsTable = async () => {
       
       console.log('[PostgreSQL] Metrics 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] Metrics 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
-      await migrateMetricsTable();
+      await runMigration(
+        'add_columns_to_metrics_20250131',
+        'Metrics 테이블에 15개 지표 컬럼 추가 및 UNIQUE 제약조건 추가',
+        migrateMetricsTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] Metrics 테이블 생성 오류:', error);

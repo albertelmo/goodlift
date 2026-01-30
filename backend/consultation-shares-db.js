@@ -41,8 +41,6 @@ const createConsultationShareTokensTable = async () => {
       await pool.query(`CREATE INDEX idx_share_tokens_expires_at ON consultation_share_tokens(expires_at)`);
       
       console.log('[PostgreSQL] 상담기록 공유 토큰 테이블이 생성되었습니다.');
-    } else {
-      console.log('[PostgreSQL] 상담기록 공유 토큰 테이블이 이미 존재합니다.');
     }
   } catch (error) {
     console.error('[PostgreSQL] 상담기록 공유 토큰 테이블 생성 오류:', error);
@@ -308,6 +306,42 @@ const deleteShareToken = async (shareId) => {
   }
 };
 
+// 상담기록 ID로 연결된 모든 공유 토큰의 name/phone 업데이트
+const updateShareTokensByConsultationId = async (consultationId, updates) => {
+  try {
+    const allowedFields = ['name', 'phone'];
+    const updateFields = [];
+    const values = [];
+    let paramIndex = 1;
+    
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        updateFields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+    
+    if (updateFields.length === 0) {
+      return { updated: 0 };
+    }
+    
+    values.push(consultationId);
+    const query = `
+      UPDATE consultation_share_tokens
+      SET ${updateFields.join(', ')}
+      WHERE consultation_record_id = $${paramIndex}
+      RETURNING id
+    `;
+    
+    const result = await pool.query(query, values);
+    return { updated: result.rowCount || 0 };
+  } catch (error) {
+    console.error('[PostgreSQL] 공유 토큰 일괄 업데이트 오류:', error);
+    throw error;
+  }
+};
+
 // 모든 활성 공유 토큰 조회 (상담기록 정보 포함)
 const getAllActiveShareTokens = async () => {
   try {
@@ -403,5 +437,6 @@ module.exports = {
   getShareTokensByConsultationId,
   updateShareToken,
   deleteShareToken,
-  getAllActiveShareTokens
+  getAllActiveShareTokens,
+  updateShareTokensByConsultationId
 };

@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성
 const pool = new Pool({
@@ -48,9 +49,12 @@ const createMarketingTable = async () => {
       
       console.log('[PostgreSQL] 마케팅 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 마케팅 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
-      await migrateMarketingTable();
+      await runMigration(
+        'add_columns_to_marketing_20250131',
+        '마케팅 테이블에 type, expenses, notes 등 컬럼 추가',
+        migrateMarketingTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 마케팅 테이블 생성 오류:', error);

@@ -43,6 +43,7 @@ const elmoUsersDB = require('./elmo-users-db');
 const elmoCalendarRecordsDB = require('./elmo-calendar-records-db');
 const elmoApiRouter = require('./elmo-api-router');
 const { ELMO_IMAGES_DIR } = require('./elmo-utils');
+const { initializeMigrationSystem } = require('./migrations-manager');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -446,6 +447,12 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 
+
+// 마이그레이션 추적 시스템 초기화 (가장 먼저 실행)
+(async () => {
+  await initializeMigrationSystem();
+  console.log('[System] 마이그레이션 추적 시스템 초기화 완료');
+})();
 
 // PostgreSQL 데이터베이스 초기화
 sessionsDB.initializeDatabase();
@@ -7138,6 +7145,24 @@ app.patch('/api/consultation-records/:id', async (req, res) => {
         
         if (!record) {
             return res.status(404).json({ message: '상담기록을 찾을 수 없습니다.' });
+        }
+        
+        // 이름 또는 전화번호가 변경되었으면 연결된 공유 토큰도 업데이트
+        if (updates.name !== undefined || updates.phone !== undefined) {
+            const shareUpdates = {};
+            if (updates.name !== undefined) {
+                shareUpdates.name = updates.name;
+            }
+            if (updates.phone !== undefined) {
+                shareUpdates.phone = updates.phone;
+            }
+            
+            try {
+                await consultationSharesDB.updateShareTokensByConsultationId(id, shareUpdates);
+            } catch (shareUpdateError) {
+                console.error('[API] 공유 토큰 업데이트 오류:', shareUpdateError);
+                // 공유 토큰 업데이트 실패해도 상담기록 업데이트는 성공으로 처리
+            }
         }
         
         res.json(record);

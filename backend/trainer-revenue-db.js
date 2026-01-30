@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성
 const pool = new Pool({
@@ -38,8 +39,11 @@ const createTrainerRevenueTable = async () => {
       
       console.log('[PostgreSQL] 트레이너 매출 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 트레이너 매출 테이블이 이미 존재합니다.');
-      await migrateTrainerRevenueTable();
+      await runMigration(
+        'add_columns_to_trainer_revenue_20250131',
+        '트레이너 매출 테이블에 year_month, total_sessions 등 7개 컬럼 추가',
+        migrateTrainerRevenueTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 트레이너 매출 테이블 생성 오류:', error);
@@ -194,8 +198,11 @@ const createTrainerOtherRevenueTable = async () => {
       
       console.log('[PostgreSQL] 트레이너 기타수입 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 트레이너 기타수입 테이블이 이미 존재합니다.');
-      await migrateTrainerOtherRevenueTable();
+      await runMigration(
+        'add_columns_to_trainer_other_revenue_20250131',
+        '트레이너 기타수입 테이블에 year_month, updated_at 컬럼 추가',
+        migrateTrainerOtherRevenueTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 트레이너 기타수입 테이블 생성 오류:', error);

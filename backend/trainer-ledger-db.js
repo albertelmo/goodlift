@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { runMigration } = require('./migrations-manager');
 
 // PostgreSQL 연결 풀 생성
 const pool = new Pool({
@@ -38,9 +39,12 @@ const createTrainerFixedExpenseTable = async () => {
       
       console.log('[PostgreSQL] 트레이너 고정지출 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 트레이너 고정지출 테이블이 이미 존재합니다.');
       // 기존 테이블에 컬럼 추가 (마이그레이션)
-      await migrateTrainerFixedExpenseTable();
+      await runMigration(
+        'add_columns_to_trainer_fixed_expenses_20250131',
+        '트레이너 고정지출 테이블에 tax_type, start_date, end_date 컬럼 추가',
+        migrateTrainerFixedExpenseTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 트레이너 고정지출 테이블 생성 오류:', error);
@@ -176,8 +180,11 @@ const createTrainerVariableExpenseTable = async () => {
       
       console.log('[PostgreSQL] 트레이너 변동지출 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 트레이너 변동지출 테이블이 이미 존재합니다.');
-      await migrateTrainerVariableExpenseTable();
+      await runMigration(
+        'add_columns_to_trainer_variable_expenses_20250131',
+        '트레이너 변동지출 테이블에 tax_type, updated_at 컬럼 추가',
+        migrateTrainerVariableExpenseTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 트레이너 변동지출 테이블 생성 오류:', error);
@@ -337,8 +344,11 @@ const createTrainerSalaryTable = async () => {
       
       console.log('[PostgreSQL] 트레이너 급여 테이블이 생성되었습니다.');
     } else {
-      console.log('[PostgreSQL] 트레이너 급여 테이블이 이미 존재합니다.');
-      await migrateTrainerSalaryTable();
+      await runMigration(
+        'add_updated_at_to_trainer_salary_20250131',
+        '트레이너 급여 테이블에 updated_at 컬럼 추가',
+        migrateTrainerSalaryTable
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 트레이너 급여 테이블 생성 오류:', error);
