@@ -1587,21 +1587,33 @@ app.post('/api/trainer-app-user', async (req, res) => {
 app.post('/api/debug-log', async (req, res) => {
     try {
         const { level, message, data } = req.body;
-        const timestamp = new Date().toISOString();
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('ko-KR', { hour12: false });
         
         // 터미널에 로그 출력
-        const logMessage = `[${timestamp}] [${level}] ${message}`;
-        if (data) {
-            console.log(logMessage, data);
+        const logPrefix = level === 'PWA' || level === 'ELMO-PWA' ? '📱' : '🔧';
+        const logMessage = `${logPrefix} [${timeStr}] [${level}] ${message}`;
+        if (data && Object.keys(data).length > 0) {
+            console.log(logMessage, JSON.stringify(data));
         } else {
             console.log(logMessage);
         }
         
         res.json({ success: true });
     } catch (error) {
-        console.error('[API] 디버깅 로그 처리 오류:', error);
-        res.status(500).json({ success: false });
+        console.error('❌ [API] 디버깅 로그 처리 오류:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
+});
+
+// PWA 버전 체크 API (30초 폴링 방식)
+// 서버 시작 시간을 버전으로 사용 (서버 재시작 시 자동으로 업데이트 감지)
+const SERVER_START_TIME = new Date().toISOString();
+app.get('/api/pwa/version', (req, res) => {
+    res.json({ 
+        version: SERVER_START_TIME, // 서버 재시작 시 자동 변경됨
+        timestamp: Date.now() 
+    });
 });
 
 // 운동기록 목록 조회
@@ -9562,5 +9574,7 @@ app.listen(PORT, HOST, () => {
     console.log(`SLOW_QUERY_THRESHOLD: ${parseInt(process.env.SLOW_QUERY_THRESHOLD || '100', 10)}ms`);
     console.log(`DEBUG_QUERIES: ${process.env.DEBUG_QUERIES === 'true' ? 'true' : 'false'}`);
     console.log(`NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
-    console.log('====================\n');
+    console.log('====================');
+    console.log('\n🔄 PWA 버전:', SERVER_START_TIME);
+    console.log('   (서버 재시작 시 자동으로 새 버전 감지됨)\n');
 });

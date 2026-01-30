@@ -1,6 +1,7 @@
-// Elmo Service Worker 버전
-const CACHE_NAME = 'elmo-v2'; // 버전 업데이트로 캐시 무효화
-const RUNTIME_CACHE = 'elmo-runtime-v2';
+// Elmo Service Worker 캐시 버전 (캐시 무효화 필요 시에만 변경)
+const VERSION = '2026-01-31-v1';
+const CACHE_NAME = `elmo-${VERSION}`;
+const RUNTIME_CACHE = `elmo-runtime-${VERSION}`;
 
 // 캐싱할 정적 파일 목록
 const STATIC_CACHE_URLS = [
@@ -21,8 +22,8 @@ self.addEventListener('install', (event) => {
         return cache.addAll(STATIC_CACHE_URLS);
       })
       .then(() => {
-        console.log('[Elmo SW] 설치 완료');
-        return self.skipWaiting(); // 즉시 활성화
+        console.log('[Elmo SW] 설치 완료 - 활성화 대기 중');
+        // skipWaiting() 제거 - 사용자가 "업데이트" 버튼을 클릭할 때까지 대기
       })
       .catch((error) => {
         console.error('[Elmo SW] 설치 오류:', error);
@@ -132,4 +133,13 @@ self.addEventListener('fetch', (event) => {
                     });
             })
     );
+});
+
+// 메시지 이벤트: 클라이언트와 통신
+self.addEventListener('message', (event) => {
+  // 새 버전 즉시 활성화 요청
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[Elmo SW] SKIP_WAITING 요청 받음 - 즉시 활성화');
+    self.skipWaiting();
+  }
 });

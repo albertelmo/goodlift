@@ -1,6 +1,7 @@
-// Service Worker 버전
-const CACHE_NAME = 'goodlift-v1';
-const RUNTIME_CACHE = 'goodlift-runtime-v1';
+// Service Worker 캐시 버전 (캐시 무효화 필요 시에만 변경)
+const VERSION = '2026-01-31-v1';
+const CACHE_NAME = `goodlift-${VERSION}`;
+const RUNTIME_CACHE = `goodlift-runtime-${VERSION}`;
 
 // 캐싱할 정적 파일 목록
 const STATIC_CACHE_URLS = [
@@ -24,8 +25,8 @@ self.addEventListener('install', (event) => {
         return cache.addAll(STATIC_CACHE_URLS);
       })
       .then(() => {
-        console.log('[Service Worker] 설치 완료');
-        return self.skipWaiting(); // 즉시 활성화
+        console.log('[Service Worker] 설치 완료 - 활성화 대기 중');
+        // skipWaiting() 제거 - 사용자가 "업데이트" 버튼을 클릭할 때까지 대기
       })
       .catch((error) => {
         console.error('[Service Worker] 캐싱 실패:', error);
@@ -115,9 +116,12 @@ self.addEventListener('fetch', (event) => {
 
 // 메시지 이벤트: 클라이언트와 통신
 self.addEventListener('message', (event) => {
+  // 새 버전 즉시 활성화 요청
   if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('[Service Worker] SKIP_WAITING 요청 받음 - 즉시 활성화');
     self.skipWaiting();
   }
+  // 추가 캐싱 요청
   if (event.data && event.data.type === 'CACHE_URLS') {
     event.waitUntil(
       caches.open(CACHE_NAME).then((cache) => {

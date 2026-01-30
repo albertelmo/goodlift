@@ -14,6 +14,47 @@
     <link rel="stylesheet" href="css/consultation.css">
 </head>
 <body>
+    <!-- PWA 업데이트 알림 배너 -->
+    <div id="pwa-update-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999999;background:#2196F3;color:#fff;padding:12px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.2);animation:slideDown 0.3s ease-out;">
+        <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:18px;">✨</span>
+                <span style="font-weight:500;font-size:14px;">새 버전을 사용할 수 있습니다</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <button id="pwa-update-btn" style="background:#fff;color:#2196F3;border:none;padding:6px 16px;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'">
+                    지금 업데이트
+                </button>
+                <button id="pwa-update-close" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);padding:6px 12px;border-radius:4px;font-size:13px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='rgba(255,255,255,0.5)'">
+                    나중에
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        /* 배너가 표시될 때 콘텐츠를 아래로 밀기 */
+        body.pwa-banner-visible {
+            padding-top: 48px;
+        }
+        @media (max-width: 600px) {
+            body.pwa-banner-visible {
+                padding-top: 68px;
+            }
+        }
+        /* 유저앱 활성화 시에도 배너 공간 확보 */
+        body.pwa-banner-visible #app-user-section {
+            padding-top: 52px; /* 배너 높이만큼만 */
+        }
+        /* 유저앱 헤더가 배너를 덮지 않도록 */
+        body.pwa-banner-visible .app-header {
+            top: 52px; /* 배너 높이만큼만 */
+        }
+    </style>
+
     <div id="old-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0;">
       <div style="display:flex;align-items:center;gap:8px;">
         <img id="mainLogo" src="img/logo.png" alt="GoodLift 로고" style="height:38px;cursor:pointer; margin-top:16px; margin-bottom:8px;" />
@@ -847,42 +888,106 @@
     <script type="module" src="js/consultation.js"></script>
     <script type="module" src="js/database.js"></script>
     <script>
-        // Service Worker 등록
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js')
-                    .then((registration) => {
-                        console.log('[PWA] Service Worker 등록 성공:', registration.scope);
-                        
-                        // 업데이트 확인
-                        registration.addEventListener('updatefound', () => {
-                            const newWorker = registration.installing;
-                            console.log('[PWA] 새로운 Service Worker 발견');
-                            
-                            newWorker.addEventListener('statechange', () => {
-                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                    // 새 버전이 설치되었음을 알림
-                                    console.log('[PWA] 새로운 버전 사용 가능');
-                                }
-                            });
-                        });
-                    })
-                    .catch((error) => {
-                        console.error('[PWA] Service Worker 등록 실패:', error);
-                    });
-            });
+        // PWA 업데이트 시스템 (환경 상관없이 폴링 방식)
+        (function() {
+            let currentVersion = null;
+            let newWorker = null;
+            let dismissedUntil = 0; // "나중에" 클릭 시 다시 알림 표시 시간
+
             
-            // Service Worker 업데이트 확인
-            let refreshing = false;
-            navigator.serviceWorker.addEventListener('controllerchange', () => {
-                if (!refreshing) {
-                    refreshing = true;
-                    console.log('[PWA] Service Worker 업데이트, 페이지 새로고침');
-                    // 페이지 새로고침 (선택사항)
-                    // window.location.reload();
+            // Service Worker 등록 (HTTPS 프로덕션용)
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/sw.js')
+                        .then((registration) => {
+                            console.log('[PWA] Service Worker 등록 성공');
+                            
+                            // 업데이트 감지
+                            registration.addEventListener('updatefound', () => {
+                                const installing = registration.installing;
+                                installing.addEventListener('statechange', () => {
+                                    if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                                        newWorker = installing;
+                                        showUpdateBanner();
+                                    }
+                                });
+                            });
+                        })
+                        .catch((error) => {
+                            console.error('[PWA] Service Worker 등록 실패:', error);
+                        });
+                });
+                
+                // Controller 변경 시 새로고침
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        refreshing = true;
+                        window.location.reload();
+                    }
+                });
+            }
+
+            
+            // 초기 버전 로드
+            fetch('/api/pwa/version')
+                .then(res => res.json())
+                .then(data => {
+                    currentVersion = data.version;
+                    console.log('[PWA] 현재 버전:', currentVersion);
+                })
+                .catch(() => {});
+            
+            // 30초마다 버전 체크 (모든 환경에서 동작)
+            setInterval(() => {
+                if (!currentVersion) return;
+                
+                fetch('/api/pwa/version?t=' + Date.now())
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.version !== currentVersion) {
+                            console.log('[PWA] 새 버전 발견:', currentVersion, '→', data.version);
+                            showUpdateBanner();
+                        }
+                    })
+                    .catch(() => {});
+            }, 30000); // 30초
+            
+            // 업데이트 배너 표시
+            function showUpdateBanner() {
+                // "나중에" 클릭 후 1시간이 지나지 않았으면 표시 안 함
+                if (Date.now() < dismissedUntil) {
+                    return;
                 }
-            });
-        }
+                
+                const banner = document.getElementById('pwa-update-banner');
+                const updateBtn = document.getElementById('pwa-update-btn');
+                const closeBtn = document.getElementById('pwa-update-close');
+                
+                if (banner && banner.style.display === 'none') {
+                    banner.style.display = 'block';
+                    document.body.classList.add('pwa-banner-visible');
+                    
+                    updateBtn.onclick = () => {
+                        if (newWorker) {
+                            // Service Worker 있으면 즉시 활성화
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                        } else {
+                            // 없으면 강제 새로고침
+                            window.location.reload(true);
+                        }
+                    };
+                    
+                    closeBtn.onclick = () => {
+                        banner.style.display = 'none';
+                        document.body.classList.remove('pwa-banner-visible');
+                        // 1시간 후 다시 알림
+                        dismissedUntil = Date.now() + (60 * 60 * 1000);
+                        console.log('[PWA] 1시간 후 다시 알림 예정');
+                    };
+                }
+            }
+        })();
     </script>
     
     <!-- 트레이너 프로필 사진 업로드 모달 -->

@@ -13,6 +13,52 @@
     <meta name="theme-color" content="#1976d2">
 </head>
 <body>
+    <!-- PWA 업데이트 알림 배너 -->
+    <div id="pwa-update-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:999999;background:#2196F3;color:#fff;padding:12px 16px;box-shadow:0 2px 8px rgba(0,0,0,0.2);animation:slideDown 0.3s ease-out;">
+        <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:18px;">✨</span>
+                <span style="font-weight:500;font-size:14px;">새 버전을 사용할 수 있습니다</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <button id="pwa-update-btn" style="background:#fff;color:#2196F3;border:none;padding:6px 16px;border-radius:4px;font-weight:600;font-size:13px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='#fff'">
+                    지금 업데이트
+                </button>
+                <button id="pwa-update-close" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);padding:6px 12px;border-radius:4px;font-size:13px;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.borderColor='#fff'" onmouseout="this.style.borderColor='rgba(255,255,255,0.5)'">
+                    나중에
+                </button>
+            </div>
+        </div>
+    </div>
+    <style>
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        /* 배너가 표시될 때 콘텐츠를 아래로 밀기 */
+        body.pwa-banner-visible {
+            padding-top: 48px;
+        }
+        @media (max-width: 600px) {
+            body.pwa-banner-visible {
+                padding-top: 68px;
+            }
+        }
+        /* 엘모 헤더가 배너를 덮지 않도록 */
+        body.pwa-banner-visible .elmo-header {
+            top: 52px; /* 배너 높이만큼만 */
+        }
+        /* 엘모 메인 섹션도 배너 공간 확보 */
+        body.pwa-banner-visible #elmo-main-section {
+            padding-top: 48px;
+        }
+        @media (max-width: 600px) {
+            body.pwa-banner-visible #elmo-main-section {
+                padding-top: 68px;
+            }
+        }
+    </style>
+
     <!-- 회원가입 모달 (body 직하위로 이동하여 overflow 문제 방지) -->
     <div id="elmo-register-modal" style="display:none;">
         <div class="elmo-modal-content">
@@ -211,5 +257,108 @@
     </div>
 
     <script type="module" src="/elmo/js/elmo-main.js"></script>
+    
+    <script>
+        // PWA 업데이트 시스템 (환경 상관없이 폴링 방식)
+        (function() {
+            let currentVersion = null;
+            let newWorker = null;
+            let dismissedUntil = 0; // "나중에" 클릭 시 다시 알림 표시 시간
+
+            
+            // Service Worker 등록 (HTTPS 프로덕션용)
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register('/elmo/sw.js')
+                        .then((registration) => {
+                            console.log('[Elmo PWA] Service Worker 등록 성공');
+                            
+                            // 업데이트 감지
+                            registration.addEventListener('updatefound', () => {
+                                const installing = registration.installing;
+                                installing.addEventListener('statechange', () => {
+                                    if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                                        newWorker = installing;
+                                        showUpdateBanner();
+                                    }
+                                });
+                            });
+                        })
+                        .catch((error) => {
+                            console.error('[Elmo PWA] Service Worker 등록 실패:', error);
+                        });
+                });
+                
+                // Controller 변경 시 새로고침
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        refreshing = true;
+                        window.location.reload();
+                    }
+                });
+            }
+
+            
+            // 초기 버전 로드
+            fetch('/api/pwa/version')
+                .then(res => res.json())
+                .then(data => {
+                    currentVersion = data.version;
+                    console.log('[Elmo PWA] 현재 버전:', currentVersion);
+                })
+                .catch(() => {});
+            
+            // 30초마다 버전 체크 (모든 환경에서 동작)
+            setInterval(() => {
+                if (!currentVersion) return;
+                
+                fetch('/api/pwa/version?t=' + Date.now())
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.version !== currentVersion) {
+                            console.log('[Elmo PWA] 새 버전 발견:', currentVersion, '→', data.version);
+                            showUpdateBanner();
+                        }
+                    })
+                    .catch(() => {});
+            }, 30000); // 30초
+            
+            // 업데이트 배너 표시
+            function showUpdateBanner() {
+                // "나중에" 클릭 후 1시간이 지나지 않았으면 표시 안 함
+                if (Date.now() < dismissedUntil) {
+                    return;
+                }
+                
+                const banner = document.getElementById('pwa-update-banner');
+                const updateBtn = document.getElementById('pwa-update-btn');
+                const closeBtn = document.getElementById('pwa-update-close');
+                
+                if (banner && banner.style.display === 'none') {
+                    banner.style.display = 'block';
+                    document.body.classList.add('pwa-banner-visible');
+                    
+                    updateBtn.onclick = () => {
+                        if (newWorker) {
+                            // Service Worker 있으면 즉시 활성화
+                            newWorker.postMessage({ type: 'SKIP_WAITING' });
+                        } else {
+                            // 없으면 강제 새로고침
+                            window.location.reload(true);
+                        }
+                    };
+                    
+                    closeBtn.onclick = () => {
+                        banner.style.display = 'none';
+                        document.body.classList.remove('pwa-banner-visible');
+                        // 1시간 후 다시 알림
+                        dismissedUntil = Date.now() + (60 * 60 * 1000);
+                        console.log('[Elmo PWA] 1시간 후 다시 알림 예정');
+                    };
+                }
+            }
+        })();
+    </script>
 </body>
 </html>
