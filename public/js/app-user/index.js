@@ -412,16 +412,7 @@ export function navigateToScreen(screen) {
                         const data = await response.json();
                         const versionEl = profileContainer.querySelector('#app-version-display');
                         if (versionEl && data.version) {
-                            // 버전 포맷팅: ISO 타임스탬프면 초.밀리초Z만 표시, 아니면 그대로 표시
-                            let displayVersion = data.version;
-                            if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(data.version)) {
-                                // ISO 형식 (2026-01-30T23:53:04.958Z) → 04.958Z만 추출
-                                const match = data.version.match(/:(\d{2}\.\d{3}Z)$/);
-                                if (match) {
-                                    displayVersion = match[1];
-                                }
-                            }
-                            versionEl.textContent = displayVersion;
+                            versionEl.textContent = data.version;
                         }
                     } catch (error) {
                         console.error('버전 정보 조회 오류:', error);
