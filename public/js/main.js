@@ -533,7 +533,7 @@ const adminTabs = [
 
 const adminHamburgerItems = [
     { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
-    { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: '👤 회원', id: 'Member', content: '<div class="member-container"><div class="member-mobile-tabs"><button class="member-tab-btn active" data-tab="list">📋 목록</button><button class="member-tab-btn" data-tab="search">🔍 검색</button><button class="member-tab-btn" data-tab="add">➕ 추가</button></div><div class="member-flex-wrap"><div id="member-search" class="member-tab-content"></div><div id="member-add" class="member-tab-content"></div><div id="member-list" class="member-tab-content active"></div></div></div>' },
     { label: '💰 지출', id: 'Expense', content: '<div id="expense-root"></div>' },
     { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
     { label: '💾 DB', id: 'Database', content: '<div id="database-root"></div>' },
@@ -552,7 +552,7 @@ const trainerTabs = [
 const centerTabs = [
     { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
-    { label: '👤 회원', id: 'Member', content: '<div class="member-flex-wrap"><div id="member-add"></div><div id="member-list"></div></div>' },
+    { label: '👤 회원', id: 'Member', content: '<div class="member-container"><div class="member-mobile-tabs"><button class="member-tab-btn active" data-tab="list">📋 목록</button><button class="member-tab-btn" data-tab="search">🔍 검색</button><button class="member-tab-btn" data-tab="add">➕ 추가</button></div><div class="member-flex-wrap"><div id="member-search" class="member-tab-content"></div><div id="member-add" class="member-tab-content"></div><div id="member-list" class="member-tab-content active"></div></div></div>' },
     { label: '💹 매출', id: 'Sales', content: '<div id="sales-root"></div>' }
 ];
 
@@ -813,6 +813,8 @@ function renderTabContent(tabId, tabContent) {
     } else if (tabId === 'Member') {
         member.renderAddForm(document.getElementById('member-add'));
         member.renderList(document.getElementById('member-list'));
+        member.renderSearch(document.getElementById('member-search'));
+        initMemberMobileTabs(); // 모바일 탭 초기화
     } else if (tabId === 'Trial') {
         trial.render(document.getElementById('trial-root'));
     } else if (tabId === 'Renew') {
@@ -843,6 +845,54 @@ function renderTabContent(tabId, tabContent) {
     } else if (tabId === 'Today') {
         adminDayCalendar.render(document.getElementById('admin-day-calendar-root'));
     }
+}
+
+// 회원 탭 모바일 탭 초기화
+function initMemberMobileTabs() {
+    const tabButtons = document.querySelectorAll('.member-tab-btn');
+    
+    if (tabButtons.length === 0) {
+        return; // PC 환경이거나 탭이 없으면 종료
+    }
+    
+    tabButtons.forEach(btn => {
+        // 기존 이벤트 리스너 제거 (중복 방지)
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        
+        newBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetTab = newBtn.dataset.tab;
+            
+            // 모든 탭 버튼 비활성화
+            document.querySelectorAll('.member-tab-btn').forEach(b => b.classList.remove('active'));
+            // 클릭한 버튼 활성화
+            newBtn.classList.add('active');
+            
+            // 컨텐츠 전환
+            const addContent = document.getElementById('member-add');
+            const listContent = document.getElementById('member-list');
+            const searchContent = document.getElementById('member-search');
+            
+            if (!addContent || !listContent || !searchContent) {
+                return;
+            }
+            
+            // 모든 컨텐츠 숨기기
+            addContent.classList.remove('active');
+            listContent.classList.remove('active');
+            searchContent.classList.remove('active');
+            
+            // 선택된 탭만 표시
+            if (targetTab === 'add') {
+                addContent.classList.add('active');
+            } else if (targetTab === 'search') {
+                searchContent.classList.add('active');
+            } else {
+                listContent.classList.add('active');
+            }
+        });
+    });
 }
 
 function renderSampleScheduler() {

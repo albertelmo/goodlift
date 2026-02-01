@@ -35,7 +35,7 @@ function render(container) {
       <!-- 회원 관리 섹션 -->
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <h4 style="margin:0;color:#333;font-size:0.9rem;">회원 관리</h4>
+          <h4 id="user-app-members-title" style="margin:0;color:#333;font-size:0.9rem;">회원 관리</h4>
           <button id="user-app-member-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
             회원 추가
           </button>
@@ -469,6 +469,12 @@ let membersSortDirection = 'desc'; // 'asc' or 'desc'
 function renderMembersList(members) {
   const listContainer = document.getElementById('user-app-members-list');
   if (!listContainer) return;
+  
+  // 제목에 회원 수 표시
+  const titleElement = document.getElementById('user-app-members-title');
+  if (titleElement) {
+    titleElement.textContent = `회원 관리 (${members.length}명)`;
+  }
   
   if (members.length === 0) {
     listContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">등록된 회원이 없습니다.</div>';

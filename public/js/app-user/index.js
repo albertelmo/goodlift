@@ -233,6 +233,10 @@ export function navigateToScreen(screen) {
                             <div class="app-profile-password" style="background: var(--app-surface); border-radius: var(--app-radius); padding: 20px; margin-bottom: 16px;">
                                 <h3 style="font-size: 16px; font-weight: 600; color: var(--app-text); margin: 0 0 16px;">비밀번호 변경</h3>
                                 <div style="margin-bottom: 16px;">
+                                    <label style="display: block; font-size: 12px; color: var(--app-text-muted); margin-bottom: 8px;">기존 비밀번호</label>
+                                    <input type="password" id="profile-current-password" placeholder="기존 비밀번호를 입력하세요" style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface); color: var(--app-text); font-size: 16px; box-sizing: border-box;">
+                                </div>
+                                <div style="margin-bottom: 16px;">
                                     <label style="display: block; font-size: 12px; color: var(--app-text-muted); margin-bottom: 8px;">새 비밀번호</label>
                                     <input type="password" id="profile-password" placeholder="새 비밀번호를 입력하세요" style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface); color: var(--app-text); font-size: 16px; box-sizing: border-box;">
                                 </div>
@@ -323,11 +327,19 @@ export function navigateToScreen(screen) {
                     passwordSaveBtn.addEventListener('click', async (e) => {
                         e.preventDefault();
                         
+                        const currentPasswordInput = profileContainer.querySelector('#profile-current-password');
                         const passwordInput = profileContainer.querySelector('#profile-password');
                         const passwordConfirmInput = profileContainer.querySelector('#profile-password-confirm');
                         
+                        const currentPassword = currentPasswordInput.value;
                         const password = passwordInput.value;
                         const passwordConfirm = passwordConfirmInput.value;
+                        
+                        if (!currentPassword) {
+                            alert('기존 비밀번호를 입력해주세요.');
+                            currentPasswordInput.focus();
+                            return;
+                        }
                         
                         if (!password) {
                             alert('새 비밀번호를 입력해주세요.');
@@ -355,12 +367,13 @@ export function navigateToScreen(screen) {
                             const originalText = passwordSaveBtn.textContent;
                             passwordSaveBtn.textContent = '변경 중...';
                             
-                            await updateAppUser(currentUser.id, { password });
+                            await updateAppUser(currentUser.id, { password, currentPassword });
                             
                             // 성공 메시지
                             alert('비밀번호가 성공적으로 변경되었습니다.');
                             
                             // 비밀번호 필드 초기화
+                            currentPasswordInput.value = '';
                             passwordInput.value = '';
                             passwordConfirmInput.value = '';
                             

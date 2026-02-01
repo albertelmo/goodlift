@@ -117,7 +117,7 @@ function formatConsultationData(data) {
                 
                 html += `<div class="consultation-view-field" style="margin-bottom: 0;">`;
                 html += `<div class="consultation-view-field-label">${escapeHtml(video.filename || `동영상 ${index + 1}`)}</div>`;
-                html += `<video controls preload="metadata" playsinline webkit-playsinline style="width: 100%; max-width: 100%; border-radius: 4px; margin-top: 8px; background: #000;" `;
+                html += `<video controls preload="none" playsinline webkit-playsinline style="width: 100%; max-width: 100%; border-radius: 4px; margin-top: 8px; background: #000;" `;
                 html += `onerror="console.error('[동영상 ${index + 1}] 로드 실패:', this.currentSrc || this.src, '에러:', this.error); const errorMsg = this.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='block';" `;
                 html += `onloadedmetadata="const video = this; const errorMsg = video.parentElement.querySelector('.video-error-message'); if(errorMsg) errorMsg.style.display='none'; if(video.readyState >= 2) { video.currentTime = 0; video.pause(); }" `;
                 html += `src="${videoUrl}" `;
@@ -143,7 +143,7 @@ function formatConsultationData(data) {
                 html += `<div class="consultation-view-field" style="margin-bottom: 0;">`;
                 html += `<div class="consultation-view-field-label" style="margin-bottom: 8px;">${imageFilename}</div>`;
                 html += `<div style="position: relative; cursor: pointer;" onclick="window.open('${imageUrl}', '_blank');">`;
-                html += `<img src="${imageUrl}" alt="${imageFilename}" style="width: 100%; height: auto; border-radius: 4px; border: 1px solid #ddd; object-fit: cover; aspect-ratio: 1;" `;
+                html += `<img src="${imageUrl}" alt="${imageFilename}" loading="lazy" style="width: 100%; height: auto; border-radius: 4px; border: 1px solid #ddd; object-fit: cover; aspect-ratio: 1;" `;
                 html += `onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" `;
                 html += `/>`;
                 html += `<div style="display: none; padding: 20px; text-align: center; color: #999; border: 1px solid #ddd; border-radius: 4px;">이미지를 불러올 수 없습니다.</div>`;

@@ -43,7 +43,8 @@ const elmoUsersDB = require('./elmo-users-db');
 const elmoCalendarRecordsDB = require('./elmo-calendar-records-db');
 const elmoApiRouter = require('./elmo-api-router');
 const { ELMO_IMAGES_DIR } = require('./elmo-utils');
-const { initializeMigrationSystem } = require('./migrations-manager');
+const { initializeMigrationSystem, runMigration } = require('./migrations-manager');
+const { createPerformanceIndexes } = require('./index-migration');
 
 // 무기명/체험 세션 판별 함수
 function isTrialSession(memberName) {
@@ -452,6 +453,13 @@ if (!fs.existsSync(DATA_DIR)) {
 (async () => {
   await initializeMigrationSystem();
   console.log('[System] 마이그레이션 추적 시스템 초기화 완료');
+  
+  // 성능 최적화 인덱스 마이그레이션 (한 번만 실행됨)
+  await runMigration(
+    'create_performance_indexes_2026_01_31_v2',
+    '성능 최적화를 위한 데이터베이스 인덱스 생성 (수정본)',
+    createPerformanceIndexes
+  );
 })();
 
 // PostgreSQL 데이터베이스 초기화
@@ -1467,7 +1475,7 @@ app.post('/api/app-users', async (req, res) => {
 app.patch('/api/app-users/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { name, phone, member_name, trainer, is_active, password } = req.body;
+        const { name, phone, member_name, trainer, is_active, password, currentPassword } = req.body;
         
         const updates = {};
         if (name !== undefined) updates.name = name.trim();
@@ -1479,6 +1487,20 @@ app.patch('/api/app-users/:id', async (req, res) => {
         // 비밀번호 변경
         if (password) {
             const bcrypt = require('bcrypt');
+            
+            // 기존 비밀번호가 제공된 경우 검증
+            if (currentPassword) {
+                const appUser = await appUsersDB.getAppUserById(id, true);
+                if (!appUser) {
+                    return res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
+                }
+                
+                const isPasswordValid = await bcrypt.compare(currentPassword, appUser.password_hash);
+                if (!isPasswordValid) {
+                    return res.status(400).json({ message: '기존 비밀번호가 일치하지 않습니다.' });
+                }
+            }
+            
             const saltRounds = 10;
             updates.password_hash = await bcrypt.hash(password, saltRounds);
         }

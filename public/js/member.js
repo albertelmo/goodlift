@@ -1,23 +1,377 @@
-export const member = {
-  renderAddForm,
-  renderList
-};
-
 let trainerMap = {};
+
+function renderSearch(container) {
+  if (!container) return;
+  container.innerHTML = `
+    <div style="margin:0 auto;padding:16px 8px;">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:20px 12px;">
+        <h3 style="color:#1976d2;margin-top:0;margin-bottom:16px;font-size:1.1rem;font-weight:600;border-bottom:1px solid #e3f2fd;padding-bottom:8px;">🔍 회원 검색</h3>
+        
+        <div style="margin-bottom:16px;">
+          <label style="display:block;margin-bottom:8px;font-weight:600;color:#333;font-size:0.9rem;">검색 유형</label>
+          <select id="search-type-select" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="name">이름</option>
+            <option value="trainer">트레이너</option>
+            <option value="phone">전화번호</option>
+          </select>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label style="display:block;margin-bottom:8px;font-weight:600;color:#333;font-size:0.9rem;">검색어</label>
+          <input type="text" id="search-keyword-input" placeholder="검색어를 입력하세요" 
+                 style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label style="display:block;margin-bottom:8px;font-weight:600;color:#333;font-size:0.9rem;">상태</label>
+          <select id="search-status-select" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">전체</option>
+            <option value="유효">유효</option>
+            <option value="만료">만료</option>
+            <option value="정지">정지</option>
+          </select>
+        </div>
+        
+        <div style="margin-bottom:16px;">
+          <label style="display:block;margin-bottom:8px;font-weight:600;color:#333;font-size:0.9rem;">센터</label>
+          <select id="search-center-select" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+            <option value="">전체</option>
+          </select>
+        </div>
+        
+        <button id="search-submit-btn" 
+                style="width:100%;background:#1976d2;color:#fff;border:none;padding:12px;border-radius:6px;font-size:1rem;font-weight:600;cursor:pointer;transition:background 0.2s;">
+          검색
+        </button>
+        
+        <div id="search-result-count" style="margin-top:16px;text-align:center;color:#666;font-size:0.9rem;min-height:20px;"></div>
+        
+        <div id="search-results" style="margin-top:20px;"></div>
+      </div>
+    </div>
+  `;
+  
+  // 센터 목록 로드
+  fetch('/api/centers').then(r=>r.json()).then(centers => {
+    const centerSelect = container.querySelector('#search-center-select');
+    if (centerSelect) {
+      const userRole = localStorage.getItem('role');
+      const userCenter = localStorage.getItem('center');
+      
+      if (userRole === 'center' && userCenter) {
+        centerSelect.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
+        centerSelect.disabled = true;
+        centerSelect.style.backgroundColor = '#f5f5f5';
+      } else {
+        centerSelect.innerHTML = '<option value="">전체</option>' + 
+          centers.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+      }
+    }
+  });
+  
+  // 검색 버튼 이벤트
+  const searchBtn = container.querySelector('#search-submit-btn');
+  const keywordInput = container.querySelector('#search-keyword-input');
+  
+  searchBtn.addEventListener('click', performSearch);
+  keywordInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      performSearch();
+    }
+  });
+  
+  function performSearch() {
+    const searchType = container.querySelector('#search-type-select').value;
+    const keyword = container.querySelector('#search-keyword-input').value.trim();
+    const status = container.querySelector('#search-status-select').value;
+    const center = container.querySelector('#search-center-select').value;
+    const resultDiv = container.querySelector('#search-results');
+    const countDiv = container.querySelector('#search-result-count');
+    
+    if (!keyword) {
+      countDiv.style.color = '#d32f2f';
+      countDiv.textContent = '검색어를 입력해주세요.';
+      return;
+    }
+    
+    resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:#1976d2;">검색 중...</div>';
+    countDiv.textContent = '';
+    
+    // 트레이너 목록과 회원 목록을 동시에 가져오기
+    Promise.all([
+      fetch('/api/members').then(r=>r.json()),
+      fetch('/api/trainers').then(r=>r.json())
+    ]).then(([members, trainers]) => {
+      const userRole = localStorage.getItem('role');
+      const userCenter = localStorage.getItem('center');
+      
+      // 센터관리자 필터링
+      if (userRole === 'center' && userCenter) {
+        members = members.filter(m => m.center === userCenter);
+      }
+      
+      // 검색 필터링
+      let filtered = members.filter(m => {
+        let match = false;
+        
+        if (searchType === 'name') {
+          match = m.name && m.name.includes(keyword);
+        } else if (searchType === 'trainer') {
+          // 트레이너 username을 name으로 변환해서 검색
+          const trainerName = trainers.find(t => t.username === m.trainer)?.name || m.trainer;
+          match = trainerName && trainerName.includes(keyword);
+        } else if (searchType === 'phone') {
+          match = m.phone && m.phone.includes(keyword);
+        }
+        
+        if (match && status && m.status !== status) match = false;
+        if (match && center && m.center !== center) match = false;
+        
+        return match;
+      });
+      
+      countDiv.style.color = '#1976d2';
+      countDiv.textContent = `검색 결과: ${filtered.length}명`;
+      
+      if (filtered.length === 0) {
+        resultDiv.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">검색 결과가 없습니다.</div>';
+        return;
+      }
+      
+      // 결과 표시
+      let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+      filtered.forEach((m, idx) => {
+        const statusColor = m.status === '유효' ? '#4caf50' : m.status === '만료' ? '#f44336' : '#ff9800';
+        html += `
+          <div class="search-result-card" data-member-idx="${idx}" style="background:#f8f9fa;border-radius:8px;padding:16px;border-left:4px solid ${statusColor};cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='#e8f4f8'" onmouseout="this.style.background='#f8f9fa'">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+              <div style="font-size:1.1rem;font-weight:600;color:#333;">${m.name}</div>
+              <div style="background:${statusColor};color:#fff;padding:4px 8px;border-radius:4px;font-size:0.8rem;">${m.status || '상태없음'}</div>
+            </div>
+            <div style="font-size:0.9rem;color:#666;line-height:1.6;">
+              <div>📞 ${m.phone}</div>
+              <div>👤 ${m.trainer}</div>
+              <div>🏢 ${m.center}</div>
+              <div>💪 잔여세션: ${m.remainSessions !== undefined ? m.remainSessions : '-'}</div>
+            </div>
+          </div>
+        `;
+      });
+      html += '</div>';
+      
+      resultDiv.innerHTML = html;
+      
+      // 카드 클릭 이벤트 (수정 모달 열기)
+      resultDiv.querySelectorAll('.search-result-card').forEach(card => {
+        card.addEventListener('click', function() {
+          const idx = parseInt(this.getAttribute('data-member-idx'));
+          const member = filtered[idx];
+          const userRole = localStorage.getItem('role');
+          const userCenter = localStorage.getItem('center');
+          
+          // 센터관리자인 경우 자신의 센터 회원만 수정 가능
+          if (userRole === 'center' && userCenter && member.center !== userCenter) {
+            alert('다른 센터의 회원은 수정할 수 없습니다.');
+            return;
+          }
+          
+          openEditModal(member, trainers, container);
+        });
+      });
+    }).catch(error => {
+      console.error('검색 오류:', error);
+      resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:#d32f2f;">검색 중 오류가 발생했습니다.</div>';
+    });
+  }
+}
+
+// 회원 정보 수정 모달 (목록 탭용)
+function showEditModal(member) {
+  const modalBg = document.getElementById('member-edit-modal-bg');
+  
+  // 트레이너 목록 가져오기
+  fetch('/api/trainers').then(r=>r.json()).then(trainers => {
+    showEditModalContent(member, trainers, modalBg);
+  });
+}
+
+// 회원 정보 수정 모달 (검색 탭용 - 별도 모달 배경 생성)
+function openEditModal(member, trainers, searchContainer) {
+  // 검색 탭에는 member-edit-modal-bg가 없으므로 새로 생성
+  let modalBg = searchContainer.querySelector('#search-edit-modal-bg');
+  if (!modalBg) {
+    modalBg = document.createElement('div');
+    modalBg.id = 'search-edit-modal-bg';
+    modalBg.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1001;';
+    searchContainer.appendChild(modalBg);
+  }
+  
+  showEditModalContent(member, trainers, modalBg);
+}
+
+// 회원 정보 수정 모달 컨텐츠 (공통)
+function showEditModalContent(member, trainers, modalBg) {
+  modalBg.style.display = 'block';
+  modalBg.innerHTML = `
+    <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:18px 16px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
+      <h3 style="color:var(--primary);margin-top:0;margin-bottom:14px;font-size:1.1rem;">회원 정보 수정</h3>
+      <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;box-sizing:border-box;background:#f4f8fd;color:#888;border:1px solid #ddd;border-radius:6px;padding:8px;margin-top:1px;font-size:0.9rem;"></div>
+      <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">VIP</b><br><input id="edit-vip-session" type="number" min="0" max="99" value="${member.vip_session || 0}" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:6px;padding:8px;margin-top:1px;font-size:0.9rem;" oninput="this.value = this.value < 0 ? 0 : this.value > 99 ? 99 : this.value;"></div>
+      <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">성별</b><br>
+        <select id="edit-gender" style="width:100%;box-sizing:border-box;border:1px solid #ddd;padding:8px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+          <option value="male"${member.gender==='male'?' selected':''}>남성</option>
+          <option value="female"${member.gender==='female'?' selected':''}>여성</option>
+        </select>
+      </div>
+      <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">센터</b><br>
+        <select id="edit-center" style="width:100%;box-sizing:border-box;border:1px solid #ddd;padding:8px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+          <option value="">불러오는 중...</option>
+        </select>
+      </div>
+      <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">상태</b><br>
+        <select id="edit-status" style="width:100%;box-sizing:border-box;border:1px solid #ddd;padding:8px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+          <option value="유효"${member.status==='유효'?' selected':''}>유효</option>
+          <option value="정지"${member.status==='정지'?' selected':''}>정지</option>
+          <option value="만료"${member.status==='만료'?' selected':''}>만료</option>
+        </select>
+      </div>
+      <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">담당 트레이너</b><br>
+        <select id="edit-trainer" style="width:100%;box-sizing:border-box;border:1px solid #ddd;padding:8px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
+          ${trainers.map(t=>`<option value="${t.username}"${member.trainer===t.username?' selected':''}>${t.name}</option>`).join('')}
+        </select>
+      </div>
+      <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">추가 세션</b><br><input id="edit-add-sessions" type="number" min="0" value="0" style="width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:6px;padding:8px;margin-top:1px;font-size:0.9rem;"></div>
+      <div id="edit-modal-result" style="min-height:18px;margin-bottom:6px;color:#1976d2;font-size:0.85rem;"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="edit-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;padding:6px;font-size:0.9rem;">저장</button>
+        <button id="edit-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;padding:6px;font-size:0.9rem;">닫기</button>
+      </div>
+    </div>
+  `;
+
+  // 센터 드롭다운 로딩
+  fetch('/api/centers').then(r=>r.json()).then(centers=>{
+    const centerSel = document.getElementById('edit-center');
+    const userRole = localStorage.getItem('role');
+    const userCenter = localStorage.getItem('center');
+    
+    if (userRole === 'center' && userCenter) {
+      // 센터관리자인 경우 자신의 센터로 강제 고정 (회원의 센터와 관계없이)
+      centerSel.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
+      centerSel.disabled = true;
+      centerSel.style.backgroundColor = '#f5f5f5';
+      centerSel.style.color = '#666';
+      centerSel.title = '센터관리자는 자신의 센터만 관리할 수 있습니다.';
+    } else {
+      // 관리자나 트레이너인 경우 모든 센터 선택 가능
+      centerSel.innerHTML = '<option value="">선택</option>' + centers.map(c=>`<option value="${c.name}"${member.center===c.name?' selected':''}>${c.name}</option>`).join('');
+    }
+  });
+
+  // 닫기 버튼
+  document.getElementById('edit-modal-cancel').onclick = function() {
+    modalBg.style.display = 'none';
+    modalBg.innerHTML = '';
+  };
+  // 저장 버튼
+  document.getElementById('edit-modal-save').onclick = async function() {
+    const status = document.getElementById('edit-status').value;
+    const trainer = document.getElementById('edit-trainer').value;
+    const addSessions = Number(document.getElementById('edit-add-sessions').value)||0;
+    const gender = document.getElementById('edit-gender').value;
+    const center = document.getElementById('edit-center').value;
+    const vipSession = Number(document.getElementById('edit-vip-session').value)||0;
+    
+    // VIP 세션 범위 검증
+    if (vipSession < 0 || vipSession > 99) {
+      const resultDiv = document.getElementById('edit-modal-result');
+      resultDiv.style.color = '#d32f2f';
+      resultDiv.innerText = 'VIP 세션은 0~99 사이의 값이어야 합니다.';
+      return;
+    }
+    
+    const resultDiv = document.getElementById('edit-modal-result');
+    resultDiv.style.color = '#1976d2';
+    resultDiv.innerText = '처리 중...';
+    try {
+      const currentUser = localStorage.getItem('username');
+      const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, trainer, addSessions, gender, center, vipSession, currentUser })
+      });
+      const result = await res.json();
+      if (res.ok) {
+        resultDiv.innerText = '저장되었습니다.';
+        setTimeout(() => {
+          modalBg.style.display = 'none';
+          modalBg.innerHTML = '';
+          // 회원 목록 새로고침을 위해 탭을 다시 클릭
+          const tabBar = document.getElementById('tabBar');
+          const memberTabBtn = Array.from(tabBar.children).find(btn => btn.textContent === 'Member');
+          if (memberTabBtn) {
+            memberTabBtn.click();
+          }
+        }, 900);
+      } else {
+        resultDiv.style.color = '#d32f2f';
+        resultDiv.innerText = result.message;
+      }
+    } catch {
+      resultDiv.style.color = '#d32f2f';
+      resultDiv.innerText = '수정에 실패했습니다.';
+    }
+  };
+  // 바깥 클릭 시 닫기 (더 안전한 방식)
+  let isDragging = false;
+  let startX, startY;
+  
+  modalBg.addEventListener('mousedown', function(e) {
+    if (e.target === modalBg) {
+      startX = e.clientX;
+      startY = e.clientY;
+      isDragging = false;
+    }
+  });
+  
+  modalBg.addEventListener('mousemove', function(e) {
+    if (startX !== undefined && startY !== undefined) {
+      const deltaX = Math.abs(e.clientX - startX);
+      const deltaY = Math.abs(e.clientY - startY);
+      if (deltaX > 5 || deltaY > 5) {
+        isDragging = true;
+      }
+    }
+  });
+  
+  modalBg.addEventListener('mouseup', function(e) {
+    if (e.target === modalBg && !isDragging && startX !== undefined && startY !== undefined) {
+      const deltaX = Math.abs(e.clientX - startX);
+      const deltaY = Math.abs(e.clientY - startY);
+      if (deltaX < 5 && deltaY < 5) {
+        modalBg.style.display = 'none';
+        modalBg.innerHTML = '';
+      }
+    }
+    startX = undefined;
+    startY = undefined;
+    isDragging = false;
+  });
+}
 
 function renderAddForm(container) {
   if (!container) return;
   container.innerHTML = `
-    <div style="max-width:800px;margin:0 auto;">
-      <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:24px;margin-top:16px;">
-        <h3 style="color:#1976d2;margin-top:0;margin-bottom:12px;font-size:1rem;font-weight:600;border-bottom:1px solid #e3f2fd;padding-bottom:8px;">회원 추가</h3>
+    <div style="margin:0 auto;padding:16px 8px;">
+      <div style="background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1);padding:20px 12px;">
+        <h3 style="color:#1976d2;margin-top:0;margin-bottom:16px;font-size:1.1rem;font-weight:600;border-bottom:1px solid #e3f2fd;padding-bottom:8px;">회원 추가</h3>
         <form id="member-add-form">
           <div style="margin-bottom:10px;">
             <label style="display:block;margin-bottom:4px;font-weight:600;color:#333;font-size:0.9rem;">
               이름 <span style="color:#d32f2f;">*</span>
             </label>
             <input type="text" name="name" required 
-                   style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;transition:border-color 0.2s;"
                    onfocus="this.style.borderColor='#1976d2';" 
                    onblur="this.style.borderColor='#ddd';">
           </div>
@@ -26,7 +380,7 @@ function renderAddForm(container) {
               성별 <span style="color:#d32f2f;">*</span>
             </label>
             <select name="gender" required 
-                    style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
+                    style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
                     onfocus="this.style.borderColor='#1976d2';" 
                     onblur="this.style.borderColor='#ddd';">
               <option value="">선택</option>
@@ -39,7 +393,7 @@ function renderAddForm(container) {
               전화번호 <span style="color:#d32f2f;">*</span>
             </label>
             <input type="tel" name="phone" required pattern="[0-9\-]+" placeholder="010-1234-5678"
-                   style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;transition:border-color 0.2s;"
                    onfocus="this.style.borderColor='#1976d2';" 
                    onblur="this.style.borderColor='#ddd';">
           </div>
@@ -48,7 +402,7 @@ function renderAddForm(container) {
               담당 트레이너 <span style="color:#d32f2f;">*</span>
             </label>
             <select name="trainer" required id="member-trainer-select"
-                    style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
+                    style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
                     onfocus="this.style.borderColor='#1976d2';" 
                     onblur="this.style.borderColor='#ddd';">
               <option value="">불러오는 중...</option>
@@ -59,7 +413,7 @@ function renderAddForm(container) {
               센터 <span style="color:#d32f2f;">*</span>
             </label>
             <select name="center" required id="member-center-select"
-                    style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
+                    style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;background:#fff;transition:border-color 0.2s;height:auto;line-height:1.4;"
                     onfocus="this.style.borderColor='#1976d2';" 
                     onblur="this.style.borderColor='#ddd';">
               <option value="">불러오는 중...</option>
@@ -70,7 +424,7 @@ function renderAddForm(container) {
               등록일 <span style="color:#d32f2f;">*</span>
             </label>
             <input type="date" name="regdate" required id="member-regdate"
-                   style="width:100%;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   style="width:100%;max-width:200px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;transition:border-color 0.2s;"
                    onfocus="this.style.borderColor='#1976d2';" 
                    onblur="this.style.borderColor='#ddd';">
           </div>
@@ -79,7 +433,7 @@ function renderAddForm(container) {
               세션 수 <span style="color:#d32f2f;">*</span>
             </label>
             <input type="number" name="sessions" min="0" required value="0"
-                   style="width:100%;max-width:200px;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;transition:border-color 0.2s;"
+                   style="width:100%;max-width:200px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;transition:border-color 0.2s;"
                    onfocus="this.style.borderColor='#1976d2';" 
                    onblur="this.style.borderColor='#ddd';">
           </div>
@@ -181,7 +535,7 @@ function renderList(container) {
   container.style.display = 'block';
   
   container.innerHTML = `
-    <div style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+    <div class="member-list-toolbar" style="margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="display:flex;align-items:center;gap:8px;">
         <button id="send-contract-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:0.9rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="계약서 전송">
           📄
@@ -191,7 +545,7 @@ function renderList(container) {
         </button>
 
       </div>
-      <div style="display:flex;align-items:center;gap:8px;">
+      <div class="member-search-filters" style="display:flex;align-items:center;gap:8px;">
         <button id="export-members-btn" style="background:transparent;color:#1976d2;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:1.2rem;width:32px;height:36px;display:flex;align-items:center;justify-content:center;margin-top:0;" title="엑셀 다운로드">
           ⬇️
         </button>
@@ -594,156 +948,6 @@ function renderList(container) {
       alert('다운로드에 실패했습니다.');
     }
   });
-  // 회원 정보 수정 모달
-  function showEditModal(member) {
-    const modalBg = document.getElementById('member-edit-modal-bg');
-    modalBg.style.display = 'block';
-    modalBg.innerHTML = `
-      <div id="member-edit-modal" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#fff;border-radius:14px;box-shadow:0 4px 32px #1976d240;padding:18px 16px;z-index:1002;min-width:260px;max-width:96vw;max-height:80vh;overflow-y:auto;">
-        <h3 style="color:var(--primary);margin-top:0;margin-bottom:14px;font-size:1.1rem;">회원 정보 수정</h3>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">이름</b><br><input type="text" value="${member.name}" readonly style="width:100%;background:#f4f8fd;color:#888;border:1.2px solid #eee;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;"></div>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">VIP</b><br><input id="edit-vip-session" type="number" min="0" max="99" value="${member.vip_session || 0}" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;" oninput="this.value = this.value < 0 ? 0 : this.value > 99 ? 99 : this.value;"></div>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">성별</b><br>
-          <select id="edit-gender" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
-            <option value="male"${member.gender==='male'?' selected':''}>남성</option>
-            <option value="female"${member.gender==='female'?' selected':''}>여성</option>
-          </select>
-        </div>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">센터</b><br>
-          <select id="edit-center" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
-            <option value="">불러오는 중...</option>
-          </select>
-        </div>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">상태</b><br>
-          <select id="edit-status" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
-            <option value="유효"${member.status==='유효'?' selected':''}>유효</option>
-            <option value="정지"${member.status==='정지'?' selected':''}>정지</option>
-            <option value="만료"${member.status==='만료'?' selected':''}>만료</option>
-          </select>
-        </div>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">담당 트레이너</b><br>
-          <select id="edit-trainer" style="width:100%;padding:4px 6px;border-radius:6px;margin-top:1px;font-size:0.9rem;">
-            ${trainers.map(t=>`<option value="${t.username}"${member.trainer===t.username?' selected':''}>${t.name}</option>`).join('')}
-          </select>
-        </div>
-        <div style="margin-bottom:8px;"><b style="font-size:0.9rem;">추가 세션</b><br><input id="edit-add-sessions" type="number" min="0" value="0" style="width:100%;border-radius:6px;padding:4px 6px;margin-top:1px;font-size:0.9rem;"></div>
-        <div id="edit-modal-result" style="min-height:18px;margin-bottom:6px;color:#1976d2;font-size:0.85rem;"></div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;">
-          <button id="edit-modal-save" style="flex:1 1 0;background:var(--primary);color:#fff;padding:6px;font-size:0.9rem;">저장</button>
-          <button id="edit-modal-cancel" style="flex:1 1 0;background:#eee;color:#1976d2;padding:6px;font-size:0.9rem;">닫기</button>
-        </div>
-      </div>
-    `;
-
-    // 센터 드롭다운 로딩
-    fetch('/api/centers').then(r=>r.json()).then(centers=>{
-      const centerSel = document.getElementById('edit-center');
-      const userRole = localStorage.getItem('role');
-      const userCenter = localStorage.getItem('center');
-      
-      if (userRole === 'center' && userCenter) {
-        // 센터관리자인 경우 자신의 센터로 강제 고정 (회원의 센터와 관계없이)
-        centerSel.innerHTML = `<option value="${userCenter}" selected>${userCenter}</option>`;
-        centerSel.disabled = true;
-        centerSel.style.backgroundColor = '#f5f5f5';
-        centerSel.style.color = '#666';
-        centerSel.title = '센터관리자는 자신의 센터만 관리할 수 있습니다.';
-      } else {
-        // 관리자나 트레이너인 경우 모든 센터 선택 가능
-        centerSel.innerHTML = '<option value="">선택</option>' + centers.map(c=>`<option value="${c.name}"${member.center===c.name?' selected':''}>${c.name}</option>`).join('');
-      }
-    });
-
-    // 닫기 버튼
-    document.getElementById('edit-modal-cancel').onclick = function() {
-      modalBg.style.display = 'none';
-      modalBg.innerHTML = '';
-    };
-    // 저장 버튼
-    document.getElementById('edit-modal-save').onclick = async function() {
-      const status = document.getElementById('edit-status').value;
-      const trainer = document.getElementById('edit-trainer').value;
-      const addSessions = Number(document.getElementById('edit-add-sessions').value)||0;
-      const gender = document.getElementById('edit-gender').value;
-      const center = document.getElementById('edit-center').value;
-      const vipSession = Number(document.getElementById('edit-vip-session').value)||0;
-      
-      // VIP 세션 범위 검증
-      if (vipSession < 0 || vipSession > 99) {
-        const resultDiv = document.getElementById('edit-modal-result');
-        resultDiv.style.color = '#d32f2f';
-        resultDiv.innerText = 'VIP 세션은 0~99 사이의 값이어야 합니다.';
-        return;
-      }
-      
-      const resultDiv = document.getElementById('edit-modal-result');
-      resultDiv.style.color = '#1976d2';
-      resultDiv.innerText = '처리 중...';
-      try {
-        const currentUser = localStorage.getItem('username');
-        const res = await fetch(`/api/members/${encodeURIComponent(member.name)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status, trainer, addSessions, gender, center, vipSession, currentUser })
-        });
-        const result = await res.json();
-        if (res.ok) {
-          resultDiv.innerText = '저장되었습니다.';
-          setTimeout(() => {
-            modalBg.style.display = 'none';
-            modalBg.innerHTML = '';
-            // 회원 목록 새로고침을 위해 탭을 다시 클릭
-            const tabBar = document.getElementById('tabBar');
-            const memberTabBtn = Array.from(tabBar.children).find(btn => btn.textContent === 'Member');
-            if (memberTabBtn) {
-              memberTabBtn.click();
-            }
-          }, 900);
-        } else {
-          resultDiv.style.color = '#d32f2f';
-          resultDiv.innerText = result.message;
-        }
-      } catch {
-        resultDiv.style.color = '#d32f2f';
-        resultDiv.innerText = '수정에 실패했습니다.';
-      }
-    };
-    // 바깥 클릭 시 닫기 (더 안전한 방식)
-    let isDragging = false;
-    let startX, startY;
-    
-    modalBg.addEventListener('mousedown', function(e) {
-      if (e.target === modalBg) {
-        startX = e.clientX;
-        startY = e.clientY;
-        isDragging = false;
-      }
-    });
-    
-    modalBg.addEventListener('mousemove', function(e) {
-      if (startX !== undefined && startY !== undefined) {
-        const deltaX = Math.abs(e.clientX - startX);
-        const deltaY = Math.abs(e.clientY - startY);
-        if (deltaX > 5 || deltaY > 5) {
-          isDragging = true;
-        }
-      }
-    });
-    
-    modalBg.addEventListener('mouseup', function(e) {
-      if (e.target === modalBg && !isDragging && startX !== undefined && startY !== undefined) {
-        const deltaX = Math.abs(e.clientX - startX);
-        const deltaY = Math.abs(e.clientY - startY);
-        if (deltaX < 5 && deltaY < 5) {
-          modalBg.style.display = 'none';
-          modalBg.innerHTML = '';
-        }
-      }
-      startX = undefined;
-      startY = undefined;
-      isDragging = false;
-    });
-  }
 
   // 계약서 전송 버튼 이벤트
   document.getElementById('send-contract-btn').onclick = function() {
@@ -1368,5 +1572,14 @@ function renderList(container) {
     };
   }
 
+}
 
-} 
+// Public API - ES6 모듈 export
+export const member = {
+  renderAddForm,
+  renderList,
+  renderSearch
+};
+
+// 브라우저 전역 객체에도 추가 (하위 호환성)
+window.member = member; 

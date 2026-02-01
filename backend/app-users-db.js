@@ -236,12 +236,14 @@ const getAppUsers = async (filters = {}) => {
 };
 
 // ID로 앱 유저 조회
-const getAppUserById = async (id) => {
+const getAppUserById = async (id, includePassword = false) => {
   try {
+    const fields = includePassword 
+      ? 'id, username, name, phone, member_name, trainer, is_trainer, is_active, password_hash, created_at, updated_at, last_login_at, last_seen_at'
+      : 'id, username, name, phone, member_name, trainer, is_trainer, is_active, created_at, updated_at, last_login_at, last_seen_at';
+    
     const query = `
-      SELECT 
-        id, username, name, phone, member_name, trainer, is_trainer, is_active,
-        created_at, updated_at, last_login_at, last_seen_at
+      SELECT ${fields}
       FROM app_users 
       WHERE id = $1
     `;

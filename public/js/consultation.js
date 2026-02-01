@@ -1164,7 +1164,7 @@ async function loadConsultationImages(consultationId) {
             return `
                 <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; margin-bottom: 8px; background: #f9f9f9;">
                     <div style="flex: 1; display: flex; align-items: center; gap: 12px;">
-                        <img src="${image.url}" alt="${escapedFilename}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">
+                        <img src="${image.url}" alt="${escapedFilename}" loading="lazy" style="width: 60px; height: 60px; object-fit: cover; border-radius: 4px; border: 1px solid #ddd;">
                         <div style="flex: 1;">
                             <div style="font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px;">
                                 <span>📷</span>

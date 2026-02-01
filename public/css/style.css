@@ -878,34 +878,172 @@ li, td, th {
 }
 
 .member-flex-wrap #member-list tr:hover {
-  background: #f8f9fa;
+    background: #f8f9fa;
 }
+
+/* 모바일 탭 (기본 숨김 - PC에서는 표시 안 함) */
+.member-mobile-tabs {
+    display: none;
+}
+
+/* PC에서 컨텐츠는 모두 표시 (기본 레이아웃 유지) */
+.member-tab-content {
+    display: block;
+}
+
+/* PC에서는 검색 탭 숨김 (모바일 전용) */
+#member-search {
+    display: none !important;
+}
+
 @media (max-width: 900px) {
+    /* 모바일에서 탭 표시 */
+    .member-mobile-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        padding: 0;
+    }
+    
+    /* 모바일에서 목록의 검색 필터 숨기기 */
+    .member-list-toolbar .member-search-filters {
+        display: none !important;
+    }
+    
+    /* 엑셀 다운로드 버튼은 왼쪽으로 이동 */
+    .member-list-toolbar {
+        justify-content: flex-start !important;
+    }
+    
+    .member-tab-btn {
+        flex: 1;
+        padding: 10px 12px;
+        background: #fff;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: #666;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .member-tab-btn:hover {
+        border-color: #1976d2;
+        background: #f8f9fa;
+    }
+    
+    .member-tab-btn.active {
+        background: #1976d2;
+        color: #fff;
+        border-color: #1976d2;
+        box-shadow: 0 2px 6px rgba(25, 118, 210, 0.3);
+    }
+    
+    /* 모바일에서 컨텐츠 전환 */
     .member-flex-wrap {
         flex-direction: column;
-        gap: 18px;
+        gap: 0;
         max-width: 100%;
+        padding: 12px 6px;
     }
-    .member-flex-wrap > #member-add, .member-flex-wrap > #member-list {
+    
+    /* 모바일에서만 탭 전환 로직 적용 */
+    .member-flex-wrap > .member-tab-content {
+        display: none !important;
+        width: 100%;
+    }
+    
+    .member-flex-wrap > .member-tab-content.active {
+        display: block !important;
+    }
+    
+    /* 모바일에서 목록 전체 높이 활용 */
+    .member-flex-wrap > #member-list.active {
+        width: 100% !important;
+        min-width: 0 !important;
+        overflow: auto !important;
+        max-height: calc(100vh - 140px) !important;
+        min-height: 600px !important;
+    }
+    
+    /* 모바일에서 추가 폼 - 중앙 정렬 및 최대 너비 제한 */
+    .member-flex-wrap > #member-add.active {
         width: 100%;
         min-width: 0;
+        max-width: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        display: flex;
+        justify-content: center;
+        padding: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        flex: none !important;
     }
-    .member-flex-wrap #member-list {
-        overflow: auto;
-        max-height: 60vh;
-        min-height: 250px;
-        /* 모바일에서만 높이 제한 적용 */
+    
+    /* 추가 폼 내부 div 크기 제한 */
+    .member-flex-wrap > #member-add.active > div {
+        max-width: 380px !important;
+        width: 100%;
+        box-sizing: border-box;
+        height: auto;
     }
+    
+    /* 검색 폼도 동일하게 - 모바일에서만 표시 */
+    .member-flex-wrap > #member-search.active {
+        display: flex !important;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        justify-content: center;
+        padding: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        flex: none !important;
+    }
+    
+    /* 검색 폼 내부 div 크기 제한 */
+    .member-flex-wrap > #member-search.active > div {
+        max-width: 380px !important;
+        width: 100%;
+        box-sizing: border-box;
+        height: auto;
+    }
+    
     .member-flex-wrap #member-list table {
-        min-width: 600px;
+        min-width: 450px;
     }
+    
+    /* 모바일에서 VIP, 성별, 등록일, 세션 수 컬럼 숨기기 */
+    .member-flex-wrap #member-list table th:nth-child(2),
+    .member-flex-wrap #member-list table td:nth-child(2),
+    .member-flex-wrap #member-list table th:nth-child(3),
+    .member-flex-wrap #member-list table td:nth-child(3),
+    .member-flex-wrap #member-list table th:nth-child(7),
+    .member-flex-wrap #member-list table td:nth-child(7),
+    .member-flex-wrap #member-list table th:nth-child(8),
+    .member-flex-wrap #member-list table td:nth-child(8) {
+        display: none !important;
+    }
+    
+    /* 기존 member-table-wrap 스타일 제거 (충돌 방지) */
     #member-table-wrap {
-        overflow: auto;
-        max-height: 55vh;
-        /* 모바일에서만 높이 제한 적용 */
+        overflow: visible !important;
+        max-height: none !important;
     }
     #member-table-wrap table {
         min-width: 600px;
+    }
+    
+    /* 목록 컨테이너 자체 높이 강제 설정 */
+    .member-container .member-flex-wrap > #member-list.active {
+        height: auto !important;
+        max-height: calc(100vh - 180px) !important;
+        min-height: 500px !important;
     }
 }
 
@@ -1086,16 +1224,22 @@ li, td, th {
     .scheduler-table .time-col { width: 48px; min-width: 48px; }
     
     .member-flex-wrap {
-        padding: 12px;
-        gap: 12px;
+        padding: 12px 6px;
+        gap: 8px;
     }
     .member-flex-wrap #member-list {
-        overflow: auto;
-        max-height: 50vh;
-        min-height: 200px;
+        overflow: auto !important;
+        max-height: 75vh !important;
+        min-height: 450px !important;
+    }
+    .member-flex-wrap > #member-list.active,
+    .member-container .member-flex-wrap > #member-list.active {
+        max-height: calc(100vh - 130px) !important;
+        min-height: 550px !important;
+        height: auto !important;
     }
     .member-flex-wrap #member-list table {
-        min-width: 500px;
+        min-width: 400px;
     }
     .member-flex-wrap #member-list th,
     .member-flex-wrap #member-list td {
@@ -1103,9 +1247,27 @@ li, td, th {
         padding: 4px 6px;
     }
     
+    /* 모바일에서 VIP, 성별, 등록일, 세션 수 컬럼 숨기기 */
+    .member-flex-wrap #member-list table th:nth-child(2),
+    .member-flex-wrap #member-list table td:nth-child(2),
+    .member-flex-wrap #member-list table th:nth-child(3),
+    .member-flex-wrap #member-list table td:nth-child(3),
+    .member-flex-wrap #member-list table th:nth-child(7),
+    .member-flex-wrap #member-list table td:nth-child(7),
+    .member-flex-wrap #member-list table th:nth-child(8),
+    .member-flex-wrap #member-list table td:nth-child(8) {
+        display: none !important;
+    }
+    
+    /* 모바일에서 목록 헤더(검색 필터) 숨기기 */
+    #member-list-header {
+        display: none !important;
+    }
+    
+    /* 기존 member-table-wrap 높이 제한 제거 */
     #member-table-wrap {
-        overflow: auto;
-        max-height: 45vh;
+        overflow: visible !important;
+        max-height: none !important;
     }
     #member-table-wrap table {
         min-width: 500px;
@@ -1114,6 +1276,41 @@ li, td, th {
     #member-table-wrap td {
         font-size: 0.65rem;
         padding: 4px 6px;
+    }
+    
+    /* 추가/검색 폼 크기 제한 */
+    .member-flex-wrap > #member-add.active {
+        display: flex;
+        justify-content: center;
+        padding: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto;
+        flex: none !important;
+    }
+    
+    .member-flex-wrap > #member-add.active > div {
+        max-width: 380px !important;
+        width: 100%;
+        box-sizing: border-box;
+        height: auto;
+    }
+    
+    .member-flex-wrap > #member-search.active {
+        display: flex !important;
+        justify-content: center;
+        padding: 0 !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow-y: auto;
+        flex: none !important;
+    }
+    
+    .member-flex-wrap > #member-search.active > div {
+        max-width: 380px !important;
+        width: 100%;
+        box-sizing: border-box;
+        height: auto;
     }
 }
 
