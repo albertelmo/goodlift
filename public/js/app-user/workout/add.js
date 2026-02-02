@@ -4,6 +4,72 @@ import { formatDate, getToday, escapeHtml, formatWeight, parseWeight } from '../
 import { addWorkoutRecord, addWorkoutRecordsBatch, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
 import { getCurrentUser } from '../index.js';
 
+// ========== 캐시 변수 (모듈 레벨) ==========
+let cachedWorkoutTypes = null;
+let cachedCategories = null;
+let preloadPromise = null;
+let isPreloading = false;
+
+/**
+ * 백그라운드 프리로딩
+ * 운동 탭 진입 시 호출되어 데이터를 미리 로드
+ */
+export async function preloadWorkoutData() {
+    // 이미 캐시되어 있으면 즉시 반환
+    if (cachedWorkoutTypes && cachedCategories) {
+        return Promise.resolve();
+    }
+    
+    // 이미 로딩 중이면 기존 Promise 반환
+    if (isPreloading && preloadPromise) {
+        return preloadPromise;
+    }
+    
+    isPreloading = true;
+    
+    preloadPromise = (async () => {
+        try {
+            console.log('[Workout Preload] 백그라운드 로딩 시작...');
+            const startTime = performance.now();
+            
+            // 병렬로 로딩
+            const [workoutTypes, cat1, cat2, cat3, cat4] = await Promise.all([
+                getWorkoutTypes(),
+                fetch('/api/workout-categories/1').then(r => r.json()),
+                fetch('/api/workout-categories/2').then(r => r.json()),
+                fetch('/api/workout-categories/3').then(r => r.json()),
+                fetch('/api/workout-categories/4').then(r => r.json())
+            ]);
+            
+            cachedWorkoutTypes = workoutTypes;
+            cachedCategories = { 1: cat1, 2: cat2, 3: cat3, 4: cat4 };
+            
+            const endTime = performance.now();
+            console.log(`[Workout Preload] 완료! (${(endTime - startTime).toFixed(0)}ms, ${workoutTypes.length}개 운동)`);
+        } catch (error) {
+            console.error('[Workout Preload] 오류:', error);
+            // 오류 발생 시 캐시 초기화하여 다음 시도 가능하게
+            cachedWorkoutTypes = null;
+            cachedCategories = null;
+        } finally {
+            isPreloading = false;
+        }
+    })();
+    
+    return preloadPromise;
+}
+
+/**
+ * 캐시 초기화 (필요 시 수동 호출)
+ */
+export function clearWorkoutDataCache() {
+    cachedWorkoutTypes = null;
+    cachedCategories = null;
+    preloadPromise = null;
+    isPreloading = false;
+    console.log('[Workout Cache] 캐시 초기화됨');
+}
+
 /**
  * 운동 선택 모달 표시 (1단계)
  */
@@ -29,24 +95,40 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
     const day = dateObj.getDate();
     const dateDisplay = `${year}.${month}.${day}`;
     
-    // 분류 목록 가져오기 (1~4번 분류)
+    // 프리로딩이 진행 중이면 대기
+    if (preloadPromise) {
+        console.log('[Workout Modal] 프리로딩 대기 중...');
+        await preloadPromise;
+    }
+    
+    // 캐시에서 데이터 가져오기 (없으면 로드)
     let allCategories = {};
+    let allWorkoutTypes = [];
+    
     try {
-        const [cat1, cat2, cat3, cat4] = await Promise.all([
-            fetch('/api/workout-categories/1').then(r => r.json()),
-            fetch('/api/workout-categories/2').then(r => r.json()),
-            fetch('/api/workout-categories/3').then(r => r.json()),
-            fetch('/api/workout-categories/4').then(r => r.json())
-        ]);
-        allCategories = { 1: cat1, 2: cat2, 3: cat3, 4: cat4 };
+        if (!cachedCategories) {
+            console.log('[Workout Modal] 분류 목록 로드 중...');
+            const [cat1, cat2, cat3, cat4] = await Promise.all([
+                fetch('/api/workout-categories/1').then(r => r.json()),
+                fetch('/api/workout-categories/2').then(r => r.json()),
+                fetch('/api/workout-categories/3').then(r => r.json()),
+                fetch('/api/workout-categories/4').then(r => r.json())
+            ]);
+            cachedCategories = { 1: cat1, 2: cat2, 3: cat3, 4: cat4 };
+        }
+        allCategories = cachedCategories;
+        console.log('[Workout Modal] 분류 목록: 캐시 사용');
     } catch (error) {
         console.error('분류 조회 오류:', error);
     }
     
-    // 운동종류 목록 가져오기
-    let allWorkoutTypes = [];
     try {
-        allWorkoutTypes = await getWorkoutTypes();
+        if (!cachedWorkoutTypes) {
+            console.log('[Workout Modal] 운동종류 목록 로드 중...');
+            cachedWorkoutTypes = await getWorkoutTypes();
+        }
+        allWorkoutTypes = cachedWorkoutTypes;
+        console.log(`[Workout Modal] 운동종류 목록: 캐시 사용 (${allWorkoutTypes.length}개)`);
     } catch (error) {
         console.error('운동종류 조회 오류:', error);
     }

@@ -1,7 +1,7 @@
 // 운동기록 메인 화면
 
 import { init as initList } from './list.js';
-import { showWorkoutSelectModal, showTextRecordModal } from './add.js';
+import { showWorkoutSelectModal, showTextRecordModal, preloadWorkoutData } from './add.js';
 import { getCurrentUser } from '../index.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
 
@@ -72,6 +72,12 @@ export async function init(appUserId, readOnly = false) {
     if (header) {
         header.style.display = 'none';
     }
+    
+    // 백그라운드 프리로딩 시작 (await 하지 않음!)
+    // 사용자가 캘린더를 보는 동안 데이터를 미리 로드
+    preloadWorkoutData().catch(err => {
+        console.error('[Workout] 프리로딩 실패:', err);
+    });
     
     // 버튼 이벤트 위임 리스너 설정 (render() 전에 설정하여 DOM 업데이트 후에도 작동)
     // setupBackButtonHandler는 setupButtonEventListeners에서 처리하므로 제거
