@@ -380,17 +380,43 @@ export async function showTextRecordEditModal(record, appUserId, onSuccess) {
     
     modal.innerHTML = `
         <div class="app-modal-header">
-            <h2>텍스트 기록 수정 (${dateDisplay})</h2>
+            <h2>간편 기록 수정 (${dateDisplay})</h2>
             <button class="app-modal-close" aria-label="닫기">×</button>
         </div>
         <form class="app-modal-form" id="text-record-edit-form">
             <input type="hidden" id="text-record-edit-date" value="${workoutDateStr}">
             <div class="app-form-group">
+                <div class="app-workout-level-group">
+                    <div class="app-workout-level-title">컨디션</div>
+                    <div class="app-workout-level-options">
+                        <button type="button" class="app-workout-level-btn" data-level="condition" data-value="high">상</button>
+                        <button type="button" class="app-workout-level-btn" data-level="condition" data-value="medium">중</button>
+                        <button type="button" class="app-workout-level-btn" data-level="condition" data-value="low">하</button>
+                    </div>
+                </div>
+                <div class="app-workout-level-group">
+                    <div class="app-workout-level-title">운동강도</div>
+                    <div class="app-workout-level-options">
+                        <button type="button" class="app-workout-level-btn" data-level="intensity" data-value="high">상</button>
+                        <button type="button" class="app-workout-level-btn" data-level="intensity" data-value="medium">중</button>
+                        <button type="button" class="app-workout-level-btn" data-level="intensity" data-value="low">하</button>
+                    </div>
+                </div>
+                <div class="app-workout-level-group">
+                    <div class="app-workout-level-title">피로도</div>
+                    <div class="app-workout-level-options">
+                        <button type="button" class="app-workout-level-btn" data-level="fatigue" data-value="high">상</button>
+                        <button type="button" class="app-workout-level-btn" data-level="fatigue" data-value="medium">중</button>
+                        <button type="button" class="app-workout-level-btn" data-level="fatigue" data-value="low">하</button>
+                    </div>
+                </div>
+            </div>
+            <div class="app-form-group">
                 <label for="text-record-edit-content">운동 내용</label>
                 <textarea 
                     id="text-record-edit-content" 
                     placeholder="예: 조깅 30분, 스트레칭 10분" 
-                    rows="10" 
+                    rows="6" 
                     maxlength="500"
                     style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); font-size: 16px; font-family: inherit; resize: vertical; box-sizing: border-box;"
                 >${escapeHtml(record.text_content || '')}</textarea>
@@ -422,6 +448,12 @@ export async function showTextRecordEditModal(record, appUserId, onSuccess) {
     const form = modal.querySelector('#text-record-edit-form');
     const textContentTextarea = modal.querySelector('#text-record-edit-content');
     const charCount = modal.querySelector('#text-record-edit-char-count');
+    const levelButtons = modal.querySelectorAll('.app-workout-level-btn');
+    const selectedLevels = {
+        condition: record.condition_level || null,
+        intensity: record.intensity_level || null,
+        fatigue: record.fatigue_level || null
+    };
     
     // 글자 수 카운터
     if (textContentTextarea && charCount) {
@@ -430,6 +462,40 @@ export async function showTextRecordEditModal(record, appUserId, onSuccess) {
             charCount.textContent = length;
         });
     }
+
+    // 초기 선택 상태 반영
+    levelButtons.forEach(btn => {
+        const level = btn.getAttribute('data-level');
+        const value = btn.getAttribute('data-value');
+        if (level && value && selectedLevels[level] === value) {
+            btn.classList.add('is-selected');
+        }
+    });
+
+    levelButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const level = btn.getAttribute('data-level');
+            const value = btn.getAttribute('data-value');
+            if (!level || !value) return;
+
+            if (selectedLevels[level] === value) {
+                selectedLevels[level] = null;
+            } else {
+                selectedLevels[level] = value;
+            }
+
+            levelButtons.forEach(other => {
+                if (other.getAttribute('data-level') === level) {
+                    const otherValue = other.getAttribute('data-value');
+                    if (selectedLevels[level] === otherValue) {
+                        other.classList.add('is-selected');
+                    } else {
+                        other.classList.remove('is-selected');
+                    }
+                }
+            });
+        });
+    });
     
     const closeModal = () => {
         // 모달 닫기 애니메이션
@@ -471,8 +537,9 @@ export async function showTextRecordEditModal(record, appUserId, onSuccess) {
         const workoutDate = document.getElementById('text-record-edit-date').value;
         const textContent = document.getElementById('text-record-edit-content').value.trim();
         
-        if (!textContent) {
-            alert('운동 내용을 입력해주세요.');
+        const hasLevels = Boolean(selectedLevels.condition || selectedLevels.intensity || selectedLevels.fatigue);
+        if (!textContent && !hasLevels) {
+            alert('운동 내용을 입력하거나 상태를 선택해주세요.');
             return;
         }
         
@@ -483,6 +550,9 @@ export async function showTextRecordEditModal(record, appUserId, onSuccess) {
             text_content: textContent,
             workout_type_id: null,
             duration_minutes: null,
+            condition_level: selectedLevels.condition,
+            intensity_level: selectedLevels.intensity,
+            fatigue_level: selectedLevels.fatigue,
             sets: [],
             notes: null
         };

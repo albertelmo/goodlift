@@ -586,6 +586,41 @@ async function render(records) {
 /**
  * 운동기록 아이템 렌더링
  */
+function renderWorkoutLevelBadges(record) {
+    const levelLabels = {
+        high: '상',
+        medium: '중',
+        low: '하'
+    };
+    const badges = [];
+    if (record.condition_level) {
+        const label = levelLabels[record.condition_level] || record.condition_level;
+        badges.push({ text: `컨디션 ${label}`, level: record.condition_level });
+    }
+    if (record.intensity_level) {
+        const label = levelLabels[record.intensity_level] || record.intensity_level;
+        badges.push({ text: `운동강도 ${label}`, level: record.intensity_level });
+    }
+    if (record.fatigue_level) {
+        const label = levelLabels[record.fatigue_level] || record.fatigue_level;
+        badges.push({ text: `피로도 ${label}`, level: record.fatigue_level, reverse: true });
+    }
+    
+    if (badges.length === 0) {
+        return '';
+    }
+    
+    return `
+        <div class="app-workout-level-badges">
+            ${badges.map(badge => {
+                const level = badge.level || 'medium';
+                const dataLevel = badge.reverse ? `${level}-reverse` : level;
+                return `<span class="app-workout-level-badge" data-level="${dataLevel}">${badge.text}</span>`;
+            }).join('')}
+        </div>
+    `;
+}
+
 function renderWorkoutItem(record) {
     // 텍스트 기록인 경우
     if (record.is_text_record) {
@@ -606,7 +641,10 @@ function renderWorkoutItem(record) {
                                 <line x1="4" y1="17" x2="20" y2="17"></line>
                             </svg>
                         </div>
-                        <div class="app-workout-item-type" style="flex: 1; min-width: 0; white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
+                        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
+                            ${renderWorkoutLevelBadges(record)}
+                            <div class="app-workout-item-text-content" style="white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
+                        </div>
                         <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -705,14 +743,14 @@ function renderWorkoutItem(record) {
         <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
             <div class="app-workout-item-main">
                 <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                    <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="4" y1="7" x2="20" y2="7"></line>
-                            <line x1="4" y1="12" x2="20" y2="12"></line>
-                            <line x1="4" y1="17" x2="20" y2="17"></line>
-                        </svg>
-                    </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
+                        <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="4" y1="7" x2="20" y2="7"></line>
+                                <line x1="4" y1="12" x2="20" y2="12"></line>
+                                <line x1="4" y1="17" x2="20" y2="17"></line>
+                            </svg>
+                        </div>
                         <div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>
                         <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -720,6 +758,7 @@ function renderWorkoutItem(record) {
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                         </button>
+                        ${renderWorkoutLevelBadges(record)}
                     </div>
                 </div>
                 ${infoHtml ? `<div class="app-workout-item-info">${infoHtml}</div>` : ''}

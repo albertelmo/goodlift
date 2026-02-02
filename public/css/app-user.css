@@ -1846,6 +1846,103 @@ body.app-user-active {
     transition: background var(--app-transition);
 }
 
+.app-workout-level-badges {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.app-workout-item-type-container .app-workout-level-badges {
+    margin-left: 6px;
+}
+
+.app-workout-level-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(59, 130, 246, 0.12);
+    color: #1d4ed8;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.app-workout-level-badge[data-level="high"] {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: rgba(34, 197, 94, 0.45);
+    color: #15803d;
+}
+
+.app-workout-level-badge[data-level="medium"] {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #b45309;
+}
+
+.app-workout-level-badge[data-level="low"] {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #b91c1c;
+}
+
+.app-workout-level-badge[data-level="high-reverse"] {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #b91c1c;
+}
+
+.app-workout-level-badge[data-level="medium-reverse"] {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: #b45309;
+}
+
+.app-workout-level-badge[data-level="low-reverse"] {
+    background: rgba(34, 197, 94, 0.2);
+    border-color: rgba(34, 197, 94, 0.45);
+    color: #15803d;
+}
+
+.app-workout-item-text-content {
+    display: block;
+}
+
+.app-workout-level-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.app-workout-level-title {
+    min-width: 70px;
+    font-size: 13px;
+    color: var(--app-text);
+    font-weight: 600;
+}
+
+.app-workout-level-options {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.app-workout-level-btn {
+    padding: 6px 10px;
+    font-size: 13px;
+    border-radius: var(--app-radius-sm);
+    border: 1px solid var(--app-border);
+    background: var(--app-surface);
+    color: var(--app-text);
+}
+
+.app-workout-level-btn.is-selected {
+    border-color: var(--app-primary);
+    background: rgba(37, 99, 235, 0.12);
+}
+
 .app-workout-item:active {
     background: var(--app-border);
 }

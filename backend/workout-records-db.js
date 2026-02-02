@@ -81,8 +81,17 @@ const createWorkoutRecordsTable = async () => {
           workout_type_id UUID,
           duration_minutes INTEGER,
           notes TEXT,
+          condition_level VARCHAR(10),
+          intensity_level VARCHAR(10),
+          fatigue_level VARCHAR(10),
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT workout_records_condition_level_check 
+            CHECK (condition_level IN ('high', 'medium', 'low') OR condition_level IS NULL),
+          CONSTRAINT workout_records_intensity_level_check 
+            CHECK (intensity_level IN ('high', 'medium', 'low') OR intensity_level IS NULL),
+          CONSTRAINT workout_records_fatigue_level_check 
+            CHECK (fatigue_level IN ('high', 'medium', 'low') OR fatigue_level IS NULL)
         )
       `;
       await pool.query(createQuery);
@@ -120,6 +129,11 @@ const createWorkoutRecordsTable = async () => {
         'migrate_workout_records_structure_20250131',
         '운동 기록 테이블 데이터 구조 마이그레이션 (sets, reps, weight 등)',
         migrateWorkoutRecordsTable
+      );
+      await runMigration(
+        'add_workout_record_levels_20260202',
+        '운동 기록 테이블에 컨디션/강도/피로도 컬럼 추가',
+        migrateWorkoutRecordLevels
       );
     }
   } catch (error) {
@@ -444,6 +458,56 @@ const migrateWorkoutRecordsTable = async () => {
   }
 };
 
+// 운동 기록 컨디션/강도/피로도 컬럼 마이그레이션
+const migrateWorkoutRecordLevels = async () => {
+  try {
+    const columnsQuery = `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'workout_records'
+    `;
+    const columnsResult = await pool.query(columnsQuery);
+    const existingColumns = columnsResult.rows.map(row => row.column_name);
+    
+    const addColumnIfMissing = async (columnName) => {
+      if (!existingColumns.includes(columnName)) {
+        await pool.query(`ALTER TABLE workout_records ADD COLUMN ${columnName} VARCHAR(10)`);
+        console.log(`[PostgreSQL] workout_records 테이블에 ${columnName} 컬럼이 추가되었습니다.`);
+      }
+    };
+    
+    await addColumnIfMissing('condition_level');
+    await addColumnIfMissing('intensity_level');
+    await addColumnIfMissing('fatigue_level');
+    
+    await pool.query(`ALTER TABLE workout_records DROP CONSTRAINT IF EXISTS workout_records_condition_level_check`);
+    await pool.query(`
+      ALTER TABLE workout_records
+      ADD CONSTRAINT workout_records_condition_level_check
+      CHECK (condition_level IN ('high', 'medium', 'low') OR condition_level IS NULL)
+    `);
+    
+    await pool.query(`ALTER TABLE workout_records DROP CONSTRAINT IF EXISTS workout_records_intensity_level_check`);
+    await pool.query(`
+      ALTER TABLE workout_records
+      ADD CONSTRAINT workout_records_intensity_level_check
+      CHECK (intensity_level IN ('high', 'medium', 'low') OR intensity_level IS NULL)
+    `);
+    
+    await pool.query(`ALTER TABLE workout_records DROP CONSTRAINT IF EXISTS workout_records_fatigue_level_check`);
+    await pool.query(`
+      ALTER TABLE workout_records
+      ADD CONSTRAINT workout_records_fatigue_level_check
+      CHECK (fatigue_level IN ('high', 'medium', 'low') OR fatigue_level IS NULL)
+    `);
+    
+    console.log('[PostgreSQL] workout_records 컨디션/강도/피로도 제약조건이 업데이트되었습니다.');
+  } catch (error) {
+    console.error('[PostgreSQL] 운동 기록 컨디션/강도/피로도 마이그레이션 오류:', error);
+    throw error;
+  }
+};
+
 
 // 인덱스 생성
 const createWorkoutRecordsIndexes = async () => {
@@ -528,6 +592,9 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
         wt.type as workout_type_type,
         wr.duration_minutes,
         wr.notes,
+        wr.condition_level,
+        wr.intensity_level,
+        wr.fatigue_level,
         wr.is_completed,
         wr.display_order,
         wr.is_text_record,
@@ -637,6 +704,9 @@ const getWorkoutRecordById = async (id, appUserId) => {
         wt.type as workout_type_type,
         wr.duration_minutes,
         wr.notes,
+        wr.condition_level,
+        wr.intensity_level,
+        wr.fatigue_level,
         wr.is_completed,
         wr.display_order,
         wr.is_text_record,
@@ -732,12 +802,25 @@ const getNextDisplayOrder = async (appUserId, workoutDate) => {
 
 // 운동기록 검증
 const validateWorkoutRecord = (workoutData) => {
-  const { is_text_record, text_content, workout_type_id } = workoutData;
+  const { is_text_record, text_content, workout_type_id, condition_level, intensity_level, fatigue_level } = workoutData;
+  const allowedLevels = ['high', 'medium', 'low'];
+  
+  const validateLevel = (value, label) => {
+    if (value && !allowedLevels.includes(value)) {
+      throw new Error(`${label} 값이 올바르지 않습니다.`);
+    }
+  };
+  
+  validateLevel(condition_level, '컨디션');
+  validateLevel(intensity_level, '운동강도');
+  validateLevel(fatigue_level, '피로도');
+  
+  const hasLevels = Boolean(condition_level || intensity_level || fatigue_level);
   
   // 텍스트 기록인 경우
   if (is_text_record === true) {
-    if (!text_content || text_content.trim() === '') {
-      throw new Error('텍스트 기록은 내용이 필수입니다.');
+    if ((!text_content || text_content.trim() === '') && !hasLevels) {
+      throw new Error('텍스트 기록은 내용 또는 상태 선택이 필요합니다.');
     }
     if (workout_type_id !== null && workout_type_id !== undefined) {
       throw new Error('텍스트 기록은 운동 종류를 가질 수 없습니다.');
@@ -775,8 +858,11 @@ const addWorkoutRecord = async (workoutData) => {
         notes,
         display_order,
         is_text_record,
-        text_content
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        text_content,
+        condition_level,
+        intensity_level,
+        fatigue_level
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `;
     const insertValues = [
@@ -787,7 +873,10 @@ const addWorkoutRecord = async (workoutData) => {
       workoutData.notes || null,
       displayOrder,
       workoutData.is_text_record || false,
-      workoutData.is_text_record ? (workoutData.text_content || null) : null
+      workoutData.is_text_record ? (workoutData.text_content || null) : null,
+      workoutData.condition_level || null,
+      workoutData.intensity_level || null,
+      workoutData.fatigue_level || null
     ];
     const insertResult = await client.query(insertQuery, insertValues);
     const workoutRecord = insertResult.rows[0];
@@ -895,8 +984,11 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
           notes,
           display_order,
           is_text_record,
-          text_content
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          text_content,
+          condition_level,
+          intensity_level,
+          fatigue_level
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
       `;
       const insertValues = [
@@ -907,7 +999,10 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
         workoutData.notes || null,
         currentOrder,
         workoutData.is_text_record || false,
-        workoutData.is_text_record ? (workoutData.text_content || null) : null
+        workoutData.is_text_record ? (workoutData.text_content || null) : null,
+        workoutData.condition_level || null,
+        workoutData.intensity_level || null,
+        workoutData.fatigue_level || null
       ];
       const insertResult = await client.query(insertQuery, insertValues);
       const workoutRecord = insertResult.rows[0];
@@ -1062,6 +1157,18 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
       fields.push(`notes = $${paramIndex++}`);
       values.push(updates.notes || null);
     }
+    if (updates.condition_level !== undefined) {
+      fields.push(`condition_level = $${paramIndex++}`);
+      values.push(updates.condition_level || null);
+    }
+    if (updates.intensity_level !== undefined) {
+      fields.push(`intensity_level = $${paramIndex++}`);
+      values.push(updates.intensity_level || null);
+    }
+    if (updates.fatigue_level !== undefined) {
+      fields.push(`fatigue_level = $${paramIndex++}`);
+      values.push(updates.fatigue_level || null);
+    }
     if (updates.is_text_record !== undefined) {
       fields.push(`is_text_record = $${paramIndex++}`);
       values.push(updates.is_text_record || false);
@@ -1072,10 +1179,10 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
     }
     
     // 검증 (업데이트 시)
-    if (updates.is_text_record !== undefined || updates.text_content !== undefined || updates.workout_type_id !== undefined) {
+    if (updates.is_text_record !== undefined || updates.text_content !== undefined || updates.workout_type_id !== undefined || updates.condition_level !== undefined || updates.intensity_level !== undefined || updates.fatigue_level !== undefined) {
       // 기존 레코드 조회하여 검증
       const existingRecord = await client.query(
-        `SELECT is_text_record, text_content, workout_type_id FROM workout_records WHERE id = $1 AND app_user_id = $2`,
+        `SELECT is_text_record, text_content, workout_type_id, condition_level, intensity_level, fatigue_level FROM workout_records WHERE id = $1 AND app_user_id = $2`,
         [id, appUserId]
       );
       if (existingRecord.rows.length > 0) {
@@ -1083,7 +1190,10 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
         const mergedData = {
           is_text_record: updates.is_text_record !== undefined ? updates.is_text_record : existing.is_text_record,
           text_content: updates.text_content !== undefined ? updates.text_content : existing.text_content,
-          workout_type_id: updates.workout_type_id !== undefined ? updates.workout_type_id : existing.workout_type_id
+          workout_type_id: updates.workout_type_id !== undefined ? updates.workout_type_id : existing.workout_type_id,
+          condition_level: updates.condition_level !== undefined ? updates.condition_level : existing.condition_level,
+          intensity_level: updates.intensity_level !== undefined ? updates.intensity_level : existing.intensity_level,
+          fatigue_level: updates.fatigue_level !== undefined ? updates.fatigue_level : existing.fatigue_level
         };
         validateWorkoutRecord(mergedData);
       }

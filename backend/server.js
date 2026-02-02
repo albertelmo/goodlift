@@ -1779,6 +1779,9 @@ app.post('/api/workout-records/batch', async (req, res) => {
             text_content: record.text_content || null,
             workout_type_id: record.workout_type_id || null,
             duration_minutes: record.duration_minutes ? parseInt(record.duration_minutes) : null,
+            condition_level: record.condition_level || null,
+            intensity_level: record.intensity_level || null,
+            fatigue_level: record.fatigue_level || null,
             sets: record.sets || [],
             notes: record.notes || null
         }));
@@ -1881,7 +1884,7 @@ app.post('/api/workout-records/batch', async (req, res) => {
 // 운동기록 단일 추가 (하위 호환성 유지)
 app.post('/api/workout-records', async (req, res) => {
     try {
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, trainer_username, trainer_name, actor_app_user_id } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, condition_level, intensity_level, fatigue_level, trainer_username, trainer_name, actor_app_user_id } = req.body;
         
         if (!app_user_id || !workout_date) {
             return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
@@ -1899,6 +1902,9 @@ app.post('/api/workout-records', async (req, res) => {
             text_content: text_content || null,
             workout_type_id: workout_type_id || null,
             duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
+            condition_level: condition_level || null,
+            intensity_level: intensity_level || null,
+            fatigue_level: fatigue_level || null,
             sets: sets || [],
             notes: notes || null
         };
@@ -2001,7 +2007,7 @@ app.patch('/api/workout-records/reorder', async (req, res) => {
 app.patch('/api/workout-records/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, condition_level, intensity_level, fatigue_level } = req.body;
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
@@ -2020,6 +2026,9 @@ app.patch('/api/workout-records/:id', async (req, res) => {
         if (duration_minutes !== undefined) updates.duration_minutes = duration_minutes ? parseInt(duration_minutes) : null;
         if (sets !== undefined) updates.sets = sets;
         if (notes !== undefined) updates.notes = notes;
+        if (condition_level !== undefined) updates.condition_level = condition_level || null;
+        if (intensity_level !== undefined) updates.intensity_level = intensity_level || null;
+        if (fatigue_level !== undefined) updates.fatigue_level = fatigue_level || null;
         
         const record = await workoutRecordsDB.updateWorkoutRecord(id, app_user_id, updates);
         

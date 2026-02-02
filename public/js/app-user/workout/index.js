@@ -484,7 +484,7 @@ async function render() {
                             운동 선택하기
                         </button>
                         <button class="app-btn-secondary app-btn-full" id="workout-text-add-btn" style="flex: 1; white-space: nowrap;">
-                            📝 직접 기록하기
+                            📝 간편 기록하기
                         </button>
                     </div>
                 </div>
