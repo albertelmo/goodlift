@@ -37,6 +37,7 @@ const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
 const appUserActivityEventsDB = require('./app-user-activity-events-db');
 const workoutCommentsDB = require('./workout-comments-db');
+const dietDailyCommentsDB = require('./diet-daily-comments-db');
 const consultationRecordsDB = require('./consultation-records-db');
 const consultationSharesDB = require('./consultation-shares-db');
 const elmoUsersDB = require('./elmo-users-db');
@@ -588,6 +589,7 @@ userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
 workoutCommentsDB.initializeDatabase(); // 운동 코멘트 테이블 초기화
+dietDailyCommentsDB.initializeDatabase(); // 식단 하루 코멘트 테이블 초기화
 consultationRecordsDB.initializeDatabase(); // 상담기록 테이블 초기화
 consultationSharesDB.initializeDatabase(); // 상담기록 공유 토큰 테이블 초기화
 elmoUsersDB.initializeDatabase(); // Elmo 사용자 테이블 초기화
@@ -2405,6 +2407,103 @@ app.patch('/api/diet-records/:id', imageUpload.single('image'), async (req, res)
     }
 });
 
+// 식단기록 평가 설정 (트레이너 전용)
+app.patch('/api/diet-records/:id/evaluation', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { evaluation, trainer_username, trainer_name, trainer_app_user_id } = req.body;
+        
+        const allowedEvaluations = ['diet_master', 'protein_hunter', 'clean_energy', 'carb_killer', 'sad'];
+        if (evaluation && !allowedEvaluations.includes(evaluation)) {
+            return res.status(400).json({ message: '평가 값이 올바르지 않습니다.' });
+        }
+        
+        let finalTrainerUsername = trainer_username || null;
+        let finalTrainerName = trainer_name || null;
+        
+        if (!finalTrainerUsername && trainer_app_user_id) {
+            const trainerUser = await appUsersDB.getAppUserById(trainer_app_user_id);
+            if (trainerUser) {
+                finalTrainerUsername = trainerUser.username;
+                finalTrainerName = finalTrainerName || trainerUser.name;
+            }
+        }
+        
+        if (!finalTrainerUsername) {
+            return res.status(400).json({ message: '트레이너 정보가 필요합니다.' });
+        }
+        
+        const record = await dietRecordsDB.getDietRecordById(id);
+        if (!record) {
+            return res.status(404).json({ message: '식단기록을 찾을 수 없습니다.' });
+        }
+        
+        const appUser = await appUsersDB.getAppUserById(record.app_user_id);
+        if (!appUser || !appUser.member_name) {
+            return res.status(403).json({ message: '회원과 연결되지 않은 앱 유저입니다.' });
+        }
+        
+        const member = await membersDB.getMemberByName(appUser.member_name);
+        if (!member || member.trainer !== finalTrainerUsername) {
+            return res.status(403).json({ message: '해당 회원의 담당 트레이너만 평가할 수 있습니다.' });
+        }
+        
+        if (!finalTrainerName) {
+            try {
+                const trainerAppUsers = await appUsersDB.getAppUsers({ username: finalTrainerUsername });
+                const trainerAppUser = Array.isArray(trainerAppUsers) ? trainerAppUsers[0] : trainerAppUsers;
+                if (trainerAppUser && trainerAppUser.name) {
+                    finalTrainerName = trainerAppUser.name;
+                } else {
+                    let accounts = [];
+                    if (fs.existsSync(DATA_PATH)) {
+                        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+                        if (raw) accounts = JSON.parse(raw);
+                    }
+                    const trainerAccount = accounts.find(acc => acc.username === finalTrainerUsername && acc.role === 'trainer');
+                    finalTrainerName = trainerAccount?.name || finalTrainerUsername;
+                }
+            } catch (e) {
+                finalTrainerName = finalTrainerUsername;
+            }
+        }
+        
+        const updated = await dietRecordsDB.updateDietRecordEvaluation(id, {
+            trainer_evaluation: evaluation || null,
+            trainer_evaluator_username: evaluation ? finalTrainerUsername : null,
+            trainer_evaluator_name: evaluation ? finalTrainerName : null
+        });
+
+        if (evaluation) {
+            await logAppUserActivityEvent({
+                eventType: 'diet_badge_added',
+                actorAppUserId: trainer_app_user_id || null,
+                subjectAppUserId: record.app_user_id,
+                source: 'trainer_proxy',
+                meta: {
+                    diet_record_id: record.id,
+                    evaluation
+                }
+            });
+
+            createActivityLogForMember(
+                record.app_user_id,
+                'diet_badge_added',
+                '식단 배지를 추가했습니다.',
+                record.id,
+                record.meal_date,
+                finalTrainerUsername,
+                finalTrainerName
+            ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
+        }
+        
+        res.json(updated);
+    } catch (error) {
+        console.error('[API] 식단기록 평가 설정 오류:', error);
+        res.status(500).json({ message: '식단기록 평가 설정 중 오류가 발생했습니다.' });
+    }
+});
+
 // 식단기록 삭제
 app.delete('/api/diet-records/:id', async (req, res) => {
     try {
@@ -2722,6 +2821,277 @@ app.post('/api/diet-records/:id/comments', async (req, res) => {
     } catch (error) {
         console.error('[API] 식단 코멘트 추가 오류:', error);
         res.status(500).json({ message: '식단 코멘트 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단 하루 코멘트 조회
+app.get('/api/diet-records/:appUserId/daily-comments', async (req, res) => {
+    try {
+        const { appUserId } = req.params;
+        const { date, startDate, endDate } = req.query;
+        
+        if (!appUserId) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        
+        const filters = {};
+        if (date) {
+            filters.date = date;
+        } else if (startDate && endDate) {
+            filters.startDate = startDate;
+            filters.endDate = endDate;
+        }
+        
+        const comments = await dietDailyCommentsDB.getComments(appUserId, filters);
+        res.json({ comments });
+    } catch (error) {
+        console.error('[API] 식단 하루 코멘트 조회 오류:', error);
+        res.status(500).json({ message: '식단 하루 코멘트 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단 하루 코멘트 생성
+app.post('/api/diet-records/:appUserId/daily-comments', async (req, res) => {
+    try {
+        const { appUserId } = req.params;
+        const {
+            diet_date,
+            comment,
+            commenter_type,
+            commenter_app_user_id,
+            commenter_username,
+            commenter_name,
+            trainer_username,
+            trainer_name
+        } = req.body;
+        
+        if (!appUserId || !diet_date || !comment) {
+            return res.status(400).json({ message: '앱 유저 ID, 식단 날짜, 코멘트 내용이 필요합니다.' });
+        }
+        
+        const appUser = await appUsersDB.getAppUserById(appUserId);
+        if (!appUser) {
+            return res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
+        }
+        
+        const normalizedCommenterType = commenter_type || (trainer_username ? 'trainer' : 'member');
+        let finalCommenterType = normalizedCommenterType;
+        let finalCommenterAppUserId = commenter_app_user_id;
+        let finalCommenterUsername = commenter_username || trainer_username || null;
+        let finalCommenterName = commenter_name || trainer_name || null;
+
+        if (finalCommenterType === 'trainer') {
+            if (!finalCommenterAppUserId && !finalCommenterUsername) {
+                return res.status(400).json({ message: '트레이너 정보가 필요합니다.' });
+            }
+
+            if (!finalCommenterUsername && finalCommenterAppUserId) {
+                const trainerUser = await appUsersDB.getAppUserById(finalCommenterAppUserId);
+                if (trainerUser) {
+                    finalCommenterUsername = trainerUser.username;
+                    finalCommenterName = finalCommenterName || trainerUser.name;
+                }
+            }
+
+            if (!finalCommenterAppUserId && finalCommenterUsername) {
+                const trainerUser = await appUsersDB.getAppUserByUsername(finalCommenterUsername);
+                if (trainerUser?.id) {
+                    finalCommenterAppUserId = trainerUser.id;
+                    finalCommenterName = finalCommenterName || trainerUser.name;
+                }
+            }
+
+            if (!finalCommenterUsername) {
+                return res.status(400).json({ message: '트레이너 정보가 필요합니다.' });
+            }
+
+            if (appUser.member_name) {
+                const member = await membersDB.getMemberByName(appUser.member_name);
+                if (!member || member.trainer !== finalCommenterUsername) {
+                    return res.status(403).json({ message: '해당 회원의 담당 트레이너만 코멘트를 작성할 수 있습니다.' });
+                }
+            } else {
+                return res.status(403).json({ message: '회원과 연결되지 않은 앱 유저입니다.' });
+            }
+
+            if (!finalCommenterName) {
+                try {
+                    const trainerAppUsers = await appUsersDB.getAppUsers({ username: finalCommenterUsername });
+                    const trainerAppUser = Array.isArray(trainerAppUsers) ? trainerAppUsers[0] : trainerAppUsers;
+                    if (trainerAppUser && trainerAppUser.name) {
+                        finalCommenterName = trainerAppUser.name;
+                    } else {
+                        let accounts = [];
+                        if (fs.existsSync(DATA_PATH)) {
+                            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+                            if (raw) accounts = JSON.parse(raw);
+                        }
+                        const trainerAccount = accounts.find(acc => acc.username === finalCommenterUsername && acc.role === 'trainer');
+                        if (trainerAccount && trainerAccount.name) {
+                            finalCommenterName = trainerAccount.name;
+                        } else {
+                            finalCommenterName = finalCommenterUsername;
+                        }
+                    }
+                } catch (e) {
+                    finalCommenterName = finalCommenterUsername;
+                }
+            }
+        } else {
+            finalCommenterType = 'member';
+            if (!finalCommenterAppUserId || finalCommenterAppUserId !== appUserId) {
+                return res.status(403).json({ message: '본인만 코멘트를 작성할 수 있습니다.' });
+            }
+            const memberUser = await appUsersDB.getAppUserById(finalCommenterAppUserId);
+            if (!memberUser) {
+                return res.status(404).json({ message: '앱 유저를 찾을 수 없습니다.' });
+            }
+            finalCommenterUsername = finalCommenterUsername || memberUser.username;
+            finalCommenterName = finalCommenterName || memberUser.name || memberUser.username;
+        }
+
+        const commentData = {
+            app_user_id: appUserId,
+            diet_date,
+            commenter_type: finalCommenterType,
+            commenter_app_user_id: finalCommenterAppUserId,
+            commenter_username: finalCommenterUsername,
+            commenter_name: finalCommenterName,
+            comment
+        };
+        const savedComment = await dietDailyCommentsDB.addComment(commentData);
+
+        if (finalCommenterAppUserId) {
+            await logAppUserActivityEvent({
+                eventType: 'diet_daily_comment_create',
+                actorAppUserId: finalCommenterAppUserId,
+                subjectAppUserId: appUserId,
+                source: finalCommenterType === 'trainer' ? 'trainer_proxy' : 'self',
+                meta: {
+                    diet_daily_comment_id: savedComment.id,
+                    diet_date
+                }
+            });
+        }
+
+        if (finalCommenterType === 'trainer') {
+            createActivityLogForMember(
+                appUserId,
+                'diet_daily_comment_added',
+                '식단 코멘트를 남겼습니다.',
+                savedComment.id,
+                diet_date,
+                finalCommenterUsername,
+                finalCommenterName
+            ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
+        } else {
+            createActivityLogForTrainer(
+                appUserId,
+                'diet_daily_comment_added',
+                '식단에 코멘트가 등록되었습니다.',
+                savedComment.id,
+                diet_date
+            ).catch(err => console.error('[Activity Log] 트레이너 로그 생성 실패:', err));
+        }
+        
+        res.status(201).json(savedComment);
+    } catch (error) {
+        console.error('[API] 식단 하루 코멘트 생성 오류:', error);
+        res.status(500).json({ message: error.message || '식단 하루 코멘트 생성 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단 하루 코멘트 수정
+app.put('/api/diet-records/:appUserId/daily-comments/:commentId', async (req, res) => {
+    try {
+        const { appUserId, commentId } = req.params;
+        const { comment, commenter_type, commenter_app_user_id, trainer_username } = req.body;
+        
+        if (!comment) {
+            return res.status(400).json({ message: '코멘트 내용이 필요합니다.' });
+        }
+        
+        const existingComment = await dietDailyCommentsDB.getCommentById(commentId);
+        if (!existingComment) {
+            return res.status(404).json({ message: '코멘트를 찾을 수 없습니다.' });
+        }
+        
+        if (existingComment.app_user_id !== appUserId) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        const requesterType = commenter_type || (trainer_username ? 'trainer' : null);
+        if (existingComment.commenter_type === 'trainer') {
+            if (requesterType !== 'trainer') {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 수정할 수 있습니다.' });
+            }
+            if (commenter_app_user_id && existingComment.commenter_app_user_id !== commenter_app_user_id) {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 수정할 수 있습니다.' });
+            }
+            if (!commenter_app_user_id && trainer_username && existingComment.commenter_username !== trainer_username) {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 수정할 수 있습니다.' });
+            }
+        } else {
+            if (!commenter_app_user_id || existingComment.commenter_app_user_id !== commenter_app_user_id) {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 수정할 수 있습니다.' });
+            }
+        }
+        
+        const updatedComment = await dietDailyCommentsDB.updateComment(commentId, { comment });
+        
+        if (!updatedComment) {
+            return res.status(404).json({ message: '코멘트 수정에 실패했습니다.' });
+        }
+        
+        res.json(updatedComment);
+    } catch (error) {
+        console.error('[API] 식단 하루 코멘트 수정 오류:', error);
+        res.status(500).json({ message: error.message || '식단 하루 코멘트 수정 중 오류가 발생했습니다.' });
+    }
+});
+
+// 식단 하루 코멘트 삭제
+app.delete('/api/diet-records/:appUserId/daily-comments/:commentId', async (req, res) => {
+    try {
+        const { appUserId, commentId } = req.params;
+        const { commenter_type, commenter_app_user_id, trainer_username } = req.body;
+        
+        const existingComment = await dietDailyCommentsDB.getCommentById(commentId);
+        if (!existingComment) {
+            return res.status(404).json({ message: '코멘트를 찾을 수 없습니다.' });
+        }
+        
+        if (existingComment.app_user_id !== appUserId) {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+        
+        const requesterType = commenter_type || (trainer_username ? 'trainer' : null);
+        if (existingComment.commenter_type === 'trainer') {
+            if (requesterType !== 'trainer') {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 삭제할 수 있습니다.' });
+            }
+            if (commenter_app_user_id && existingComment.commenter_app_user_id !== commenter_app_user_id) {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 삭제할 수 있습니다.' });
+            }
+            if (!commenter_app_user_id && trainer_username && existingComment.commenter_username !== trainer_username) {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 삭제할 수 있습니다.' });
+            }
+        } else {
+            if (!commenter_app_user_id || existingComment.commenter_app_user_id !== commenter_app_user_id) {
+                return res.status(403).json({ message: '본인이 작성한 코멘트만 삭제할 수 있습니다.' });
+            }
+        }
+        
+        const deletedComment = await dietDailyCommentsDB.deleteComment(commentId);
+        
+        if (!deletedComment) {
+            return res.status(404).json({ message: '코멘트 삭제에 실패했습니다.' });
+        }
+        
+        res.json(deletedComment);
+    } catch (error) {
+        console.error('[API] 식단 하루 코멘트 삭제 오류:', error);
+        res.status(500).json({ message: error.message || '식단 하루 코멘트 삭제 중 오류가 발생했습니다.' });
     }
 });
 

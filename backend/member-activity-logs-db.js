@@ -24,7 +24,7 @@ const createMemberActivityLogsTable = async () => {
           app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
           trainer_username VARCHAR(50) NOT NULL,
           trainer_name VARCHAR(100),
-          activity_type VARCHAR(50) NOT NULL CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'workout_comment_added')),
+          activity_type VARCHAR(50) NOT NULL CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'diet_daily_comment_added', 'diet_badge_added', 'workout_comment_added')),
           activity_message TEXT NOT NULL,
           related_record_id UUID,
           record_date DATE,
@@ -45,6 +45,16 @@ const createMemberActivityLogsTable = async () => {
         'migrate_member_activity_logs_20250131',
         '회원 활동 로그 테이블 activity_type 길이 확장 (VARCHAR(20) → VARCHAR(50))',
         migrateMemberActivityLogsTable
+      );
+      await runMigration(
+        'migrate_member_activity_logs_activity_type_20260202',
+        '회원 활동 로그 activity_type에 diet_daily_comment_added 추가',
+        migrateMemberActivityLogsActivityType
+      );
+      await runMigration(
+        'migrate_member_activity_logs_activity_type_20260202_badge',
+        '회원 활동 로그 activity_type에 diet_badge_added 추가',
+        migrateMemberActivityLogsBadgeType
       );
     }
   } catch (error) {
@@ -96,8 +106,8 @@ const migrateMemberActivityLogsTable = async () => {
       for (const constraint of constraintResult.rows) {
         const checkClause = constraint.check_clause;
         
-        // 'workout_comment_added'가 포함되어 있지 않으면 업데이트
-        if (!checkClause.includes('workout_comment_added')) {
+        // 'diet_daily_comment_added'가 포함되어 있지 않으면 업데이트
+        if (!checkClause.includes('diet_daily_comment_added')) {
           // 기존 제약조건 제거
           await pool.query(`
             ALTER TABLE member_activity_logs 
@@ -118,7 +128,7 @@ const migrateMemberActivityLogsTable = async () => {
         AND cc.constraint_schema = tc.constraint_schema
       WHERE tc.table_schema = 'public'
         AND tc.table_name = 'member_activity_logs'
-        AND cc.check_clause LIKE '%workout_comment_added%'
+        AND cc.check_clause LIKE '%diet_daily_comment_added%'
     `;
     const newConstraintResult = await pool.query(checkNewConstraintQuery);
     
@@ -127,7 +137,7 @@ const migrateMemberActivityLogsTable = async () => {
       await pool.query(`
         ALTER TABLE member_activity_logs 
         ADD CONSTRAINT member_activity_logs_activity_type_check 
-        CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'workout_comment_added'))
+        CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'diet_daily_comment_added', 'diet_badge_added', 'workout_comment_added'))
       `);
       console.log('[PostgreSQL] member_activity_logs 테이블에 activity_type 제약조건이 추가되었습니다.');
     } else {
@@ -136,6 +146,102 @@ const migrateMemberActivityLogsTable = async () => {
   } catch (error) {
     console.error('[PostgreSQL] 회원 활동 로그 테이블 마이그레이션 오류:', error);
     // 마이그레이션 실패해도 계속 진행 (제약조건이 이미 올바르게 설정되어 있을 수 있음)
+  }
+};
+
+// activity_type 제약조건에 diet_daily_comment_added 추가 마이그레이션
+const migrateMemberActivityLogsActivityType = async () => {
+  try {
+    const constraintQuery = `
+      SELECT cc.constraint_name, cc.check_clause
+      FROM information_schema.check_constraints cc
+      JOIN information_schema.table_constraints tc
+        ON cc.constraint_name = tc.constraint_name
+        AND cc.constraint_schema = tc.constraint_schema
+      WHERE tc.table_schema = 'public'
+        AND tc.table_name = 'member_activity_logs'
+        AND tc.constraint_type = 'CHECK'
+    `;
+    const constraintResult = await pool.query(constraintQuery);
+    
+    let activityTypeConstraint = null;
+    let checkClause = '';
+    for (const row of constraintResult.rows) {
+      if (row.check_clause && row.check_clause.includes('activity_type')) {
+        activityTypeConstraint = row.constraint_name;
+        checkClause = row.check_clause;
+        break;
+      }
+    }
+    
+    if (checkClause.includes('diet_daily_comment_added')) {
+      return;
+    }
+    
+    if (activityTypeConstraint) {
+      await pool.query(`
+        ALTER TABLE member_activity_logs 
+        DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}
+      `);
+    }
+    
+    await pool.query(`
+      ALTER TABLE member_activity_logs 
+      ADD CONSTRAINT member_activity_logs_activity_type_check 
+      CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'diet_daily_comment_added', 'diet_badge_added', 'workout_comment_added'))
+    `);
+    console.log('[PostgreSQL] member_activity_logs activity_type 제약조건이 업데이트되었습니다. (diet_daily_comment_added 추가)');
+  } catch (error) {
+    console.error('[PostgreSQL] member_activity_logs activity_type 제약조건 마이그레이션 오류:', error);
+    throw error;
+  }
+};
+
+// activity_type 제약조건에 diet_badge_added 추가 마이그레이션
+const migrateMemberActivityLogsBadgeType = async () => {
+  try {
+    const constraintQuery = `
+      SELECT cc.constraint_name, cc.check_clause
+      FROM information_schema.check_constraints cc
+      JOIN information_schema.table_constraints tc
+        ON cc.constraint_name = tc.constraint_name
+        AND cc.constraint_schema = tc.constraint_schema
+      WHERE tc.table_schema = 'public'
+        AND tc.table_name = 'member_activity_logs'
+        AND tc.constraint_type = 'CHECK'
+    `;
+    const constraintResult = await pool.query(constraintQuery);
+    
+    let activityTypeConstraint = null;
+    let checkClause = '';
+    for (const row of constraintResult.rows) {
+      if (row.check_clause && row.check_clause.includes('activity_type')) {
+        activityTypeConstraint = row.constraint_name;
+        checkClause = row.check_clause;
+        break;
+      }
+    }
+    
+    if (checkClause.includes('diet_badge_added')) {
+      return;
+    }
+    
+    if (activityTypeConstraint) {
+      await pool.query(`
+        ALTER TABLE member_activity_logs 
+        DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}
+      `);
+    }
+    
+    await pool.query(`
+      ALTER TABLE member_activity_logs 
+      ADD CONSTRAINT member_activity_logs_activity_type_check 
+      CHECK (activity_type IN ('workout_recorded', 'diet_comment_added', 'diet_daily_comment_added', 'diet_badge_added', 'workout_comment_added'))
+    `);
+    console.log('[PostgreSQL] member_activity_logs activity_type 제약조건이 업데이트되었습니다. (diet_badge_added 추가)');
+  } catch (error) {
+    console.error('[PostgreSQL] member_activity_logs activity_type 제약조건 마이그레이션 오류:', error);
+    throw error;
   }
 };
 

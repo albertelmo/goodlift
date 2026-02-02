@@ -82,8 +82,14 @@ const createDietRecordsTable = async () => {
           image_url VARCHAR(500),
           image_thumbnail_url VARCHAR(500),
           notes TEXT,
+          trainer_evaluation VARCHAR(20),
+          trainer_evaluator_username VARCHAR(50),
+          trainer_evaluator_name VARCHAR(100),
+          trainer_evaluated_at TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT diet_records_trainer_evaluation_check 
+            CHECK (trainer_evaluation IN ('diet_master', 'protein_hunter', 'clean_energy', 'carb_killer', 'sad') OR trainer_evaluation IS NULL)
         )
       `;
       await pool.query(createQuery);
@@ -102,6 +108,11 @@ const createDietRecordsTable = async () => {
         'add_columns_to_diet_records_20250131',
         '식단 기록 테이블에 comment_text, center 등 컬럼 추가',
         migrateDietRecordsTable
+      );
+      await runMigration(
+        'add_trainer_evaluation_to_diet_records_20260202',
+        '식단 기록 테이블에 트레이너 평가 컬럼 추가',
+        migrateDietRecordEvaluations
       );
       // 코멘트 테이블도 확인
       await createDietCommentsTable();
@@ -224,6 +235,68 @@ const migrateDietRecordsTable = async () => {
     await createDietRecordsIndexes();
   } catch (error) {
     console.error('[PostgreSQL] diet_records 테이블 마이그레이션 오류:', error);
+    throw error;
+  }
+};
+
+// 식단 기록 트레이너 평가 컬럼 마이그레이션
+const migrateDietRecordEvaluations = async () => {
+  try {
+    const columnsQuery = `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'diet_records'
+    `;
+    const columnsResult = await pool.query(columnsQuery);
+    const existingColumns = columnsResult.rows.map(row => row.column_name);
+    
+    const addColumnIfMissing = async (columnName, columnType) => {
+      if (!existingColumns.includes(columnName)) {
+        await pool.query(`ALTER TABLE diet_records ADD COLUMN ${columnName} ${columnType}`);
+        console.log(`[PostgreSQL] diet_records 테이블에 ${columnName} 컬럼이 추가되었습니다.`);
+      }
+    };
+    
+    await addColumnIfMissing('trainer_evaluation', 'VARCHAR(20)');
+    await addColumnIfMissing('trainer_evaluator_username', 'VARCHAR(50)');
+    await addColumnIfMissing('trainer_evaluator_name', 'VARCHAR(100)');
+    await addColumnIfMissing('trainer_evaluated_at', 'TIMESTAMP');
+    
+    const constraintQuery = `
+      SELECT constraint_name
+      FROM information_schema.table_constraints
+      WHERE table_schema = 'public'
+        AND table_name = 'diet_records'
+        AND constraint_type = 'CHECK'
+    `;
+    const constraintResult = await pool.query(constraintQuery);
+    
+    let evaluationConstraint = null;
+    for (const row of constraintResult.rows) {
+      const checkQuery = `
+        SELECT check_clause
+        FROM information_schema.check_constraints
+        WHERE constraint_name = $1
+      `;
+      const checkResult = await pool.query(checkQuery, [row.constraint_name]);
+      if (checkResult.rows.length > 0 && checkResult.rows[0].check_clause && checkResult.rows[0].check_clause.includes('trainer_evaluation')) {
+        evaluationConstraint = row.constraint_name;
+        break;
+      }
+    }
+    
+    if (evaluationConstraint) {
+      await pool.query(`ALTER TABLE diet_records DROP CONSTRAINT IF EXISTS ${evaluationConstraint}`);
+    }
+    
+    await pool.query(`
+      ALTER TABLE diet_records
+      ADD CONSTRAINT diet_records_trainer_evaluation_check
+      CHECK (trainer_evaluation IN ('diet_master', 'protein_hunter', 'clean_energy', 'carb_killer', 'sad') OR trainer_evaluation IS NULL)
+    `);
+    console.log('[PostgreSQL] diet_records 트레이너 평가 제약조건이 업데이트되었습니다.');
+  } catch (error) {
+    console.error('[PostgreSQL] 식단 기록 트레이너 평가 마이그레이션 오류:', error);
     throw error;
   }
 };
@@ -357,6 +430,10 @@ const getDietRecords = async (appUserId, filters = {}) => {
         dr.image_url,
         dr.image_thumbnail_url,
         dr.notes,
+        dr.trainer_evaluation,
+        dr.trainer_evaluator_username,
+        dr.trainer_evaluator_name,
+        dr.trainer_evaluated_at,
         dr.created_at,
         dr.updated_at
       FROM diet_records dr
@@ -495,6 +572,10 @@ const getDietRecordById = async (id, appUserId = null) => {
         dr.image_url,
         dr.image_thumbnail_url,
         dr.notes,
+        dr.trainer_evaluation,
+        dr.trainer_evaluator_username,
+        dr.trainer_evaluator_name,
+        dr.trainer_evaluated_at,
         dr.created_at,
         dr.updated_at
       FROM diet_records dr
@@ -683,6 +764,78 @@ const updateDietRecord = async (id, appUserId, updates) => {
   }
 };
 
+// 식단기록 평가 업데이트
+const updateDietRecordEvaluation = async (id, evaluationData) => {
+  try {
+    const {
+      trainer_evaluation,
+      trainer_evaluator_username,
+      trainer_evaluator_name
+    } = evaluationData;
+    
+    const query = `
+      UPDATE diet_records
+      SET 
+        trainer_evaluation = $1,
+        trainer_evaluator_username = $2,
+        trainer_evaluator_name = $3,
+        trainer_evaluated_at = $4,
+        updated_at = NOW() AT TIME ZONE 'Asia/Seoul'
+      WHERE id = $5
+      RETURNING 
+        id,
+        app_user_id,
+        meal_date,
+        meal_time,
+        meal_type,
+        image_url,
+        image_thumbnail_url,
+        notes,
+        trainer_evaluation,
+        trainer_evaluator_username,
+        trainer_evaluator_name,
+        trainer_evaluated_at,
+        created_at,
+        updated_at
+    `;
+    
+    const values = [
+      trainer_evaluation || null,
+      trainer_evaluator_username || null,
+      trainer_evaluator_name || null,
+      trainer_evaluation ? new Date() : null,
+      id
+    ];
+    
+    const result = await pool.query(query, values);
+    const record = result.rows[0] || null;
+    if (!record) {
+      return null;
+    }
+    
+    // 날짜 정규화
+    if (record.meal_date) {
+      if (record.meal_date instanceof Date) {
+        const year = record.meal_date.getFullYear();
+        const month = String(record.meal_date.getMonth() + 1).padStart(2, '0');
+        const day = String(record.meal_date.getDate()).padStart(2, '0');
+        record.meal_date = `${year}-${month}-${day}`;
+      } else if (typeof record.meal_date === 'string') {
+        record.meal_date = record.meal_date.split('T')[0];
+      }
+    }
+    
+    if (record.meal_time && typeof record.meal_time === 'string') {
+      record.meal_time = record.meal_time.split('.')[0];
+    }
+    
+    return record;
+  } catch (error) {
+    console.error('[PostgreSQL] 식단기록 평가 업데이트 오류:', error);
+    throw error;
+  }
+};
+
 // 식단기록 삭제
 const deleteDietRecord = async (id, appUserId) => {
   try {
@@ -857,6 +1010,7 @@ module.exports = {
   getDietRecordById,
   addDietRecord,
   updateDietRecord,
+  updateDietRecordEvaluation,
   deleteDietRecord,
   getDietRecordsForCalendar,
   addDietComment,

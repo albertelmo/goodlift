@@ -511,6 +511,20 @@ export async function updateDietRecord(id, formData) {
 }
 
 /**
+ * 식단 평가 업데이트
+ */
+export async function updateDietRecordEvaluation(id, data) {
+    const result = await patch(`/diet-records/${id}/evaluation`, data);
+    
+    // 해당 사용자의 식단기록 캐시 무효화
+    if (result?.app_user_id) {
+        cache.invalidate(key => key.includes(`/diet-records`) && key.includes(`app_user_id=${result.app_user_id}`));
+    }
+    
+    return result;
+}
+
+/**
  * 식단기록 삭제 (캐시 무효화 포함)
  */
 export async function deleteDietRecord(id, appUserId) {

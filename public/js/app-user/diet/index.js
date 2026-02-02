@@ -2,12 +2,63 @@
 
 import { init as initList } from './list.js';
 import { showDietAddModal } from './add.js';
+import { getCurrentUser } from '../index.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
 
 let currentAppUserId = null;
 let isReadOnly = false;
 let lastButtonClickTime = 0; // 버튼 클릭 중복 방지용
 const BUTTON_CLICK_THROTTLE = 300; // 300ms 내 중복 클릭 방지
+const trainerNameCache = new Map();
+
+async function resolveTrainerName(trainerUsername) {
+    if (!trainerUsername) return null;
+    if (trainerNameCache.has(trainerUsername)) {
+        return trainerNameCache.get(trainerUsername);
+    }
+    try {
+        const response = await fetch(`/api/trainers?username=${encodeURIComponent(trainerUsername)}`);
+        if (response.ok) {
+            const trainers = await response.json();
+            const trainer = Array.isArray(trainers)
+                ? trainers.find(t => t.username === trainerUsername)
+                : trainers;
+            if (trainer?.name) {
+                trainerNameCache.set(trainerUsername, trainer.name);
+                return trainer.name;
+            }
+        }
+    } catch (error) {
+        // noop
+    }
+    trainerNameCache.set(trainerUsername, null);
+    return null;
+}
+
+async function resolveTrainerNameForMember(currentUser) {
+    if (!currentUser) return null;
+    if (currentUser.trainer) {
+        return resolveTrainerName(currentUser.trainer);
+    }
+
+    const memberName = currentUser.member_name || currentUser.name;
+    if (!memberName) return null;
+
+    try {
+        const membersResponse = await fetch(`/api/members?name=${encodeURIComponent(memberName)}`);
+        if (membersResponse.ok) {
+            const members = await membersResponse.json();
+            const member = members.find(m => m.name === memberName);
+            if (member?.trainer) {
+                return resolveTrainerName(member.trainer);
+            }
+        }
+    } catch (error) {
+        // noop
+    }
+
+    return null;
+}
 
 /**
  * 식단기록 화면 초기화
@@ -163,6 +214,33 @@ function setupButtonEventListeners() {
             }
             return;
         }
+
+        // 식단 코멘트 버튼 클릭
+        if (btnId === 'diet-comment-btn' && !isReadOnly) {
+            if (eventType === 'touchstart') {
+                return;
+            }
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                const { showDietCommentModal } = await import('./comment.js');
+                const selectedDateStr = getSelectedDate();
+                const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+                await showDietCommentModal(targetAppUserId, selectedDateStr, (commentDate) => {
+                    import('./list.js').then(module => {
+                        module.refresh(commentDate);
+                    });
+                });
+            } catch (error) {
+                console.error('[Diet] 코멘트 버튼 클릭 오류:', error);
+            }
+            return;
+        }
     };
     
     // 여러 이벤트 타입 처리
@@ -198,6 +276,21 @@ async function render() {
         memberDisplay = ` (${viewingTrainerName} 트레이너의 식단기록)`;
     }
     // connectedMemberAppUserId가 있는 경우는 병렬 호출에서 처리하므로 여기서는 처리하지 않음
+
+    const currentUser = getCurrentUser();
+    const isTrainer = currentUser?.is_trainer === true || currentUser?.isTrainer === true;
+    const canLeaveComment = !isReadOnly && (connectedMemberAppUserId || !isTrainer);
+    const trainerUsername = currentUser?.trainer;
+    const isMemberView = !isTrainer && !connectedMemberAppUserId;
+    let commentButtonLabel = '💬 식단 코멘트 남기기';
+    if (canLeaveComment && isMemberView) {
+        commentButtonLabel = '💬 트레이너에게 말걸기';
+        if (trainerUsername) {
+            const cachedTrainerName = trainerNameCache.get(trainerUsername);
+            const displayName = cachedTrainerName || trainerUsername;
+            commentButtonLabel = `💬 ${displayName} 트레이너에게 말걸기`;
+        }
+    }
     
     // 뒤로가기 버튼 (트레이너 기록을 볼 때만 표시)
     const backButton = isReadOnly && viewingTrainerName ? `
@@ -233,10 +326,31 @@ async function render() {
                 </button>
             </div>
             ` : ''}
+            ${canLeaveComment ? `
+            <div class="app-diet-add-section">
+                <button class="app-btn-secondary app-btn-full" id="diet-comment-btn">
+                    ${commentButtonLabel}
+                </button>
+            </div>
+            ` : ''}
         </div>
             <div id="diet-list-wrapper"></div>
         </div>
     `;
+
+    if (canLeaveComment && isMemberView) {
+        const commentBtn = document.getElementById('diet-comment-btn');
+        if (commentBtn) {
+            const resolvePromise = trainerUsername
+                ? resolveTrainerName(trainerUsername)
+                : resolveTrainerNameForMember(currentUser);
+            resolvePromise.then(trainerName => {
+                if (trainerName) {
+                    commentBtn.textContent = `💬 ${trainerName} 트레이너에게 말걸기`;
+                }
+            });
+        }
+    }
     
     // 월 변경 감지 설정
     setupMonthUpdateObserver();
