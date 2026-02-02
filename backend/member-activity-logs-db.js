@@ -321,7 +321,7 @@ const getActivityLogs = async (appUserId, filters = {}) => {
         related_record_id,
         record_date,
         is_read,
-        created_at
+        to_char(created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
       FROM member_activity_logs
       WHERE app_user_id = $1
     `;
@@ -363,15 +363,6 @@ const getActivityLogs = async (appUserId, filters = {}) => {
     }
     
     const result = await pool.query(query, params);
-    
-    // 날짜 정규화
-    for (const log of result.rows) {
-      if (log.created_at) {
-        if (log.created_at instanceof Date) {
-          log.created_at = log.created_at.toISOString();
-        }
-      }
-    }
     
     return result.rows;
   } catch (error) {

@@ -408,7 +408,7 @@ const getActivityLogs = async (trainerUsername, filters = {}) => {
         related_record_id,
         record_date,
         is_read,
-        created_at
+        to_char(created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
       FROM trainer_activity_logs
       WHERE trainer_username = $1
     `;
@@ -450,16 +450,6 @@ const getActivityLogs = async (trainerUsername, filters = {}) => {
     }
     
     const result = await pool.query(query, params);
-    
-    // 날짜 정규화
-    for (const log of result.rows) {
-      if (log.created_at) {
-        if (log.created_at instanceof Date) {
-          // 이미 Date 객체면 그대로 사용 (Asia/Seoul 시간대로 저장됨)
-          log.created_at = log.created_at.toISOString();
-        }
-      }
-    }
     
     return result.rows;
   } catch (error) {
