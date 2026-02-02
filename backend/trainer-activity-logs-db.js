@@ -142,7 +142,8 @@ const migrateTrainerActivityLogsTable = async () => {
       
       if (activityTypeConstraint) {
         // 기존 제약조건 삭제
-        await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}`);
+        const safeConstraintName = `"${activityTypeConstraint.replace(/"/g, '""')}"`;
+        await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${safeConstraintName}`);
         // 새로운 제약조건 추가 (diet_daily_comment_added 포함)
         await pool.query(`
           ALTER TABLE trainer_activity_logs 
@@ -203,7 +204,8 @@ const migrateTrainerActivityLogsActivityType = async () => {
         return;
       }
       
-      await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}`);
+      const safeConstraintName = `"${activityTypeConstraint.replace(/"/g, '""')}"`;
+      await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${safeConstraintName}`);
     }
     
     await pool.query(`
@@ -255,7 +257,8 @@ const migrateTrainerActivityLogsBadgeType = async () => {
         return;
       }
       
-      await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}`);
+      const safeConstraintName = `"${activityTypeConstraint.replace(/"/g, '""')}"`;
+      await pool.query(`ALTER TABLE trainer_activity_logs DROP CONSTRAINT IF EXISTS ${safeConstraintName}`);
     }
     
     await pool.query(`

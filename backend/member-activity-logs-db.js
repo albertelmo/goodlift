@@ -109,9 +109,10 @@ const migrateMemberActivityLogsTable = async () => {
         // 'diet_daily_comment_added'가 포함되어 있지 않으면 업데이트
         if (!checkClause.includes('diet_daily_comment_added')) {
           // 기존 제약조건 제거
+          const safeConstraintName = `"${constraint.constraint_name.replace(/"/g, '""')}"`;
           await pool.query(`
             ALTER TABLE member_activity_logs 
-            DROP CONSTRAINT IF EXISTS ${constraint.constraint_name}
+            DROP CONSTRAINT IF EXISTS ${safeConstraintName}
           `);
           
           console.log(`[PostgreSQL] 기존 제약조건 ${constraint.constraint_name} 제거됨`);
@@ -179,9 +180,10 @@ const migrateMemberActivityLogsActivityType = async () => {
     }
     
     if (activityTypeConstraint) {
+      const safeConstraintName = `"${activityTypeConstraint.replace(/"/g, '""')}"`;
       await pool.query(`
         ALTER TABLE member_activity_logs 
-        DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}
+        DROP CONSTRAINT IF EXISTS ${safeConstraintName}
       `);
     }
     
@@ -227,9 +229,10 @@ const migrateMemberActivityLogsBadgeType = async () => {
     }
     
     if (activityTypeConstraint) {
+      const safeConstraintName = `"${activityTypeConstraint.replace(/"/g, '""')}"`;
       await pool.query(`
         ALTER TABLE member_activity_logs 
-        DROP CONSTRAINT IF EXISTS ${activityTypeConstraint}
+        DROP CONSTRAINT IF EXISTS ${safeConstraintName}
       `);
     }
     
