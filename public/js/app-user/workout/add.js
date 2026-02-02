@@ -1667,7 +1667,7 @@ export async function showTextRecordModal(appUserId, selectedDate = null, onSucc
     
     modal.innerHTML = `
         <div class="app-modal-header">
-            <h2>텍스트로 운동 기록 (${dateDisplay})</h2>
+            <h2>직접 기록 (${dateDisplay})</h2>
             <button class="app-modal-close" aria-label="닫기" tabindex="-1">×</button>
         </div>
         <form class="app-modal-form" id="text-record-form">

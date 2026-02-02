@@ -1,6 +1,6 @@
 // 운동 코멘트 모달
 
-import { formatDate, formatDateShort, escapeHtml } from '../utils.js';
+import { escapeHtml } from '../utils.js';
 import { getCurrentUser } from '../index.js';
 
 /**
@@ -21,8 +21,13 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
     // 선택된 날짜가 있으면 사용, 없으면 오늘 날짜
     const { getToday } = await import('../utils.js');
     const defaultDate = selectedDate || getToday();
+    
+    // 날짜를 "YY.M.D" 형식으로 변환 (운동 선택과 동일)
     const dateObj = new Date(defaultDate);
-    const dateDisplay = formatDateShort(dateObj);
+    const year = dateObj.getFullYear().toString().slice(-2);
+    const month = dateObj.getMonth() + 1;
+    const day = dateObj.getDate();
+    const dateDisplay = `${year}.${month}.${day}`;
     
     // 현재 로그인한 사용자 정보 (트레이너/회원)
     const currentUser = getCurrentUser();
@@ -92,7 +97,7 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
     
     modal.innerHTML = `
         <div class="app-modal-header">
-            <h2>운동 코멘트 남기기</h2>
+            <h2>운동 코멘트 (${dateDisplay})</h2>
             <button class="app-modal-close-btn" id="workout-comment-modal-close">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -101,11 +106,6 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
             </button>
         </div>
         <div class="app-modal-content" style="padding: 20px;">
-            <div style="margin-bottom: 16px;">
-                <label style="display: block; font-size: 14px; color: var(--app-text-muted); margin-bottom: 8px;">날짜</label>
-                <input type="date" id="workout-comment-date" value="${defaultDate}" style="width: 100%; padding: 10px; border: 1px solid var(--app-border); border-radius: var(--app-radius-sm); background: var(--app-surface); color: var(--app-text); font-size: 16px; box-sizing: border-box;">
-            </div>
-            
             <div style="margin-bottom: 20px;">
                 <h3 style="font-size: 16px; font-weight: 600; color: var(--app-text); margin: 0 0 12px 0;">기존 코멘트</h3>
                 <div id="workout-comment-list" style="max-height: 300px; overflow-y: auto; margin-bottom: 16px;">
@@ -119,11 +119,11 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
             </div>
             
             <div style="display: flex; gap: 8px;">
-                <button class="app-btn-primary" id="workout-comment-save-btn" style="flex: 1;">
-                    저장
-                </button>
                 <button class="app-btn-secondary" id="workout-comment-cancel-btn" style="flex: 1;">
                     취소
+                </button>
+                <button class="app-btn-primary" id="workout-comment-save-btn" style="flex: 1;">
+                    저장
                 </button>
             </div>
         </div>
@@ -140,6 +140,7 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
         modalBg,
         modal,
         appUserId,
+        defaultDate,
         {
             commenter_type,
             commenter_app_user_id,
@@ -155,11 +156,10 @@ export async function showWorkoutCommentModal(appUserId, selectedDate = null, on
 /**
  * 코멘트 모달 이벤트 설정
  */
-function setupCommentModalEvents(modalBg, modal, appUserId, commenterInfo, onSuccess) {
+function setupCommentModalEvents(modalBg, modal, appUserId, selectedDate, commenterInfo, onSuccess) {
     const closeBtn = modal.querySelector('#workout-comment-modal-close');
     const cancelBtn = modal.querySelector('#workout-comment-cancel-btn');
     const saveBtn = modal.querySelector('#workout-comment-save-btn');
-    const dateInput = modal.querySelector('#workout-comment-date');
     const commentText = modal.querySelector('#workout-comment-text');
     const commentList = modal.querySelector('#workout-comment-list');
     const {
@@ -200,76 +200,8 @@ function setupCommentModalEvents(modalBg, modal, appUserId, commenterInfo, onSuc
     };
     document.addEventListener('keydown', escHandler);
     
-    // 날짜 변경 시 코멘트 목록 새로고침
-    dateInput.addEventListener('change', async () => {
-        const selectedDate = dateInput.value;
-        try {
-            const response = await fetch(`/api/workout-records/${appUserId}/comments?date=${selectedDate}`);
-            if (response.ok) {
-                const data = await response.json();
-                const comments = (data.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-                
-                const commentsHtml = comments.length > 0 
-                    ? comments.map(comment => {
-                        // 시간을 "11:11 AM" 형식으로 변환 (식단과 동일)
-                        let commentTime = '';
-                        if (comment.created_at) {
-                            const date = new Date(comment.created_at);
-                            const hours = date.getHours();
-                            const minutes = String(date.getMinutes()).padStart(2, '0');
-                            const ampm = hours >= 12 ? 'PM' : 'AM';
-                            const displayHours = hours % 12 || 12;
-                            commentTime = `${displayHours}:${minutes} ${ampm}`;
-                        }
-                        const isTrainerComment = comment.commenter_type === 'trainer';
-                        const isMemberComment = !isTrainerComment;
-                        const isMyComment = comment.commenter_type === commenter_type && (
-                            (commenter_app_user_id && comment.commenter_app_user_id === commenter_app_user_id) ||
-                            (isTrainerComment && commenter_username && comment.commenter_username === commenter_username)
-                        );
-                        const commenterLabel = isTrainerComment
-                            ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '트레이너')} 트레이너`
-                            : (isTrainer && isViewingMember
-                                ? `${escapeHtml(comment.commenter_name || comment.commenter_username || '회원')} 회원님`
-                                : '나');
-                        
-                        return `
-                            <div class="workout-comment-item ${isMemberComment ? 'workout-comment-item-mine' : ''}" data-comment-id="${comment.id}">
-                                <div class="workout-comment-header">
-                                    <span class="workout-comment-trainer">${commenterLabel}</span>
-                                    <span class="workout-comment-time">${commentTime}</span>
-                                </div>
-                                <div class="workout-comment-content">${escapeHtml(comment.comment)}</div>
-                                ${isMyComment ? `
-                                <div class="workout-comment-actions">
-                                    <button class="workout-comment-edit-btn" data-comment-id="${comment.id}">수정</button>
-                                    <button class="workout-comment-delete-btn" data-comment-id="${comment.id}">삭제</button>
-                                </div>
-                                ` : ''}
-                            </div>
-                        `;
-                    }).join('')
-                    : '<div class="workout-comment-empty">작성된 코멘트가 없습니다.</div>';
-                
-                commentList.innerHTML = commentsHtml;
-                setupCommentItemEvents(
-                    commentList,
-                    appUserId,
-                    { commenter_type, commenter_app_user_id, commenter_username },
-                    dateInput,
-                    commentText,
-                    onSuccess,
-                    closeModal
-                );
-            }
-        } catch (error) {
-            console.error('코멘트 조회 오류:', error);
-        }
-    });
-    
     // 저장 버튼
     saveBtn.addEventListener('click', async () => {
-        const selectedDate = dateInput.value;
         const comment = commentText.value.trim();
         
         if (!comment) {
@@ -320,8 +252,7 @@ function setupCommentModalEvents(modalBg, modal, appUserId, commenterInfo, onSuc
                 }
             }
             
-            // 성공 시 목록 새로고침
-            dateInput.dispatchEvent(new Event('change'));
+            // 성공 시 텍스트 초기화
             commentText.value = '';
             saveBtn._editingCommentId = null;
             saveBtn.textContent = '저장';
@@ -346,9 +277,10 @@ function setupCommentModalEvents(modalBg, modal, appUserId, commenterInfo, onSuc
     setupCommentItemEvents(
         commentList,
         appUserId,
+        selectedDate,
         { commenter_type, commenter_app_user_id, commenter_username },
-        dateInput,
         commentText,
+        saveBtn,
         onSuccess,
         closeModal
     );
@@ -357,14 +289,13 @@ function setupCommentModalEvents(modalBg, modal, appUserId, commenterInfo, onSuc
 /**
  * 코멘트 아이템 이벤트 설정
  */
-function setupCommentItemEvents(commentList, appUserId, commenterInfo, dateInput, commentText, onSuccess, closeModal) {
+function setupCommentItemEvents(commentList, appUserId, selectedDate, commenterInfo, commentText, saveBtn, onSuccess, closeModal) {
     const { commenter_type, commenter_app_user_id, commenter_username } = commenterInfo;
     // 수정 버튼
     commentList.querySelectorAll('.workout-comment-edit-btn').forEach(btn => {
         btn.addEventListener('click', async () => {
             const commentId = btn.getAttribute('data-comment-id');
             try {
-                const selectedDate = dateInput.value;
                 const response = await fetch(`/api/workout-records/${appUserId}/comments?date=${selectedDate}`);
                 if (response.ok) {
                     const data = await response.json();
@@ -373,7 +304,6 @@ function setupCommentItemEvents(commentList, appUserId, commenterInfo, dateInput
                         commentText.value = comment.comment;
                         commentText.focus();
                         // 수정 모드로 전환
-                        const saveBtn = document.querySelector('#workout-comment-save-btn');
                         if (saveBtn) {
                             saveBtn.textContent = '수정';
                             saveBtn._editingCommentId = commentId;
@@ -409,12 +339,8 @@ function setupCommentItemEvents(commentList, appUserId, commenterInfo, dateInput
                     throw new Error('코멘트 삭제에 실패했습니다.');
                 }
                 
-                // 목록 새로고침
-                dateInput.dispatchEvent(new Event('change'));
-                
                 if (onSuccess) {
                     // 선택된 날짜를 전달하여 해당 날짜의 코멘트만 다시 로드
-                    const selectedDate = dateInput.value;
                     onSuccess(selectedDate);
                 }
                 

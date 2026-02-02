@@ -5,7 +5,7 @@
   "start_url": "/elmo/",
   "scope": "/elmo/",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait",
   "background_color": "#f5f5f5",
   "theme_color": "#1976d2",
   "icons": [

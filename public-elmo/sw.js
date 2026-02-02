@@ -1,5 +1,5 @@
 // Elmo Service Worker 캐시 버전 (캐시 무효화 필요 시에만 변경)
-const VERSION = '2026-01-31-v1';
+const VERSION = '2026-02-02-manifest-only';
 const CACHE_NAME = `elmo-${VERSION}`;
 const RUNTIME_CACHE = `elmo-runtime-${VERSION}`;
 
