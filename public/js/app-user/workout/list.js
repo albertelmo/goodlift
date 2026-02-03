@@ -1,6 +1,6 @@
 // 운동기록 목록 렌더링
 
-import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText } from '../utils.js';
+import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText, debugLog } from '../utils.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
 import { getCurrentUser } from '../index.js';
 
@@ -9,6 +9,59 @@ let currentRecords = [];
 let sessionsByDate = {}; // 날짜별 세션 데이터
 let trainerNameMap = {}; // 트레이너 username -> name 매핑
 let cachedTimerSettings = null; // 타이머 설정 캐시
+const TIMER_SETTINGS_STORAGE_KEY = 'workout_rest_timer_settings';
+const FAVORITES_ONLY_STORAGE_KEY = 'workout_show_favorites_only';
+
+function getCachedTimerSettings() {
+    if (cachedTimerSettings) {
+        return cachedTimerSettings;
+    }
+    try {
+        const stored = localStorage.getItem(TIMER_SETTINGS_STORAGE_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (parsed && typeof parsed === 'object') {
+                cachedTimerSettings = parsed;
+                return cachedTimerSettings;
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+    return null;
+}
+
+function setCachedTimerSettings(settings, source = 'unknown') {
+    cachedTimerSettings = settings;
+    try {
+        localStorage.setItem(TIMER_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    } catch (e) {
+        // ignore
+    }
+    debugLog('PWA', 'workout timer settings cached', { source, ...settings });
+}
+
+function getCachedShowFavoritesOnly() {
+    try {
+        const stored = localStorage.getItem(FAVORITES_ONLY_STORAGE_KEY);
+        if (stored === null) {
+            return null;
+        }
+        return stored === 'true';
+    } catch (e) {
+        // ignore
+    }
+    return null;
+}
+
+function setCachedShowFavoritesOnly(value, source = 'unknown') {
+    try {
+        localStorage.setItem(FAVORITES_ONLY_STORAGE_KEY, value ? 'true' : 'false');
+    } catch (e) {
+        // ignore
+    }
+    debugLog('PWA', 'workout favorites-only cached', { source, value });
+}
 let commentsByDate = {}; // 날짜별 코멘트 데이터
 
 let isReadOnly = false;
@@ -22,6 +75,11 @@ export async function init(appUserId, readOnly = false, immediateFilters = null)
     
     const { formatDate } = await import('../utils.js');
     const { getSelectedDate } = await import('./calendar.js');
+
+    // 초기 로딩 시 타이머/즐겨찾기 설정을 로컬에 캐시
+    preloadWorkoutUserSettings().catch(error => {
+        console.error('운동 설정 사전 로드 오류:', error);
+    });
     
     // 1단계: 선택된 날짜(또는 오늘) 데이터만 즉시 로드
     const selectedDateStr = immediateFilters ? null : getSelectedDate();
@@ -40,6 +98,37 @@ export async function init(appUserId, readOnly = false, immediateFilters = null)
     
     // 2단계: 백그라운드에서 나머지 데이터 로드
     loadRemainingDataInBackground();
+}
+
+/**
+ * 운동 관련 사용자 설정 사전 로드
+ */
+async function preloadWorkoutUserSettings() {
+    const hasTimerSettings = Boolean(getCachedTimerSettings());
+    const showFavoritesOnly = getCachedShowFavoritesOnly();
+    const hasFavoriteSettings = showFavoritesOnly !== null;
+    
+    if (hasTimerSettings && hasFavoriteSettings) {
+        return;
+    }
+    if (!currentAppUserId) {
+        return;
+    }
+    
+    const settings = await getUserSettings(currentAppUserId);
+    if (!hasTimerSettings) {
+        const restTimerEnabled = settings.rest_timer_enabled !== undefined ? settings.rest_timer_enabled : true;
+        const restMinutes = settings.rest_timer_minutes !== undefined ? settings.rest_timer_minutes : 0;
+        const restSeconds = settings.rest_timer_seconds !== undefined ? settings.rest_timer_seconds : 30;
+        setCachedTimerSettings({
+            restTimerEnabled,
+            restMinutes,
+            restSeconds
+        }, 'preload');
+    }
+    if (!hasFavoriteSettings) {
+        setCachedShowFavoritesOnly(settings.show_favorites_only === true, 'preload');
+    }
 }
 
 /**
@@ -412,11 +501,12 @@ async function render(records) {
     // 타이머 설정 불러오기 (캐시가 없거나 만료된 경우) - 병렬로 처리
     // 렌더링 시점에는 캐시된 값 또는 기본값 사용, 로드 완료 후 업데이트
     let timerDisplayText = '-';
-    if (cachedTimerSettings) {
-        if (!cachedTimerSettings.restTimerEnabled) {
+    const storedSettings = getCachedTimerSettings();
+    if (storedSettings) {
+        if (!storedSettings.restTimerEnabled) {
             timerDisplayText = 'off';
         } else {
-            timerDisplayText = formatTime(cachedTimerSettings.restMinutes * 60 + cachedTimerSettings.restSeconds);
+            timerDisplayText = formatTime(storedSettings.restMinutes * 60 + storedSettings.restSeconds);
         }
     } else {
         // 캐시가 없으면 병렬로 로드하고, 로드 완료 후 업데이트
@@ -910,15 +1000,27 @@ async function showTimerModal(date) {
     let restSeconds = 30;
     
     // DB에서 저장된 설정 불러오기
-    try {
-        if (currentAppUserId) {
-            const settings = await getUserSettings(currentAppUserId);
-            useRestTimer = settings.rest_timer_enabled !== undefined ? settings.rest_timer_enabled : true;
-            restMinutes = settings.rest_timer_minutes !== undefined ? settings.rest_timer_minutes : 0;
-            restSeconds = settings.rest_timer_seconds !== undefined ? settings.rest_timer_seconds : 30;
+    const storedSettings = getCachedTimerSettings();
+    if (storedSettings) {
+        useRestTimer = storedSettings.restTimerEnabled;
+        restMinutes = storedSettings.restMinutes;
+        restSeconds = storedSettings.restSeconds;
+    } else {
+        try {
+            if (currentAppUserId) {
+                const settings = await getUserSettings(currentAppUserId);
+                useRestTimer = settings.rest_timer_enabled !== undefined ? settings.rest_timer_enabled : true;
+                restMinutes = settings.rest_timer_minutes !== undefined ? settings.rest_timer_minutes : 0;
+                restSeconds = settings.rest_timer_seconds !== undefined ? settings.rest_timer_seconds : 30;
+                setCachedTimerSettings({
+                    restTimerEnabled: useRestTimer,
+                    restMinutes,
+                    restSeconds
+                }, 'timer-modal-load');
+            }
+        } catch (e) {
+            console.error('타이머 설정 불러오기 오류:', e);
         }
-    } catch (e) {
-        console.error('타이머 설정 불러오기 오류:', e);
     }
     
     const modalHtml = `
@@ -1017,8 +1119,12 @@ async function showTimerModal(date) {
                 // 모달 닫기
                 modalBg.remove();
                 
-                // 타이머 설정 캐시 무효화 (다음 렌더링 시 다시 불러오기)
-                cachedTimerSettings = null;
+                // 타이머 설정 캐시 업데이트
+                setCachedTimerSettings({
+                    restTimerEnabled: useRest,
+                    restMinutes: minutes,
+                    restSeconds: seconds
+                }, 'timer-modal-save');
                 
                 // 목록 다시 렌더링하여 변경된 타이머 설정 표시
                 await render(currentRecords);
@@ -1077,23 +1183,35 @@ async function showRestTimerModal() {
     let restMinutes = 0;
     let restSeconds = 30;
     
-    try {
-        if (currentAppUserId) {
-            const settings = await getUserSettings(currentAppUserId);
-            // 설정이 있으면 저장된 값 사용, 없으면 기본값 사용
-            if ('rest_timer_enabled' in settings) {
-                restTimerEnabled = settings.rest_timer_enabled;
+    const storedSettings = getCachedTimerSettings();
+    if (storedSettings) {
+        restTimerEnabled = storedSettings.restTimerEnabled;
+        restMinutes = storedSettings.restMinutes;
+        restSeconds = storedSettings.restSeconds;
+    } else {
+        try {
+            if (currentAppUserId) {
+                const settings = await getUserSettings(currentAppUserId);
+                // 설정이 있으면 저장된 값 사용, 없으면 기본값 사용
+                if ('rest_timer_enabled' in settings) {
+                    restTimerEnabled = settings.rest_timer_enabled;
+                }
+                if ('rest_timer_minutes' in settings) {
+                    restMinutes = settings.rest_timer_minutes;
+                }
+                if ('rest_timer_seconds' in settings) {
+                    restSeconds = settings.rest_timer_seconds;
+                }
+                setCachedTimerSettings({
+                    restTimerEnabled,
+                    restMinutes,
+                    restSeconds
+                }, 'rest-timer-modal-load');
             }
-            if ('rest_timer_minutes' in settings) {
-                restMinutes = settings.rest_timer_minutes;
-            }
-            if ('rest_timer_seconds' in settings) {
-                restSeconds = settings.rest_timer_seconds;
-            }
+        } catch (e) {
+            console.error('휴식 타이머 설정 불러오기 오류:', e);
+            // 에러 발생 시 기본값 사용
         }
-    } catch (e) {
-        console.error('휴식 타이머 설정 불러오기 오류:', e);
-        // 에러 발생 시 기본값 사용
     }
     
     // 휴식 타이머가 비활성화되어 있거나 시간이 0이면 모달을 띄우지 않음
@@ -1408,7 +1526,12 @@ async function showCelebrationModal() {
 /**
  * 타이머 설정 불러오기 (캐시)
  */
-async function loadTimerSettings() {
+async function loadTimerSettings(forceRefresh = false) {
+    const existing = getCachedTimerSettings();
+    if (existing && !forceRefresh) {
+        return existing;
+    }
+    
     // 타이머 설정 불러오기 (기본값: 30초)
     let restTimerEnabled = true;
     let restMinutes = 0;
@@ -1433,11 +1556,13 @@ async function loadTimerSettings() {
         // 에러 발생 시 기본값 사용
     }
     
-    cachedTimerSettings = {
+    setCachedTimerSettings({
         restTimerEnabled,
         restMinutes,
         restSeconds
-    };
+    }, forceRefresh ? 'load-timer-settings-refresh' : 'load-timer-settings');
+    
+    return getCachedTimerSettings();
 }
 
 /**

@@ -1,6 +1,6 @@
 // 운동기록 추가 모달
 
-import { formatDate, getToday, escapeHtml, formatWeight, parseWeight } from '../utils.js';
+import { formatDate, getToday, escapeHtml, formatWeight, parseWeight, debugLog } from '../utils.js';
 import { addWorkoutRecord, addWorkoutRecordsBatch, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
 import { getCurrentUser } from '../index.js';
 
@@ -9,6 +9,29 @@ let cachedWorkoutTypes = null;
 let cachedCategories = null;
 let preloadPromise = null;
 let isPreloading = false;
+const FAVORITES_ONLY_STORAGE_KEY = 'workout_show_favorites_only';
+
+function getCachedShowFavoritesOnly() {
+    try {
+        const stored = localStorage.getItem(FAVORITES_ONLY_STORAGE_KEY);
+        if (stored === null) {
+            return null;
+        }
+        return stored === 'true';
+    } catch (e) {
+        // ignore
+    }
+    return null;
+}
+
+function setCachedShowFavoritesOnly(value, source = 'unknown') {
+    try {
+        localStorage.setItem(FAVORITES_ONLY_STORAGE_KEY, value ? 'true' : 'false');
+    } catch (e) {
+        // ignore
+    }
+    debugLog('PWA', 'workout favorites-only cached', { source, value });
+}
 
 /**
  * 백그라운드 프리로딩
@@ -447,6 +470,7 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
                 await updateUserSettings(appUserId, {
                     show_favorites_only: showFavoritesOnly
                 });
+                setCachedShowFavoritesOnly(showFavoritesOnly, 'favorites-filter-toggle');
             } catch (error) {
                 console.error('사용자 설정 저장 오류:', error);
             }
@@ -549,9 +573,15 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
     // 사용자 설정에서 즐겨찾기 필터 옵션 불러오기 후 초기 렌더링 (updateWorkoutList 정의 후)
     (async () => {
         try {
-            const settings = await getUserSettings(appUserId);
-            if (settings.show_favorites_only === true) {
-                showFavoritesOnly = true;
+            const cachedShowFavoritesOnly = getCachedShowFavoritesOnly();
+            if (cachedShowFavoritesOnly !== null) {
+                showFavoritesOnly = cachedShowFavoritesOnly;
+            } else {
+                const settings = await getUserSettings(appUserId);
+                showFavoritesOnly = settings.show_favorites_only === true;
+                setCachedShowFavoritesOnly(showFavoritesOnly, 'favorites-filter-load');
+            }
+            if (showFavoritesOnly) {
                 favoriteFilterBtn.classList.add('active');
                 const polygon = favoriteFilterBtn.querySelector('svg polygon');
                 if (polygon) polygon.setAttribute('fill', 'currentColor');
