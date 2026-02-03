@@ -1,7 +1,7 @@
 // 앱 유저 홈/대시보드 화면
 
 import { formatDate, getToday, escapeHtml, getTimeAgo } from './utils.js';
-import { getWorkoutRecords, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead } from './api.js';
+import { getWorkoutRecords, getWorkoutRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead } from './api.js';
 
 let currentUser = null;
 let nextSession = null;
@@ -9,6 +9,7 @@ let trainerMembers = null; // 트레이너의 연결된 회원 목록
 let memberTrainers = null; // 회원의 연결된 트레이너 목록
 let todayWorkoutSummary = null; // 오늘의 운동 요약
 let weeklyWorkoutSummary = null; // 주간 운동 요약
+let monthlyWorkoutCompletionSummary = null; // 이번달 운동 완료 요약
 let connectedAppUserInfo = null; // 현재 연결된 유저앱 회원 정보
 let activityLogs = null; // 트레이너 활동 로그
 let activityLogsUnreadCount = 0; // 읽지 않은 로그 개수
@@ -30,6 +31,7 @@ export async function init(userData) {
         loadMemberTrainers(),
         loadTodayWorkoutSummary(),
         loadWeeklyWorkoutSummary(),
+        loadMonthlyWorkoutCompletionSummary(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs()
@@ -414,6 +416,56 @@ async function loadWeeklyWorkoutSummary() {
 }
 
 /**
+ * 이번달 운동 완료 요약 조회 (오운완)
+ */
+async function loadMonthlyWorkoutCompletionSummary() {
+    try {
+        const appUserId = currentUser?.id;
+        if (!appUserId) {
+            monthlyWorkoutCompletionSummary = null;
+            return;
+        }
+        
+        const today = new Date(getToday());
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        monthStart.setHours(0, 0, 0, 0);
+        monthEnd.setHours(23, 59, 59, 999);
+        
+        const startDate = formatDate(monthStart);
+        const endDate = formatDate(monthEnd);
+        const daysInMonth = monthEnd.getDate();
+        
+        const calendarSummary = await getWorkoutRecordsForCalendar(appUserId, startDate, endDate);
+        const completedDates = new Set();
+        
+        if (calendarSummary && typeof calendarSummary === 'object') {
+            Object.entries(calendarSummary).forEach(([dateKey, summary]) => {
+                if (summary && summary.allCompleted === true) {
+                    completedDates.add(dateKey);
+                }
+            });
+        }
+        
+        const dailyCompletion = Array.from({ length: daysInMonth }, (_, idx) => {
+            const day = idx + 1;
+            const date = new Date(today.getFullYear(), today.getMonth(), day);
+            const dateKey = formatDate(date);
+            return completedDates.has(dateKey);
+        });
+        
+        monthlyWorkoutCompletionSummary = {
+            daysInMonth,
+            completedCount: completedDates.size,
+            dailyCompletion
+        };
+    } catch (error) {
+        console.error('이번달 운동 완료 요약 조회 오류:', error);
+        monthlyWorkoutCompletionSummary = null;
+    }
+}
+
+/**
  * 트레이너의 연결된 회원 목록 조회
  * 
  * 로직:
@@ -660,20 +712,55 @@ function render() {
         nextSessionText = `${sessionDate}(${dayOfWeek}) ${sessionTime}`;
     }
     
-    // 오늘의 운동 요약 텍스트
-    let todayWorkoutText = '운동을 추가해 주세요!';
-    if (todayWorkoutSummary) {
-        const parts = [];
-        if (todayWorkoutSummary.workoutCount > 0) {
-            parts.push(`${todayWorkoutSummary.workoutCount}개 운동`);
+    // 이번달 오운완 요약 텍스트
+    const todayDate = new Date(getToday());
+    const monthLabel = '오운완';
+    let monthlyCompletionText = '기록 없음';
+    let monthlyCompletionGraph = '<div style="font-size: 0.85rem; color: var(--app-text-muted);">기록 없음</div>';
+    
+    let medalImageSrc = '';
+    let medalAlt = '';
+    if (monthlyWorkoutCompletionSummary) {
+        const completedCount = monthlyWorkoutCompletionSummary.completedCount || 0;
+        const daysInMonth = monthlyWorkoutCompletionSummary.daysInMonth || 0;
+        monthlyCompletionText = `완료 ${completedCount}일`;
+        
+        const effectiveDays = Math.max(1, daysInMonth - 15);
+        const ratio = completedCount > 0 ? completedCount / effectiveDays : 0;
+        const maxBars = 8;
+        const rawBars = Math.round(ratio * maxBars);
+        const filledBars = completedCount > 0
+            ? Math.max(1, Math.min(maxBars, rawBars))
+            : Math.max(0, Math.min(maxBars, rawBars));
+        const barHeights = [6, 8, 10, 12, 14, 16, 18, 20];
+        
+        const bars = barHeights.map((height, index) => {
+            const isFilled = index < filledBars;
+            const background = isFilled ? '#4caf50' : '#e0e0e0';
+            return `<div style="width: 4px; height: ${height}px; border-radius: 2px; background: ${background};"></div>`;
+        }).join('');
+
+        if (completedCount >= 1 && completedCount <= 3) {
+            medalImageSrc = '/img/medal/bronze.png';
+            medalAlt = 'BRONZE';
+        } else if (completedCount >= 4 && completedCount <= 7) {
+            medalImageSrc = '/img/medal/silver.png';
+            medalAlt = 'SILVER';
+        } else if (completedCount >= 8 && completedCount <= 10) {
+            medalImageSrc = '/img/medal/gold.png';
+            medalAlt = 'GOLD';
+        } else if (completedCount > 10) {
+            medalImageSrc = '/img/medal/diamond.png';
+            medalAlt = 'DIAMOND';
         }
-        if (todayWorkoutSummary.totalSets > 0) {
-            parts.push(`${todayWorkoutSummary.totalSets}세트`);
-        }
-        if (todayWorkoutSummary.totalMinutes > 0) {
-            parts.push(`${todayWorkoutSummary.totalMinutes}분`);
-        }
-        todayWorkoutText = parts.length > 0 ? parts.join(' · ') : '운동을 추가해 주세요!';
+        
+        monthlyCompletionGraph = `
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 0; margin-left: 2px; transform: translateY(-4px);">
+                <div style="display: flex; align-items: flex-end; gap: 2px;">
+                    ${bars}
+                </div>
+            </div>
+        `;
     }
     
     // 주간 운동 요약 텍스트
@@ -708,11 +795,26 @@ function render() {
         }
     }
     
+    const primaryTrainer = Array.isArray(memberTrainers) && memberTrainers.length > 0 ? memberTrainers[0] : null;
+    const trainerDisplayName = primaryTrainer?.name || null;
+    const trainerDisplayImage = primaryTrainer?.profile_image_url || null;
+
     container.innerHTML = `
         <div class="app-dashboard">
-            <div class="app-dashboard-header">
-                <h1 class="app-dashboard-title">안녕하세요, ${escapeHtml(currentUser?.name || '회원')}님 👋</h1>
-                <p class="app-dashboard-subtitle">${formatDate(new Date())}</p>
+            <div class="app-dashboard-header" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
+                <div style="min-width: 0;">
+                    <h1 class="app-dashboard-title">안녕하세요, ${escapeHtml(currentUser?.name || '회원')}님 👋</h1>
+                    <p class="app-dashboard-subtitle">${formatDate(new Date())}</p>
+                </div>
+                ${!isTrainer && trainerDisplayName ? `
+                    <div class="app-trainer-header-link" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; cursor: pointer;" data-trainer-username="${escapeHtml(primaryTrainer?.username || '')}">
+                        <div style="display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2;">
+                            <div style="font-size: 0.85rem; color: var(--app-text); white-space: nowrap;">${escapeHtml(trainerDisplayName)}</div>
+                            <div style="font-size: 0.75rem; color: var(--app-text-muted); white-space: nowrap;">트레이너</div>
+                        </div>
+                        
+                    </div>
+                ` : ''}
             </div>
             
             ${isTrainer ? `
@@ -774,11 +876,21 @@ function render() {
                             : ''}
                 </div>
                 
-                <div class="app-card app-card-primary" id="today-workout-card" ${!todayWorkoutSummary ? 'style="cursor: pointer;"' : ''}>
+                <div class="app-card app-card-primary" id="today-workout-card" style="cursor: pointer;">
                     <div class="app-card-icon">💪</div>
-                    <div class="app-card-content">
-                        <h3>오늘의 운동</h3>
-                        <p class="app-card-value">${escapeHtml(todayWorkoutText)}</p>
+                    <div class="app-card-content" style="display: flex; align-items: stretch; gap: 12px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <h3>${escapeHtml(monthLabel)}</h3>
+                            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                                <p class="app-card-value" style="margin: 0;">${escapeHtml(monthlyCompletionText)}</p>
+                                ${monthlyCompletionGraph}
+                            </div>
+                        </div>
+                        ${monthlyWorkoutCompletionSummary && monthlyWorkoutCompletionSummary.completedCount > 0 && medalImageSrc ? `
+                            <div style="display: flex; align-items: center; justify-content: center; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
+                                <img src="${medalImageSrc}" alt="${medalAlt}" style="width: 60px; height: 60px; object-fit: cover; flex-shrink: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" />
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
                 
@@ -806,7 +918,7 @@ function render() {
                         </button>
                     ` : ''}
                 </div>
-                <div class="app-activity-logs-list">
+                <div class="app-activity-logs-list app-activity-logs-list-member">
                     ${memberActivityLogs && memberActivityLogs.length > 0 ? memberActivityLogs.map(log => {
                         const timeAgo = getTimeAgo(log.created_at);
                         const isUnread = !log.is_read;
@@ -913,30 +1025,7 @@ function render() {
             </div>
             ` : ''}
             
-            ${memberTrainers && memberTrainers.length > 0 ? `
-            <div class="app-dashboard-section">
-                <h2 class="app-section-title">담당 트레이너 (${memberTrainers.length}명)</h2>
-                <div class="app-member-list">
-                    ${memberTrainers.map(trainer => {
-                        return `
-                        <div class="app-member-item" data-trainer-username="${escapeHtml(trainer.username)}" style="cursor:pointer; display: flex; align-items: center; gap: 12px;">
-                            <div class="app-member-info" style="flex: 1; min-width: 0;">
-                                <div style="display:flex;align-items:center;gap:8px;">
-                                    <p class="app-member-name">${escapeHtml(trainer.name)}</p>
-                                </div>
-                                <p class="app-member-details">트레이너</p>
-                            </div>
-                            ${trainer.profile_image_url 
-                                ? `<div style="flex-shrink: 0; margin: -8px 0;">
-                                    <img src="${escapeHtml(trainer.profile_image_url)}" alt="트레이너 프로필" class="trainer-profile-image" data-profile-image-url="${escapeHtml(trainer.profile_image_url)}" data-trainer-name="${escapeHtml(trainer.name)}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 50%; border: 2px solid var(--app-border); cursor: pointer; display: block;" onerror="this.style.display='none';" />
-                                  </div>`
-                                : ''}
-                        </div>
-                    `;
-                    }).join('')}
-                </div>
-            </div>
-            ` : ''}
+            ${''}
         </div>
     `;
     
@@ -1268,22 +1357,21 @@ function createModal() {
  * 오늘의 운동 카드 클릭 이벤트 설정
  */
 function setupTodayWorkoutCardClick() {
-    // 운동기록이 없는 경우에만 클릭 이벤트 추가
-    if (!todayWorkoutSummary) {
-        const todayWorkoutCard = document.getElementById('today-workout-card');
-        if (todayWorkoutCard) {
-            todayWorkoutCard.addEventListener('click', () => {
-                // 자동으로 운동 추가 모달을 열기 위한 플래그 설정
-                localStorage.setItem('autoOpenWorkoutAdd', 'true');
-                
-                // 하단 네비게이션의 운동 탭 버튼을 클릭
-                const workoutNavBtn = document.querySelector('[data-screen="workout"]');
-                if (workoutNavBtn) {
-                    workoutNavBtn.click();
-                }
-            });
+    const todayWorkoutCard = document.getElementById('today-workout-card');
+    if (!todayWorkoutCard) return;
+    
+    todayWorkoutCard.addEventListener('click', () => {
+        // 완료 기록이 없을 때는 자동으로 운동 추가 모달 열기
+        if (!monthlyWorkoutCompletionSummary || monthlyWorkoutCompletionSummary.completedCount === 0) {
+            localStorage.setItem('autoOpenWorkoutAdd', 'true');
         }
-    }
+        
+        // 하단 네비게이션의 운동 탭 버튼을 클릭
+        const workoutNavBtn = document.querySelector('[data-screen="workout"]');
+        if (workoutNavBtn) {
+            workoutNavBtn.click();
+        }
+    });
 }
 
 /**
@@ -1311,12 +1399,15 @@ function setupMemberClickEvents() {
  * 트레이너 목록 클릭 이벤트 설정
  */
 function setupTrainerClickEvents() {
-    const trainerItems = document.querySelectorAll('.app-member-item[data-trainer-username]');
+    const trainerItems = document.querySelectorAll('.app-member-item[data-trainer-username], .app-trainer-header-link[data-trainer-username]');
     
     trainerItems.forEach(item => {
         item.addEventListener('click', async (e) => {
             e.stopPropagation();
             const trainerUsername = item.getAttribute('data-trainer-username');
+            if (!trainerUsername) {
+                return;
+            }
             await viewTrainerWorkouts(trainerUsername);
         });
     });
@@ -1777,6 +1868,7 @@ export async function refresh() {
         loadMemberTrainers(),
         loadTodayWorkoutSummary(),
         loadWeeklyWorkoutSummary(),
+        loadMonthlyWorkoutCompletionSummary(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs()

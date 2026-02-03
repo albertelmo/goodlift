@@ -1,6 +1,6 @@
 // 운동기록 목록 렌더링
 
-import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText, debugLog } from '../utils.js';
+import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText } from '../utils.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
 import { getCurrentUser } from '../index.js';
 
@@ -31,14 +31,13 @@ function getCachedTimerSettings() {
     return null;
 }
 
-function setCachedTimerSettings(settings, source = 'unknown') {
+function setCachedTimerSettings(settings) {
     cachedTimerSettings = settings;
     try {
         localStorage.setItem(TIMER_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     } catch (e) {
         // ignore
     }
-    debugLog('PWA', 'workout timer settings cached', { source, ...settings });
 }
 
 function getCachedShowFavoritesOnly() {
@@ -54,13 +53,12 @@ function getCachedShowFavoritesOnly() {
     return null;
 }
 
-function setCachedShowFavoritesOnly(value, source = 'unknown') {
+function setCachedShowFavoritesOnly(value) {
     try {
         localStorage.setItem(FAVORITES_ONLY_STORAGE_KEY, value ? 'true' : 'false');
     } catch (e) {
         // ignore
     }
-    debugLog('PWA', 'workout favorites-only cached', { source, value });
 }
 let commentsByDate = {}; // 날짜별 코멘트 데이터
 
@@ -124,10 +122,10 @@ async function preloadWorkoutUserSettings() {
             restTimerEnabled,
             restMinutes,
             restSeconds
-        }, 'preload');
+        });
     }
     if (!hasFavoriteSettings) {
-        setCachedShowFavoritesOnly(settings.show_favorites_only === true, 'preload');
+        setCachedShowFavoritesOnly(settings.show_favorites_only === true);
     }
 }
 
@@ -1016,7 +1014,7 @@ async function showTimerModal(date) {
                     restTimerEnabled: useRestTimer,
                     restMinutes,
                     restSeconds
-                }, 'timer-modal-load');
+                });
             }
         } catch (e) {
             console.error('타이머 설정 불러오기 오류:', e);
@@ -1124,7 +1122,7 @@ async function showTimerModal(date) {
                     restTimerEnabled: useRest,
                     restMinutes: minutes,
                     restSeconds: seconds
-                }, 'timer-modal-save');
+                });
                 
                 // 목록 다시 렌더링하여 변경된 타이머 설정 표시
                 await render(currentRecords);
@@ -1206,7 +1204,7 @@ async function showRestTimerModal() {
                     restTimerEnabled,
                     restMinutes,
                     restSeconds
-                }, 'rest-timer-modal-load');
+                });
             }
         } catch (e) {
             console.error('휴식 타이머 설정 불러오기 오류:', e);
@@ -1560,7 +1558,7 @@ async function loadTimerSettings(forceRefresh = false) {
         restTimerEnabled,
         restMinutes,
         restSeconds
-    }, forceRefresh ? 'load-timer-settings-refresh' : 'load-timer-settings');
+    });
     
     return getCachedTimerSettings();
 }

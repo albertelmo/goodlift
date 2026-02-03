@@ -263,13 +263,6 @@ async function loadActivityStats() {
           <div class="user-app-activity-item" data-label="회원 식단 코멘트" data-event-type="diet_comment_create" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">식단 코멘트: <strong>${members.dietCommentUsers || 0}</strong></div>
         </div>
         <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
-          <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">트레이너 활성</div>
-          <div class="user-app-activity-item" data-label="트레이너 접속(앱오픈)" data-event-type="app_open" data-actor-role="trainer" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">접속(앱오픈): <strong>${trainers.appOpenUsers || 0}</strong></div>
-          <div class="user-app-activity-item" data-label="트레이너 로그인" data-event-type="login" data-actor-role="trainer" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">로그인: <strong>${trainers.loginUsers || 0}</strong></div>
-          <div class="user-app-activity-item" data-label="트레이너 운동 대리 입력" data-event-type="workout_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">운동 대리 입력자: <strong>${trainers.workoutProxyActors || 0}</strong></div>
-          <div class="user-app-activity-item" data-label="트레이너 식단 대리 입력" data-event-type="diet_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">식단 대리 입력자: <strong>${trainers.dietProxyActors || 0}</strong></div>
-        </div>
-        <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
           <div style="font-size:0.8rem;font-weight:600;color:#1976d2;margin-bottom:6px;">기록 건수</div>
           <div class="user-app-activity-item" data-label="운동 건수(직접)" data-event-type="workout_create" data-actor-role="member" data-source="self" style="font-size:0.75rem;color:#555;cursor:pointer;">운동(직접): <strong>${counts.workoutSelf || 0}</strong></div>
           <div class="user-app-activity-item" data-label="운동 건수(대리)" data-event-type="workout_create" data-actor-role="trainer" data-source="trainer_proxy" style="font-size:0.75rem;color:#555;cursor:pointer;">운동(대리): <strong>${counts.workoutProxy || 0}</strong></div>

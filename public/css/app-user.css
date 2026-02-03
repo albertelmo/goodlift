@@ -494,6 +494,11 @@ body.app-user-active {
     scrollbar-color: rgba(102, 126, 234, 0.3) transparent;
 }
 
+/* 회원 홈: 트레이너 활동 알림 높이 (축소) */
+.app-activity-logs-list-member {
+    max-height: 200px;
+}
+
 .app-activity-logs-list::-webkit-scrollbar {
     width: 6px;
 }

@@ -2971,8 +2971,7 @@ app.post('/api/diet-records/:appUserId/daily-comments', async (req, res) => {
         const savedComment = await dietDailyCommentsDB.addComment(commentData);
 
         if (finalCommenterAppUserId) {
-            await logAppUserActivityEvent({
-                eventType: 'diet_daily_comment_create',
+            const activityPayload = {
                 actorAppUserId: finalCommenterAppUserId,
                 subjectAppUserId: appUserId,
                 source: finalCommenterType === 'trainer' ? 'trainer_proxy' : 'self',
@@ -2980,7 +2979,19 @@ app.post('/api/diet-records/:appUserId/daily-comments', async (req, res) => {
                     diet_daily_comment_id: savedComment.id,
                     diet_date
                 }
-            });
+            };
+            
+            // 식단 기록 코멘트와 동일한 이벤트로도 기록 (관리자 활동 로그에 포함)
+            await logAppUserActivityEvent({
+                eventType: 'diet_comment_create',
+                ...activityPayload
+            }).catch(err => console.error('[Activity Log] app_user_activity_events 생성 실패:', err));
+            
+            // 일별 코멘트 전용 이벤트도 유지
+            await logAppUserActivityEvent({
+                eventType: 'diet_daily_comment_create',
+                ...activityPayload
+            }).catch(err => console.error('[Activity Log] app_user_activity_events 생성 실패:', err));
         }
 
         if (finalCommenterType === 'trainer') {
