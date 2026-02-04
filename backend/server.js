@@ -36,6 +36,7 @@ const dietRecordsDB = require('./diet-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
 const appUserActivityEventsDB = require('./app-user-activity-events-db');
+const achievementsDB = require('./achievements-db');
 const workoutCommentsDB = require('./workout-comments-db');
 const dietDailyCommentsDB = require('./diet-daily-comments-db');
 const consultationRecordsDB = require('./consultation-records-db');
@@ -585,6 +586,7 @@ workoutTypesDB.initializeDatabase(); // workout_types 테이블을 먼저 생성
 workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
 favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_users와 workout_types를 참조하므로 마지막에 생성
 dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
+achievementsDB.initializeDatabase(); // 업적 집계 테이블 초기화/백필
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
@@ -1305,6 +1307,9 @@ app.get('/api/app-users/medal-status', async (req, res) => {
             return res.json({ results: [] });
         }
         
+        const uuidRegex = /^[0-9a-fA-F-]{36}$/;
+        const validAppUserIds = appUserIds.filter(id => uuidRegex.test(id));
+        
         // 조회 기간 설정 (없으면 이번달)
         let startDate = start_date;
         let endDate = end_date;
@@ -1318,45 +1323,10 @@ app.get('/api/app-users/medal-status', async (req, res) => {
             endDate = monthEnd.toISOString().split('T')[0];
         }
         
-        const getWorkoutTier = (days) => {
-            if (days >= 13) return 'diamond';
-            if (days >= 9) return 'gold';
-            if (days >= 5) return 'silver';
-            if (days >= 1) return 'bronze';
-            return 'none';
-        };
-        const getDietTier = (days) => {
-            if (days >= 16) return 'diamond';
-            if (days >= 11) return 'gold';
-            if (days >= 6) return 'silver';
-            if (days >= 1) return 'bronze';
-            return 'none';
-        };
-        
-        const results = await Promise.all(appUserIds.map(async (appUserId) => {
-            if (appUserId.startsWith('trainer-')) {
-                return {
-                    app_user_id: appUserId,
-                    workout: { days: 0, tier: 'none' },
-                    diet: { days: 0, tier: 'none' }
-                };
-            }
-            
-            const [workoutSummary, dietSummary] = await Promise.all([
-                workoutRecordsDB.getWorkoutRecordsForCalendar(appUserId, startDate, endDate),
-                dietRecordsDB.getDietRecordsForCalendar(appUserId, startDate, endDate)
-            ]);
-            
-            const workoutDays = Object.values(workoutSummary || {}).filter(day => day && day.allCompleted).length;
-            const dietDays = Object.values(dietSummary || {}).filter(day => day && day.hasDiet).length;
-            
-            return {
-                app_user_id: appUserId,
-                workout: { days: workoutDays, tier: getWorkoutTier(workoutDays) },
-                diet: { days: dietDays, tier: getDietTier(dietDays) }
-            };
-        }));
-        
+        if (validAppUserIds.length === 0) {
+            return res.json({ results: [] });
+        }
+        const results = await achievementsDB.getMedalStatus(validAppUserIds, startDate, endDate);
         res.json({ results });
     } catch (error) {
         console.error('[API] 앱 유저 메달 현황 조회 오류:', error);

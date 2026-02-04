@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const { runMigration } = require('./migrations-manager');
+const achievementsDB = require('./achievements-db');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
 const basePool = new Pool({
@@ -935,6 +936,12 @@ const addWorkoutRecord = async (workoutData) => {
       }
     }
     
+    try {
+      await achievementsDB.refreshDailyStats(workoutRecord.app_user_id, workoutRecord.workout_date);
+    } catch (error) {
+      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    }
+    
     return workoutRecord;
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1063,6 +1070,23 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
           record.workout_type_type = typeResult.rows[0].type;
         }
       }
+    }
+    
+    try {
+      const uniqueKeys = new Set();
+      addedRecords.forEach(record => {
+        if (record.app_user_id && record.workout_date) {
+          uniqueKeys.add(`${record.app_user_id}::${record.workout_date}`);
+        }
+      });
+      for (const key of uniqueKeys) {
+        const [appUserId, dateStr] = key.split('::');
+        if (appUserId && dateStr) {
+          await achievementsDB.refreshDailyStats(appUserId, dateStr);
+        }
+      }
+    } catch (error) {
+      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
     }
     
     return addedRecords;
@@ -1245,7 +1269,18 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
     await client.query('COMMIT');
     
     // 업데이트된 레코드 조회 (세트 정보 포함)
-    return await getWorkoutRecordById(id, appUserId);
+    const updatedRecord = await getWorkoutRecordById(id, appUserId);
+    try {
+      if (oldDateNormalized) {
+        await achievementsDB.refreshDailyStats(appUserId, oldDateNormalized);
+      }
+      if (newDateNormalized && newDateNormalized !== oldDateNormalized) {
+        await achievementsDB.refreshDailyStats(appUserId, newDateNormalized);
+      }
+    } catch (error) {
+      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    }
+    return updatedRecord;
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('[PostgreSQL] 운동기록 수정 오류:', error);
@@ -1261,10 +1296,18 @@ const deleteWorkoutRecord = async (id, appUserId) => {
     const query = `
       DELETE FROM workout_records
       WHERE id = $1 AND app_user_id = $2
-      RETURNING id
+      RETURNING id, workout_date
     `;
     const result = await pool.query(query, [id, appUserId]);
-    return result.rows[0] || null;
+    const deletedRecord = result.rows[0] || null;
+    try {
+      if (deletedRecord?.workout_date) {
+        await achievementsDB.refreshDailyStats(appUserId, deletedRecord.workout_date);
+      }
+    } catch (error) {
+      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    }
+    return deletedRecord;
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 삭제 오류:', error);
     throw error;
@@ -1281,7 +1324,15 @@ const updateWorkoutRecordCompleted = async (id, appUserId, isCompleted) => {
       RETURNING *
     `;
     const result = await pool.query(query, [isCompleted, id, appUserId]);
-    return result.rows[0] || null;
+    const updatedRecord = result.rows[0] || null;
+    try {
+      if (updatedRecord?.workout_date) {
+        await achievementsDB.refreshDailyStats(appUserId, updatedRecord.workout_date);
+      }
+    } catch (error) {
+      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    }
+    return updatedRecord;
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 완료 상태 업데이트 오류:', error);
     throw error;
@@ -1293,7 +1344,7 @@ const updateWorkoutSetCompleted = async (setId, workoutRecordId, appUserId, isCo
   try {
     // workout_record_id가 해당 app_user_id에 속하는지 확인
     const checkQuery = `
-      SELECT id FROM workout_records 
+      SELECT id, workout_date FROM workout_records 
       WHERE id = $1 AND app_user_id = $2
     `;
     const checkResult = await pool.query(checkQuery, [workoutRecordId, appUserId]);
@@ -1309,7 +1360,16 @@ const updateWorkoutSetCompleted = async (setId, workoutRecordId, appUserId, isCo
       RETURNING *
     `;
     const result = await pool.query(query, [isCompleted, setId, workoutRecordId]);
-    return result.rows[0] || null;
+    const updatedSet = result.rows[0] || null;
+    try {
+      const workoutDate = checkResult.rows[0]?.workout_date;
+      if (workoutDate) {
+        await achievementsDB.refreshDailyStats(appUserId, workoutDate);
+      }
+    } catch (error) {
+      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    }
+    return updatedSet;
   } catch (error) {
     console.error('[PostgreSQL] 세트 완료 상태 업데이트 오류:', error);
     throw error;

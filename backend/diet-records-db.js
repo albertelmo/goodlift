@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const { runMigration } = require('./migrations-manager');
+const achievementsDB = require('./achievements-db');
 
 // PostgreSQL 연결 풀 생성 (기존 DB 모듈 패턴과 동일)
 const basePool = new Pool({
@@ -695,6 +696,12 @@ const addDietRecord = async (dietData) => {
     
     record.comments = [];
     record.comment_count = 0;
+
+    try {
+      await achievementsDB.refreshDailyStats(record.app_user_id, record.meal_date);
+    } catch (error) {
+      console.error('[PostgreSQL] 식단 업적 갱신 오류:', error);
+    }
     
     return record;
   } catch (error) {
@@ -706,6 +713,25 @@ const addDietRecord = async (dietData) => {
 // 식단기록 수정
 const updateDietRecord = async (id, appUserId, updates) => {
   try {
+    const existingDateResult = await pool.query(
+      `SELECT meal_date FROM diet_records WHERE id = $1 AND app_user_id = $2`,
+      [id, appUserId]
+    );
+    const oldDate = existingDateResult.rows[0]?.meal_date || null;
+    const normalizeDate = (value) => {
+      if (!value) return null;
+      if (value instanceof Date) {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      if (typeof value === 'string') {
+        return value.split('T')[0];
+      }
+      return value;
+    };
+    const oldDateNormalized = normalizeDate(oldDate);
     const fields = [];
     const values = [];
     let paramIndex = 1;
@@ -757,7 +783,19 @@ const updateDietRecord = async (id, appUserId, updates) => {
     }
     
     // 업데이트된 레코드 조회
-    return await getDietRecordById(id, appUserId);
+    const updatedRecord = await getDietRecordById(id, appUserId);
+    try {
+      const newDateNormalized = normalizeDate(updatedRecord?.meal_date || updates.meal_date);
+      if (oldDateNormalized) {
+        await achievementsDB.refreshDailyStats(appUserId, oldDateNormalized);
+      }
+      if (newDateNormalized && newDateNormalized !== oldDateNormalized) {
+        await achievementsDB.refreshDailyStats(appUserId, newDateNormalized);
+      }
+    } catch (error) {
+      console.error('[PostgreSQL] 식단 업적 갱신 오류:', error);
+    }
+    return updatedRecord;
   } catch (error) {
     console.error('[PostgreSQL] 식단기록 수정 오류:', error);
     throw error;
@@ -842,10 +880,18 @@ const deleteDietRecord = async (id, appUserId) => {
     const query = `
       DELETE FROM diet_records
       WHERE id = $1 AND app_user_id = $2
-      RETURNING id, image_url, image_thumbnail_url
+      RETURNING id, meal_date, image_url, image_thumbnail_url
     `;
     const result = await pool.query(query, [id, appUserId]);
-    return result.rows[0] || null;
+    const deletedRecord = result.rows[0] || null;
+    try {
+      if (deletedRecord?.meal_date) {
+        await achievementsDB.refreshDailyStats(appUserId, deletedRecord.meal_date);
+      }
+    } catch (error) {
+      console.error('[PostgreSQL] 식단 업적 갱신 오류:', error);
+    }
+    return deletedRecord;
   } catch (error) {
     console.error('[PostgreSQL] 식단기록 삭제 오류:', error);
     throw error;
