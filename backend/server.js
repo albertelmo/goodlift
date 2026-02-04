@@ -1744,7 +1744,7 @@ app.get('/api/workout-records/calendar', async (req, res) => {
             return res.json({});
         }
         
-        const summary = await workoutRecordsDB.getWorkoutRecordsForCalendar(
+        const summary = await achievementsDB.getWorkoutCalendarSummary(
             app_user_id,
             start_date || null,
             end_date || null
@@ -2217,7 +2217,7 @@ app.get('/api/diet-records/calendar', async (req, res) => {
             return res.json({});
         }
         
-        const summary = await dietRecordsDB.getDietRecordsForCalendar(
+        const summary = await achievementsDB.getDietCalendarSummary(
             app_user_id,
             start_date || null,
             end_date || null

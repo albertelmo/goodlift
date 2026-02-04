@@ -576,7 +576,7 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
             if (cachedShowFavoritesOnly !== null) {
                 showFavoritesOnly = cachedShowFavoritesOnly;
             } else {
-                const settings = await getUserSettings(appUserId);
+            const settings = await getUserSettings(appUserId);
                 showFavoritesOnly = settings.show_favorites_only === true;
                 setCachedShowFavoritesOnly(showFavoritesOnly);
             }

@@ -11,6 +11,7 @@ const createDailyStatsTable = async () => {
     CREATE TABLE IF NOT EXISTS app_user_daily_stats (
       app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
       record_date DATE NOT NULL,
+      workout_has_record BOOLEAN DEFAULT false,
       workout_all_completed BOOLEAN DEFAULT false,
       diet_has_record BOOLEAN DEFAULT false,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -47,7 +48,7 @@ const backfillDailyStats = async () => {
       SELECT
         app_user_id,
         record_date,
-        COUNT(*) > 0 AS has_workout,
+        COUNT(*) > 0 AS workout_has_record,
         BOOL_AND(record_completed) AS workout_all_completed
       FROM workout_records_with_completion
       GROUP BY app_user_id, record_date
@@ -68,6 +69,7 @@ const backfillDailyStats = async () => {
     INSERT INTO app_user_daily_stats (
       app_user_id,
       record_date,
+      workout_has_record,
       workout_all_completed,
       diet_has_record,
       updated_at
@@ -75,6 +77,7 @@ const backfillDailyStats = async () => {
     SELECT
       d.app_user_id,
       d.record_date,
+      COALESCE(w.workout_has_record, false),
       COALESCE(w.workout_all_completed, false),
       COALESCE(di.diet_has_record, false),
       NOW()
@@ -82,8 +85,58 @@ const backfillDailyStats = async () => {
     LEFT JOIN workout_daily w ON w.app_user_id = d.app_user_id AND w.record_date = d.record_date
     LEFT JOIN diet_daily di ON di.app_user_id = d.app_user_id AND di.record_date = d.record_date
     ON CONFLICT (app_user_id, record_date) DO UPDATE
-    SET workout_all_completed = EXCLUDED.workout_all_completed,
+    SET workout_has_record = EXCLUDED.workout_has_record,
+        workout_all_completed = EXCLUDED.workout_all_completed,
         diet_has_record = EXCLUDED.diet_has_record,
+        updated_at = EXCLUDED.updated_at
+  `;
+  await pool.query(query);
+};
+
+const backfillWorkoutHasRecord = async () => {
+  const query = `
+    WITH workout_records_with_completion AS (
+      SELECT
+        wr.app_user_id,
+        wr.workout_date AS record_date,
+        wr.id AS workout_record_id,
+        CASE
+          WHEN wr.is_text_record = true THEN wr.is_completed
+          WHEN wt.type = '시간' THEN wr.is_completed
+          WHEN wt.type = '세트' THEN (COUNT(wrs.*) > 0 AND BOOL_AND(wrs.is_completed))
+          ELSE false
+        END AS record_completed
+      FROM workout_records wr
+      LEFT JOIN workout_types wt ON wr.workout_type_id = wt.id
+      LEFT JOIN workout_record_sets wrs ON wrs.workout_record_id = wr.id
+      GROUP BY wr.app_user_id, wr.workout_date, wr.id, wr.is_text_record, wr.is_completed, wt.type
+    ),
+    workout_daily AS (
+      SELECT
+        app_user_id,
+        record_date,
+        COUNT(*) > 0 AS workout_has_record,
+        BOOL_AND(record_completed) AS workout_all_completed
+      FROM workout_records_with_completion
+      GROUP BY app_user_id, record_date
+    )
+    INSERT INTO app_user_daily_stats (
+      app_user_id,
+      record_date,
+      workout_has_record,
+      workout_all_completed,
+      updated_at
+    )
+    SELECT
+      app_user_id,
+      record_date,
+      workout_has_record,
+      workout_all_completed,
+      NOW()
+    FROM workout_daily
+    ON CONFLICT (app_user_id, record_date) DO UPDATE
+    SET workout_has_record = EXCLUDED.workout_has_record,
+        workout_all_completed = EXCLUDED.workout_all_completed,
         updated_at = EXCLUDED.updated_at
   `;
   await pool.query(query);
@@ -164,17 +217,59 @@ const refreshDailyStats = async (appUserId, recordDateRaw) => {
       INSERT INTO app_user_daily_stats (
         app_user_id,
         record_date,
+        workout_has_record,
         workout_all_completed,
         diet_has_record,
         updated_at
-      ) VALUES ($1, $2, $3, $4, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, NOW())
       ON CONFLICT (app_user_id, record_date) DO UPDATE
-      SET workout_all_completed = EXCLUDED.workout_all_completed,
+      SET workout_has_record = EXCLUDED.workout_has_record,
+          workout_all_completed = EXCLUDED.workout_all_completed,
           diet_has_record = EXCLUDED.diet_has_record,
           updated_at = EXCLUDED.updated_at
     `,
-    [appUserId, recordDate, workoutStatus.allCompleted, dietHasRecord]
+    [appUserId, recordDate, workoutStatus.hasWorkout, workoutStatus.allCompleted, dietHasRecord]
   );
+};
+
+const getWorkoutCalendarSummary = async (appUserId, startDate, endDate) => {
+  const query = `
+    SELECT record_date, workout_has_record, workout_all_completed
+    FROM app_user_daily_stats
+    WHERE app_user_id = $1
+      AND record_date >= $2
+      AND record_date <= $3
+  `;
+  const result = await pool.query(query, [appUserId, startDate, endDate]);
+  const summary = {};
+  result.rows.forEach(row => {
+    const dateStr = normalizeDate(row.record_date);
+    summary[dateStr] = {
+      hasWorkout: row.workout_has_record === true,
+      allCompleted: row.workout_all_completed === true
+    };
+  });
+  return summary;
+};
+
+const getDietCalendarSummary = async (appUserId, startDate, endDate) => {
+  const query = `
+    SELECT record_date, diet_has_record
+    FROM app_user_daily_stats
+    WHERE app_user_id = $1
+      AND record_date >= $2
+      AND record_date <= $3
+  `;
+  const result = await pool.query(query, [appUserId, startDate, endDate]);
+  const summary = {};
+  result.rows.forEach(row => {
+    const dateStr = normalizeDate(row.record_date);
+    summary[dateStr] = {
+      hasDiet: row.diet_has_record === true,
+      count: row.diet_has_record ? 1 : 0
+    };
+  });
+  return summary;
 };
 
 const getMedalStatus = async (appUserIds, startDate, endDate) => {
@@ -231,6 +326,28 @@ const initializeDatabase = async () => {
     createDailyStatsTable
   );
   await runMigration(
+    'add_workout_has_record_to_daily_stats_20260205',
+    '앱 유저 일별 업적 집계에 workout_has_record 컬럼 추가',
+    async () => {
+      const checkQuery = `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'app_user_daily_stats'
+          AND column_name = 'workout_has_record'
+      `;
+      const checkResult = await pool.query(checkQuery);
+      if (checkResult.rows.length === 0) {
+        await pool.query(`ALTER TABLE app_user_daily_stats ADD COLUMN workout_has_record BOOLEAN DEFAULT false`);
+      }
+    }
+  );
+  await runMigration(
+    'backfill_workout_has_record_20260205',
+    '기존 운동 기록 기반 workout_has_record 재계산',
+    backfillWorkoutHasRecord
+  );
+  await runMigration(
     'backfill_app_user_daily_stats_20260205',
     '앱 유저 일별 업적 집계 초기 백필',
     backfillDailyStats
@@ -241,5 +358,7 @@ module.exports = {
   pool,
   initializeDatabase,
   refreshDailyStats,
-  getMedalStatus
+  getMedalStatus,
+  getWorkoutCalendarSummary,
+  getDietCalendarSummary
 };

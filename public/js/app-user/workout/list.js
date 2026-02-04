@@ -832,13 +832,13 @@ function renderWorkoutItem(record) {
             <div class="app-workout-item-main">
                 <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 4px;">
                     <div style="display: flex; align-items: center; gap: 6px;">
-                        <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="4" y1="7" x2="20" y2="7"></line>
-                                <line x1="4" y1="12" x2="20" y2="12"></line>
-                                <line x1="4" y1="17" x2="20" y2="17"></line>
-                            </svg>
-                        </div>
+                    <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="4" y1="7" x2="20" y2="7"></line>
+                            <line x1="4" y1="12" x2="20" y2="12"></line>
+                            <line x1="4" y1="17" x2="20" y2="17"></line>
+                        </svg>
+                    </div>
                         <div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>
                         <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1004,20 +1004,20 @@ async function showTimerModal(date) {
         restMinutes = storedSettings.restMinutes;
         restSeconds = storedSettings.restSeconds;
     } else {
-        try {
-            if (currentAppUserId) {
-                const settings = await getUserSettings(currentAppUserId);
-                useRestTimer = settings.rest_timer_enabled !== undefined ? settings.rest_timer_enabled : true;
-                restMinutes = settings.rest_timer_minutes !== undefined ? settings.rest_timer_minutes : 0;
-                restSeconds = settings.rest_timer_seconds !== undefined ? settings.rest_timer_seconds : 30;
+    try {
+        if (currentAppUserId) {
+            const settings = await getUserSettings(currentAppUserId);
+            useRestTimer = settings.rest_timer_enabled !== undefined ? settings.rest_timer_enabled : true;
+            restMinutes = settings.rest_timer_minutes !== undefined ? settings.rest_timer_minutes : 0;
+            restSeconds = settings.rest_timer_seconds !== undefined ? settings.rest_timer_seconds : 30;
                 setCachedTimerSettings({
                     restTimerEnabled: useRestTimer,
                     restMinutes,
                     restSeconds
                 });
-            }
-        } catch (e) {
-            console.error('타이머 설정 불러오기 오류:', e);
+        }
+    } catch (e) {
+        console.error('타이머 설정 불러오기 오류:', e);
         }
     }
     
@@ -1187,28 +1187,28 @@ async function showRestTimerModal() {
         restMinutes = storedSettings.restMinutes;
         restSeconds = storedSettings.restSeconds;
     } else {
-        try {
-            if (currentAppUserId) {
-                const settings = await getUserSettings(currentAppUserId);
-                // 설정이 있으면 저장된 값 사용, 없으면 기본값 사용
-                if ('rest_timer_enabled' in settings) {
-                    restTimerEnabled = settings.rest_timer_enabled;
-                }
-                if ('rest_timer_minutes' in settings) {
-                    restMinutes = settings.rest_timer_minutes;
-                }
-                if ('rest_timer_seconds' in settings) {
-                    restSeconds = settings.rest_timer_seconds;
-                }
+    try {
+        if (currentAppUserId) {
+            const settings = await getUserSettings(currentAppUserId);
+            // 설정이 있으면 저장된 값 사용, 없으면 기본값 사용
+            if ('rest_timer_enabled' in settings) {
+                restTimerEnabled = settings.rest_timer_enabled;
+            }
+            if ('rest_timer_minutes' in settings) {
+                restMinutes = settings.rest_timer_minutes;
+            }
+            if ('rest_timer_seconds' in settings) {
+                restSeconds = settings.rest_timer_seconds;
+            }
                 setCachedTimerSettings({
                     restTimerEnabled,
                     restMinutes,
                     restSeconds
                 });
-            }
-        } catch (e) {
-            console.error('휴식 타이머 설정 불러오기 오류:', e);
-            // 에러 발생 시 기본값 사용
+        }
+    } catch (e) {
+        console.error('휴식 타이머 설정 불러오기 오류:', e);
+        // 에러 발생 시 기본값 사용
         }
     }
     
