@@ -1,16 +1,17 @@
 // 앱 유저 홈/대시보드 화면
 
 import { formatDate, getToday, escapeHtml, getTimeAgo } from './utils.js';
-import { getWorkoutRecords, getWorkoutRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead } from './api.js';
+import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead } from './api.js';
 
 let currentUser = null;
 let nextSession = null;
 let trainerMembers = null; // 트레이너의 연결된 회원 목록
 let memberTrainers = null; // 회원의 연결된 트레이너 목록
 let todayWorkoutSummary = null; // 오늘의 운동 요약
-let weeklyWorkoutSummary = null; // 주간 운동 요약
 let monthlyWorkoutCompletionSummary = null; // 이번달 운동 완료 요약
+let monthlyDietSummary = null; // 이번달 식단 요약
 let connectedAppUserInfo = null; // 현재 연결된 유저앱 회원 정보
+let trainerMemberMedalStatus = {}; // 트레이너 회원 메달 현황 (app_user_id -> status)
 let activityLogs = null; // 트레이너 활동 로그
 let activityLogsUnreadCount = 0; // 읽지 않은 로그 개수
 let memberActivityLogs = null; // 회원 활동 로그
@@ -30,12 +31,13 @@ export async function init(userData) {
         loadTrainerMembers(),
         loadMemberTrainers(),
         loadTodayWorkoutSummary(),
-        loadWeeklyWorkoutSummary(),
         loadMonthlyWorkoutCompletionSummary(),
+        loadMonthlyDietSummary(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs()
     ]);
+    await loadTrainerMemberMedalStatus();
     render();
     
     // 활동 로그 자동 업데이트 시작
@@ -130,6 +132,8 @@ function updateActivityLogsUI() {
                          data-log-id="${log.id}"
                          data-app-user-id="${log.app_user_id || ''}"
                          data-member-name="${escapeHtml(log.member_name || '')}"
+                         data-activity-type="${escapeHtml(log.activity_type || '')}"
+                         data-record-date="${escapeHtml(log.record_date || '')}"
                          style="cursor:pointer;">
                         <div class="app-activity-log-content">
                             <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -175,6 +179,8 @@ function updateActivityLogsUI() {
                          data-log-id="${log.id}"
                          data-app-user-id="${log.app_user_id || ''}"
                          data-member-name="${escapeHtml(log.member_name || '')}"
+                         data-activity-type="${escapeHtml(log.activity_type || '')}"
+                         data-record-date="${escapeHtml(log.record_date || '')}"
                          style="cursor:pointer;">
                         <div class="app-activity-log-content">
                             <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -338,80 +344,44 @@ async function loadTodayWorkoutSummary() {
 }
 
 /**
- * 주간 운동 요약 조회
+ * 이번달 식단 요약 조회
  */
-async function loadWeeklyWorkoutSummary() {
+async function loadMonthlyDietSummary() {
     try {
-        const today = getToday(); // YYYY-MM-DD 형식
-        const todayDate = new Date(today);
-        
-        // 이번 주 월요일 계산 (월요일이 0번 인덱스이므로, getDay()가 0(일)이면 -6, 아니면 1-getDay())
-        const dayOfWeek = todayDate.getDay(); // 0(일) ~ 6(토)
-        const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        const mondayDate = new Date(todayDate);
-        mondayDate.setDate(todayDate.getDate() + mondayOffset);
-        mondayDate.setHours(0, 0, 0, 0);
-        
-        // 이번 주 일요일 계산
-        const sundayDate = new Date(mondayDate);
-        sundayDate.setDate(mondayDate.getDate() + 6);
-        sundayDate.setHours(23, 59, 59, 999);
-        
-        const startDate = formatDate(mondayDate); // YYYY-MM-DD
-        const endDate = formatDate(sundayDate); // YYYY-MM-DD
-        
         const appUserId = currentUser?.id;
-        
         if (!appUserId) {
-            weeklyWorkoutSummary = null;
+            monthlyDietSummary = null;
             return;
         }
         
-        // 주간 운동기록 조회
-        const records = await getWorkoutRecords(appUserId, {
-            startDate: startDate,
-            endDate: endDate
-        });
+        const today = new Date(getToday());
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        monthStart.setHours(0, 0, 0, 0);
+        monthEnd.setHours(23, 59, 59, 999);
         
-        if (!records || records.length === 0) {
-            weeklyWorkoutSummary = null;
-            return;
+        const startDate = formatDate(monthStart);
+        const endDate = formatDate(monthEnd);
+        const daysInMonth = monthEnd.getDate();
+        
+        const dietSummary = await getDietRecordsForCalendar(appUserId, startDate, endDate);
+        
+        let dietDaysCount = 0;
+        for (let day = 1; day <= daysInMonth; day += 1) {
+            const date = new Date(today.getFullYear(), today.getMonth(), day);
+            const dateKey = formatDate(date);
+            if (dietSummary && dietSummary[dateKey] && dietSummary[dateKey].hasDiet) {
+                dietDaysCount += 1;
+            }
         }
         
-        // 요약 정보 계산
-        const workoutTypes = new Set();
-        let totalSets = 0;
-        let totalMinutes = 0;
-        const aerobicWorkouts = new Set(); // 유산소 운동 이름 목록
-        
-        records.forEach(record => {
-            const workoutTypeName = record.workout_type_name;
-            const workoutTypeType = record.workout_type_type;
-            
-            if (workoutTypeName) {
-                workoutTypes.add(workoutTypeName);
-            }
-            
-            if (workoutTypeType === '세트' && record.sets) {
-                totalSets += record.sets.length;
-            } else if (workoutTypeType === '시간' && record.duration_minutes) {
-                totalMinutes += record.duration_minutes;
-                // 유산소 운동 이름 수집
-                if (workoutTypeName) {
-                    aerobicWorkouts.add(workoutTypeName);
-                }
-            }
-        });
-        
-        weeklyWorkoutSummary = {
-            workoutCount: workoutTypes.size,
-            totalSets: totalSets,
-            totalMinutes: totalMinutes,
-            aerobicWorkoutNames: Array.from(aerobicWorkouts) // 유산소 운동 이름 배열
+        monthlyDietSummary = {
+            dietDaysCount,
+            daysInMonth
         };
     } catch (error) {
-        console.error('주간 운동 요약 조회 오류:', error);
-        weeklyWorkoutSummary = null;
+        console.error('이번달 식단 요약 조회 오류:', error);
+        monthlyDietSummary = null;
     }
 }
 
@@ -537,6 +507,62 @@ async function loadConnectedAppUserInfo() {
     } catch (error) {
         console.error('연결된 회원 정보 조회 오류:', error);
         connectedAppUserInfo = null;
+    }
+}
+
+/**
+ * 트레이너 회원 메달 현황 조회
+ */
+async function loadTrainerMemberMedalStatus() {
+    const isTrainer = currentUser?.isTrainer === true;
+    if (!isTrainer) {
+        trainerMemberMedalStatus = {};
+        return;
+    }
+    
+    const memberIds = new Set();
+    if (trainerMembers && trainerMembers.length > 0) {
+        trainerMembers.forEach(member => {
+            if (member.app_user_id) {
+                memberIds.add(member.app_user_id);
+            }
+        });
+    }
+    if (connectedAppUserInfo && connectedAppUserInfo.id) {
+        memberIds.add(connectedAppUserInfo.id);
+    }
+    
+    if (memberIds.size === 0) {
+        trainerMemberMedalStatus = {};
+        return;
+    }
+    
+    const today = new Date(getToday());
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    monthStart.setHours(0, 0, 0, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+    
+    const startDate = formatDate(monthStart);
+    const endDate = formatDate(monthEnd);
+    
+    try {
+        const idsParam = Array.from(memberIds).join(',');
+        const response = await fetch(`/api/app-users/medal-status?app_user_ids=${encodeURIComponent(idsParam)}&start_date=${startDate}&end_date=${endDate}`);
+        if (!response.ok) {
+            throw new Error('메달 현황 조회 실패');
+        }
+        const data = await response.json();
+        const statusMap = {};
+        (data.results || []).forEach(item => {
+            if (item && item.app_user_id) {
+                statusMap[item.app_user_id] = item;
+            }
+        });
+        trainerMemberMedalStatus = statusMap;
+    } catch (error) {
+        console.error('트레이너 회원 메달 현황 조회 오류:', error);
+        trainerMemberMedalStatus = {};
     }
 }
 
@@ -668,8 +694,8 @@ async function loadMemberTrainers() {
 function formatShortDate(dateStr) {
     if (!dateStr) return '';
     const date = new Date(dateStr);
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1);
+    const day = String(date.getDate());
     return `${month}/${day}`;
 }
 
@@ -681,6 +707,98 @@ function formatDayOfWeek(dateStr) {
     const date = new Date(dateStr);
     const days = ['일', '월', '화', '수', '목', '금', '토'];
     return days[date.getDay()];
+}
+
+/**
+ * 시간 형식 변환 (HH:MM -> H:MM)
+ */
+function formatShortTime(timeStr) {
+    if (!timeStr) return '';
+    const [hour, minute] = timeStr.split(':');
+    if (!hour || !minute) return timeStr;
+    return `${parseInt(hour, 10)}:${minute}`;
+}
+
+/**
+ * 메달 티어 라벨/스타일
+ */
+function getWorkoutMedalLabel(tier) {
+    switch (tier) {
+        case 'bronze': return '브론즈';
+        case 'silver': return '실버';
+        case 'gold': return '골드';
+        case 'diamond': return '다이아';
+        default: return '기록없음';
+    }
+}
+
+function getDietMedalLabel(tier) {
+    switch (tier) {
+        case 'bronze': return '브론즈';
+        case 'silver': return '실버';
+        case 'gold': return '골드';
+        case 'diamond': return '다이아';
+        default: return '기록없음';
+    }
+}
+
+function getMedalTierStyle(tier) {
+    switch (tier) {
+        case 'bronze':
+            return 'background:#fce8d8;color:#8d4f1b;';
+        case 'silver':
+            return 'background:#eef1f6;color:#546e7a;';
+        case 'gold':
+            return 'background:#fff3cd;color:#b7791f;';
+        case 'diamond':
+            return 'background:#e8f5ff;color:#1e88e5;';
+        default:
+            return 'background:#f5f5f5;color:#666;';
+    }
+}
+
+function renderMemberMedalBadges(appUserId) {
+    const status = trainerMemberMedalStatus[appUserId];
+    if (!status) return '';
+    const workoutTier = status.workout?.tier || 'none';
+    const dietTier = status.diet?.tier || 'none';
+    const workoutLabel = getWorkoutMedalLabel(workoutTier);
+    const dietLabel = getDietMedalLabel(dietTier);
+    return `
+        <span style="font-size:0.72rem;color:var(--app-text-muted);">
+            🏋️ ${workoutLabel} · 🥗 ${dietLabel}
+        </span>
+    `;
+}
+
+/**
+ * 활동 로그 타입에 따른 이동 화면 결정
+ */
+function getActivityLogTarget(item) {
+    if (!item) return null;
+    const activityType = item.getAttribute('data-activity-type') || '';
+    const recordDate = item.getAttribute('data-record-date') || '';
+    if (!activityType || !recordDate) return null;
+    
+    if (activityType.startsWith('workout')) {
+        return { screen: 'workout', recordDate };
+    }
+    if (activityType.startsWith('diet')) {
+        return { screen: 'diet', recordDate };
+    }
+    return null;
+}
+
+/**
+ * 활동 로그 클릭 시 해당 화면으로 이동 (날짜 포함)
+ */
+async function navigateFromActivityLog(item) {
+    const target = getActivityLogTarget(item);
+    if (!target) return;
+    localStorage.setItem('pendingNavScreen', target.screen);
+    localStorage.setItem('pendingNavDate', target.recordDate);
+    const { navigateToScreen } = await import('./index.js');
+    navigateToScreen(target.screen);
 }
 
 /**
@@ -706,7 +824,7 @@ function render() {
     if (!isTrainer && nextSession) {
         const sessionDate = formatShortDate(nextSession.date);
         const dayOfWeek = formatDayOfWeek(nextSession.date);
-        const sessionTime = nextSession.time || '';
+        const sessionTime = formatShortTime(nextSession.time || '');
         trainerName = nextSession.trainerName || null;
         trainerProfileImageUrl = nextSession.trainerProfileImageUrl || null;
         nextSessionText = `${sessionDate}(${dayOfWeek}) ${sessionTime}`;
@@ -714,16 +832,20 @@ function render() {
     
     // 이번달 오운완 요약 텍스트
     const todayDate = new Date(getToday());
-    const monthLabel = '오운완';
+    const todayLabel = `${formatShortDate(today)}(${formatDayOfWeek(today)})`;
     let monthlyCompletionText = '기록 없음';
     let monthlyCompletionGraph = '<div style="font-size: 0.85rem; color: var(--app-text-muted);">기록 없음</div>';
     
     let medalImageSrc = '';
     let medalAlt = '';
+    let badgeLabel = '시작~!';
+    let badgeStyle = 'background:#f5f5f5;color:#666;';
+    let badgeRemainingText = '';
+    let workoutCardStyle = '';
     if (monthlyWorkoutCompletionSummary) {
         const completedCount = monthlyWorkoutCompletionSummary.completedCount || 0;
         const daysInMonth = monthlyWorkoutCompletionSummary.daysInMonth || 0;
-        monthlyCompletionText = `완료 ${completedCount}일`;
+        monthlyCompletionText = `오운완 ${completedCount}일`;
         
         const effectiveDays = Math.max(1, daysInMonth - 15);
         const ratio = completedCount > 0 ? completedCount / effectiveDays : 0;
@@ -740,18 +862,35 @@ function render() {
             return `<div style="width: 4px; height: ${height}px; border-radius: 2px; background: ${background};"></div>`;
         }).join('');
 
-        if (completedCount >= 1 && completedCount <= 3) {
+        if (completedCount >= 1 && completedCount <= 4) {
             medalImageSrc = '/img/medal/bronze.png';
             medalAlt = 'BRONZE';
-        } else if (completedCount >= 4 && completedCount <= 7) {
+            badgeLabel = '브론즈';
+            badgeStyle = 'background:#fce8d8;color:#8d4f1b;';
+            badgeRemainingText = `실버까지<br>${5 - completedCount}일!`;
+        } else if (completedCount >= 5 && completedCount <= 8) {
             medalImageSrc = '/img/medal/silver.png';
             medalAlt = 'SILVER';
-        } else if (completedCount >= 8 && completedCount <= 10) {
+            badgeLabel = '실버';
+            badgeStyle = 'background:#eef1f6;color:#546e7a;';
+            badgeRemainingText = `골드까지<br>${9 - completedCount}일!`;
+        } else if (completedCount >= 9 && completedCount <= 12) {
             medalImageSrc = '/img/medal/gold.png';
             medalAlt = 'GOLD';
-        } else if (completedCount > 10) {
+            badgeLabel = '골드';
+            badgeStyle = 'background:#fff3cd;color:#b7791f;';
+            badgeRemainingText = `다이아까지<br>${13 - completedCount}일!`;
+        } else if (completedCount >= 13) {
             medalImageSrc = '/img/medal/diamond.png';
             medalAlt = 'DIAMOND';
+            badgeLabel = '다이아';
+            badgeStyle = 'background:#e8f5ff;color:#1e88e5;';
+            badgeRemainingText = '';
+            workoutCardStyle = 'background:#e8f5ff;border:2px solid #64b5f6;box-shadow:0 6px 16px rgba(30,136,229,0.18);';
+        } else {
+            badgeLabel = '시작~!';
+            badgeStyle = 'background:#f5f5f5;color:#666;';
+            badgeRemainingText = '';
         }
         
         monthlyCompletionGraph = `
@@ -763,36 +902,74 @@ function render() {
         `;
     }
     
-    // 주간 운동 요약 텍스트
-    let weeklyWorkoutText = '기록 없음';
-    if (weeklyWorkoutSummary) {
-        const firstLineParts = [];
-        if (weeklyWorkoutSummary.workoutCount > 0) {
-            firstLineParts.push(`${weeklyWorkoutSummary.workoutCount}개 운동`);
-        }
-        if (weeklyWorkoutSummary.totalSets > 0) {
-            firstLineParts.push(`${weeklyWorkoutSummary.totalSets}세트`);
-        }
+    // 이번달 식단 요약 텍스트
+    let monthlyDietText = '식단 0일';
+    let monthlyDietGraph = '<div style="font-size: 0.85rem; color: var(--app-text-muted);">기록 없음</div>';
+    
+    let dietMedalImageSrc = '';
+    let dietMedalAlt = '';
+    let dietBadgeLabel = '시작~!';
+    let dietBadgeStyle = 'background:#f5f5f5;color:#666;';
+    let dietBadgeRemainingText = '';
+    let dietCardStyle = '';
+    if (monthlyDietSummary) {
+        const dietDaysCount = monthlyDietSummary.dietDaysCount || 0;
+        const daysInMonth = monthlyDietSummary.daysInMonth || 0;
+        monthlyDietText = `식단 ${dietDaysCount}일`;
         
-        // 첫 번째 줄: 운동 개수와 세트 수
-        const firstLine = firstLineParts.length > 0 ? firstLineParts.join(' ') : '';
+        const effectiveDays = Math.max(1, daysInMonth - 10);
+        const ratio = dietDaysCount > 0 ? dietDaysCount / effectiveDays : 0;
+        const maxBars = 8;
+        const rawBars = Math.round(ratio * maxBars);
+        const filledBars = dietDaysCount > 0
+            ? Math.max(1, Math.min(maxBars, rawBars))
+            : Math.max(0, Math.min(maxBars, rawBars));
+        const barHeights = [6, 8, 10, 12, 14, 16, 18, 20];
         
-        // 두 번째 줄: 유산소 운동 시간 (시간이 있을 경우만)
-        let secondLine = '';
-        if (weeklyWorkoutSummary.totalMinutes > 0) {
-            secondLine = `유산소 ${weeklyWorkoutSummary.totalMinutes}분`;
-        }
+        const bars = barHeights.map((height, index) => {
+            const isFilled = index < filledBars;
+            const background = isFilled ? '#4caf50' : '#e0e0e0';
+            return `<div style="width: 4px; height: ${height}px; border-radius: 2px; background: ${background};"></div>`;
+        }).join('');
         
-        // 두 줄로 구성 (두 번째 줄이 있을 경우만 줄바꿈)
-        if (firstLine && secondLine) {
-            weeklyWorkoutText = `${firstLine}<br>${secondLine}`;
-        } else if (firstLine) {
-            weeklyWorkoutText = firstLine;
-        } else if (secondLine) {
-            weeklyWorkoutText = secondLine;
+        if (dietDaysCount >= 1 && dietDaysCount <= 5) {
+            dietMedalImageSrc = '/img/medal/bronze.png';
+            dietMedalAlt = 'BRONZE';
+            dietBadgeLabel = '브론즈';
+            dietBadgeStyle = 'background:#fce8d8;color:#8d4f1b;';
+            dietBadgeRemainingText = `실버까지<br>${6 - dietDaysCount}일!`;
+        } else if (dietDaysCount >= 6 && dietDaysCount <= 10) {
+            dietMedalImageSrc = '/img/medal/silver.png';
+            dietMedalAlt = 'SILVER';
+            dietBadgeLabel = '실버';
+            dietBadgeStyle = 'background:#eef1f6;color:#546e7a;';
+            dietBadgeRemainingText = `골드까지<br>${11 - dietDaysCount}일!`;
+        } else if (dietDaysCount >= 11 && dietDaysCount <= 15) {
+            dietMedalImageSrc = '/img/medal/gold.png';
+            dietMedalAlt = 'GOLD';
+            dietBadgeLabel = '골드';
+            dietBadgeStyle = 'background:#fff3cd;color:#b7791f;';
+            dietBadgeRemainingText = `다이아까지<br>${16 - dietDaysCount}일!`;
+        } else if (dietDaysCount >= 16) {
+            dietMedalImageSrc = '/img/medal/diamond.png';
+            dietMedalAlt = 'DIAMOND';
+            dietBadgeLabel = '다이아';
+            dietBadgeStyle = 'background:#e8f5ff;color:#1e88e5;';
+            dietBadgeRemainingText = '';
+            dietCardStyle = 'background:#e8f5ff;border:2px solid #64b5f6;box-shadow:0 6px 16px rgba(30,136,229,0.18);';
         } else {
-            weeklyWorkoutText = '기록 없음';
+            dietBadgeLabel = '시작~!';
+            dietBadgeStyle = 'background:#f5f5f5;color:#666;';
+            dietBadgeRemainingText = '';
         }
+        
+        monthlyDietGraph = `
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 0; margin-left: 2px; transform: translateY(-4px);">
+                <div style="display: flex; align-items: flex-end; gap: 2px;">
+                    ${bars}
+                </div>
+            </div>
+        `;
     }
     
     const primaryTrainer = Array.isArray(memberTrainers) && memberTrainers.length > 0 ? memberTrainers[0] : null;
@@ -804,7 +981,7 @@ function render() {
             <div class="app-dashboard-header" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
                 <div style="min-width: 0;">
                     <h1 class="app-dashboard-title">안녕하세요, ${escapeHtml(currentUser?.name || '회원')}님 👋</h1>
-                    <p class="app-dashboard-subtitle">${formatDate(new Date())}</p>
+                    <p class="app-dashboard-subtitle">${todayLabel}</p>
                 </div>
                 ${!isTrainer && trainerDisplayName ? `
                     <div class="app-trainer-header-link" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; cursor: pointer;" data-trainer-username="${escapeHtml(primaryTrainer?.username || '')}">
@@ -842,6 +1019,8 @@ function render() {
                              data-log-id="${log.id}"
                              data-app-user-id="${log.app_user_id || ''}"
                              data-member-name="${escapeHtml(log.member_name || '')}"
+                             data-activity-type="${escapeHtml(log.activity_type || '')}"
+                             data-record-date="${escapeHtml(log.record_date || '')}"
                              style="cursor:pointer;">
                             <div class="app-activity-log-content">
                                 <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -857,7 +1036,7 @@ function render() {
             ` : `
             <!-- 일반 회원용 카드 및 통계 -->
             <div class="app-dashboard-cards">
-                <div class="app-card app-card-info" style="display: flex; align-items: center; gap: 12px;">
+                <div class="app-card app-card-info" id="next-session-card" style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
                     <div class="app-card-icon">🏋️</div>
                     <div class="app-card-content" style="flex: 1; min-width: 0;">
                         <h3>다음 수업</h3>
@@ -876,29 +1055,53 @@ function render() {
                             : ''}
                 </div>
                 
-                <div class="app-card app-card-primary" id="today-workout-card" style="cursor: pointer;">
+                <div class="app-card app-card-primary" id="today-workout-card" style="cursor: pointer; ${workoutCardStyle}">
                     <div class="app-card-icon">💪</div>
                     <div class="app-card-content" style="display: flex; align-items: stretch; gap: 12px;">
                         <div style="flex: 1; min-width: 0;">
-                            <h3>${escapeHtml(monthLabel)}</h3>
+                            <h3>
+                                <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;${badgeStyle}">${badgeLabel}</span>
+                            </h3>
                             <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
                                 <p class="app-card-value" style="margin: 0;">${escapeHtml(monthlyCompletionText)}</p>
                                 ${monthlyCompletionGraph}
                             </div>
                         </div>
-                        ${monthlyWorkoutCompletionSummary && monthlyWorkoutCompletionSummary.completedCount > 0 && medalImageSrc ? `
-                            <div style="display: flex; align-items: center; justify-content: center; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
-                                <img src="${medalImageSrc}" alt="${medalAlt}" style="width: 60px; height: 60px; object-fit: cover; flex-shrink: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" />
+                        ${monthlyWorkoutCompletionSummary ? `
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
+                                ${monthlyWorkoutCompletionSummary.completedCount > 0 && badgeRemainingText ? `
+                                    <span style="font-size:0.75rem;color:var(--app-text-muted);white-space:nowrap;text-align:right;">${badgeRemainingText}</span>
+                                ` : ''}
+                                ${medalImageSrc && monthlyWorkoutCompletionSummary.completedCount > 0 ? `
+                                    <img src="${medalImageSrc}" alt="${medalAlt}" style="width: 60px; height: 60px; object-fit: cover; flex-shrink: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" />
+                                ` : ''}
                             </div>
                         ` : ''}
                     </div>
                 </div>
                 
-                <div class="app-card app-card-secondary" id="weekly-workout-card" style="cursor: pointer;">
-                    <div class="app-card-icon">📊</div>
-                    <div class="app-card-content">
-                        <h3>주간 운동</h3>
-                        <p class="app-card-value">${weeklyWorkoutText}</p>
+                <div class="app-card app-card-secondary" id="diet-summary-card" style="cursor: pointer; ${dietCardStyle}">
+                    <div class="app-card-icon">🥗</div>
+                    <div class="app-card-content" style="display: flex; align-items: stretch; gap: 12px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <h3>
+                                <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;${dietBadgeStyle}">${dietBadgeLabel}</span>
+                            </h3>
+                            <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                                <p class="app-card-value" style="margin: 0;">${escapeHtml(monthlyDietText)}</p>
+                                ${monthlyDietGraph}
+                            </div>
+                        </div>
+                        ${monthlyDietSummary ? `
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
+                                ${monthlyDietSummary.dietDaysCount > 0 && dietBadgeRemainingText ? `
+                                    <span style="font-size:0.75rem;color:var(--app-text-muted);white-space:nowrap;text-align:right;">${dietBadgeRemainingText}</span>
+                                ` : ''}
+                                ${dietMedalImageSrc && monthlyDietSummary.dietDaysCount > 0 ? `
+                                    <img src="${dietMedalImageSrc}" alt="${dietMedalAlt}" style="width: 60px; height: 60px; object-fit: cover; flex-shrink: 0; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.2);" />
+                                ` : ''}
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -928,6 +1131,8 @@ function render() {
                              data-log-id="${log.id}"
                              data-app-user-id="${log.app_user_id || ''}"
                              data-member-name="${escapeHtml(log.member_name || '')}"
+                             data-activity-type="${escapeHtml(log.activity_type || '')}"
+                             data-record-date="${escapeHtml(log.record_date || '')}"
                              style="cursor:pointer;">
                             <div class="app-activity-log-content">
                                 <p class="app-activity-log-message">${escapeHtml(log.activity_message)}</p>
@@ -977,14 +1182,16 @@ function render() {
                                      data-member-name="${connectedAppUserInfo.member_name ? escapeHtml(connectedAppUserInfo.member_name) : ''}"
                                      style="cursor:pointer;">
                                     <div class="app-member-info">
-                                        <div style="display:flex;align-items:center;gap:8px;">
+                                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                             <p class="app-member-name">${escapeHtml(connectedAppUserInfo.name || '회원')}</p>
+                                            ${renderMemberMedalBadges(connectedAppUserInfo.id)}
                                             <span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>
-                                            ${connectedAppUserInfo.member_name ? '<span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>' : ''}
                                         </div>
-                                        <p class="app-member-details">
-                                            ${escapeHtml(connectedAppUserInfo.phone || '-')} | 아이디: ${escapeHtml(connectedAppUserInfo.username || '-')}
-                                        </p>
+                                        ${connectedAppUserInfo.remainSessions !== undefined && connectedAppUserInfo.remainSessions > 0 ? `
+                                            <p class="app-member-details">
+                                                남은 세션: ${connectedAppUserInfo.remainSessions}회
+                                            </p>
+                                        ` : ''}
                                     </div>
                                 </div>
                                 `;
@@ -1001,15 +1208,16 @@ function render() {
                                      data-member-name="${member.member_name ? escapeHtml(member.member_name) : ''}"
                                      style="cursor:pointer;">
                                     <div class="app-member-info">
-                                        <div style="display:flex;align-items:center;gap:8px;">
+                                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                             <p class="app-member-name">${escapeHtml(member.name)}</p>
+                                            ${renderMemberMedalBadges(member.app_user_id)}
                                             ${isConnected ? '<span style="color:#4caf50;font-size:0.75rem;font-weight:600;">(연결됨)</span>' : ''}
-                                            <span style="color:var(--app-text-muted);font-size:0.75rem;">(PT 회원)</span>
                                         </div>
-                                        <p class="app-member-details">
-                                            ${escapeHtml(member.phone || '-')} | 아이디: ${escapeHtml(member.username)}
-                                            ${member.remainSessions !== undefined && member.remainSessions > 0 ? ` | 남은 세션: ${member.remainSessions}회` : ''}
-                                        </p>
+                                        ${member.remainSessions !== undefined && member.remainSessions > 0 ? `
+                                            <p class="app-member-details">
+                                                남은 세션: ${member.remainSessions}회
+                                            </p>
+                                        ` : ''}
                                     </div>
                                 </div>
                             `;
@@ -1045,8 +1253,11 @@ function render() {
         // 오늘의 운동 카드 클릭 이벤트 설정
         setupTodayWorkoutCardClick();
         
-        // 주간 운동 카드 클릭 이벤트 설정
-        setupWeeklyWorkoutCardClick();
+        // 다음 수업 카드 클릭 이벤트 설정
+        setupNextSessionCardClick();
+        
+        // 식단 카드 클릭 이벤트 설정
+        setupDietSummaryCardClick();
         
         // 트레이너 프로필 사진 클릭 이벤트 설정
         setupTrainerProfileImageClick();
@@ -1061,15 +1272,32 @@ function render() {
 }
 
 /**
- * 주간 운동 카드 클릭 이벤트 설정
+ * 식단 카드 클릭 이벤트 설정
  */
-function setupWeeklyWorkoutCardClick() {
-    const weeklyWorkoutCard = document.getElementById('weekly-workout-card');
-    if (weeklyWorkoutCard) {
-        weeklyWorkoutCard.addEventListener('click', () => {
-            showWeeklyWorkoutModal();
+function setupDietSummaryCardClick() {
+    const dietSummaryCard = document.getElementById('diet-summary-card');
+    if (dietSummaryCard) {
+        dietSummaryCard.addEventListener('click', async () => {
+            const { navigateToScreen } = await import('./index.js');
+            navigateToScreen('diet');
         });
     }
+}
+
+/**
+ * 다음 수업 카드 클릭 이벤트 설정
+ */
+function setupNextSessionCardClick() {
+    const nextSessionCard = document.getElementById('next-session-card');
+    if (!nextSessionCard || !nextSession || !nextSession.date) {
+        return;
+    }
+    nextSessionCard.addEventListener('click', async () => {
+        localStorage.setItem('pendingNavScreen', 'workout');
+        localStorage.setItem('pendingNavDate', nextSession.date);
+        const { navigateToScreen } = await import('./index.js');
+        navigateToScreen('workout');
+    });
 }
 
 /**
@@ -1867,12 +2095,13 @@ export async function refresh() {
         loadTrainerMembers(),
         loadMemberTrainers(),
         loadTodayWorkoutSummary(),
-        loadWeeklyWorkoutSummary(),
         loadMonthlyWorkoutCompletionSummary(),
+        loadMonthlyDietSummary(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs()
     ]);
+    await loadTrainerMemberMedalStatus();
     render();
     
     // 활동 로그 자동 업데이트 재시작
@@ -2014,35 +2243,38 @@ function setupMemberActivityLogEvents() {
                     const logId = item.getAttribute('data-log-id');
                     const isUnread = item.classList.contains('app-activity-log-item-unread');
                     
-                    if (!logId || !isUnread) return;
+                    if (!logId) return;
                     
                     const appUserId = currentUser?.id;
                     if (!appUserId) return;
                     
                     try {
-                        await markMemberActivityLogAsRead(logId, appUserId);
-                        item.classList.remove('app-activity-log-item-unread');
-                        item.classList.add('app-activity-log-item-read');
-                        const indicator = item.querySelector('.app-activity-log-indicator');
-                        if (indicator) indicator.remove();
-                        memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
-                        const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                        if (sectionTitle) {
-                            const badge = sectionTitle.querySelector('span');
-                            if (memberActivityLogsUnreadCount > 0) {
-                                if (badge) {
-                                    badge.textContent = memberActivityLogsUnreadCount;
+                        if (isUnread) {
+                            await markMemberActivityLogAsRead(logId, appUserId);
+                            item.classList.remove('app-activity-log-item-unread');
+                            item.classList.add('app-activity-log-item-read');
+                            const indicator = item.querySelector('.app-activity-log-indicator');
+                            if (indicator) indicator.remove();
+                            memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
+                            const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                            if (sectionTitle) {
+                                const badge = sectionTitle.querySelector('span');
+                                if (memberActivityLogsUnreadCount > 0) {
+                                    if (badge) {
+                                        badge.textContent = memberActivityLogsUnreadCount;
+                                    } else {
+                                        sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>`;
+                                    }
                                 } else {
-                                    sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>`;
+                                    if (badge) badge.remove();
+                                    const markAllBtn = document.getElementById('mark-all-member-read-btn');
+                                    if (markAllBtn) markAllBtn.style.display = 'none';
                                 }
-                            } else {
-                                if (badge) badge.remove();
-                                const markAllBtn = document.getElementById('mark-all-member-read-btn');
-                                if (markAllBtn) markAllBtn.style.display = 'none';
                             }
+                            const log = memberActivityLogs.find(l => l.id === logId);
+                            if (log) log.is_read = true;
                         }
-                        const log = memberActivityLogs.find(l => l.id === logId);
-                        if (log) log.is_read = true;
+                        await navigateFromActivityLog(item);
                     } catch (error) {
                         console.error('로그 읽음 처리 오류:', error);
                         alert(`로그 읽음 처리 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
@@ -2064,52 +2296,55 @@ function setupMemberActivityLogEvents() {
         const logId = item.getAttribute('data-log-id');
         const isUnread = item.classList.contains('app-activity-log-item-unread');
         
-        if (!logId || !isUnread) return;
+        if (!logId) return;
         
         const appUserId = currentUser?.id;
         if (!appUserId) return;
         
         try {
-            await markMemberActivityLogAsRead(logId, appUserId);
-            
-            // UI 업데이트
-            item.classList.remove('app-activity-log-item-unread');
-            item.classList.add('app-activity-log-item-read');
-            
-            // 읽음 표시 제거
-            const indicator = item.querySelector('.app-activity-log-indicator');
-            if (indicator) {
-                indicator.remove();
-            }
-            
-            // 읽지 않은 개수 업데이트
-            memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
-            
-            // 헤더의 읽지 않은 개수 뱃지 업데이트
-            const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-            if (sectionTitle) {
-                const badge = sectionTitle.querySelector('span');
-                if (memberActivityLogsUnreadCount > 0) {
-                    if (badge) {
-                        badge.textContent = memberActivityLogsUnreadCount;
+            if (isUnread) {
+                await markMemberActivityLogAsRead(logId, appUserId);
+                
+                // UI 업데이트
+                item.classList.remove('app-activity-log-item-unread');
+                item.classList.add('app-activity-log-item-read');
+                
+                // 읽음 표시 제거
+                const indicator = item.querySelector('.app-activity-log-indicator');
+                if (indicator) {
+                    indicator.remove();
+                }
+                
+                // 읽지 않은 개수 업데이트
+                memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
+                
+                // 헤더의 읽지 않은 개수 뱃지 업데이트
+                const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                if (sectionTitle) {
+                    const badge = sectionTitle.querySelector('span');
+                    if (memberActivityLogsUnreadCount > 0) {
+                        if (badge) {
+                            badge.textContent = memberActivityLogsUnreadCount;
+                        } else {
+                            sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>`;
+                        }
                     } else {
-                        sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>`;
+                        if (badge) badge.remove();
+                        // 전체 읽음 처리 버튼 숨김
+                        const markAllBtn = document.getElementById('mark-all-member-read-btn');
+                        if (markAllBtn) markAllBtn.style.display = 'none';
                     }
-                } else {
-                    if (badge) badge.remove();
-                    // 전체 읽음 처리 버튼 숨김
-                    const markAllBtn = document.getElementById('mark-all-member-read-btn');
-                    if (markAllBtn) markAllBtn.style.display = 'none';
+                }
+                
+                // 로그 데이터 업데이트 (is_read 상태 변경)
+                if (memberActivityLogs) {
+                    const log = memberActivityLogs.find(l => l.id === logId);
+                    if (log) {
+                        log.is_read = true;
+                    }
                 }
             }
-            
-            // 로그 데이터 업데이트 (is_read 상태 변경)
-            if (memberActivityLogs) {
-                const log = memberActivityLogs.find(l => l.id === logId);
-                if (log) {
-                    log.is_read = true;
-                }
-            }
+            await navigateFromActivityLog(item);
         } catch (error) {
             console.error('로그 읽음 처리 오류:', error);
             alert(`로그 읽음 처리 중 오류가 발생했습니다: ${error.message || '알 수 없는 오류'}`);
@@ -2315,41 +2550,43 @@ function setupActivityLogEvents() {
                     const memberName = item.getAttribute('data-member-name');
                     const isUnread = item.classList.contains('app-activity-log-item-unread');
                     
-                    if (!logId || !isUnread) return;
+                    if (!logId) return;
                     
                     const trainerUsername = currentUser?.username;
                     if (!trainerUsername) return;
                     
                     try {
-                        await markActivityLogAsRead(logId, trainerUsername);
-                        
-                        item.classList.remove('app-activity-log-item-unread');
-                        item.classList.add('app-activity-log-item-read');
-                        
-                        const indicator = item.querySelector('.app-activity-log-indicator');
-                        if (indicator) indicator.remove();
-                        
-                        activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
-                        
-                        const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                        if (sectionTitle) {
-                            const badge = sectionTitle.querySelector('span');
-                            if (activityLogsUnreadCount > 0) {
-                                if (badge) {
-                                    badge.textContent = activityLogsUnreadCount;
+                        if (isUnread) {
+                            await markActivityLogAsRead(logId, trainerUsername);
+                            
+                            item.classList.remove('app-activity-log-item-unread');
+                            item.classList.add('app-activity-log-item-read');
+                            
+                            const indicator = item.querySelector('.app-activity-log-indicator');
+                            if (indicator) indicator.remove();
+                            
+                            activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
+                            
+                            const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                            if (sectionTitle) {
+                                const badge = sectionTitle.querySelector('span');
+                                if (activityLogsUnreadCount > 0) {
+                                    if (badge) {
+                                        badge.textContent = activityLogsUnreadCount;
+                                    } else {
+                                        sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
+                                    }
                                 } else {
-                                    sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
+                                    if (badge) badge.remove();
+                                    const markAllBtn = document.getElementById('mark-all-read-btn');
+                                    if (markAllBtn) markAllBtn.parentElement.remove();
                                 }
-                            } else {
-                                if (badge) badge.remove();
-                                const markAllBtn = document.getElementById('mark-all-read-btn');
-                                if (markAllBtn) markAllBtn.parentElement.remove();
                             }
-                        }
-                        
-                        const log = activityLogs.find(l => l.id === logId);
-                        if (log) {
-                            log.is_read = true;
+                            
+                            const log = activityLogs.find(l => l.id === logId);
+                            if (log) {
+                                log.is_read = true;
+                            }
                         }
                         
                         // 회원 연결 로직
@@ -2360,16 +2597,19 @@ function setupActivityLogEvents() {
                             const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
                             
                             if (connectedAppUserId === appUserId) {
+                                await navigateFromActivityLog(item);
                                 return;
                             }
                             
                             if (connectedAppUserId) {
                                 if (confirm(`현재 연결된 회원과의 연결을 해제하고 "${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
                                     await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                                    await navigateFromActivityLog(item);
                                 }
                             } else {
                                 if (confirm(`"${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
                                     await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                                    await navigateFromActivityLog(item);
                                 }
                             }
                         }
@@ -2404,11 +2644,6 @@ function setupActivityLogEvents() {
             return;
         }
         
-        if (!isUnread) {
-            console.log('[로그 클릭] 이미 읽음 처리된 로그');
-            return;
-        }
-        
         const trainerUsername = currentUser?.username;
         if (!trainerUsername) {
             console.log('[로그 클릭] trainerUsername 없음');
@@ -2419,43 +2654,45 @@ function setupActivityLogEvents() {
         
         try {
                 // 1. 읽음 처리 (기존 로직)
-                await markActivityLogAsRead(logId, trainerUsername);
-                
-                // UI 업데이트
-                item.classList.remove('app-activity-log-item-unread');
-                item.classList.add('app-activity-log-item-read');
-                
-                // 읽음 표시 제거
-                const indicator = item.querySelector('.app-activity-log-indicator');
-                if (indicator) {
-                    indicator.remove();
-                }
-                
-                // 읽지 않은 개수 업데이트
-                activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
-                
-                // 헤더의 읽지 않은 개수 업데이트
-                const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                if (sectionTitle) {
-                    const badge = sectionTitle.querySelector('span');
-                    if (activityLogsUnreadCount > 0) {
-                        if (badge) {
-                            badge.textContent = activityLogsUnreadCount;
-                        } else {
-                            sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
-                        }
-                    } else {
-                        if (badge) badge.remove();
-                        // 전체 읽음 처리 버튼도 제거
-                        const markAllBtn = document.getElementById('mark-all-read-btn');
-                        if (markAllBtn) markAllBtn.parentElement.remove();
+                if (isUnread) {
+                    await markActivityLogAsRead(logId, trainerUsername);
+                    
+                    // UI 업데이트
+                    item.classList.remove('app-activity-log-item-unread');
+                    item.classList.add('app-activity-log-item-read');
+                    
+                    // 읽음 표시 제거
+                    const indicator = item.querySelector('.app-activity-log-indicator');
+                    if (indicator) {
+                        indicator.remove();
                     }
-                }
-                
-                // 로그 데이터 업데이트
-                const log = activityLogs.find(l => l.id === logId);
-                if (log) {
-                    log.is_read = true;
+                    
+                    // 읽지 않은 개수 업데이트
+                    activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
+                    
+                    // 헤더의 읽지 않은 개수 업데이트
+                    const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
+                    if (sectionTitle) {
+                        const badge = sectionTitle.querySelector('span');
+                        if (activityLogsUnreadCount > 0) {
+                            if (badge) {
+                                badge.textContent = activityLogsUnreadCount;
+                            } else {
+                                sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
+                            }
+                        } else {
+                            if (badge) badge.remove();
+                            // 전체 읽음 처리 버튼도 제거
+                            const markAllBtn = document.getElementById('mark-all-read-btn');
+                            if (markAllBtn) markAllBtn.parentElement.remove();
+                        }
+                    }
+                    
+                    // 로그 데이터 업데이트
+                    const log = activityLogs.find(l => l.id === logId);
+                    if (log) {
+                        log.is_read = true;
+                    }
                 }
                 
                 // 2. app_user_id 확인 및 회원 연결 로직
@@ -2469,7 +2706,7 @@ function setupActivityLogEvents() {
                     
                     // 상황 1-2-1: 이미 연결된 회원의 로그
                     if (connectedAppUserId === appUserId) {
-                        // 연결 확인 없이 읽음 처리만 완료
+                        await navigateFromActivityLog(item);
                         return;
                     }
                     
@@ -2478,11 +2715,13 @@ function setupActivityLogEvents() {
                         // 상황 1-2-2: 다른 회원이 연결되어 있음
                         if (confirm(`현재 연결된 회원과의 연결을 해제하고 "${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
                             await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                            await navigateFromActivityLog(item);
                         }
                     } else {
                         // 상황 1-1: 연결된 회원이 없음
                         if (confirm(`"${memberName}" 회원의 정보를 불러오시겠습니까?`)) {
                             await connectAppUser(appUserId, memberName, true); // skipConfirm: true (이미 확인 받았으므로)
+                            await navigateFromActivityLog(item);
                         }
                     }
                 }

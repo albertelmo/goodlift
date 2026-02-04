@@ -571,7 +571,9 @@ async function render() {
     const { getSelectedDate } = await import('./calendar.js');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const selectedDateStr = getSelectedDate();
+    const pendingScreen = localStorage.getItem('pendingNavScreen');
+    const pendingDate = localStorage.getItem('pendingNavDate');
+    const selectedDateStr = (pendingScreen === 'workout' && pendingDate) ? pendingDate : getSelectedDate();
     const targetDate = selectedDateStr ? new Date(selectedDateStr) : today;
     const targetDateStr = formatDate(targetDate);
     
@@ -618,6 +620,10 @@ async function render() {
         const selectedDateStr = getSelectedDate();
         if (selectedDateStr) {
             await listData.filterByDate(selectedDateStr);
+        }
+        if (pendingScreen === 'workout' && pendingDate) {
+            localStorage.removeItem('pendingNavScreen');
+            localStorage.removeItem('pendingNavDate');
         }
     } catch (error) {
         console.error('운동기록 로드 중 오류:', error);
@@ -748,7 +754,7 @@ async function loadWorkoutRecordsForCalendar() {
         // 캘린더 초기화
         const calendarContainer = document.getElementById('workout-calendar-container');
         if (calendarContainer) {
-            const { init: initCalendar, updateWorkoutRecords, updateSessions, render: renderCalendar } = await import('./calendar.js');
+            const { init: initCalendar, updateWorkoutRecords, updateSessions, render: renderCalendar, setSelectedDate } = await import('./calendar.js');
             initCalendar(calendarContainer, async (selectedDate) => {
                 // 날짜 선택 시 목록 필터링
                 if (selectedDate) {
@@ -763,6 +769,13 @@ async function loadWorkoutRecordsForCalendar() {
             
             // 세션 데이터는 render()에서 로드 후 전달
             renderCalendar(calendarContainer);
+            
+            const pendingScreen = localStorage.getItem('pendingNavScreen');
+            const pendingDate = localStorage.getItem('pendingNavDate');
+            if (pendingScreen === 'workout' && pendingDate) {
+                setSelectedDate(pendingDate);
+                renderCalendar(calendarContainer);
+            }
             
             // 운동기록 업데이트 함수를 전역에 저장 (목록 새로고침 시 사용)
             window.updateCalendarWorkoutRecords = async () => {

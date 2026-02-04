@@ -379,7 +379,9 @@ async function render() {
     const { getSelectedDate } = await import('./calendar.js');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const selectedDateStr = getSelectedDate();
+    const pendingScreen = localStorage.getItem('pendingNavScreen');
+    const pendingDate = localStorage.getItem('pendingNavDate');
+    const selectedDateStr = (pendingScreen === 'diet' && pendingDate) ? pendingDate : getSelectedDate();
     const targetDate = selectedDateStr ? new Date(selectedDateStr) : today;
     const targetDateStr = formatDate(targetDate);
     
@@ -415,6 +417,10 @@ async function render() {
         const selectedDateStr = getSelectedDate();
         if (selectedDateStr && listData) {
             await listData.filterByDate(selectedDateStr);
+        }
+        if (pendingScreen === 'diet' && pendingDate) {
+            localStorage.removeItem('pendingNavScreen');
+            localStorage.removeItem('pendingNavDate');
         }
     } catch (error) {
         console.error('식단기록 로드 중 오류:', error);
@@ -484,7 +490,7 @@ async function loadDietRecordsForCalendar() {
             throw new Error('사용자 ID가 없습니다.');
         }
         
-        const { getDietRecordsForCalendar } = await import('../api.js');
+    const { getDietRecordsForCalendar } = await import('../api.js');
         const { getToday } = await import('../utils.js');
         const today = getToday();
         const todayDate = new Date(today);
@@ -499,8 +505,8 @@ async function loadDietRecordsForCalendar() {
         
         // 캘린더 초기화
         const calendarContainer = document.getElementById('diet-calendar-container');
-        if (calendarContainer) {
-            const { init: initCalendar, updateDietRecords, render: renderCalendar } = await import('./calendar.js');
+    if (calendarContainer) {
+        const { init: initCalendar, updateDietRecords, render: renderCalendar, setSelectedDate } = await import('./calendar.js');
             initCalendar(calendarContainer, async (selectedDate) => {
                 if (selectedDate) {
                     const { formatDate } = await import('../utils.js');
@@ -512,6 +518,13 @@ async function loadDietRecordsForCalendar() {
             }, summary);
             
             renderCalendar(calendarContainer);
+        
+        const pendingScreen = localStorage.getItem('pendingNavScreen');
+        const pendingDate = localStorage.getItem('pendingNavDate');
+        if (pendingScreen === 'diet' && pendingDate) {
+            setSelectedDate(pendingDate);
+            renderCalendar(calendarContainer);
+        }
             
             // 식단기록 업데이트 함수를 전역에 저장
             window.updateCalendarDietRecords = async () => {

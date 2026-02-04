@@ -1288,6 +1288,82 @@ app.get('/api/trainer-members', async (req, res) => {
     }
 });
 
+// 앱 유저 메달 현황 조회 (트레이너용)
+app.get('/api/app-users/medal-status', async (req, res) => {
+    try {
+        const { app_user_ids, start_date, end_date } = req.query;
+        if (!app_user_ids) {
+            return res.status(400).json({ message: '앱 유저 ID 목록이 필요합니다.' });
+        }
+        
+        const appUserIds = app_user_ids
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean);
+        
+        if (appUserIds.length === 0) {
+            return res.json({ results: [] });
+        }
+        
+        // 조회 기간 설정 (없으면 이번달)
+        let startDate = start_date;
+        let endDate = end_date;
+        if (!startDate || !endDate) {
+            const today = new Date();
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            monthStart.setHours(0, 0, 0, 0);
+            monthEnd.setHours(23, 59, 59, 999);
+            startDate = monthStart.toISOString().split('T')[0];
+            endDate = monthEnd.toISOString().split('T')[0];
+        }
+        
+        const getWorkoutTier = (days) => {
+            if (days >= 13) return 'diamond';
+            if (days >= 9) return 'gold';
+            if (days >= 5) return 'silver';
+            if (days >= 1) return 'bronze';
+            return 'none';
+        };
+        const getDietTier = (days) => {
+            if (days >= 16) return 'diamond';
+            if (days >= 11) return 'gold';
+            if (days >= 6) return 'silver';
+            if (days >= 1) return 'bronze';
+            return 'none';
+        };
+        
+        const results = await Promise.all(appUserIds.map(async (appUserId) => {
+            if (appUserId.startsWith('trainer-')) {
+                return {
+                    app_user_id: appUserId,
+                    workout: { days: 0, tier: 'none' },
+                    diet: { days: 0, tier: 'none' }
+                };
+            }
+            
+            const [workoutSummary, dietSummary] = await Promise.all([
+                workoutRecordsDB.getWorkoutRecordsForCalendar(appUserId, startDate, endDate),
+                dietRecordsDB.getDietRecordsForCalendar(appUserId, startDate, endDate)
+            ]);
+            
+            const workoutDays = Object.values(workoutSummary || {}).filter(day => day && day.allCompleted).length;
+            const dietDays = Object.values(dietSummary || {}).filter(day => day && day.hasDiet).length;
+            
+            return {
+                app_user_id: appUserId,
+                workout: { days: workoutDays, tier: getWorkoutTier(workoutDays) },
+                diet: { days: dietDays, tier: getDietTier(dietDays) }
+            };
+        }));
+        
+        res.json({ results });
+    } catch (error) {
+        console.error('[API] 앱 유저 메달 현황 조회 오류:', error);
+        res.status(500).json({ message: '앱 유저 메달 현황 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 앱 유저 단일 조회
 app.get('/api/app-users/:id', async (req, res) => {
     try {
