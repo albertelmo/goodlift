@@ -99,6 +99,10 @@ window.addEventListener('focus', () => {
  */
 export function navigateToScreen(screen) {
     currentScreen = screen;
+    const achievementBtn = document.getElementById('app-achievement-btn');
+    if (achievementBtn) {
+        achievementBtn.style.display = screen === 'home' ? 'inline-flex' : 'none';
+    }
     
     // 화면별 모듈 로드
     switch (screen) {

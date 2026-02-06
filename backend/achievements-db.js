@@ -14,6 +14,10 @@ const createDailyStatsTable = async () => {
       workout_has_record BOOLEAN DEFAULT false,
       workout_all_completed BOOLEAN DEFAULT false,
       diet_has_record BOOLEAN DEFAULT false,
+      workout_member_comment_count INT DEFAULT 0,
+      workout_trainer_comment_count INT DEFAULT 0,
+      diet_member_comment_count INT DEFAULT 0,
+      diet_trainer_comment_count INT DEFAULT 0,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (app_user_id, record_date)
     )
@@ -61,10 +65,44 @@ const backfillDailyStats = async () => {
       FROM diet_records dr
       GROUP BY dr.app_user_id, dr.meal_date
     ),
+    workout_comments_daily AS (
+      SELECT
+        wc.app_user_id,
+        wc.workout_date AS record_date,
+        COUNT(*) FILTER (WHERE wc.commenter_type = 'member' AND wc.commenter_app_user_id = wc.app_user_id) AS workout_member_comment_count,
+        COUNT(*) FILTER (WHERE wc.commenter_type = 'trainer') AS workout_trainer_comment_count
+      FROM workout_comments wc
+      GROUP BY wc.app_user_id, wc.workout_date
+    ),
+    diet_daily_comments_daily AS (
+      SELECT
+        dc.app_user_id,
+        dc.diet_date AS record_date,
+        COUNT(*) FILTER (WHERE dc.commenter_type = 'member' AND dc.commenter_app_user_id = dc.app_user_id) AS diet_member_comment_count,
+        COUNT(*) FILTER (WHERE dc.commenter_type = 'trainer') AS diet_trainer_comment_count
+      FROM diet_daily_comments dc
+      GROUP BY dc.app_user_id, dc.diet_date
+    ),
+    diet_record_comments_daily AS (
+      SELECT
+        dr.app_user_id,
+        dr.meal_date AS record_date,
+        COUNT(*) FILTER (WHERE dc.commenter_type = 'user' AND dc.commenter_id = dr.app_user_id::text) AS diet_member_comment_count,
+        COUNT(*) FILTER (WHERE dc.commenter_type = 'trainer') AS diet_trainer_comment_count
+      FROM diet_comments dc
+      JOIN diet_records dr ON dr.id = dc.diet_record_id
+      GROUP BY dr.app_user_id, dr.meal_date
+    ),
     all_days AS (
       SELECT app_user_id, record_date FROM workout_daily
       UNION
       SELECT app_user_id, record_date FROM diet_daily
+      UNION
+      SELECT app_user_id, record_date FROM workout_comments_daily
+      UNION
+      SELECT app_user_id, record_date FROM diet_daily_comments_daily
+      UNION
+      SELECT app_user_id, record_date FROM diet_record_comments_daily
     )
     INSERT INTO app_user_daily_stats (
       app_user_id,
@@ -72,6 +110,10 @@ const backfillDailyStats = async () => {
       workout_has_record,
       workout_all_completed,
       diet_has_record,
+      workout_member_comment_count,
+      workout_trainer_comment_count,
+      diet_member_comment_count,
+      diet_trainer_comment_count,
       updated_at
     )
     SELECT
@@ -80,14 +122,25 @@ const backfillDailyStats = async () => {
       COALESCE(w.workout_has_record, false),
       COALESCE(w.workout_all_completed, false),
       COALESCE(di.diet_has_record, false),
+      COALESCE(wc.workout_member_comment_count, 0),
+      COALESCE(wc.workout_trainer_comment_count, 0),
+      COALESCE(ddc.diet_member_comment_count, 0) + COALESCE(drc.diet_member_comment_count, 0),
+      COALESCE(ddc.diet_trainer_comment_count, 0) + COALESCE(drc.diet_trainer_comment_count, 0),
       NOW()
     FROM all_days d
     LEFT JOIN workout_daily w ON w.app_user_id = d.app_user_id AND w.record_date = d.record_date
     LEFT JOIN diet_daily di ON di.app_user_id = d.app_user_id AND di.record_date = d.record_date
+    LEFT JOIN workout_comments_daily wc ON wc.app_user_id = d.app_user_id AND wc.record_date = d.record_date
+    LEFT JOIN diet_daily_comments_daily ddc ON ddc.app_user_id = d.app_user_id AND ddc.record_date = d.record_date
+    LEFT JOIN diet_record_comments_daily drc ON drc.app_user_id = d.app_user_id AND drc.record_date = d.record_date
     ON CONFLICT (app_user_id, record_date) DO UPDATE
     SET workout_has_record = EXCLUDED.workout_has_record,
         workout_all_completed = EXCLUDED.workout_all_completed,
         diet_has_record = EXCLUDED.diet_has_record,
+        workout_member_comment_count = EXCLUDED.workout_member_comment_count,
+        workout_trainer_comment_count = EXCLUDED.workout_trainer_comment_count,
+        diet_member_comment_count = EXCLUDED.diet_member_comment_count,
+        diet_trainer_comment_count = EXCLUDED.diet_trainer_comment_count,
         updated_at = EXCLUDED.updated_at
   `;
   await pool.query(query);
@@ -198,14 +251,66 @@ const getDietDayStatus = async (appUserId, recordDate) => {
   return total > 0;
 };
 
+const getWorkoutCommentCounts = async (appUserId, recordDate) => {
+  const query = `
+    SELECT
+      COUNT(*) FILTER (WHERE commenter_type = 'member' AND commenter_app_user_id = $1) AS member_count,
+      COUNT(*) FILTER (WHERE commenter_type = 'trainer') AS trainer_count
+    FROM workout_comments
+    WHERE app_user_id = $1 AND workout_date = $2
+  `;
+  const result = await pool.query(query, [appUserId, recordDate]);
+  const row = result.rows[0] || { member_count: 0, trainer_count: 0 };
+  return {
+    memberCount: parseInt(row.member_count || 0, 10),
+    trainerCount: parseInt(row.trainer_count || 0, 10)
+  };
+};
+
+const getDietCommentCounts = async (appUserId, recordDate) => {
+  const query = `
+    SELECT
+      COALESCE(daily.member_count, 0) + COALESCE(record.member_count, 0) AS member_count,
+      COALESCE(daily.trainer_count, 0) + COALESCE(record.trainer_count, 0) AS trainer_count
+    FROM (
+      SELECT
+        COUNT(*) FILTER (WHERE commenter_type = 'member' AND commenter_app_user_id = $1) AS member_count,
+        COUNT(*) FILTER (WHERE commenter_type = 'trainer') AS trainer_count
+      FROM diet_daily_comments
+      WHERE app_user_id = $1 AND diet_date = $2
+    ) daily
+    CROSS JOIN (
+      SELECT
+        COUNT(*) FILTER (WHERE commenter_type = 'user' AND commenter_id = $1::text) AS member_count,
+        COUNT(*) FILTER (WHERE commenter_type = 'trainer') AS trainer_count
+      FROM diet_comments dc
+      JOIN diet_records dr ON dr.id = dc.diet_record_id
+      WHERE dr.app_user_id = $1 AND dr.meal_date = $2
+    ) record
+  `;
+  const result = await pool.query(query, [appUserId, recordDate]);
+  const row = result.rows[0] || { member_count: 0, trainer_count: 0 };
+  return {
+    memberCount: parseInt(row.member_count || 0, 10),
+    trainerCount: parseInt(row.trainer_count || 0, 10)
+  };
+};
+
 const refreshDailyStats = async (appUserId, recordDateRaw) => {
   const recordDate = normalizeDate(recordDateRaw);
   if (!appUserId || !recordDate) return;
-  const [workoutStatus, dietHasRecord] = await Promise.all([
+  const [workoutStatus, dietHasRecord, workoutCommentCounts, dietCommentCounts] = await Promise.all([
     getWorkoutDayStatus(appUserId, recordDate),
-    getDietDayStatus(appUserId, recordDate)
+    getDietDayStatus(appUserId, recordDate),
+    getWorkoutCommentCounts(appUserId, recordDate),
+    getDietCommentCounts(appUserId, recordDate)
   ]);
-  if (!workoutStatus.hasWorkout && !dietHasRecord) {
+  if (!workoutStatus.hasWorkout
+      && !dietHasRecord
+      && workoutCommentCounts.memberCount === 0
+      && workoutCommentCounts.trainerCount === 0
+      && dietCommentCounts.memberCount === 0
+      && dietCommentCounts.trainerCount === 0) {
     await pool.query(
       `DELETE FROM app_user_daily_stats WHERE app_user_id = $1 AND record_date = $2`,
       [appUserId, recordDate]
@@ -220,15 +325,33 @@ const refreshDailyStats = async (appUserId, recordDateRaw) => {
         workout_has_record,
         workout_all_completed,
         diet_has_record,
+        workout_member_comment_count,
+        workout_trainer_comment_count,
+        diet_member_comment_count,
+        diet_trainer_comment_count,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
       ON CONFLICT (app_user_id, record_date) DO UPDATE
       SET workout_has_record = EXCLUDED.workout_has_record,
           workout_all_completed = EXCLUDED.workout_all_completed,
           diet_has_record = EXCLUDED.diet_has_record,
+          workout_member_comment_count = EXCLUDED.workout_member_comment_count,
+          workout_trainer_comment_count = EXCLUDED.workout_trainer_comment_count,
+          diet_member_comment_count = EXCLUDED.diet_member_comment_count,
+          diet_trainer_comment_count = EXCLUDED.diet_trainer_comment_count,
           updated_at = EXCLUDED.updated_at
     `,
-    [appUserId, recordDate, workoutStatus.hasWorkout, workoutStatus.allCompleted, dietHasRecord]
+    [
+      appUserId,
+      recordDate,
+      workoutStatus.hasWorkout,
+      workoutStatus.allCompleted,
+      dietHasRecord,
+      workoutCommentCounts.memberCount,
+      workoutCommentCounts.trainerCount,
+      dietCommentCounts.memberCount,
+      dietCommentCounts.trainerCount
+    ]
   );
 };
 
@@ -319,6 +442,63 @@ const getMedalStatus = async (appUserIds, startDate, endDate) => {
   });
 };
 
+const getAchievementSummary = async (appUserId, startDate, endDate) => {
+  const query = `
+    SELECT
+      COUNT(*) FILTER (WHERE workout_all_completed) AS workout_days,
+      COUNT(*) FILTER (WHERE diet_has_record) AS diet_days,
+      COALESCE(SUM(workout_member_comment_count), 0) AS workout_member_comment_count,
+      COALESCE(SUM(workout_trainer_comment_count), 0) AS workout_trainer_comment_count,
+      COALESCE(SUM(diet_member_comment_count), 0) AS diet_member_comment_count,
+      COALESCE(SUM(diet_trainer_comment_count), 0) AS diet_trainer_comment_count
+    FROM app_user_daily_stats
+    WHERE app_user_id = $1
+      AND record_date >= $2
+      AND record_date <= $3
+  `;
+  const result = await pool.query(query, [appUserId, startDate, endDate]);
+  const row = result.rows[0] || {};
+  return {
+    workoutDays: parseInt(row.workout_days || 0, 10),
+    dietDays: parseInt(row.diet_days || 0, 10),
+    workoutMemberCommentCount: parseInt(row.workout_member_comment_count || 0, 10),
+    workoutTrainerCommentCount: parseInt(row.workout_trainer_comment_count || 0, 10),
+    dietMemberCommentCount: parseInt(row.diet_member_comment_count || 0, 10),
+    dietTrainerCommentCount: parseInt(row.diet_trainer_comment_count || 0, 10)
+  };
+};
+
+const getAchievementSummaries = async (appUserIds, startDate, endDate) => {
+  if (!appUserIds || appUserIds.length === 0) {
+    return [];
+  }
+  const query = `
+    SELECT
+      app_user_id,
+      COUNT(*) FILTER (WHERE workout_all_completed) AS workout_days,
+      COUNT(*) FILTER (WHERE diet_has_record) AS diet_days,
+      COALESCE(SUM(workout_member_comment_count), 0) AS workout_member_comment_count,
+      COALESCE(SUM(workout_trainer_comment_count), 0) AS workout_trainer_comment_count,
+      COALESCE(SUM(diet_member_comment_count), 0) AS diet_member_comment_count,
+      COALESCE(SUM(diet_trainer_comment_count), 0) AS diet_trainer_comment_count
+    FROM app_user_daily_stats
+    WHERE app_user_id = ANY($1::uuid[])
+      AND record_date >= $2
+      AND record_date <= $3
+    GROUP BY app_user_id
+  `;
+  const result = await pool.query(query, [appUserIds, startDate, endDate]);
+  return result.rows.map(row => ({
+    app_user_id: row.app_user_id,
+    workoutDays: parseInt(row.workout_days || 0, 10),
+    dietDays: parseInt(row.diet_days || 0, 10),
+    workoutMemberCommentCount: parseInt(row.workout_member_comment_count || 0, 10),
+    workoutTrainerCommentCount: parseInt(row.workout_trainer_comment_count || 0, 10),
+    dietMemberCommentCount: parseInt(row.diet_member_comment_count || 0, 10),
+    dietTrainerCommentCount: parseInt(row.diet_trainer_comment_count || 0, 10)
+  }));
+};
+
 const initializeDatabase = async () => {
   await runMigration(
     'create_app_user_daily_stats_20260205',
@@ -343,6 +523,29 @@ const initializeDatabase = async () => {
     }
   );
   await runMigration(
+    'add_comment_counts_to_daily_stats_20260206',
+    '앱 유저 일별 업적 집계에 코멘트 카운트 컬럼 추가',
+    async () => {
+      const checkQuery = `
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'app_user_daily_stats'
+      `;
+      const checkResult = await pool.query(checkQuery);
+      const existingColumns = checkResult.rows.map(row => row.column_name);
+      const addColumnIfMissing = async (columnName) => {
+        if (!existingColumns.includes(columnName)) {
+          await pool.query(`ALTER TABLE app_user_daily_stats ADD COLUMN ${columnName} INT DEFAULT 0`);
+        }
+      };
+      await addColumnIfMissing('workout_member_comment_count');
+      await addColumnIfMissing('workout_trainer_comment_count');
+      await addColumnIfMissing('diet_member_comment_count');
+      await addColumnIfMissing('diet_trainer_comment_count');
+    }
+  );
+  await runMigration(
     'backfill_workout_has_record_20260205',
     '기존 운동 기록 기반 workout_has_record 재계산',
     backfillWorkoutHasRecord
@@ -350,6 +553,11 @@ const initializeDatabase = async () => {
   await runMigration(
     'backfill_app_user_daily_stats_20260205',
     '앱 유저 일별 업적 집계 초기 백필',
+    backfillDailyStats
+  );
+  await runMigration(
+    'backfill_app_user_daily_stats_comment_counts_20260206',
+    '앱 유저 일별 업적 집계 코멘트 카운트 백필',
     backfillDailyStats
   );
 };
@@ -360,5 +568,7 @@ module.exports = {
   refreshDailyStats,
   getMedalStatus,
   getWorkoutCalendarSummary,
-  getDietCalendarSummary
+  getDietCalendarSummary,
+  getAchievementSummary,
+  getAchievementSummaries
 };

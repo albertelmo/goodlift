@@ -8,6 +8,7 @@ body.app-user-active {
     width: 100%;
     max-width: 100%;
     background: var(--app-bg);
+    font-size: 19px;
 }
 
 :root {
@@ -60,6 +61,178 @@ body.app-user-active {
     height: 48px; /* 최소 높이로 컴팩트하게 */
 }
 
+.app-header-icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--app-border);
+    background: var(--app-surface);
+    color: var(--app-text);
+    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+    align-self: center;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.app-header-icon-btn:active {
+    transform: scale(0.96);
+}
+
+.app-achievement-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    padding: 16px;
+}
+
+.app-achievement-modal-content {
+    width: min(92vw, 360px);
+    max-width: 360px;
+    background: var(--app-surface);
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.2);
+    box-sizing: border-box;
+}
+
+.app-achievement-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    min-height: 32px;
+}
+
+.app-achievement-modal-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--app-text);
+    margin: 0;
+    line-height: 1;
+}
+
+.app-achievement-modal-close {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: var(--app-text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    align-self: center;
+}
+
+.app-achievement-section {
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fafafa;
+}
+
+.app-achievement-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.app-achievement-card {
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    padding: 12px;
+    background: #fafafa;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.app-achievement-card-title {
+    font-size: 13px;
+    color: var(--app-text-muted);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.app-achievement-medal-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.app-achievement-medal-row img {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--app-border);
+}
+
+.app-achievement-medal-row img.is-locked {
+    filter: grayscale(1);
+    opacity: 0.35;
+}
+
+.app-achievement-medal-row img.is-earned {
+    box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+    border-color: rgba(0,0,0,0.18);
+}
+
+.app-achievement-badge {
+    display: inline-block;
+    align-self: flex-start;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.app-achievement-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 15px;
+    color: var(--app-text);
+}
+
+.app-achievement-label {
+    color: var(--app-text-muted);
+    font-size: 13px;
+}
+
+.app-achievement-medal {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.app-achievement-medal img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--app-border);
+}
+
 .app-hamburger-btn,
 .app-header-btn {
     background: none;
@@ -92,7 +265,7 @@ body.app-user-active {
 }
 
 .app-header-title {
-    font-size: 20px;
+    font-size: 21px;
     font-weight: 700;
     color: #000;
     flex: 1;
@@ -184,7 +357,7 @@ body.app-user-active {
 }
 
 .app-drawer-user-name {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     margin: 0 0 4px 0;
     white-space: nowrap;
@@ -193,7 +366,7 @@ body.app-user-active {
 }
 
 .app-drawer-user-id {
-    font-size: 12px;
+    font-size: 13px;
     opacity: 0.8;
     margin: 0;
     white-space: nowrap;
@@ -233,7 +406,7 @@ body.app-user-active {
     color: var(--app-text);
     text-decoration: none;
     transition: background var(--app-transition);
-    font-size: 15px;
+    font-size: 16px;
 }
 
 .app-drawer-item:hover {
@@ -245,7 +418,7 @@ body.app-user-active {
 }
 
 .app-drawer-icon {
-    font-size: 20px;
+    font-size: 21px;
     width: 24px;
     text-align: center;
 }
@@ -276,11 +449,11 @@ body.app-user-active {
 }
 
 .app-dashboard-header {
-    margin-bottom: 24px;
+    margin-bottom: 12px;
 }
 
 .app-dashboard-title {
-    font-size: 24px;
+    font-size: 21px;
     font-weight: 700;
     color: var(--app-text);
     margin: 0 0 8px 0;
@@ -288,7 +461,7 @@ body.app-user-active {
 }
 
 .app-dashboard-subtitle {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--app-text-muted);
     margin: 0;
 }
@@ -346,7 +519,7 @@ body.app-user-active {
 }
 
 .app-card-content h3 {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--app-text-muted);
     margin: 0 0 4px 0;
@@ -354,11 +527,18 @@ body.app-user-active {
 }
 
 .app-card-value {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--app-text);
     margin: 0;
     line-height: 1.2;
+}
+
+.app-card-value-compact {
+    font-size: clamp(15px, 4.6vw, 22px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .app-dashboard-stats {
@@ -376,13 +556,13 @@ body.app-user-active {
 }
 
 .app-stat-label {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--app-text-muted);
     margin: 0 0 8px 0;
 }
 
 .app-stat-value {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 700;
     color: var(--app-primary);
     margin: 0;
@@ -393,7 +573,7 @@ body.app-user-active {
 }
 
 .app-section-title {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 600;
     color: var(--app-text);
     margin: 0 0 12px 0;
@@ -451,14 +631,14 @@ body.app-user-active {
 }
 
 .app-member-name {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--app-text);
     margin: 0;
 }
 
 .app-member-details {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--app-text-muted);
     margin: 0;
 }
@@ -557,7 +737,7 @@ body.app-user-active {
 }
 
 .app-activity-log-message {
-    font-size: 14px;
+    font-size: 15px;
     line-height: 1.4;
     color: var(--app-text);
     margin: 0;
@@ -575,7 +755,7 @@ body.app-user-active {
 }
 
 .app-activity-log-time {
-    font-size: 14px;
+    font-size: 15px;
     color: var(--app-text-muted);
     margin: 0;
     font-weight: 400;
@@ -640,12 +820,12 @@ body.app-user-active {
 }
 
 .app-bottom-nav-icon {
-    font-size: 22px;
+    font-size: 23px;
     line-height: 1;
 }
 
 .app-bottom-nav-label {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     line-height: 1;
 }
@@ -752,14 +932,14 @@ body.app-user-active {
 }
 
 .app-workout-month-display {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--app-text);
     padding-left: 12px;
 }
 
 .app-workout-today-btn {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--app-text-muted);
     background: var(--app-bg);
     padding: 4px 8px;
@@ -802,14 +982,14 @@ body.app-user-active {
 }
 
 .app-diet-month-display {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--app-text);
     padding-left: 12px;
 }
 
 .app-diet-today-btn {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--app-text-muted);
     background: var(--app-bg);
     padding: 4px 8px;
@@ -895,7 +1075,7 @@ body.app-user-active {
 }
 
 .app-diet-date-title {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 600;
     color: var(--app-text);
     margin: 0;
@@ -906,7 +1086,7 @@ body.app-user-active {
 }
 
 .app-diet-date-count {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--app-text-muted);
     background: var(--app-bg);
     padding: 4px 8px;

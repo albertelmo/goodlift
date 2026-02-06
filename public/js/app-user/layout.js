@@ -44,7 +44,9 @@ function render() {
                 </svg>
             </button>
             <div class="app-header-title">스탠다드 멤버스</div>
-            <div style="width: 40px;"></div>
+            <button class="app-header-icon-btn" id="app-achievement-btn" aria-label="업적 보기" style="display:none;">
+                🏅
+            </button>
         </header>
 
         <!-- 햄버거 메뉴 (사이드 드로어) -->

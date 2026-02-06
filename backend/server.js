@@ -1334,6 +1334,45 @@ app.get('/api/app-users/medal-status', async (req, res) => {
     }
 });
 
+// 앱 유저 업적 요약 조회 (회원용)
+app.get('/api/app-users/:appUserId/achievement-summary', async (req, res) => {
+    try {
+        const { appUserId } = req.params;
+        const { start_date, end_date } = req.query;
+        
+        if (!appUserId || !start_date || !end_date) {
+            return res.status(400).json({ message: 'appUserId, start_date, end_date는 필수입니다.' });
+        }
+        
+        const summary = await achievementsDB.getAchievementSummary(appUserId, start_date, end_date);
+        res.json(summary);
+    } catch (error) {
+        console.error('[API] 업적 요약 조회 오류:', error);
+        res.status(500).json({ message: '업적 요약 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 앱 유저 업적 요약 목록 조회 (관리자용)
+app.get('/api/app-users/achievement-summaries', async (req, res) => {
+    try {
+        const { app_user_ids, start_date, end_date } = req.query;
+        if (!app_user_ids || !start_date || !end_date) {
+            return res.status(400).json({ message: 'app_user_ids, start_date, end_date는 필수입니다.' });
+        }
+        
+        const ids = app_user_ids.split(',').map(id => id.trim()).filter(Boolean);
+        if (ids.length === 0) {
+            return res.json({ results: [] });
+        }
+        
+        const results = await achievementsDB.getAchievementSummaries(ids, start_date, end_date);
+        res.json({ results });
+    } catch (error) {
+        console.error('[API] 업적 요약 목록 조회 오류:', error);
+        res.status(500).json({ message: '업적 요약 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 앱 유저 단일 조회
 app.get('/api/app-users/:id', async (req, res) => {
     try {
@@ -2870,6 +2909,9 @@ app.post('/api/diet-records/:id/comments', async (req, res) => {
                     commenter_name // trainer name
                 ).catch(err => console.error('[Activity Log] 회원 로그 생성 실패:', err));
             }
+
+            achievementsDB.refreshDailyStats(record.app_user_id, record.meal_date)
+                .catch(err => console.error('[Daily Stats] 식단 코멘트 집계 갱신 실패:', err));
         }
         
         res.status(201).json(comment);
@@ -3059,6 +3101,9 @@ app.post('/api/diet-records/:appUserId/daily-comments', async (req, res) => {
                 diet_date
             ).catch(err => console.error('[Activity Log] 트레이너 로그 생성 실패:', err));
         }
+
+        achievementsDB.refreshDailyStats(appUserId, diet_date)
+            .catch(err => console.error('[Daily Stats] 식단 하루 코멘트 집계 갱신 실패:', err));
         
         res.status(201).json(savedComment);
     } catch (error) {
@@ -3332,6 +3377,9 @@ app.post('/api/workout-records/:appUserId/comments', async (req, res) => {
                 workout_date
             ).catch(err => console.error('[Activity Log] 트레이너 로그 생성 실패:', err));
         }
+
+        achievementsDB.refreshDailyStats(appUserId, workout_date)
+            .catch(err => console.error('[Daily Stats] 운동 코멘트 집계 갱신 실패:', err));
         
         res.status(201).json(savedComment);
     } catch (error) {

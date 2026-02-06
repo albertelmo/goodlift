@@ -10,6 +10,7 @@ let memberTrainers = null; // 회원의 연결된 트레이너 목록
 let todayWorkoutSummary = null; // 오늘의 운동 요약
 let monthlyWorkoutCompletionSummary = null; // 이번달 운동 완료 요약
 let monthlyDietSummary = null; // 이번달 식단 요약
+let monthlyAchievementSummary = null; // 이번달 업적 요약 (코멘트 포함)
 let connectedAppUserInfo = null; // 현재 연결된 유저앱 회원 정보
 let trainerMemberMedalStatus = {}; // 트레이너 회원 메달 현황 (app_user_id -> status)
 let activityLogs = null; // 트레이너 활동 로그
@@ -33,6 +34,7 @@ export async function init(userData) {
         loadTodayWorkoutSummary(),
         loadMonthlyWorkoutCompletionSummary(),
         loadMonthlyDietSummary(),
+        loadMonthlyAchievementSummary(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs()
@@ -432,6 +434,37 @@ async function loadMonthlyWorkoutCompletionSummary() {
     } catch (error) {
         console.error('이번달 운동 완료 요약 조회 오류:', error);
         monthlyWorkoutCompletionSummary = null;
+    }
+}
+
+/**
+ * 이번달 업적 요약 조회 (코멘트 포함)
+ */
+async function loadMonthlyAchievementSummary() {
+    try {
+        const appUserId = currentUser?.id;
+        if (!appUserId) {
+            monthlyAchievementSummary = null;
+            return;
+        }
+        
+        const today = new Date(getToday());
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        monthStart.setHours(0, 0, 0, 0);
+        monthEnd.setHours(23, 59, 59, 999);
+        
+        const startDate = formatDate(monthStart);
+        const endDate = formatDate(monthEnd);
+        
+        const response = await fetch(`/api/app-users/${encodeURIComponent(appUserId)}/achievement-summary?start_date=${startDate}&end_date=${endDate}`);
+        if (!response.ok) {
+            throw new Error('업적 요약 조회 실패');
+        }
+        monthlyAchievementSummary = await response.json();
+    } catch (error) {
+        console.error('이번달 업적 요약 조회 오류:', error);
+        monthlyAchievementSummary = null;
     }
 }
 
@@ -971,6 +1004,87 @@ function render() {
             </div>
         `;
     }
+
+    const workoutMemberComments = monthlyAchievementSummary?.workoutMemberCommentCount || 0;
+    const workoutTrainerComments = monthlyAchievementSummary?.workoutTrainerCommentCount || 0;
+    const dietMemberComments = monthlyAchievementSummary?.dietMemberCommentCount || 0;
+    const dietTrainerComments = monthlyAchievementSummary?.dietTrainerCommentCount || 0;
+    const memberCommentTotal = workoutMemberComments + dietMemberComments;
+    const trainerCommentTotal = workoutTrainerComments + dietTrainerComments;
+
+    const getCommentTier = (count) => {
+        if (count >= 16) return { tier: 'diamond', label: '다이아', medal: '/img/medal/diamond.png' };
+        if (count >= 11) return { tier: 'gold', label: '골드', medal: '/img/medal/gold.png' };
+        if (count >= 6) return { tier: 'silver', label: '실버', medal: '/img/medal/silver.png' };
+        if (count >= 1) return { tier: 'bronze', label: '브론즈', medal: '/img/medal/bronze.png' };
+        return { tier: 'none', label: '미취득', medal: null };
+    };
+
+    const memberCommentTier = getCommentTier(memberCommentTotal);
+    const trainerCommentTier = getCommentTier(trainerCommentTotal);
+
+    const getWorkoutTier = (count) => {
+        if (count >= 13) return 'diamond';
+        if (count >= 9) return 'gold';
+        if (count >= 5) return 'silver';
+        if (count >= 1) return 'bronze';
+        return 'none';
+    };
+
+    const getDietTier = (count) => {
+        if (count >= 16) return 'diamond';
+        if (count >= 11) return 'gold';
+        if (count >= 6) return 'silver';
+        if (count >= 1) return 'bronze';
+        return 'none';
+    };
+
+    const tierLabels = {
+        none: '시작~!',
+        bronze: '브론즈',
+        silver: '실버',
+        gold: '골드',
+        diamond: '다이아'
+    };
+
+    const tierStyles = {
+        bronze: 'background:#fce8d8;color:#8d4f1b;',
+        silver: 'background:#eef1f6;color:#546e7a;',
+        gold: 'background:#fff3cd;color:#b7791f;',
+        diamond: 'background:#e8f5ff;color:#1e88e5;'
+    };
+
+    const tierRank = {
+        none: 0,
+        bronze: 1,
+        silver: 2,
+        gold: 3,
+        diamond: 4
+    };
+
+    const medalLevels = [
+        { tier: 'bronze', label: '브론즈', src: '/img/medal/bronze.png' },
+        { tier: 'silver', label: '실버', src: '/img/medal/silver.png' },
+        { tier: 'gold', label: '골드', src: '/img/medal/gold.png' },
+        { tier: 'diamond', label: '다이아', src: '/img/medal/diamond.png' }
+    ];
+
+    const renderMedalRow = (currentTier) => {
+        const rank = tierRank[currentTier] || 0;
+        return medalLevels.map(level => {
+            const isEarned = tierRank[level.tier] <= rank;
+            return `<img src="${level.src}" alt="${level.label}" class="${isEarned ? 'is-earned' : 'is-locked'}">`;
+        }).join('');
+    };
+
+    const workoutDays = monthlyWorkoutCompletionSummary?.completedCount || 0;
+    const dietDays = monthlyDietSummary?.dietDaysCount || 0;
+    const workoutTier = getWorkoutTier(workoutDays);
+    const dietTier = getDietTier(dietDays);
+    const workoutTitle = `오운완 ${workoutDays}일`;
+    const dietTitle = `식단 ${dietDays}일`;
+    const memberCommentTitle = `회원 코멘트 ${memberCommentTotal}회`;
+    const trainerCommentTitle = `트레이너 코멘트 ${trainerCommentTotal}회`;
     
     const primaryTrainer = Array.isArray(memberTrainers) && memberTrainers.length > 0 ? memberTrainers[0] : null;
     const trainerDisplayName = primaryTrainer?.name || null;
@@ -981,7 +1095,6 @@ function render() {
             <div class="app-dashboard-header" style="display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;">
                 <div style="min-width: 0;">
                     <h1 class="app-dashboard-title">안녕하세요, ${escapeHtml(currentUser?.name || '회원')}님 👋</h1>
-                    <p class="app-dashboard-subtitle">${todayLabel}</p>
                 </div>
                 ${!isTrainer && trainerDisplayName ? `
                     <div class="app-trainer-header-link" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; cursor: pointer;" data-trainer-username="${escapeHtml(primaryTrainer?.username || '')}">
@@ -1063,12 +1176,12 @@ function render() {
                                 <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;${badgeStyle}">${badgeLabel}</span>
                             </h3>
                             <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                                <p class="app-card-value" style="margin: 0;">${escapeHtml(monthlyCompletionText)}</p>
+                                <p class="app-card-value app-card-value-compact" style="margin: 0;">${escapeHtml(monthlyCompletionText)}</p>
                                 ${monthlyCompletionGraph}
                             </div>
                         </div>
                         ${monthlyWorkoutCompletionSummary ? `
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
+                            <div class="app-achievement-trigger" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
                                 ${monthlyWorkoutCompletionSummary.completedCount > 0 && badgeRemainingText ? `
                                     <span style="font-size:0.75rem;color:var(--app-text-muted);white-space:nowrap;text-align:right;">${badgeRemainingText}</span>
                                 ` : ''}
@@ -1088,12 +1201,12 @@ function render() {
                                 <span style="display:inline-block;padding:2px 10px;border-radius:12px;font-size:0.8rem;font-weight:700;${dietBadgeStyle}">${dietBadgeLabel}</span>
                             </h3>
                             <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
-                                <p class="app-card-value" style="margin: 0;">${escapeHtml(monthlyDietText)}</p>
+                                <p class="app-card-value app-card-value-compact" style="margin: 0;">${escapeHtml(monthlyDietText)}</p>
                                 ${monthlyDietGraph}
                             </div>
                         </div>
                         ${monthlyDietSummary ? `
-                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
+                            <div class="app-achievement-trigger" style="display: flex; align-items: center; justify-content: center; gap: 8px; height: 100%; align-self: stretch; padding-left: 6px; margin: -8px 0;">
                                 ${monthlyDietSummary.dietDaysCount > 0 && dietBadgeRemainingText ? `
                                     <span style="font-size:0.75rem;color:var(--app-text-muted);white-space:nowrap;text-align:right;">${dietBadgeRemainingText}</span>
                                 ` : ''}
@@ -1112,7 +1225,7 @@ function render() {
             <div class="app-dashboard-section">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                     <h2 class="app-section-title" style="margin: 0;">
-                        🔔 트레이너 활동 알림
+                        🔔 활동 알림
                         ${memberActivityLogsUnreadCount > 0 ? `<span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>` : ''}
                     </h2>
                     ${memberActivityLogs && memberActivityLogsUnreadCount > 0 ? `
@@ -1233,7 +1346,54 @@ function render() {
             </div>
             ` : ''}
             
-            ${''}
+            ${!isTrainer ? `
+            <div class="app-achievement-modal" id="app-achievement-modal">
+                <div class="app-achievement-modal-content">
+                    <div class="app-achievement-modal-header">
+                        <h3 class="app-achievement-modal-title">이번달 업적</h3>
+                        <button class="app-achievement-modal-close" id="app-achievement-modal-close" aria-label="닫기">×</button>
+                    </div>
+                    <div class="app-achievement-grid">
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">
+                                ${workoutTitle}
+                                ${workoutTier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[workoutTier]}">${tierLabels[workoutTier]}</span>` : ''}
+                            </div>
+                            <div class="app-achievement-medal-row">
+                                ${renderMedalRow(workoutTier)}
+                            </div>
+                        </div>
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">
+                                ${dietTitle}
+                                ${dietTier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[dietTier]}">${tierLabels[dietTier]}</span>` : ''}
+                            </div>
+                            <div class="app-achievement-medal-row">
+                                ${renderMedalRow(dietTier)}
+                            </div>
+                        </div>
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">
+                                ${memberCommentTitle}
+                                ${memberCommentTier.tier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[memberCommentTier.tier]}">${tierLabels[memberCommentTier.tier]}</span>` : ''}
+                            </div>
+                            <div class="app-achievement-medal-row">
+                                ${renderMedalRow(memberCommentTier.tier)}
+                            </div>
+                        </div>
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">
+                                ${trainerCommentTitle}
+                                ${trainerCommentTier.tier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[trainerCommentTier.tier]}">${tierLabels[trainerCommentTier.tier]}</span>` : ''}
+                            </div>
+                            <div class="app-achievement-medal-row">
+                                ${renderMedalRow(trainerCommentTier.tier)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
         </div>
     `;
     
@@ -1268,6 +1428,41 @@ function render() {
         setupActivityLogEvents();
     } else {
         setupMemberActivityLogEvents();
+    }
+
+    if (!isTrainer) {
+        const achievementBtn = document.getElementById('app-achievement-btn');
+        if (achievementBtn) {
+            achievementBtn.style.display = 'inline-flex';
+            achievementBtn.onclick = () => {
+                const modal = document.getElementById('app-achievement-modal');
+                if (modal) modal.style.display = 'flex';
+            };
+        }
+
+        const modal = document.getElementById('app-achievement-modal');
+        const modalCloseBtn = document.getElementById('app-achievement-modal-close');
+        if (modal && modalCloseBtn) {
+            modalCloseBtn.onclick = () => {
+                modal.style.display = 'none';
+            };
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.style.display = 'none';
+                }
+            };
+        }
+
+        const achievementTriggers = document.querySelectorAll('.app-achievement-trigger');
+        achievementTriggers.forEach(trigger => {
+            trigger.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (modal) {
+                    modal.style.display = 'flex';
+                }
+            });
+        });
     }
 }
 

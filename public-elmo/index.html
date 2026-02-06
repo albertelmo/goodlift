@@ -263,6 +263,7 @@
         (function() {
             let currentVersion = null;
             let newWorker = null;
+            let latestDetectedVersion = null;
             let dismissedUntil = 0; // "나중에" 클릭 시 다시 알림 표시 시간
 
             
@@ -279,6 +280,12 @@
                                 installing.addEventListener('statechange', () => {
                                     if (installing.state === 'installed' && navigator.serviceWorker.controller) {
                                         newWorker = installing;
+                                        fetch('/api/pwa/version')
+                                            .then(res => res.json())
+                                            .then(data => {
+                                                latestDetectedVersion = data.version;
+                                            })
+                                            .catch(() => {});
                                         showUpdateBanner();
                                     }
                                 });
@@ -317,6 +324,7 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.version !== currentVersion) {
+                            latestDetectedVersion = data.version;
                             console.log('[Elmo PWA] 새 버전 발견:', currentVersion, '→', data.version);
                             showUpdateBanner();
                         }
@@ -340,6 +348,9 @@
                     document.body.classList.add('pwa-banner-visible');
                     
                     updateBtn.onclick = () => {
+                        if (latestDetectedVersion) {
+                            currentVersion = latestDetectedVersion;
+                        }
                         if (newWorker) {
                             // Service Worker 있으면 즉시 활성화
                             newWorker.postMessage({ type: 'SKIP_WAITING' });

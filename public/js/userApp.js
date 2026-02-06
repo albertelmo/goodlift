@@ -36,11 +36,22 @@ function render(container) {
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
           <h4 id="user-app-members-title" style="margin:0;color:#333;font-size:0.9rem;">회원 관리</h4>
-          <button id="user-app-member-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
-            회원 추가
-          </button>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <button id="user-app-members-tab-btn" class="header-text-btn" style="background:#1976d2 !important;color:#fff !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
+              회원 관리
+            </button>
+            <button id="user-app-activity-tab-btn" class="header-text-btn" style="background:#fff !important;color:#1976d2 !important;border:1px solid #1976d2 !important;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
+              회원 활동관리
+            </button>
+            <button id="user-app-member-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
+              회원 추가
+            </button>
+          </div>
         </div>
         <div id="user-app-members-list" style="background:#fff;border-radius:4px;padding:8px;">
+          <div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">불러오는 중...</div>
+        </div>
+        <div id="user-app-activity-list" style="background:#fff;border-radius:4px;padding:8px;display:none;">
           <div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">불러오는 중...</div>
         </div>
       </div>
@@ -125,6 +136,17 @@ function setupEventListeners(container) {
       showMemberAddModal();
     });
   }
+
+  const membersTabBtn = container.querySelector('#user-app-members-tab-btn');
+  const activityTabBtn = container.querySelector('#user-app-activity-tab-btn');
+  if (membersTabBtn && activityTabBtn) {
+    membersTabBtn.addEventListener('click', () => {
+      setMembersTab('members');
+    });
+    activityTabBtn.addEventListener('click', () => {
+      setMembersTab('activity');
+    });
+  }
   
   // 운동종류 추가 버튼
   const addWorkoutTypeBtn = container.querySelector('#user-app-workout-type-add-btn');
@@ -188,6 +210,43 @@ async function loadData() {
     loadCategories(3),
     loadCategories(4)
   ]);
+}
+
+function setMembersTab(tab) {
+  membersActiveTab = tab;
+  const membersList = document.getElementById('user-app-members-list');
+  const activityList = document.getElementById('user-app-activity-list');
+  const membersTabBtn = document.getElementById('user-app-members-tab-btn');
+  const activityTabBtn = document.getElementById('user-app-activity-tab-btn');
+  const addMemberBtn = document.getElementById('user-app-member-add-btn');
+  if (membersList && activityList) {
+    membersList.style.display = tab === 'members' ? 'block' : 'none';
+    activityList.style.display = tab === 'activity' ? 'block' : 'none';
+  }
+  if (membersTabBtn && activityTabBtn) {
+    if (tab === 'members') {
+      membersTabBtn.style.background = '#1976d2';
+      membersTabBtn.style.color = '#fff';
+      membersTabBtn.style.border = 'none';
+      activityTabBtn.style.background = '#fff';
+      activityTabBtn.style.color = '#1976d2';
+      activityTabBtn.style.border = '1px solid #1976d2';
+    } else {
+      activityTabBtn.style.background = '#1976d2';
+      activityTabBtn.style.color = '#fff';
+      activityTabBtn.style.border = 'none';
+      membersTabBtn.style.background = '#fff';
+      membersTabBtn.style.color = '#1976d2';
+      membersTabBtn.style.border = '1px solid #1976d2';
+    }
+  }
+  if (addMemberBtn) {
+    addMemberBtn.style.display = tab === 'members' ? 'inline-block' : 'none';
+  }
+  if (tab === 'activity') {
+    activityCurrentPage = 1;
+    renderMemberActivityList(membersCached);
+  }
 }
 
 function getDateString(date) {
@@ -444,8 +503,8 @@ async function loadMembers() {
       ...user,
       trainer: user.member_name ? (trainerMap[user.member_name] || '-') : '-'
     }));
-    
-    renderMembersList(membersWithTrainer);
+    membersCached = membersWithTrainer;
+    renderMembersList(membersCached);
   } catch (error) {
     console.error('회원 조회 오류:', error);
     const listContainer = document.getElementById('user-app-members-list');
@@ -458,6 +517,13 @@ async function loadMembers() {
 // 회원 목록 정렬 상태 관리 (기본값: 생성순 내림차순 - 최신순)
 let membersSortColumn = 'created_at';
 let membersSortDirection = 'desc'; // 'asc' or 'desc'
+const membersPageSize = 10;
+let membersCurrentPage = 1;
+let membersCached = [];
+let membersActiveTab = 'members';
+let activityCurrentPage = 1;
+let activitySortColumn = 'name';
+let activitySortDirection = 'asc';
 
 function renderMembersList(members) {
   const listContainer = document.getElementById('user-app-members-list');
@@ -495,6 +561,13 @@ function renderMembersList(members) {
     }
   });
   
+  const totalPages = Math.max(1, Math.ceil(sortedMembers.length / membersPageSize));
+  if (membersCurrentPage > totalPages) {
+    membersCurrentPage = totalPages;
+  }
+  const startIndex = (membersCurrentPage - 1) * membersPageSize;
+  const pagedMembers = sortedMembers.slice(startIndex, startIndex + membersPageSize);
+  
   // 정렬 아이콘 생성 함수 (운동종류와 동일한 스타일)
   const getSortIcon = (column) => {
     if (membersSortColumn !== column) {
@@ -522,7 +595,7 @@ function renderMembersList(members) {
       <tbody>
   `;
   
-  sortedMembers.forEach(member => {
+  pagedMembers.forEach(member => {
     html += `
       <tr style="border-bottom:1px solid #eee;">
         <td style="padding:4px 6px;">${escapeHtml(member.username)}</td>
@@ -542,6 +615,11 @@ function renderMembersList(members) {
   html += `
       </tbody>
     </table>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;">
+      <button data-page="prev" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${membersCurrentPage === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>이전</button>
+      <span style="font-size:0.75rem;color:#666;">${membersCurrentPage} / ${totalPages}</span>
+      <button data-page="next" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${membersCurrentPage === totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>다음</button>
+    </div>
   `;
   
   listContainer.innerHTML = html;
@@ -559,17 +637,257 @@ function renderMembersList(members) {
         membersSortColumn = column;
         membersSortDirection = 'asc';
       }
+      membersCurrentPage = 1;
       renderMembersList(members);
     });
   }
+  
+  listContainer.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dir = btn.getAttribute('data-page');
+      if (dir === 'prev' && membersCurrentPage > 1) {
+        membersCurrentPage -= 1;
+        renderMembersList(members);
+      }
+      if (dir === 'next') {
+        const lastPage = Math.max(1, Math.ceil(sortedMembers.length / membersPageSize));
+        if (membersCurrentPage < lastPage) {
+          membersCurrentPage += 1;
+          renderMembersList(members);
+        }
+      }
+    });
+  });
   
   // 테이블 행 클릭 이벤트 (수정 모달 열기)
   listContainer.querySelectorAll('tbody tr').forEach((row, index) => {
     row.style.cursor = 'pointer';
     row.addEventListener('click', () => {
-      const member = sortedMembers[index];
+      const member = pagedMembers[index];
       if (member) {
         showMemberEditModal(member);
+      }
+    });
+  });
+}
+
+function getWorkoutTierFromDays(days) {
+  if (days >= 13) return 'diamond';
+  if (days >= 9) return 'gold';
+  if (days >= 5) return 'silver';
+  if (days >= 1) return 'bronze';
+  return 'none';
+}
+
+function getDietTierFromDays(days) {
+  if (days >= 16) return 'diamond';
+  if (days >= 11) return 'gold';
+  if (days >= 6) return 'silver';
+  if (days >= 1) return 'bronze';
+  return 'none';
+}
+
+function getCommentTierFromCount(count) {
+  if (count >= 16) return 'diamond';
+  if (count >= 11) return 'gold';
+  if (count >= 6) return 'silver';
+  if (count >= 1) return 'bronze';
+  return 'none';
+}
+
+function renderTierBadge(label, tier) {
+  const styles = {
+    bronze: 'background:#fce8d8;color:#8d4f1b;',
+    silver: 'background:#eef1f6;color:#546e7a;',
+    gold: 'background:#fff3cd;color:#b7791f;',
+    diamond: 'background:#e8f5ff;color:#1e88e5;',
+    none: 'background:#f5f5f5;color:#666;'
+  };
+  const style = styles[tier] || styles.none;
+  return `<span style="padding:2px 6px;border-radius:10px;font-size:0.7rem;font-weight:600;${style}">${label}</span>`;
+}
+
+async function fetchAchievementSummaries(appUserIds, startDate, endDate) {
+  if (!appUserIds || appUserIds.length === 0) {
+    return {};
+  }
+  const response = await fetch(`/api/app-users/achievement-summaries?app_user_ids=${encodeURIComponent(appUserIds.join(','))}&start_date=${startDate}&end_date=${endDate}`);
+  if (!response.ok) {
+    throw new Error('업적 요약 조회 실패');
+  }
+  const result = await response.json();
+  const map = {};
+  (result.results || []).forEach(item => {
+    map[item.app_user_id] = item;
+  });
+  return map;
+}
+
+async function renderMemberActivityList(members) {
+  const listContainer = document.getElementById('user-app-activity-list');
+  if (!listContainer) return;
+  
+  if (!members || members.length === 0) {
+    listContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">등록된 회원이 없습니다.</div>';
+    return;
+  }
+  
+  const titleElement = document.getElementById('user-app-members-title');
+  if (titleElement) {
+    titleElement.textContent = `회원 관리 (${members.length}명)`;
+  }
+  
+  const today = new Date();
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  const startDate = getDateString(monthStart);
+  const endDate = getDateString(monthEnd);
+  
+  let summaries = {};
+  try {
+    summaries = await fetchAchievementSummaries(members.map(m => m.id), startDate, endDate);
+  } catch (error) {
+    console.error('업적 요약 조회 오류:', error);
+  }
+  
+  const getSummary = (memberId) => summaries[memberId] || {
+    workoutDays: 0,
+    dietDays: 0,
+    workoutMemberCommentCount: 0,
+    workoutTrainerCommentCount: 0,
+    dietMemberCommentCount: 0,
+    dietTrainerCommentCount: 0
+  };
+  
+  const sortedMembers = [...members].sort((a, b) => {
+    if (activitySortColumn === 'name') {
+      const aValue = (a.name || '').trim();
+      const bValue = (b.name || '').trim();
+      const comparison = aValue.localeCompare(bValue, 'ko', { numeric: true });
+      return activitySortDirection === 'asc' ? comparison : -comparison;
+    }
+    const aSummary = getSummary(a.id);
+    const bSummary = getSummary(b.id);
+    const getCommentTotal = (summary, type) => {
+      if (type === 'member') {
+        return (summary.workoutMemberCommentCount || 0) + (summary.dietMemberCommentCount || 0);
+      }
+      return (summary.workoutTrainerCommentCount || 0) + (summary.dietTrainerCommentCount || 0);
+    };
+    let aValue = 0;
+    let bValue = 0;
+    if (activitySortColumn === 'workout') {
+      aValue = aSummary.workoutDays || 0;
+      bValue = bSummary.workoutDays || 0;
+    } else if (activitySortColumn === 'diet') {
+      aValue = aSummary.dietDays || 0;
+      bValue = bSummary.dietDays || 0;
+    } else if (activitySortColumn === 'member_comments') {
+      aValue = getCommentTotal(aSummary, 'member');
+      bValue = getCommentTotal(bSummary, 'member');
+    } else if (activitySortColumn === 'trainer_comments') {
+      aValue = getCommentTotal(aSummary, 'trainer');
+      bValue = getCommentTotal(bSummary, 'trainer');
+    }
+    if (aValue === bValue) {
+      const aName = (a.name || '').trim();
+      const bName = (b.name || '').trim();
+      return aName.localeCompare(bName, 'ko', { numeric: true });
+    }
+    return activitySortDirection === 'asc' ? aValue - bValue : bValue - aValue;
+  });
+  
+  const totalPages = Math.max(1, Math.ceil(sortedMembers.length / membersPageSize));
+  if (activityCurrentPage > totalPages) {
+    activityCurrentPage = totalPages;
+  }
+  const startIndex = (activityCurrentPage - 1) * membersPageSize;
+  const pagedMembers = sortedMembers.slice(startIndex, startIndex + membersPageSize);
+  
+  const getSortIcon = (column) => {
+    if (activitySortColumn !== column) {
+      return '<span style="color:#999;font-size:0.7rem;margin-left:4px;">↕</span>';
+    }
+    return activitySortDirection === 'asc'
+      ? '<span style="color:#1976d2;font-size:0.7rem;margin-left:4px;">↑</span>'
+      : '<span style="color:#1976d2;font-size:0.7rem;margin-left:4px;">↓</span>';
+  };
+  
+  let html = `
+    <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+      <thead>
+        <tr style="background:#f5f5f5;border-bottom:1px solid #ddd;">
+          <th class="activity-sort-header" data-column="name" style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">이름${getSortIcon('name')}</th>
+          <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">회원명</th>
+          <th class="activity-sort-header" data-column="workout" style="padding:4px 6px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">오운완${getSortIcon('workout')}</th>
+          <th class="activity-sort-header" data-column="diet" style="padding:4px 6px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">식단${getSortIcon('diet')}</th>
+          <th class="activity-sort-header" data-column="member_comments" style="padding:4px 6px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">회원 코멘트${getSortIcon('member_comments')}</th>
+          <th class="activity-sort-header" data-column="trainer_comments" style="padding:4px 6px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;">트레이너 코멘트${getSortIcon('trainer_comments')}</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  
+  pagedMembers.forEach(member => {
+    const summary = getSummary(member.id);
+    const workoutTier = getWorkoutTierFromDays(summary.workoutDays || 0);
+    const dietTier = getDietTierFromDays(summary.dietDays || 0);
+    const memberCommentTotal = (summary.workoutMemberCommentCount || 0) + (summary.dietMemberCommentCount || 0);
+    const trainerCommentTotal = (summary.workoutTrainerCommentCount || 0) + (summary.dietTrainerCommentCount || 0);
+    const memberCommentTier = getCommentTierFromCount(memberCommentTotal);
+    const trainerCommentTier = getCommentTierFromCount(trainerCommentTotal);
+    
+    html += `
+      <tr style="border-bottom:1px solid #eee;">
+        <td style="padding:4px 6px;">${escapeHtml(member.name)}</td>
+        <td style="padding:4px 6px;color:#666;">${member.member_name ? escapeHtml(member.member_name) : '-'}</td>
+        <td style="padding:4px 6px;text-align:center;">${renderTierBadge(`오운완 ${summary.workoutDays || 0}일`, workoutTier)}</td>
+        <td style="padding:4px 6px;text-align:center;">${renderTierBadge(`식단 ${summary.dietDays || 0}일`, dietTier)}</td>
+        <td style="padding:4px 6px;text-align:center;">${renderTierBadge(`${memberCommentTotal}회`, memberCommentTier)}</td>
+        <td style="padding:4px 6px;text-align:center;">${renderTierBadge(`${trainerCommentTotal}회`, trainerCommentTier)}</td>
+      </tr>
+    `;
+  });
+  
+  html += `
+      </tbody>
+    </table>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;">
+      <button data-page="prev" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${activityCurrentPage === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>이전</button>
+      <span style="font-size:0.75rem;color:#666;">${activityCurrentPage} / ${totalPages}</span>
+      <button data-page="next" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${activityCurrentPage === totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>다음</button>
+    </div>
+  `;
+  
+  listContainer.innerHTML = html;
+  
+  listContainer.querySelectorAll('.activity-sort-header').forEach(th => {
+    th.addEventListener('click', () => {
+      const column = th.getAttribute('data-column');
+      if (activitySortColumn === column) {
+        activitySortDirection = activitySortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        activitySortColumn = column;
+        activitySortDirection = 'asc';
+      }
+      activityCurrentPage = 1;
+      renderMemberActivityList(members);
+    });
+  });
+  
+  listContainer.querySelectorAll('button[data-page]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dir = btn.getAttribute('data-page');
+      if (dir === 'prev' && activityCurrentPage > 1) {
+        activityCurrentPage -= 1;
+        renderMemberActivityList(members);
+      }
+      if (dir === 'next') {
+        const lastPage = Math.max(1, Math.ceil(sortedMembers.length / membersPageSize));
+        if (activityCurrentPage < lastPage) {
+          activityCurrentPage += 1;
+          renderMemberActivityList(members);
+        }
       }
     });
   });
