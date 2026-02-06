@@ -2507,7 +2507,7 @@ app.patch('/api/diet-records/:id/evaluation', async (req, res) => {
         const { id } = req.params;
         const { evaluation, trainer_username, trainer_name, trainer_app_user_id } = req.body;
         
-        const allowedEvaluations = ['diet_master', 'protein_hunter', 'clean_energy', 'carb_killer', 'sad'];
+        const allowedEvaluations = ['verygood', 'good', 'ok', 'bad', 'verybad'];
         if (evaluation && !allowedEvaluations.includes(evaluation)) {
             return res.status(400).json({ message: '평가 값이 올바르지 않습니다.' });
         }

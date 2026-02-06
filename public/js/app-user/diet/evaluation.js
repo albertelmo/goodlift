@@ -4,11 +4,11 @@ import { getCurrentUser } from '../index.js';
 import { updateDietRecordEvaluation } from '../api.js';
 
 const evaluationOptions = [
-    { value: 'diet_master', label: '식단의 정석' },
-    { value: 'protein_hunter', label: '단백질 사냥꾼' },
-    { value: 'clean_energy', label: '클린 에너지' },
-    { value: 'carb_killer', label: '탄수화물이...' },
-    { value: 'sad', label: '아니되옵니다' }
+    { value: 'verygood', label: 'Very Good!' },
+    { value: 'good', label: 'Good' },
+    { value: 'ok', label: 'OK' },
+    { value: 'bad', label: 'Bad' },
+    { value: 'verybad', label: 'Very Bad!' }
 ];
 
 export async function showDietEvaluationModal(appUserId, record, onSuccess) {

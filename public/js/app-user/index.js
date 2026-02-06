@@ -101,7 +101,8 @@ export function navigateToScreen(screen) {
     currentScreen = screen;
     const achievementBtn = document.getElementById('app-achievement-btn');
     if (achievementBtn) {
-        achievementBtn.style.display = screen === 'home' ? 'inline-flex' : 'none';
+        const isTrainer = currentUser?.isTrainer === true || currentUser?.is_trainer === true;
+        achievementBtn.style.display = screen === 'home' && !isTrainer ? 'inline-flex' : 'none';
     }
     
     // 화면별 모듈 로드

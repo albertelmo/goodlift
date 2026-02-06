@@ -90,7 +90,7 @@ const createDietRecordsTable = async () => {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT diet_records_trainer_evaluation_check 
-            CHECK (trainer_evaluation IN ('diet_master', 'protein_hunter', 'clean_energy', 'carb_killer', 'sad') OR trainer_evaluation IS NULL)
+            CHECK (trainer_evaluation IN ('verygood', 'good', 'ok', 'bad', 'verybad') OR trainer_evaluation IS NULL)
         )
       `;
       await pool.query(createQuery);
@@ -114,6 +114,11 @@ const createDietRecordsTable = async () => {
         'add_trainer_evaluation_to_diet_records_20260202',
         '식단 기록 테이블에 트레이너 평가 컬럼 추가',
         migrateDietRecordEvaluations
+      );
+      await runMigration(
+        'update_trainer_evaluation_values_20260206',
+        '식단 기록 트레이너 평가 값 및 제약조건 업데이트',
+        migrateDietRecordEvaluationValues
       );
       // 코멘트 테이블도 확인
       await createDietCommentsTable();
@@ -291,13 +296,80 @@ const migrateDietRecordEvaluations = async () => {
     }
     
     await pool.query(`
+      UPDATE diet_records
+      SET trainer_evaluation = CASE trainer_evaluation
+        WHEN 'diet_master' THEN 'verygood'
+        WHEN 'protein_hunter' THEN 'good'
+        WHEN 'clean_energy' THEN 'ok'
+        WHEN 'carb_killer' THEN 'bad'
+        WHEN 'sad' THEN 'verybad'
+        ELSE trainer_evaluation
+      END
+    `);
+    
+    await pool.query(`
       ALTER TABLE diet_records
       ADD CONSTRAINT diet_records_trainer_evaluation_check
-      CHECK (trainer_evaluation IN ('diet_master', 'protein_hunter', 'clean_energy', 'carb_killer', 'sad') OR trainer_evaluation IS NULL)
+      CHECK (trainer_evaluation IN ('verygood', 'good', 'ok', 'bad', 'verybad') OR trainer_evaluation IS NULL)
     `);
     console.log('[PostgreSQL] diet_records 트레이너 평가 제약조건이 업데이트되었습니다.');
   } catch (error) {
     console.error('[PostgreSQL] 식단 기록 트레이너 평가 마이그레이션 오류:', error);
+    throw error;
+  }
+};
+
+// 트레이너 평가 값 변경 및 제약조건 갱신
+const migrateDietRecordEvaluationValues = async () => {
+  try {
+    const constraintQuery = `
+      SELECT constraint_name
+      FROM information_schema.table_constraints
+      WHERE table_schema = 'public'
+        AND table_name = 'diet_records'
+        AND constraint_type = 'CHECK'
+    `;
+    const constraintResult = await pool.query(constraintQuery);
+    
+    let evaluationConstraint = null;
+    for (const row of constraintResult.rows) {
+      const checkQuery = `
+        SELECT check_clause
+        FROM information_schema.check_constraints
+        WHERE constraint_name = $1
+      `;
+      const checkResult = await pool.query(checkQuery, [row.constraint_name]);
+      if (checkResult.rows.length > 0 && checkResult.rows[0].check_clause && checkResult.rows[0].check_clause.includes('trainer_evaluation')) {
+        evaluationConstraint = row.constraint_name;
+        break;
+      }
+    }
+    
+    if (evaluationConstraint) {
+      await pool.query(`ALTER TABLE diet_records DROP CONSTRAINT IF EXISTS ${evaluationConstraint}`);
+    }
+    
+    await pool.query(`
+      UPDATE diet_records
+      SET trainer_evaluation = CASE trainer_evaluation
+        WHEN 'diet_master' THEN 'verygood'
+        WHEN 'protein_hunter' THEN 'good'
+        WHEN 'clean_energy' THEN 'ok'
+        WHEN 'carb_killer' THEN 'bad'
+        WHEN 'sad' THEN 'verybad'
+        ELSE trainer_evaluation
+      END
+    `);
+    
+    await pool.query(`
+      ALTER TABLE diet_records
+      ADD CONSTRAINT diet_records_trainer_evaluation_check
+      CHECK (trainer_evaluation IN ('verygood', 'good', 'ok', 'bad', 'verybad') OR trainer_evaluation IS NULL)
+    `);
+    
+    console.log('[PostgreSQL] diet_records 트레이너 평가 값/제약조건이 업데이트되었습니다.');
+  } catch (error) {
+    console.error('[PostgreSQL] 식단 기록 트레이너 평가 값 업데이트 오류:', error);
     throw error;
   }
 };

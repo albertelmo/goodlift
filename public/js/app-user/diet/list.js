@@ -10,12 +10,12 @@ let isReadOnly = false;
 let currentFilters = {}; // 현재 필터 상태 저장
 let commentsByDate = {}; // 날짜별 하루 코멘트 데이터
 
-const evaluationLabels = {
-    diet_master: '식단의 정석 🥗',
-    protein_hunter: '단백질 사냥꾼 🍗',
-    clean_energy: '클린 에너지 🥦',
-    carb_killer: '탄수화물이... 🍞',
-    sad: '아니되옵니다 😢'
+const evaluationConfig = {
+    verygood: { label: 'Very Good!', image: '/img/foodbadge/verygood.png' },
+    good: { label: 'Good', image: '/img/foodbadge/good.png' },
+    ok: { label: 'OK', image: '/img/foodbadge/ok.png' },
+    bad: { label: 'Bad', image: '/img/foodbadge/bad.png' },
+    verybad: { label: 'Very Bad!', image: '/img/foodbadge/verybad.png' }
 };
 
 /**
@@ -391,9 +391,11 @@ async function render(records) {
                 return commenterType === 'user' || commenterType === 'trainer';
             });
             
-            const evaluationLabel = record.trainer_evaluation ? evaluationLabels[record.trainer_evaluation] : '';
-            const evaluationBadge = evaluationLabel
-                ? `<div class="app-diet-evaluation-badge" data-evaluation="${record.trainer_evaluation}">${evaluationLabel}</div>`
+            const evaluationInfo = record.trainer_evaluation ? evaluationConfig[record.trainer_evaluation] : null;
+            const evaluationBadge = evaluationInfo
+                ? `<div class="app-diet-evaluation-badge" data-evaluation="${record.trainer_evaluation}">
+                        <img src="${evaluationInfo.image}" alt="${evaluationInfo.label}">
+                   </div>`
                 : '';
             
             html += `
