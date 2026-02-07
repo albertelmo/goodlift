@@ -3,7 +3,7 @@
 import { init as initLayout } from './layout.js';
 import { init as initDashboard } from './dashboard.js';
 import { escapeHtml } from './utils.js';
-import { updateAppUser, get, postAppUserPing, getUserSettings, updateUserSettings } from './api.js';
+import { updateAppUser, get, postAppUserPing, getUserSettings, updateUserSettings, getPushVapidPublicKey, getPushStatus, subscribePush, unsubscribePush, sendPushTest } from './api.js';
 
 let currentUser = null;
 let currentScreen = 'home';
@@ -254,6 +254,16 @@ export function navigateToScreen(screen) {
                                         </button>
                                     </div>
                                 </div>
+                                <div class="app-profile-info-item" style="padding: 12px 0;">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                        <div style="font-size: 12px; color: var(--app-text-muted);">알림 받기</div>
+                                        <button type="button" id="push-notification-toggle" class="app-toggle-btn">
+                                            <span class="app-toggle-text">OFF</span>
+                                            <span class="app-toggle-knob"></span>
+                                        </button>
+                                    </div>
+                                    <div id="push-notification-status" style="font-size: 11px; color: var(--app-text-muted); margin-top: 6px; display: none;"></div>
+                                </div>
                             </div>
                             
                             <div class="app-profile-password" style="background: var(--app-surface); border-radius: var(--app-radius); padding: 20px; margin-bottom: 16px;">
@@ -387,6 +397,159 @@ export function navigateToScreen(screen) {
                     }
                 })();
 
+                // 푸시 알림 토글 로드
+                (async () => {
+                    const pushToggleBtn = profileContainer.querySelector('#push-notification-toggle');
+                    const statusEl = profileContainer.querySelector('#push-notification-status');
+                    if (!pushToggleBtn || !statusEl) return;
+
+                    const toggleText = pushToggleBtn.querySelector('.app-toggle-text');
+                    const setToggleState = (enabled) => {
+                        pushToggleBtn.dataset.enabled = enabled ? 'true' : 'false';
+                        pushToggleBtn.classList.toggle('is-on', enabled);
+                        if (toggleText) {
+                            toggleText.textContent = enabled ? 'ON' : 'OFF';
+                        }
+                    };
+
+                    const showStatus = (message, isError = false) => {
+                        statusEl.textContent = message || '';
+                        statusEl.style.display = message ? 'block' : 'none';
+                        statusEl.style.color = isError ? '#d32f2f' : 'var(--app-text-muted)';
+                    };
+
+                    const isPushSupported = () => (
+                        'serviceWorker' in navigator &&
+                        'PushManager' in window &&
+                        'Notification' in window
+                    );
+                    const isIOS = () => /iP(ad|hone|od)/.test(navigator.userAgent);
+                    const isStandalone = () => (
+                        window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
+                    ) || window.navigator.standalone === true;
+
+                    const urlBase64ToUint8Array = (base64String) => {
+                        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+                        const rawData = window.atob(base64);
+                        const outputArray = new Uint8Array(rawData.length);
+                        for (let i = 0; i < rawData.length; ++i) {
+                            outputArray[i] = rawData.charCodeAt(i);
+                        }
+                        return outputArray;
+                    };
+
+                    const getRegistration = async () => {
+                        if (!isPushSupported()) return null;
+                        const existing = await navigator.serviceWorker.getRegistration('/');
+                        return existing || navigator.serviceWorker.register('/sw.js');
+                    };
+
+                    if (!isPushSupported()) {
+                        setToggleState(false);
+                        pushToggleBtn.disabled = true;
+                        if (isIOS() && !isStandalone()) {
+                            showStatus('아이폰은 홈 화면에 추가한 뒤 푸시 알림을 사용할 수 있습니다.');
+                        } else if (isIOS()) {
+                            showStatus('아이폰은 iOS 16.4 이상에서만 푸시 알림을 지원합니다.');
+                        } else {
+                            showStatus('이 기기에서는 푸시 알림을 지원하지 않습니다.');
+                        }
+                        return;
+                    }
+
+                    try {
+                        const status = await getPushStatus(currentUser.id);
+                        setToggleState(status?.enabled === true);
+                    } catch (error) {
+                        console.error('푸시 상태 조회 오류:', error);
+                    }
+
+                    pushToggleBtn.addEventListener('click', async () => {
+                        const nextEnabled = pushToggleBtn.dataset.enabled !== 'true';
+                        showStatus('');
+
+                        if (nextEnabled) {
+                            if (Notification.permission === 'denied') {
+                                setToggleState(false);
+                                showStatus('알림 권한이 차단되어 있습니다. 설정에서 허용해주세요.', true);
+                                return;
+                            }
+
+                            if (Notification.permission !== 'granted') {
+                                const permission = await Notification.requestPermission();
+                                if (permission !== 'granted') {
+                                    setToggleState(false);
+                                    showStatus('알림 권한이 허용되지 않았습니다.', true);
+                                    return;
+                                }
+                            }
+
+                            try {
+                                const registration = await getRegistration();
+                                if (!registration) {
+                                    setToggleState(false);
+                                    showStatus('서비스 워커 등록에 실패했습니다.', true);
+                                    return;
+                                }
+
+                                let subscription = await registration.pushManager.getSubscription();
+                                if (!subscription) {
+                                    const { publicKey } = await getPushVapidPublicKey();
+                                    if (!publicKey) {
+                                        setToggleState(false);
+                                        showStatus('푸시 키를 불러오지 못했습니다.', true);
+                                        return;
+                                    }
+                                    subscription = await registration.pushManager.subscribe({
+                                        userVisibleOnly: true,
+                                        applicationServerKey: urlBase64ToUint8Array(publicKey)
+                                    });
+                                }
+
+                                await subscribePush(currentUser.id, subscription, {
+                                    userAgent: navigator.userAgent,
+                                    platform: navigator.platform
+                                });
+
+                                setToggleState(true);
+                                showStatus('알림 받기가 활성화되었습니다.');
+
+                                try {
+                                    await sendPushTest(currentUser.id);
+                                } catch (error) {
+                                    console.error('푸시 테스트 전송 오류:', error);
+                                }
+                            } catch (error) {
+                                console.error('푸시 구독 오류:', error);
+                                setToggleState(false);
+                                showStatus(error.message || '푸시 구독 중 오류가 발생했습니다.', true);
+                            }
+                            return;
+                        }
+
+                        try {
+                            const registration = await getRegistration();
+                            const subscription = registration
+                                ? await registration.pushManager.getSubscription()
+                                : null;
+
+                            if (subscription) {
+                                await unsubscribePush(currentUser.id, subscription.endpoint);
+                                await subscription.unsubscribe();
+                            } else {
+                                await unsubscribePush(currentUser.id);
+                            }
+
+                            setToggleState(false);
+                            showStatus('알림 받기가 해제되었습니다.');
+                        } catch (error) {
+                            console.error('푸시 해제 오류:', error);
+                            showStatus(error.message || '푸시 해제 중 오류가 발생했습니다.', true);
+                        }
+                    });
+                })();
+                
                 // 비밀번호 변경 버튼 클릭 이벤트
                 const passwordSaveBtn = profileContainer.querySelector('#profile-password-save-btn');
                 if (passwordSaveBtn) {

@@ -224,6 +224,49 @@ export async function del(endpoint) {
     return request(endpoint, { method: 'DELETE' });
 }
 
+// ========== 푸시 알림 API ==========
+
+export async function getPushVapidPublicKey() {
+    return get('/push/vapid-public-key');
+}
+
+export async function getPushStatus(appUserId) {
+    if (!appUserId) {
+        throw new Error('앱 유저 ID가 필요합니다.');
+    }
+    const params = new URLSearchParams({ app_user_id: appUserId });
+    return get(`/push/status?${params.toString()}`);
+}
+
+export async function subscribePush(appUserId, subscription, metadata = {}) {
+    if (!appUserId) {
+        throw new Error('앱 유저 ID가 필요합니다.');
+    }
+    return post('/push/subscribe', {
+        app_user_id: appUserId,
+        subscription,
+        user_agent: metadata.userAgent,
+        platform: metadata.platform
+    });
+}
+
+export async function unsubscribePush(appUserId, endpoint = null) {
+    if (!appUserId) {
+        throw new Error('앱 유저 ID가 필요합니다.');
+    }
+    return post('/push/unsubscribe', {
+        app_user_id: appUserId,
+        endpoint
+    });
+}
+
+export async function sendPushTest(appUserId) {
+    if (!appUserId) {
+        throw new Error('앱 유저 ID가 필요합니다.');
+    }
+    return post('/push/send-test', { app_user_id: appUserId });
+}
+
 // ========== 운동기록 API ==========
 
 /**

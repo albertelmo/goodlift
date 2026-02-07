@@ -45,6 +45,8 @@ const consultationRecordsDB = require('./consultation-records-db');
 const consultationSharesDB = require('./consultation-shares-db');
 const elmoUsersDB = require('./elmo-users-db');
 const elmoCalendarRecordsDB = require('./elmo-calendar-records-db');
+const pushSubscriptionsDB = require('./push-subscriptions-db');
+const webpush = require('web-push');
 const elmoApiRouter = require('./elmo-api-router');
 const { ELMO_IMAGES_DIR } = require('./elmo-utils');
 const { initializeMigrationSystem, runMigration } = require('./migrations-manager');
@@ -379,6 +381,14 @@ const emailService = require('./email-service');
 
 const app = express();
 const PORT = 3000;
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+  console.warn('[Push] VAPID 키가 설정되지 않았습니다. 푸시 알림 전송이 비활성화됩니다.');
+}
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '../data');
 const DATA_PATH = path.join(DATA_DIR, 'accounts.json');
 const CENTERS_PATH = path.join(DATA_DIR, 'centers.json');
@@ -605,6 +615,7 @@ consultationRecordsDB.initializeDatabase(); // 상담기록 테이블 초기화
 consultationSharesDB.initializeDatabase(); // 상담기록 공유 토큰 테이블 초기화
 elmoUsersDB.initializeDatabase(); // Elmo 사용자 테이블 초기화
 elmoCalendarRecordsDB.initializeDatabase(); // Elmo 캘린더 기록 테이블 초기화
+pushSubscriptionsDB.initializeDatabase(); // 푸시 구독 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -1812,6 +1823,159 @@ app.get('/api/pwa/version', (req, res) => {
         version: PWA_VERSION,
         timestamp: Date.now() 
     });
+});
+
+// ============================================
+// Web Push API
+// ============================================
+const ensurePushReady = () => {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        throw new Error('VAPID 키가 설정되지 않았습니다.');
+    }
+};
+
+const normalizeSubscription = (row) => {
+    if (!row) return null;
+    if (row.subscription) {
+        if (typeof row.subscription === 'string') {
+            try {
+                return JSON.parse(row.subscription);
+            } catch (error) {
+                return null;
+            }
+        }
+        return row.subscription;
+    }
+    return {
+        endpoint: row.endpoint,
+        keys: {
+            p256dh: row.p256dh,
+            auth: row.auth
+        }
+    };
+};
+
+const sendPushToSubscriptions = async (rows, payload) => {
+    const results = [];
+    for (const row of rows) {
+        const subscription = normalizeSubscription(row);
+        if (!subscription?.endpoint) {
+            continue;
+        }
+        try {
+            await webpush.sendNotification(subscription, payload);
+            results.push({ endpoint: subscription.endpoint, ok: true });
+        } catch (error) {
+            if (error?.statusCode === 404 || error?.statusCode === 410) {
+                await pushSubscriptionsDB.deactivateByEndpoint(subscription.endpoint);
+            }
+            results.push({ endpoint: subscription.endpoint, ok: false, error: error?.message || 'send 실패' });
+        }
+    }
+    return results;
+};
+
+app.get('/api/push/vapid-public-key', (req, res) => {
+    if (!VAPID_PUBLIC_KEY) {
+        return res.status(500).json({ message: 'VAPID public key가 설정되지 않았습니다.' });
+    }
+    res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+app.get('/api/push/status', async (req, res) => {
+    try {
+        const { app_user_id } = req.query;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const enabled = await pushSubscriptionsDB.getSubscriptionStatus(app_user_id);
+        res.json({ enabled });
+    } catch (error) {
+        console.error('[API] 푸시 상태 조회 오류:', error);
+        res.status(500).json({ message: '푸시 상태 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.post('/api/push/subscribe', async (req, res) => {
+    try {
+        const { app_user_id, subscription, user_agent, platform } = req.body;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        if (!subscription?.endpoint) {
+            return res.status(400).json({ message: 'subscription 정보가 필요합니다.' });
+        }
+        const saved = await pushSubscriptionsDB.upsertSubscription(app_user_id, subscription, {
+            userAgent: user_agent,
+            platform
+        });
+        res.json({ success: true, subscription: saved });
+    } catch (error) {
+        console.error('[API] 푸시 구독 저장 오류:', error);
+        res.status(500).json({ message: '푸시 구독 저장 중 오류가 발생했습니다.' });
+    }
+});
+
+app.post('/api/push/unsubscribe', async (req, res) => {
+    try {
+        const { app_user_id, endpoint } = req.body;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const count = await pushSubscriptionsDB.deactivateSubscription(app_user_id, endpoint);
+        res.json({ success: true, updated: count });
+    } catch (error) {
+        console.error('[API] 푸시 구독 해제 오류:', error);
+        res.status(500).json({ message: '푸시 구독 해제 중 오류가 발생했습니다.' });
+    }
+});
+
+app.post('/api/push/send-test', async (req, res) => {
+    try {
+        ensurePushReady();
+        const { app_user_id } = req.body;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const subscriptions = await pushSubscriptionsDB.getActiveSubscriptions(app_user_id);
+        if (!subscriptions || subscriptions.length === 0) {
+            return res.status(404).json({ message: '활성 구독이 없습니다.' });
+        }
+        const payload = JSON.stringify({
+            title: '알림이 설정되었습니다',
+            body: '이제 운동 알림을 받을 수 있어요.',
+            url: '/app-user'
+        });
+        const results = await sendPushToSubscriptions(subscriptions, payload);
+        res.json({ success: true, results });
+    } catch (error) {
+        console.error('[API] 푸시 테스트 전송 오류:', error);
+        res.status(500).json({ message: error.message || '푸시 테스트 전송 중 오류가 발생했습니다.' });
+    }
+});
+
+app.post('/api/push/send', async (req, res) => {
+    try {
+        ensurePushReady();
+        const { app_user_id, title, body, url } = req.body;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const subscriptions = await pushSubscriptionsDB.getActiveSubscriptions(app_user_id);
+        if (!subscriptions || subscriptions.length === 0) {
+            return res.status(404).json({ message: '활성 구독이 없습니다.' });
+        }
+        const payload = JSON.stringify({
+            title: title || '알림',
+            body: body || '',
+            url: url || '/app-user'
+        });
+        const results = await sendPushToSubscriptions(subscriptions, payload);
+        res.json({ success: true, results });
+    } catch (error) {
+        console.error('[API] 푸시 전송 오류:', error);
+        res.status(500).json({ message: error.message || '푸시 전송 중 오류가 발생했습니다.' });
+    }
 });
 
 // 운동기록 목록 조회
