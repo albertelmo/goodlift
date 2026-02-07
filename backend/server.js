@@ -195,8 +195,7 @@ async function createActivityLogForMember(appUserId, activityType, message, reco
     // 로그 메시지 생성: "{트레이너명} 트레이너가 {월}/{일} {메시지}"
     const activityMessage = `${finalTrainerName} 트레이너가 ${dateStr} ${message}`;
     
-    // 활동 로그 생성 (비동기로 처리, 실패해도 에러를 throw하지 않음)
-    await memberActivityLogsDB.addActivityLog({
+    const savedLog = await memberActivityLogsDB.addActivityLog({
       app_user_id: appUserId,
       trainer_username: trainerUsername,
       trainer_name: finalTrainerName,
@@ -204,6 +203,14 @@ async function createActivityLogForMember(appUserId, activityType, message, reco
       activity_message: activityMessage,
       related_record_id: recordId,
       record_date: recordDate
+    });
+
+    enqueuePushForMemberActivity({
+      appUserId,
+      activityType,
+      activityMessage,
+      recordDate,
+      logId: savedLog?.id || null
     });
   } catch (error) {
     // 로그 생성 실패해도 주요 기능에는 영향 없도록 에러만 기록
@@ -1828,13 +1835,13 @@ app.get('/api/pwa/version', (req, res) => {
 // ============================================
 // Web Push API
 // ============================================
-const ensurePushReady = () => {
+function ensurePushReady() {
     if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
         throw new Error('VAPID 키가 설정되지 않았습니다.');
     }
-};
+}
 
-const normalizeSubscription = (row) => {
+function normalizeSubscription(row) {
     if (!row) return null;
     if (row.subscription) {
         if (typeof row.subscription === 'string') {
@@ -1853,9 +1860,9 @@ const normalizeSubscription = (row) => {
             auth: row.auth
         }
     };
-};
+}
 
-const sendPushToSubscriptions = async (rows, payload) => {
+async function sendPushToSubscriptions(rows, payload) {
     const results = [];
     for (const row of rows) {
         const subscription = normalizeSubscription(row);
@@ -1873,7 +1880,7 @@ const sendPushToSubscriptions = async (rows, payload) => {
         }
     }
     return results;
-};
+}
 
 app.get('/api/push/vapid-public-key', (req, res) => {
     if (!VAPID_PUBLIC_KEY) {
@@ -1881,6 +1888,47 @@ app.get('/api/push/vapid-public-key', (req, res) => {
     }
     res.json({ publicKey: VAPID_PUBLIC_KEY });
 });
+
+function buildActivityPushTarget(activityType, recordDate) {
+    const normalizedDate = normalizeDateString(recordDate);
+    let screen = 'home';
+    if (activityType?.startsWith('workout')) {
+        screen = 'workout';
+    } else if (activityType?.startsWith('diet')) {
+        screen = 'diet';
+    }
+    let url = `/?screen=${screen}`;
+    if (normalizedDate && (screen === 'workout' || screen === 'diet')) {
+        url += `&date=${encodeURIComponent(normalizedDate)}`;
+    }
+    return { screen, url };
+}
+
+function enqueuePushForMemberActivity({ appUserId, activityType, activityMessage, recordDate }) {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return;
+    }
+    const { url } = buildActivityPushTarget(activityType, recordDate);
+    const categoryTitle = activityType?.startsWith('diet')
+        ? '식단 알림'
+        : activityType?.startsWith('workout')
+            ? '운동 알림'
+            : '';
+    const payload = JSON.stringify({
+        title: categoryTitle,
+        body: activityMessage || '',
+        url
+    });
+    setImmediate(async () => {
+        try {
+            const subscriptions = await pushSubscriptionsDB.getActiveSubscriptions(appUserId);
+            if (!subscriptions || subscriptions.length === 0) return;
+            await sendPushToSubscriptions(subscriptions, payload);
+        } catch (error) {
+            console.error('[Push] 회원 활동 알림 전송 오류:', error);
+        }
+    });
+}
 
 app.get('/api/push/status', async (req, res) => {
     try {
@@ -1943,8 +1991,8 @@ app.post('/api/push/send-test', async (req, res) => {
         }
         const payload = JSON.stringify({
             title: '알림이 설정되었습니다',
-            body: '이제 운동 알림을 받을 수 있어요.',
-            url: '/app-user'
+            body: '이제 스탠다드 멤버스의 다양한 알림을 받을 수 있어요.',
+            url: '/?screen=profile'
         });
         const results = await sendPushToSubscriptions(subscriptions, payload);
         res.json({ success: true, results });

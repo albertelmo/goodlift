@@ -59,11 +59,8 @@ export function showAppUserSection(appUserData) {
     if (logoutBtn) logoutBtn.style.display = 'none';
     if (settingsBtn) settingsBtn.style.display = 'none';
     
-    // 레이아웃 초기화
+    // 레이아웃 초기화 (초기 화면은 레이아웃에서 결정)
     initLayout(appUserData);
-    
-    // 홈 화면 초기화
-    initDashboard(appUserData);
     
     // 접속 핑 (활성 통계용)
     scheduleAppUserPing(true);
@@ -548,6 +545,91 @@ export function navigateToScreen(screen) {
                             showStatus(error.message || '푸시 해제 중 오류가 발생했습니다.', true);
                         }
                     });
+                    pushToggleBtn.addEventListener('touchstart', async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const nextEnabled = pushToggleBtn.dataset.enabled !== 'true';
+                        showStatus('');
+
+                        if (nextEnabled) {
+                            if (Notification.permission === 'denied') {
+                                setToggleState(false);
+                                showStatus('알림 권한이 차단되어 있습니다. 설정에서 허용해주세요.', true);
+                                return;
+                            }
+
+                            if (Notification.permission !== 'granted') {
+                                const permission = await Notification.requestPermission();
+                                if (permission !== 'granted') {
+                                    setToggleState(false);
+                                    showStatus('알림 권한이 허용되지 않았습니다.', true);
+                                    return;
+                                }
+                            }
+
+                            try {
+                                const registration = await getRegistration();
+                                if (!registration) {
+                                    setToggleState(false);
+                                    showStatus('서비스 워커 등록에 실패했습니다.', true);
+                                    return;
+                                }
+
+                                let subscription = await registration.pushManager.getSubscription();
+                                if (!subscription) {
+                                    const { publicKey } = await getPushVapidPublicKey();
+                                    if (!publicKey) {
+                                        setToggleState(false);
+                                        showStatus('푸시 키를 불러오지 못했습니다.', true);
+                                        return;
+                                    }
+                                    subscription = await registration.pushManager.subscribe({
+                                        userVisibleOnly: true,
+                                        applicationServerKey: urlBase64ToUint8Array(publicKey)
+                                    });
+                                }
+
+                                await subscribePush(currentUser.id, subscription, {
+                                    userAgent: navigator.userAgent,
+                                    platform: navigator.platform
+                                });
+
+                                setToggleState(true);
+                                showStatus('알림 받기가 활성화되었습니다.');
+
+                                try {
+                                    await sendPushTest(currentUser.id);
+                                } catch (error) {
+                                    console.error('푸시 테스트 전송 오류:', error);
+                                }
+                            } catch (error) {
+                                console.error('푸시 구독 오류:', error);
+                                setToggleState(false);
+                                showStatus(error.message || '푸시 구독 중 오류가 발생했습니다.', true);
+                            }
+                            return;
+                        }
+
+                        try {
+                            const registration = await getRegistration();
+                            const subscription = registration
+                                ? await registration.pushManager.getSubscription()
+                                : null;
+
+                            if (subscription) {
+                                await unsubscribePush(currentUser.id, subscription.endpoint);
+                                await subscription.unsubscribe();
+                            } else {
+                                await unsubscribePush(currentUser.id);
+                            }
+
+                            setToggleState(false);
+                            showStatus('알림 받기가 해제되었습니다.');
+                        } catch (error) {
+                            console.error('푸시 해제 오류:', error);
+                            showStatus(error.message || '푸시 해제 중 오류가 발생했습니다.', true);
+                        }
+                    }, { passive: false });
                 })();
                 
                 // 비밀번호 변경 버튼 클릭 이벤트

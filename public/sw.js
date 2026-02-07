@@ -10,7 +10,7 @@ self.addEventListener('push', event => {
   const options = {
     body: payload.body || '',
     data: {
-      url: payload.url || '/app-user'
+      url: payload.url || '/'
     }
   };
 
@@ -19,13 +19,15 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const targetUrl = event.notification?.data?.url || '/app-user';
+  const targetUrl = event.notification?.data?.url || '/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url.includes(targetUrl)) {
-          return client.focus();
+      if (clientList.length > 0) {
+        const client = clientList[0];
+        if (typeof client.navigate === 'function') {
+          return client.navigate(targetUrl).then(() => client.focus());
         }
+        return client.focus();
       }
       return clients.openWindow(targetUrl);
     })

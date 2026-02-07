@@ -1,0 +1,16 @@
+﻿DATABASE_URL=postgresql://fms_user:password@localhost:5432/fms_db
+NODE_ENV=development
+PORT=3000
+
+# ?대찓???ㅼ젙 (Gmail)
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_USER=goodlift0801@gmail.com
+EMAIL_PASS=pnne ervf yqwy jogw
+
+# PWA 踰꾩쟾 愿由?(濡쒖뺄 媛쒕컻??
+PWA_VERSION=local-dev-v1
+
+VAPID_PUBLIC_KEY=BLC3vw2JvTAQwygivYVGUxz7woVdpMudCXTSpOYRYSxiFyi_pFfSpVd-A7Ms1CoKeStFlOjvmf8mr7CGYKba7uE
+VAPID_PRIVATE_KEY=KkzR_KE0lXtx9FO2qOxnA2u36r6KEBMven8CqAmdjB0
+VAPID_SUBJECT=mailto:admin@example.com

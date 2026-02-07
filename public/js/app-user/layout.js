@@ -24,6 +24,32 @@ export function init(userData) {
     
     // 초기 탭 상태 업데이트
     updateTabsEnabledState();
+
+    const initialScreen = getInitialScreen();
+    navigateToScreen(initialScreen);
+}
+
+function getInitialScreen() {
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        const screen = params.get('screen');
+        const date = params.get('date');
+        if (screen && screens[screen]) {
+            const isViewingTrainer = localStorage.getItem('isReadOnly') === 'true' && 
+                                     localStorage.getItem('viewingTrainerName');
+            if (isViewingTrainer && ['home', 'diet', 'profile'].includes(screen)) {
+                return 'workout';
+            }
+            if (date && (screen === 'workout' || screen === 'diet')) {
+                localStorage.setItem('pendingNavScreen', screen);
+                localStorage.setItem('pendingNavDate', date);
+            }
+            return screen;
+        }
+    } catch (error) {
+        // ignore
+    }
+    return 'home';
 }
 
 /**
