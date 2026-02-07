@@ -63,7 +63,7 @@ function render(container) {
           <div style="display:flex;align-items:stretch;gap:8px;">
             <input type="text" id="user-app-guide-search" placeholder="운동 이름 검색..." style="width:200px;padding:4px 8px;border:1px solid #ddd;border-radius:3px;font-size:0.75rem;box-sizing:border-box;margin:0;font-family:inherit;">
             <button id="user-app-guide-save-btn" class="header-text-btn" style="background:#1976d2 !important;color:#fff !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;margin:0;font-family:inherit;white-space:nowrap;">
-              저장
+              목록 저장
             </button>
           </div>
         </div>
@@ -661,9 +661,9 @@ function renderMembersList(members) {
       </tbody>
     </table>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;">
-      <button data-page="prev" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${membersCurrentPage === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>이전</button>
+      <button data-page="prev" style="background:#fff;border:1px solid #ddd;color:#333;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${membersCurrentPage === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>이전</button>
       <span style="font-size:0.75rem;color:#666;">${membersCurrentPage} / ${totalPages}</span>
-      <button data-page="next" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${membersCurrentPage === totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>다음</button>
+      <button data-page="next" style="background:#fff;border:1px solid #ddd;color:#333;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${membersCurrentPage === totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>다음</button>
     </div>
   `;
   
@@ -898,9 +898,9 @@ async function renderMemberActivityList(members) {
       </tbody>
     </table>
     <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 0;">
-      <button data-page="prev" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${activityCurrentPage === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>이전</button>
+      <button data-page="prev" style="background:#fff;border:1px solid #ddd;color:#333;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${activityCurrentPage === 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>이전</button>
       <span style="font-size:0.75rem;color:#666;">${activityCurrentPage} / ${totalPages}</span>
-      <button data-page="next" style="background:#fff;border:1px solid #ddd;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${activityCurrentPage === totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>다음</button>
+      <button data-page="next" style="background:#fff;border:1px solid #ddd;color:#333;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;" ${activityCurrentPage === totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : ''}>다음</button>
     </div>
   `;
   
