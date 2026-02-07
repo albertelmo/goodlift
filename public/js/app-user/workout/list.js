@@ -13,6 +13,22 @@ let cachedTimerSettings = null; // 타이머 설정 캐시
 const TIMER_SETTINGS_STORAGE_KEY = 'workout_rest_timer_settings';
 const FAVORITES_ONLY_STORAGE_KEY = 'workout_show_favorites_only';
 let workoutGuideMap = new Map();
+let calendarUpdateTimer = null;
+
+function scheduleCalendarUpdate() {
+    if (!window.updateCalendarWorkoutRecords) {
+        return;
+    }
+    if (calendarUpdateTimer) {
+        clearTimeout(calendarUpdateTimer);
+    }
+    calendarUpdateTimer = setTimeout(() => {
+        calendarUpdateTimer = null;
+        window.updateCalendarWorkoutRecords().catch(error => {
+            console.error('캘린더 업데이트 오류:', error);
+        });
+    }, 400);
+}
 
 function getCachedTimerSettings() {
     if (cachedTimerSettings) {
@@ -986,36 +1002,54 @@ function showCompletedCheckModal(record) {
         checkbox.addEventListener('change', async (e) => {
             const isChecked = checkbox.checked;
             const type = checkbox.getAttribute('data-type');
+            let prevRecordCompleted = null;
+            let prevSetCompleted = null;
+            let setId = null;
             
             try {
                 if (type === 'record') {
-                    await updateWorkoutRecordCompleted(record.id, currentAppUserId, isChecked);
+                    prevRecordCompleted = record.is_completed || false;
                     record.is_completed = isChecked;
                 } else if (type === 'set') {
-                    const setId = checkbox.getAttribute('data-set-id');
-                    await updateWorkoutSetCompleted(record.id, setId, currentAppUserId, isChecked);
+                    setId = checkbox.getAttribute('data-set-id');
                     const set = record.sets.find(s => s.id === setId);
                     if (set) {
+                        prevSetCompleted = set.is_completed || false;
                         set.is_completed = isChecked;
                     }
                 }
                 
-                // 카드 목록 업데이트
+                // 카드 목록 업데이트 (낙관적 UI)
                 const recordIndex = currentRecords.findIndex(r => r.id === record.id);
                 if (recordIndex !== -1) {
-                    // currentRecords 업데이트
                     currentRecords[recordIndex] = { ...record };
-                    // 현재 필터 날짜로 다시 렌더링
                     await render(currentRecords);
                 }
                 
-                // 캘린더 업데이트
-                if (window.updateCalendarWorkoutRecords) {
-                    await window.updateCalendarWorkoutRecords();
+                scheduleCalendarUpdate();
+                
+                if (type === 'record') {
+                    await updateWorkoutRecordCompleted(record.id, currentAppUserId, isChecked);
+                } else if (type === 'set') {
+                    await updateWorkoutSetCompleted(record.id, setId, currentAppUserId, isChecked);
                 }
             } catch (error) {
                 console.error('완료 상태 업데이트 오류:', error);
-                checkbox.checked = !isChecked; // 롤백
+                // 롤백
+                if (type === 'record') {
+                    record.is_completed = prevRecordCompleted;
+                } else if (type === 'set') {
+                    const set = record.sets.find(s => s.id === setId);
+                    if (set) {
+                        set.is_completed = prevSetCompleted;
+                    }
+                }
+                checkbox.checked = !isChecked;
+                const recordIndex = currentRecords.findIndex(r => r.id === record.id);
+                if (recordIndex !== -1) {
+                    currentRecords[recordIndex] = { ...record };
+                    await render(currentRecords);
+                }
                 alert('완료 상태를 업데이트하는 중 오류가 발생했습니다.');
             }
         });
@@ -1716,37 +1750,34 @@ function setupClickListeners() {
                 const record = currentRecords.find(r => r.id === recordId);
                 if (!record || !record.sets) return;
                 
+                // 날짜 확인용
+                const workoutDate = record.workout_date;
+                let dateStr = workoutDate;
+                if (dateStr instanceof Date) {
+                    dateStr = formatDate(dateStr);
+                } else if (typeof dateStr === 'string') {
+                    dateStr = dateStr.split('T')[0];
+                }
+                
+                const previousStates = record.sets.map(set => ({
+                    id: set.id,
+                    is_completed: set.is_completed || false
+                }));
+                
+                // 낙관적 UI 업데이트
+                record.sets.forEach(set => {
+                    set.is_completed = isChecked;
+                });
+                await render(currentRecords);
+                scheduleCalendarUpdate();
+                
                 try {
-                    // 날짜 확인용
-                    const workoutDate = record.workout_date;
-                    let dateStr = workoutDate;
-                    if (dateStr instanceof Date) {
-                        dateStr = formatDate(dateStr);
-                    } else if (typeof dateStr === 'string') {
-                        dateStr = dateStr.split('T')[0];
-                    }
-                    
                     // 모든 세트의 완료 상태 업데이트
                     const { updateWorkoutSetCompleted } = await import('../api.js');
                     const updatePromises = record.sets.map(set => 
                         updateWorkoutSetCompleted(recordId, set.id, currentAppUserId, isChecked)
                     );
                     await Promise.all(updatePromises);
-                    
-                    // 현재 레코드 데이터 업데이트
-                    if (record.sets) {
-                        record.sets.forEach(set => {
-                            set.is_completed = isChecked;
-                        });
-                    }
-                    
-                    // 카드 다시 렌더링
-                    await render(currentRecords);
-                    
-                    // 캘린더 업데이트
-                    if (window.updateCalendarWorkoutRecords) {
-                        await window.updateCalendarWorkoutRecords();
-                    }
                     
                     // 체크된 경우에만 모달 처리 (체크 해제 시에는 모달 표시 안 함)
                     if (isChecked) {
@@ -1765,6 +1796,13 @@ function setupClickListeners() {
                     console.error('전체 세트 완료 상태 업데이트 오류:', error);
                     // 실패 시 체크박스 상태 원복
                     allSetsCheckbox.checked = !isChecked;
+                    record.sets.forEach(set => {
+                        const prev = previousStates.find(state => state.id === set.id);
+                        if (prev) {
+                            set.is_completed = prev.is_completed;
+                        }
+                    });
+                    await render(currentRecords);
                     alert('완료 상태 업데이트에 실패했습니다.');
                 }
                 });
@@ -1783,6 +1821,9 @@ function setupClickListeners() {
                 const isChecked = checkbox.checked;
                 const type = checkbox.getAttribute('data-type');
                 const recordId = checkbox.getAttribute('data-record-id');
+                let prevRecordCompleted = null;
+                let prevSetCompleted = null;
+                let setId = null;
                 
                 // currentAppUserId 확인
                 if (!currentAppUserId) {
@@ -1810,54 +1851,44 @@ function setupClickListeners() {
                     }
                     
                     if (type === 'record') {
-                        // 운동기록 완료 상태 업데이트
-                        const { updateWorkoutRecordCompleted } = await import('../api.js');
-                        await updateWorkoutRecordCompleted(recordId, currentAppUserId, isChecked);
+                        prevRecordCompleted = record.is_completed || false;
+                        record.is_completed = isChecked;
                     } else if (type === 'set') {
-                        // 세트 완료 상태 업데이트
-                        const setId = checkbox.getAttribute('data-set-id');
+                        setId = checkbox.getAttribute('data-set-id');
                         if (!setId) {
                             console.error('setId가 없습니다.');
                             checkbox.checked = !isChecked;
                             alert('세트 정보를 찾을 수 없습니다.');
                             return;
                         }
-                        const { updateWorkoutSetCompleted } = await import('../api.js');
-                        await updateWorkoutSetCompleted(recordId, setId, currentAppUserId, isChecked);
-                    }
-                    
-                    // 현재 레코드 데이터 업데이트
-                    const updatedRecord = currentRecords.find(r => r.id === recordId);
-                    if (updatedRecord) {
-                        if (type === 'record') {
-                            updatedRecord.is_completed = isChecked;
-                        } else if (type === 'set') {
-                            const setId = checkbox.getAttribute('data-set-id');
-                            const set = updatedRecord.sets?.find(s => s.id === setId);
-                            if (set) {
-                                set.is_completed = isChecked;
-                            }
+                        const set = record.sets?.find(s => s.id === setId);
+                        if (set) {
+                            prevSetCompleted = set.is_completed || false;
+                            set.is_completed = isChecked;
                         }
                     }
                     
                     // 전체 세트 체크박스 상태 업데이트 (세트 타입인 경우)
                     if (type === 'set') {
                         const allSetsCheckbox = item.querySelector('.app-workout-item-all-sets-checkbox');
-                        if (allSetsCheckbox) {
-                            const record = currentRecords.find(r => r.id === recordId);
-                            if (record && record.sets) {
-                                const allCompleted = record.sets.every(set => set.is_completed === true) && record.sets.length > 0;
-                                allSetsCheckbox.checked = allCompleted;
-                            }
+                        if (allSetsCheckbox && record.sets) {
+                            const allCompleted = record.sets.every(set => set.is_completed === true) && record.sets.length > 0;
+                            allSetsCheckbox.checked = allCompleted;
                         }
                     }
                     
-                    // 카드 다시 렌더링 (데이터 업데이트 후)
+                    // 카드 다시 렌더링 (낙관적 UI)
                     await render(currentRecords);
+                    scheduleCalendarUpdate();
                     
-                    // 캘린더 업데이트
-                    if (window.updateCalendarWorkoutRecords) {
-                        await window.updateCalendarWorkoutRecords();
+                    if (type === 'record') {
+                        // 운동기록 완료 상태 업데이트
+                        const { updateWorkoutRecordCompleted } = await import('../api.js');
+                        await updateWorkoutRecordCompleted(recordId, currentAppUserId, isChecked);
+                    } else if (type === 'set') {
+                        // 세트 완료 상태 업데이트
+                        const { updateWorkoutSetCompleted } = await import('../api.js');
+                        await updateWorkoutSetCompleted(recordId, setId, currentAppUserId, isChecked);
                     }
                     
                     // 체크된 경우에만 모달 처리 (체크 해제 시에는 모달 표시 안 함)
@@ -1885,7 +1916,16 @@ function setupClickListeners() {
                         errorStack: error.stack
                     });
                     // 실패 시 체크박스 상태 원복
+                    if (type === 'record') {
+                        record.is_completed = prevRecordCompleted;
+                    } else if (type === 'set') {
+                        const set = record.sets?.find(s => s.id === setId);
+                        if (set) {
+                            set.is_completed = prevSetCompleted;
+                        }
+                    }
                     checkbox.checked = !isChecked;
+                    await render(currentRecords);
                     const errorMessage = error.message || '알 수 없는 오류';
                     alert(`완료 상태 업데이트에 실패했습니다: ${errorMessage}`);
                 }

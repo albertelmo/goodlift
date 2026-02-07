@@ -32,6 +32,15 @@ const logQuery = (query, params, duration) => {
   }
 };
 
+const scheduleDailyStatsRefresh = (appUserId, workoutDate) => {
+  if (!workoutDate) return;
+  setImmediate(() => {
+    Promise.resolve(achievementsDB.refreshDailyStats(appUserId, workoutDate)).catch(error => {
+      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    });
+  });
+};
+
 // Pool의 query 메서드를 래핑하여 로깅 추가
 const pool = {
   query: async (query, params) => {
@@ -1325,12 +1334,8 @@ const updateWorkoutRecordCompleted = async (id, appUserId, isCompleted) => {
     `;
     const result = await pool.query(query, [isCompleted, id, appUserId]);
     const updatedRecord = result.rows[0] || null;
-    try {
-      if (updatedRecord?.workout_date) {
-        await achievementsDB.refreshDailyStats(appUserId, updatedRecord.workout_date);
-      }
-    } catch (error) {
-      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    if (updatedRecord?.workout_date) {
+      scheduleDailyStatsRefresh(appUserId, updatedRecord.workout_date);
     }
     return updatedRecord;
   } catch (error) {
@@ -1361,13 +1366,9 @@ const updateWorkoutSetCompleted = async (setId, workoutRecordId, appUserId, isCo
     `;
     const result = await pool.query(query, [isCompleted, setId, workoutRecordId]);
     const updatedSet = result.rows[0] || null;
-    try {
-      const workoutDate = checkResult.rows[0]?.workout_date;
-      if (workoutDate) {
-        await achievementsDB.refreshDailyStats(appUserId, workoutDate);
-      }
-    } catch (error) {
-      console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
+    const workoutDate = checkResult.rows[0]?.workout_date;
+    if (workoutDate) {
+      scheduleDailyStatsRefresh(appUserId, workoutDate);
     }
     return updatedSet;
   } catch (error) {
