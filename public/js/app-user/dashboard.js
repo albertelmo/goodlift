@@ -1,7 +1,9 @@
 // 앱 유저 홈/대시보드 화면
 
 import { formatDate, getToday, escapeHtml, getTimeAgo } from './utils.js';
+import { getUserSettings, updateUserSettings } from './api.js';
 import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead } from './api.js';
+import { showWorkoutGuideDetailModal } from './guide-modal.js';
 
 let currentUser = null;
 let nextSession = null;
@@ -11,6 +13,9 @@ let todayWorkoutSummary = null; // 오늘의 운동 요약
 let monthlyWorkoutCompletionSummary = null; // 이번달 운동 완료 요약
 let monthlyDietSummary = null; // 이번달 식단 요약
 let monthlyAchievementSummary = null; // 이번달 업적 요약 (코멘트 포함)
+let achievementMedalTotals = null; // 누적 메달 집계
+let workoutGuideEnabled = false;
+let workoutGuideItems = [];
 let connectedAppUserInfo = null; // 현재 연결된 유저앱 회원 정보
 let trainerMemberMedalStatus = {}; // 트레이너 회원 메달 현황 (app_user_id -> status)
 let activityLogs = null; // 트레이너 활동 로그
@@ -35,6 +40,9 @@ export async function init(userData) {
         loadMonthlyWorkoutCompletionSummary(),
         loadMonthlyDietSummary(),
         loadMonthlyAchievementSummary(),
+        loadAchievementMedalTotals(),
+        loadWorkoutGuideSettings(),
+        loadWorkoutGuideItems(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs()
@@ -44,6 +52,33 @@ export async function init(userData) {
     
     // 활동 로그 자동 업데이트 시작
     startActivityLogsAutoUpdate();
+}
+
+async function loadWorkoutGuideSettings() {
+    try {
+        const appUserId = currentUser?.id;
+        if (!appUserId) return;
+        const settings = await getUserSettings(appUserId);
+        if (settings && typeof settings.workout_guide_enabled !== 'undefined') {
+            workoutGuideEnabled = settings.workout_guide_enabled === true || settings.workout_guide_enabled === 'true';
+        }
+    } catch (error) {
+        console.error('운동 가이드 설정 조회 오류:', error);
+    }
+}
+
+async function loadWorkoutGuideItems() {
+    try {
+        const response = await fetch('/api/workout-guide-items');
+        if (!response.ok) {
+            throw new Error('운동 가이드 목록 조회 실패');
+        }
+        const data = await response.json();
+        workoutGuideItems = Array.isArray(data.items) ? data.items : [];
+    } catch (error) {
+        console.error('운동 가이드 목록 조회 오류:', error);
+        workoutGuideItems = [];
+    }
 }
 
 /**
@@ -465,6 +500,27 @@ async function loadMonthlyAchievementSummary() {
     } catch (error) {
         console.error('이번달 업적 요약 조회 오류:', error);
         monthlyAchievementSummary = null;
+    }
+}
+
+/**
+ * 누적 메달 집계 조회
+ */
+async function loadAchievementMedalTotals() {
+    try {
+        const appUserId = currentUser?.id;
+        if (!appUserId) {
+            achievementMedalTotals = null;
+            return;
+        }
+        const response = await fetch(`/api/app-users/${encodeURIComponent(appUserId)}/achievement-medal-totals`);
+        if (!response.ok) {
+            throw new Error('누적 메달 집계 조회 실패');
+        }
+        achievementMedalTotals = await response.json();
+    } catch (error) {
+        console.error('누적 메달 집계 조회 오류:', error);
+        achievementMedalTotals = null;
     }
 }
 
@@ -1054,6 +1110,37 @@ function render() {
         diamond: 'background:#e8f5ff;color:#1e88e5;'
     };
 
+    const medalTotals = achievementMedalTotals || {
+        workout: { bronze: 0, silver: 0, gold: 0, diamond: 0 },
+        diet: { bronze: 0, silver: 0, gold: 0, diamond: 0 },
+        memberComment: { bronze: 0, silver: 0, gold: 0, diamond: 0 },
+        trainerComment: { bronze: 0, silver: 0, gold: 0, diamond: 0 }
+    };
+    const medalTierOrder = ['bronze', 'silver', 'gold', 'diamond'];
+    const renderTotalsRow = (label, totals) => `
+        <div class="app-achievement-totals-row">
+            <div class="app-achievement-totals-label">${label}</div>
+            <div class="app-achievement-totals-badges">
+                ${medalTierOrder.map(tier => `
+                    <span class="app-achievement-totals-badge" style="${tierStyles[tier]}">
+                        ${tierLabels[tier]} ${totals?.[tier] ?? 0}
+                    </span>
+                `).join('')}
+            </div>
+        </div>
+    `;
+    const renderTotalsMedalRow = (totals) => {
+        return medalLevels.map(level => {
+            const count = totals?.[level.tier] ?? 0;
+            return `
+                <div class="app-achievement-medal-wrap">
+                    <img src="${level.src}" alt="${level.label}" class="${count > 0 ? 'is-earned' : 'is-locked'}">
+                    ${count > 0 ? `<span class="app-achievement-medal-count">x${count}</span>` : ''}
+                </div>
+            `;
+        }).join('');
+    };
+
     const tierRank = {
         none: 0,
         bronze: 1,
@@ -1069,11 +1156,21 @@ function render() {
         { tier: 'diamond', label: '다이아', src: '/img/medal/diamond.png' }
     ];
 
-    const renderMedalRow = (currentTier) => {
+    const renderMedalRow = (currentTier, remainingText = null) => {
         const rank = tierRank[currentTier] || 0;
+        const nextTier = medalLevels.find(level => tierRank[level.tier] === rank + 1);
+        const overlayText = remainingText ? `${remainingText}<br>남음` : '';
         return medalLevels.map(level => {
             const isEarned = tierRank[level.tier] <= rank;
-            return `<img src="${level.src}" alt="${level.label}" class="${isEarned ? 'is-earned' : 'is-locked'}">`;
+            const overlay = !isEarned && nextTier && nextTier.tier === level.tier && overlayText
+                ? `<span class="app-achievement-medal-overlay">${overlayText}</span>`
+                : '';
+            return `
+                <div class="app-achievement-medal-wrap">
+                    <img src="${level.src}" alt="${level.label}" class="${isEarned ? 'is-earned' : 'is-locked'}">
+                    ${overlay}
+                </div>
+            `;
         }).join('');
     };
 
@@ -1085,6 +1182,43 @@ function render() {
     const dietTitle = `식단 ${dietDays}일`;
     const memberCommentTitle = `회원 코멘트 ${memberCommentTotal}회`;
     const trainerCommentTitle = `트레이너 코멘트 ${trainerCommentTotal}회`;
+    const shouldShowGuideButton = !isTrainer && workoutGuideEnabled;
+
+    const guideItems = (Array.isArray(workoutGuideItems) ? workoutGuideItems : []).filter(item => item.guide_is_active !== false).map(item => {
+        const categories = [
+            item.category_1_name,
+            item.category_2_name,
+            item.category_3_name,
+            item.category_4_name
+        ].filter(Boolean).join(' / ');
+        const descriptionParts = [];
+        if (item.guide_description) {
+            descriptionParts.push(item.guide_description);
+        } else if (categories) {
+            descriptionParts.push(categories);
+        }
+        return {
+            id: item.id,
+            title: item.guide_title || item.name,
+            description: descriptionParts.join(' · '),
+            videoUrl: item.guide_video_url || '',
+            externalLink: item.guide_external_link || ''
+        };
+    });
+
+    const getRemainingText = (count, thresholds, unit) => {
+        for (const threshold of thresholds) {
+            if (count < threshold) {
+                return `${threshold - count}${unit}`;
+            }
+        }
+        return null;
+    };
+
+    const workoutRemaining = getRemainingText(workoutDays, [1, 5, 9, 13], '일');
+    const dietRemaining = getRemainingText(dietDays, [1, 6, 11, 16], '일');
+    const memberCommentRemaining = getRemainingText(memberCommentTotal, [1, 6, 11, 16], '회');
+    const trainerCommentRemaining = getRemainingText(trainerCommentTotal, [1, 6, 11, 16], '회');
     
     const primaryTrainer = Array.isArray(memberTrainers) && memberTrainers.length > 0 ? memberTrainers[0] : null;
     const trainerDisplayName = primaryTrainer?.name || null;
@@ -1350,8 +1484,11 @@ function render() {
             <div class="app-achievement-modal" id="app-achievement-modal">
                 <div class="app-achievement-modal-content">
                     <div class="app-achievement-modal-header">
-                        <h3 class="app-achievement-modal-title">이번달 업적</h3>
-                        <button class="app-achievement-modal-close" id="app-achievement-modal-close" aria-label="닫기">×</button>
+                        <div class="app-achievement-header-row">
+                            <h3 class="app-achievement-modal-title">이번달 업적</h3>
+                            <button type="button" class="app-achievement-totals-btn" id="app-achievement-totals-open">전체 수집 메달</button>
+                        </div>
+                        <button type="button" class="app-achievement-modal-close" id="app-achievement-modal-close" aria-label="닫기">×</button>
                     </div>
                     <div class="app-achievement-grid">
                         <div class="app-achievement-card">
@@ -1360,7 +1497,7 @@ function render() {
                                 ${workoutTier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[workoutTier]}">${tierLabels[workoutTier]}</span>` : ''}
                             </div>
                             <div class="app-achievement-medal-row">
-                                ${renderMedalRow(workoutTier)}
+                                ${renderMedalRow(workoutTier, workoutRemaining)}
                             </div>
                         </div>
                         <div class="app-achievement-card">
@@ -1369,7 +1506,7 @@ function render() {
                                 ${dietTier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[dietTier]}">${tierLabels[dietTier]}</span>` : ''}
                             </div>
                             <div class="app-achievement-medal-row">
-                                ${renderMedalRow(dietTier)}
+                                ${renderMedalRow(dietTier, dietRemaining)}
                             </div>
                         </div>
                         <div class="app-achievement-card">
@@ -1378,7 +1515,7 @@ function render() {
                                 ${memberCommentTier.tier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[memberCommentTier.tier]}">${tierLabels[memberCommentTier.tier]}</span>` : ''}
                             </div>
                             <div class="app-achievement-medal-row">
-                                ${renderMedalRow(memberCommentTier.tier)}
+                                ${renderMedalRow(memberCommentTier.tier, memberCommentRemaining)}
                             </div>
                         </div>
                         <div class="app-achievement-card">
@@ -1387,7 +1524,41 @@ function render() {
                                 ${trainerCommentTier.tier !== 'none' ? `<span class="app-achievement-badge" style="${tierStyles[trainerCommentTier.tier]}">${tierLabels[trainerCommentTier.tier]}</span>` : ''}
                             </div>
                             <div class="app-achievement-medal-row">
-                                ${renderMedalRow(trainerCommentTier.tier)}
+                                ${renderMedalRow(trainerCommentTier.tier, trainerCommentRemaining)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="app-achievement-modal" id="app-achievement-totals-modal" style="display:none;">
+                <div class="app-achievement-modal-content">
+                    <div class="app-achievement-modal-header">
+                        <h3 class="app-achievement-modal-title">전체 수집 메달</h3>
+                        <button type="button" class="app-achievement-modal-close" id="app-achievement-totals-close" aria-label="닫기">×</button>
+                    </div>
+                    <div class="app-achievement-grid">
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">오운완</div>
+                            <div class="app-achievement-medal-row">
+                                ${renderTotalsMedalRow(medalTotals.workout)}
+                            </div>
+                        </div>
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">식단</div>
+                            <div class="app-achievement-medal-row">
+                                ${renderTotalsMedalRow(medalTotals.diet)}
+                            </div>
+                        </div>
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">회원 코멘트</div>
+                            <div class="app-achievement-medal-row">
+                                ${renderTotalsMedalRow(medalTotals.memberComment)}
+                            </div>
+                        </div>
+                        <div class="app-achievement-card">
+                            <div class="app-achievement-card-title">트레이너 코멘트</div>
+                            <div class="app-achievement-medal-row">
+                                ${renderTotalsMedalRow(medalTotals.trainerComment)}
                             </div>
                         </div>
                     </div>
@@ -1398,6 +1569,127 @@ function render() {
     `;
     
     // 회원 목록 클릭 이벤트 설정
+    if (!isTrainer) {
+        const guideHtml = `
+            <button type="button" class="app-guide-fab" id="app-guide-fab" style="${shouldShowGuideButton ? '' : 'display:none;'}">
+                <span>운동</span>
+                <span>가이드</span>
+            </button>
+            <div class="app-guide-modal" id="app-guide-modal">
+                <div class="app-guide-modal-content">
+                    <div class="app-guide-modal-header">
+                        <h3>운동 가이드</h3>
+                        <button class="app-guide-modal-close" id="app-guide-modal-close">×</button>
+                    </div>
+                    <div class="app-guide-modal-body">
+                        <div class="app-guide-list" id="app-guide-list">
+                            ${guideItems.length === 0
+                                ? '<div class="app-guide-empty">준비중입니다.</div>'
+                                : guideItems.map((item, index) => `
+                                    <button class="app-guide-list-item" data-guide-id="${item.id}">
+                                        ${escapeHtml(item.title)}
+                                    </button>
+                                `).join('')}
+                        </div>
+                    </div>
+                    <label class="app-guide-dismiss">
+                        <input type="checkbox" id="app-guide-dismiss-checkbox" ${workoutGuideEnabled ? '' : 'checked'}>
+                        운동가이드 버튼 숨기기
+                    </label>
+                </div>
+            </div>
+        `;
+        container.insertAdjacentHTML('beforeend', guideHtml);
+
+        const guideFab = container.querySelector('#app-guide-fab');
+        const guideModal = container.querySelector('#app-guide-modal');
+        const guideCloseBtn = container.querySelector('#app-guide-modal-close');
+        const guideList = container.querySelector('#app-guide-list');
+        const guideDismissCheckbox = container.querySelector('#app-guide-dismiss-checkbox');
+
+        if (guideFab && guideModal) {
+            guideFab.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                guideModal.style.display = 'flex';
+            });
+            guideFab.addEventListener('touchstart', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                guideModal.style.display = 'flex';
+            }, { passive: false });
+        }
+        if (guideCloseBtn && guideModal) {
+            guideCloseBtn.addEventListener('click', () => {
+                guideModal.style.display = 'none';
+            });
+            guideModal.addEventListener('click', (e) => {
+                if (e.target === guideModal) {
+                    guideModal.style.display = 'none';
+                }
+            });
+        }
+        if (guideList) {
+            guideList.querySelectorAll('.app-guide-list-item').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-guide-id');
+                    const item = guideItems.find(i => i.id === id);
+                    showWorkoutGuideDetailModal(item);
+                });
+            });
+        }
+        if (guideDismissCheckbox) {
+            guideDismissCheckbox.addEventListener('change', async () => {
+                const dismissed = guideDismissCheckbox.checked;
+                workoutGuideEnabled = !dismissed;
+                try {
+                    await updateUserSettings(currentUser.id, { workout_guide_enabled: workoutGuideEnabled });
+                } catch (error) {
+                    console.error('운동 가이드 설정 업데이트 오류:', error);
+                }
+                if (dismissed) {
+                    alert('내정보에서 버튼보기 설정이 가능합니다.');
+                }
+                if (dismissed && guideFab) {
+                    guideFab.style.display = 'none';
+                    guideModal.style.display = 'none';
+                }
+            });
+        }
+    }
+
+    const achievementModal = container.querySelector('#app-achievement-modal');
+    const achievementTotalsModal = container.querySelector('#app-achievement-totals-modal');
+    const achievementTotalsOpen = container.querySelector('#app-achievement-totals-open');
+    const achievementTotalsClose = container.querySelector('#app-achievement-totals-close');
+    if (achievementTotalsOpen && achievementTotalsModal) {
+        achievementTotalsOpen.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            achievementTotalsModal.style.display = 'flex';
+        });
+        achievementTotalsOpen.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            achievementTotalsModal.style.display = 'flex';
+        }, { passive: false });
+    }
+    if (achievementTotalsClose && achievementTotalsModal) {
+        achievementTotalsClose.addEventListener('click', () => {
+            achievementTotalsModal.style.display = 'none';
+        });
+        achievementTotalsClose.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            achievementTotalsModal.style.display = 'none';
+        }, { passive: false });
+        achievementTotalsModal.addEventListener('click', (e) => {
+            if (e.target === achievementTotalsModal) {
+                achievementTotalsModal.style.display = 'none';
+            }
+        });
+    }
+
     setupMemberClickEvents();
     
     // 트레이너 목록 클릭 이벤트 설정
@@ -1434,23 +1726,38 @@ function render() {
         const achievementBtn = document.getElementById('app-achievement-btn');
         if (achievementBtn) {
             achievementBtn.style.display = 'inline-flex';
-            achievementBtn.onclick = () => {
+            achievementBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 const modal = document.getElementById('app-achievement-modal');
                 if (modal) modal.style.display = 'flex';
-            };
+            });
+            achievementBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const modal = document.getElementById('app-achievement-modal');
+                if (modal) modal.style.display = 'flex';
+            }, { passive: false });
         }
 
         const modal = document.getElementById('app-achievement-modal');
         const modalCloseBtn = document.getElementById('app-achievement-modal-close');
         if (modal && modalCloseBtn) {
-            modalCloseBtn.onclick = () => {
+            modalCloseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 modal.style.display = 'none';
-            };
-            modal.onclick = (e) => {
+            });
+            modalCloseBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                modal.style.display = 'none';
+            }, { passive: false });
+            modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     modal.style.display = 'none';
                 }
-            };
+            });
         }
 
         const achievementTriggers = document.querySelectorAll('.app-achievement-trigger');

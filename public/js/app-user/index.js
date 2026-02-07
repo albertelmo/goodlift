@@ -3,7 +3,7 @@
 import { init as initLayout } from './layout.js';
 import { init as initDashboard } from './dashboard.js';
 import { escapeHtml } from './utils.js';
-import { updateAppUser, get, postAppUserPing } from './api.js';
+import { updateAppUser, get, postAppUserPing, getUserSettings, updateUserSettings } from './api.js';
 
 let currentUser = null;
 let currentScreen = 'home';
@@ -98,6 +98,15 @@ window.addEventListener('focus', () => {
  * 화면 이동
  */
 export function navigateToScreen(screen) {
+    // 다른 화면으로 이동할 때 남아있는 오버레이 모달 제거
+    document.querySelectorAll('.app-modal-bg, .modal-bg, .app-achievement-modal, .app-guide-modal').forEach(el => {
+        try {
+            el.remove();
+        } catch (e) {
+            // ignore
+        }
+    });
+
     currentScreen = screen;
     const achievementBtn = document.getElementById('app-achievement-btn');
     if (achievementBtn) {
@@ -234,6 +243,18 @@ export function navigateToScreen(screen) {
                                     <div style="font-size: 14px; color: var(--app-text-muted); font-family: monospace;" id="app-version-display">불러오는 중...</div>
                                 </div>
                             </div>
+
+                                <div class="app-profile-info" style="background: var(--app-surface); border-radius: var(--app-radius); padding: 20px; margin-bottom: 16px;">
+                                <div class="app-profile-info-item" style="padding: 12px 0; border-bottom: 1px solid var(--app-border);">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+                                        <div style="font-size: 12px; color: var(--app-text-muted);">운동 가이드</div>
+                                        <button type="button" id="workout-guide-toggle" class="app-toggle-btn">
+                                            <span class="app-toggle-text">OFF</span>
+                                            <span class="app-toggle-knob"></span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                             
                             <div class="app-profile-password" style="background: var(--app-surface); border-radius: var(--app-radius); padding: 20px; margin-bottom: 16px;">
                                 <h3 style="font-size: 16px; font-weight: 600; color: var(--app-text); margin: 0 0 16px;">비밀번호 변경</h3>
@@ -326,6 +347,46 @@ export function navigateToScreen(screen) {
                     });
                 }
                 
+                // 운동 가이드 토글 로드
+                (async () => {
+                    const toggleBtn = profileContainer.querySelector('#workout-guide-toggle');
+                    if (!toggleBtn) return;
+
+                    const toggleText = toggleBtn.querySelector('.app-toggle-text');
+                    const setToggleState = (enabled) => {
+                        toggleBtn.dataset.enabled = enabled ? 'true' : 'false';
+                        toggleBtn.classList.toggle('is-on', enabled);
+                        if (toggleText) {
+                            toggleText.textContent = enabled ? 'ON' : 'OFF';
+                        }
+                    };
+
+                    // 초기 상태를 먼저 세팅하고 클릭 이벤트를 바로 연결
+                    const initialEnabled = toggleBtn.dataset.enabled === 'true' || toggleBtn.classList.contains('is-on');
+                    setToggleState(initialEnabled);
+
+                    toggleBtn.addEventListener('click', async () => {
+                        const nextEnabled = toggleBtn.dataset.enabled !== 'true';
+                        setToggleState(nextEnabled);
+                        await updateUserSettings(currentUser.id, { workout_guide_enabled: nextEnabled });
+                    });
+                    toggleBtn.addEventListener('touchstart', async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const nextEnabled = toggleBtn.dataset.enabled !== 'true';
+                        setToggleState(nextEnabled);
+                        await updateUserSettings(currentUser.id, { workout_guide_enabled: nextEnabled });
+                    }, { passive: false });
+
+                    try {
+                        const settings = await getUserSettings(currentUser.id);
+                        const enabled = settings?.workout_guide_enabled === true ? true : false;
+                        setToggleState(enabled);
+                    } catch (error) {
+                        console.error('운동 가이드 설정 로드 오류:', error);
+                    }
+                })();
+
                 // 비밀번호 변경 버튼 클릭 이벤트
                 const passwordSaveBtn = profileContainer.querySelector('#profile-password-save-btn');
                 if (passwordSaveBtn) {

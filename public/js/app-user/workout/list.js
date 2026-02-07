@@ -3,6 +3,7 @@
 import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText } from '../utils.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
 import { getCurrentUser } from '../index.js';
+import { showWorkoutGuideDetailModal } from '../guide-modal.js';
 
 let currentAppUserId = null;
 let currentRecords = [];
@@ -11,6 +12,7 @@ let trainerNameMap = {}; // 트레이너 username -> name 매핑
 let cachedTimerSettings = null; // 타이머 설정 캐시
 const TIMER_SETTINGS_STORAGE_KEY = 'workout_rest_timer_settings';
 const FAVORITES_ONLY_STORAGE_KEY = 'workout_show_favorites_only';
+let workoutGuideMap = new Map();
 
 function getCachedTimerSettings() {
     if (cachedTimerSettings) {
@@ -78,6 +80,8 @@ export async function init(appUserId, readOnly = false, immediateFilters = null)
     preloadWorkoutUserSettings().catch(error => {
         console.error('운동 설정 사전 로드 오류:', error);
     });
+
+    await loadWorkoutGuideItems();
     
     // 1단계: 선택된 날짜(또는 오늘) 데이터만 즉시 로드
     const selectedDateStr = immediateFilters ? null : getSelectedDate();
@@ -127,6 +131,44 @@ async function preloadWorkoutUserSettings() {
     if (!hasFavoriteSettings) {
         setCachedShowFavoritesOnly(settings.show_favorites_only === true);
     }
+}
+
+async function loadWorkoutGuideItems() {
+    try {
+        const response = await fetch('/api/workout-guide-items');
+        if (!response.ok) {
+            throw new Error('운동 가이드 목록 조회 실패');
+        }
+        const data = await response.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        const activeItems = items.filter(item => item.guide_is_active !== false);
+        workoutGuideMap = new Map(activeItems.map(item => [String(item.id), buildGuideItem(item)]));
+    } catch (error) {
+        console.error('운동 가이드 목록 조회 오류:', error);
+        workoutGuideMap = new Map();
+    }
+}
+
+function buildGuideItem(item) {
+    const categories = [
+        item.category_1_name,
+        item.category_2_name,
+        item.category_3_name,
+        item.category_4_name
+    ].filter(Boolean).join(' / ');
+    const descriptionParts = [];
+    if (item.guide_description) {
+        descriptionParts.push(item.guide_description);
+    } else if (categories) {
+        descriptionParts.push(categories);
+    }
+    return {
+        id: item.id,
+        title: item.guide_title || item.name,
+        description: descriptionParts.join(' · '),
+        videoUrl: item.guide_video_url || '',
+        externalLink: item.guide_external_link || ''
+    };
 }
 
 /**
@@ -839,7 +881,17 @@ function renderWorkoutItem(record) {
                             <line x1="4" y1="17" x2="20" y2="17"></line>
                         </svg>
                     </div>
-                        <div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>
+                        ${(() => {
+                            const guideItem = workoutGuideMap.get(String(record.workout_type_id || ''));
+                            if (!guideItem) {
+                                return `<div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>`;
+                            }
+                            return `
+                                <button type="button" class="app-workout-item-type-btn" data-guide-id="${guideItem.id}">
+                                    ${escapeHtml(workoutTypeName)}
+                                </button>
+                            `;
+                        })()}
                         <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1596,6 +1648,19 @@ function setupClickListeners() {
         const recordId = item.getAttribute('data-record-id');
         const record = currentRecords.find(r => r.id === recordId);
         if (!record) return;
+
+        const guideButton = item.querySelector('.app-workout-item-type-btn');
+        if (guideButton) {
+            guideButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const guideId = guideButton.getAttribute('data-guide-id');
+                const guideItem = workoutGuideMap.get(String(guideId));
+                if (guideItem) {
+                    showWorkoutGuideDetailModal(guideItem);
+                }
+            });
+        }
         
         // 수정 버튼 클릭 시 수정 모달 열기 (읽기 전용 모드가 아닌 경우만)
         if (!isReadOnly) {

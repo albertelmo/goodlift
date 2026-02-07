@@ -32,6 +32,8 @@ const workoutRecordsDB = require('./workout-records-db');
 const workoutTypesDB = require('./workout-types-db');
 const favoriteWorkoutsDB = require('./app-user-favorite-workouts-db');
 const userSettingsDB = require('./app-user-settings-db');
+const appSettingsDB = require('./app-settings-db');
+const workoutGuidesDB = require('./workout-guides-db');
 const dietRecordsDB = require('./diet-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
@@ -393,6 +395,7 @@ const getUploadsDir = () => {
 const UPLOADS_DIR = getUploadsDir();
 const DIET_IMAGES_DIR = path.join(UPLOADS_DIR, 'diet-images');
 const CONSULTATION_VIDEOS_DIR = path.join(UPLOADS_DIR, 'consultation-videos');
+const WORKOUT_GUIDE_VIDEOS_DIR = path.join(UPLOADS_DIR, 'workout-guide-videos');
 const CONSULTATION_IMAGES_DIR = path.join(UPLOADS_DIR, 'consultation-images');
 const TRAINER_PROFILES_DIR = path.join(UPLOADS_DIR, 'trainer-profiles');
 
@@ -410,6 +413,10 @@ const ensureDirectories = () => {
     if (!fs.existsSync(CONSULTATION_VIDEOS_DIR)) {
       fs.mkdirSync(CONSULTATION_VIDEOS_DIR, { recursive: true });
       console.log(`[Consultation] 상담기록 동영상 디렉토리 생성: ${CONSULTATION_VIDEOS_DIR}`);
+    }
+    if (!fs.existsSync(WORKOUT_GUIDE_VIDEOS_DIR)) {
+      fs.mkdirSync(WORKOUT_GUIDE_VIDEOS_DIR, { recursive: true });
+      console.log(`[Workout Guide] 운동 가이드 동영상 디렉토리 생성: ${WORKOUT_GUIDE_VIDEOS_DIR}`);
     }
     if (!fs.existsSync(CONSULTATION_IMAGES_DIR)) {
       fs.mkdirSync(CONSULTATION_IMAGES_DIR, { recursive: true });
@@ -583,11 +590,13 @@ trainerRevenueDB.initializeDatabase();
     await appUserActivityEventsDB.initializeDatabase();
 })();
 workoutTypesDB.initializeDatabase(); // workout_types 테이블을 먼저 생성해야 함
+workoutGuidesDB.initializeDatabase(); // workout_guides는 workout_types를 참조
 workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
 favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_users와 workout_types를 참조하므로 마지막에 생성
 dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
 achievementsDB.initializeDatabase(); // 업적 집계 테이블 초기화/백필
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
+appSettingsDB.initializeDatabase(); // 전역 앱 설정 테이블 초기화
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
 workoutCommentsDB.initializeDatabase(); // 운동 코멘트 테이블 초기화
@@ -895,6 +904,23 @@ const videoUpload = multer({
         // 동영상 파일만 허용
         const allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
         if (allowedMimes.includes(file.mimetype) || 
+            file.originalname.match(/\.(mp4|mov|avi|webm)$/i)) {
+            cb(null, true);
+        } else {
+            cb(new Error('동영상 파일만 업로드 가능합니다. (mp4, mov, avi, webm)'), false);
+        }
+    }
+});
+
+// 운동 가이드 동영상 업로드 설정
+const workoutGuideVideoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: parseInt(process.env.WORKOUT_GUIDE_VIDEO_MAX_SIZE || '104857600', 10) // 기본 100MB
+    },
+    fileFilter: (req, file, cb) => {
+        const allowedMimes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm'];
+        if (allowedMimes.includes(file.mimetype) ||
             file.originalname.match(/\.(mp4|mov|avi|webm)$/i)) {
             cb(null, true);
         } else {
@@ -1352,6 +1378,21 @@ app.get('/api/app-users/:appUserId/achievement-summary', async (req, res) => {
     }
 });
 
+// 앱 유저 누적 메달 집계 조회 (회원용)
+app.get('/api/app-users/:appUserId/achievement-medal-totals', async (req, res) => {
+    try {
+        const { appUserId } = req.params;
+        if (!appUserId) {
+            return res.status(400).json({ message: 'appUserId는 필수입니다.' });
+        }
+        const totals = await achievementsDB.getAchievementMedalTotals(appUserId);
+        res.json(totals);
+    } catch (error) {
+        console.error('[API] 누적 메달 집계 조회 오류:', error);
+        res.status(500).json({ message: '누적 메달 집계 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 앱 유저 업적 요약 목록 조회 (관리자용)
 app.get('/api/app-users/achievement-summaries', async (req, res) => {
     try {
@@ -1370,6 +1411,54 @@ app.get('/api/app-users/achievement-summaries', async (req, res) => {
     } catch (error) {
         console.error('[API] 업적 요약 목록 조회 오류:', error);
         res.status(500).json({ message: '업적 요약 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 아이디/비밀번호 찾기 (유저앱)
+app.post('/api/auth/recover', async (req, res) => {
+    try {
+        const { name, phone, email, type } = req.body;
+        if (!name || !phone || !email) {
+            return res.status(400).json({ message: '이름, 전화번호, 이메일을 입력해주세요.' });
+        }
+        if (type !== 'username' && type !== 'password') {
+            return res.status(400).json({ message: '요청 유형이 올바르지 않습니다.' });
+        }
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({ message: '이메일 형식이 올바르지 않습니다.' });
+        }
+        
+        const normalizedPhone = String(phone).replace(/[^0-9]/g, '');
+        const appUser = await appUsersDB.getAppUserByNamePhone(name, normalizedPhone);
+        if (!appUser || appUser.is_trainer === true || appUser.is_active === false) {
+            return res.status(404).json({ message: '일치하는 회원을 찾을 수 없습니다.' });
+        }
+        
+        let tempPassword = null;
+        if (type === 'password') {
+            const bcrypt = require('bcrypt');
+            const saltRounds = 10;
+            tempPassword = Math.random().toString(36).slice(-8);
+            const password_hash = await bcrypt.hash(tempPassword, saltRounds);
+            await appUsersDB.updateAppUser(appUser.id, { password_hash });
+        }
+        
+        await emailService.sendAppUserRecoveryEmail({
+            recipientEmail: email,
+            name: appUser.name,
+            username: appUser.username,
+            tempPassword,
+            mode: type
+        });
+        
+        const message = type === 'username'
+            ? '아이디가 이메일로 전송되었습니다.'
+            : '아이디와 임시 비밀번호가 이메일로 전송되었습니다.';
+        res.json({ message });
+    } catch (error) {
+        console.error('[API] 아이디/비밀번호 찾기 오류:', error);
+        res.status(500).json({ message: '요청 처리 중 오류가 발생했습니다.' });
     }
 });
 
@@ -3847,6 +3936,205 @@ app.patch('/api/user-settings', async (req, res) => {
     } catch (error) {
         console.error('[API] 사용자 설정 업데이트 오류:', error);
         res.status(500).json({ message: '사용자 설정 업데이트 중 오류가 발생했습니다.' });
+    }
+});
+
+// ========== 앱 전역 설정 (운동 가이드) ==========
+app.get('/api/app-settings/workout-guide', async (req, res) => {
+    try {
+        const raw = await appSettingsDB.getSetting('workout_guide_items', '[]');
+        let items = [];
+        try {
+            items = JSON.parse(raw || '[]');
+        } catch (e) {
+            items = [];
+        }
+        if (!Array.isArray(items)) items = [];
+        res.json({ items });
+    } catch (error) {
+        console.error('[API] 운동 가이드 설정 조회 오류:', error);
+        res.status(500).json({ message: '운동 가이드 설정 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.put('/api/app-settings/workout-guide', async (req, res) => {
+    try {
+        const { items } = req.body || {};
+        if (!Array.isArray(items)) {
+            return res.status(400).json({ message: 'items는 배열이어야 합니다.' });
+        }
+        const normalized = Array.from(new Set(items.map(id => String(id))));
+        await appSettingsDB.setSetting('workout_guide_items', JSON.stringify(normalized));
+        res.json({ message: '운동 가이드 설정이 저장되었습니다.', items: normalized });
+    } catch (error) {
+        console.error('[API] 운동 가이드 설정 저장 오류:', error);
+        res.status(500).json({ message: '운동 가이드 설정 저장 중 오류가 발생했습니다.' });
+    }
+});
+
+app.get('/api/workout-guide-items', async (req, res) => {
+    try {
+        const raw = await appSettingsDB.getSetting('workout_guide_items', '[]');
+        let items = [];
+        try {
+            items = JSON.parse(raw || '[]');
+        } catch (e) {
+            items = [];
+        }
+        if (!Array.isArray(items) || items.length === 0) {
+            return res.json({ items: [] });
+        }
+        const workoutTypes = await workoutTypesDB.getWorkoutTypesByIds(items);
+        const guides = await workoutGuidesDB.getGuidesByWorkoutTypeIds(items);
+        const guideMap = new Map(guides.map(guide => [guide.workout_type_id, guide]));
+        const merged = workoutTypes.map(type => {
+            const guide = guideMap.get(type.id);
+            return {
+                ...type,
+                guide_title: guide?.title || null,
+                guide_description: guide?.description || null,
+                guide_video_url: guide?.video_url || null,
+                guide_video_filename: guide?.video_filename || null,
+                guide_external_link: guide?.external_link || null,
+                guide_is_active: guide?.is_active ?? true
+            };
+        });
+        res.json({ items: merged });
+    } catch (error) {
+        console.error('[API] 운동 가이드 목록 조회 오류:', error);
+        res.status(500).json({ message: '운동 가이드 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동 가이드 단건 조회
+app.get('/api/workout-guides/:workoutTypeId', async (req, res) => {
+    try {
+        const { workoutTypeId } = req.params;
+        const guide = await workoutGuidesDB.getGuideByWorkoutTypeId(workoutTypeId);
+        if (!guide) {
+            return res.json({
+                guide: {
+                    workout_type_id: workoutTypeId,
+                    title: null,
+                    description: null,
+                    video_url: null,
+                    external_link: null,
+                    video_filename: null,
+                    video_size: null,
+                    video_mime: null,
+                    video_uploaded_at: null,
+                    video_uploaded_by: null,
+                    is_active: true
+                }
+            });
+        }
+        res.json({ guide });
+    } catch (error) {
+        console.error('[API] 운동 가이드 조회 오류:', error);
+        res.status(500).json({ message: '운동 가이드 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동 가이드 텍스트 수정
+app.patch('/api/workout-guides/:workoutTypeId', async (req, res) => {
+    try {
+        const { workoutTypeId } = req.params;
+        const { title, description, external_link, is_active } = req.body || {};
+        const existing = await workoutGuidesDB.getGuideByWorkoutTypeId(workoutTypeId);
+        const next = {
+            title: typeof title === 'undefined' ? (existing?.title ?? null) : title,
+            description: typeof description === 'undefined' ? (existing?.description ?? null) : description,
+            external_link: typeof external_link === 'undefined' ? (existing?.external_link ?? null) : external_link,
+            is_active: typeof is_active === 'undefined' ? (existing?.is_active ?? true) : is_active
+        };
+        const guide = existing
+            ? await workoutGuidesDB.updateGuide(workoutTypeId, next)
+            : await workoutGuidesDB.upsertGuide(workoutTypeId, next);
+        res.json({ message: '운동 가이드가 저장되었습니다.', guide });
+    } catch (error) {
+        console.error('[API] 운동 가이드 수정 오류:', error);
+        res.status(500).json({ message: '운동 가이드 수정 중 오류가 발생했습니다.' });
+    }
+});
+
+// 운동 가이드 동영상 업로드
+app.post('/api/workout-guides/:workoutTypeId/video', workoutGuideVideoUpload.single('file'), async (req, res) => {
+    try {
+        const { workoutTypeId } = req.params;
+        const { currentUser } = req.body || {};
+        if (!req.file) {
+            return res.status(400).json({ message: '동영상 파일을 선택해주세요.' });
+        }
+
+        let guide = await workoutGuidesDB.getGuideByWorkoutTypeId(workoutTypeId);
+        if (!guide) {
+            guide = await workoutGuidesDB.upsertGuide(workoutTypeId, {});
+        }
+
+        // 기존 파일 삭제
+        if (guide.video_url) {
+            const urlPath = guide.video_url.replace(/^\/uploads\//, '');
+            const filePath = path.join(UPLOADS_DIR, urlPath);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        }
+
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const videoId = uuidv4();
+        const fileExt = path.extname(req.file.originalname);
+        const videoDir = path.join(WORKOUT_GUIDE_VIDEOS_DIR, String(year), month, workoutTypeId);
+        const videoFileName = `${videoId}${fileExt}`;
+        const videoPath = path.join(videoDir, videoFileName);
+        if (!fs.existsSync(videoDir)) {
+            fs.mkdirSync(videoDir, { recursive: true });
+        }
+        fs.writeFileSync(videoPath, req.file.buffer);
+        const relativePath = path.join('uploads', 'workout-guide-videos', String(year), month, workoutTypeId, videoFileName).replace(/\\/g, '/');
+
+        guide = await workoutGuidesDB.updateGuide(workoutTypeId, {
+            video_url: `/${relativePath}`,
+            video_filename: req.file.originalname,
+            video_size: req.file.size,
+            video_mime: req.file.mimetype,
+            video_uploaded_at: new Date(),
+            video_uploaded_by: currentUser || null
+        });
+
+        res.json({ video_url: guide?.video_url });
+    } catch (error) {
+        console.error('[API] 운동 가이드 동영상 업로드 오류:', error);
+        res.status(500).json({ message: '동영상 업로드에 실패했습니다.' });
+    }
+});
+
+// 운동 가이드 동영상 삭제
+app.delete('/api/workout-guides/:workoutTypeId/video', async (req, res) => {
+    try {
+        const { workoutTypeId } = req.params;
+        const guide = await workoutGuidesDB.getGuideByWorkoutTypeId(workoutTypeId);
+        if (!guide || !guide.video_url) {
+            return res.json({ message: '삭제할 동영상이 없습니다.' });
+        }
+        const urlPath = guide.video_url.replace(/^\/uploads\//, '');
+        const filePath = path.join(UPLOADS_DIR, urlPath);
+        if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+        }
+        await workoutGuidesDB.updateGuide(workoutTypeId, {
+            video_url: null,
+            video_filename: null,
+            video_size: null,
+            video_mime: null,
+            video_uploaded_at: null,
+            video_uploaded_by: null
+        });
+        res.json({ message: '동영상이 삭제되었습니다.' });
+    } catch (error) {
+        console.error('[API] 운동 가이드 동영상 삭제 오류:', error);
+        res.status(500).json({ message: '동영상 삭제에 실패했습니다.' });
     }
 });
 

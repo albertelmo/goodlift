@@ -499,6 +499,72 @@ const getAchievementSummaries = async (appUserIds, startDate, endDate) => {
   }));
 };
 
+const getAchievementMedalTotals = async (appUserId) => {
+  const query = `
+    SELECT
+      date_trunc('month', record_date) AS month,
+      COUNT(*) FILTER (WHERE workout_all_completed) AS workout_days,
+      COUNT(*) FILTER (WHERE diet_has_record) AS diet_days,
+      COALESCE(SUM(workout_member_comment_count + diet_member_comment_count), 0) AS member_comment_count,
+      COALESCE(SUM(workout_trainer_comment_count + diet_trainer_comment_count), 0) AS trainer_comment_count
+    FROM app_user_daily_stats
+    WHERE app_user_id = $1
+      AND record_date < (date_trunc('month', CURRENT_DATE) + INTERVAL '1 month')
+    GROUP BY date_trunc('month', record_date)
+    ORDER BY date_trunc('month', record_date)
+  `;
+  const result = await pool.query(query, [appUserId]);
+
+  const getWorkoutTier = (count) => {
+    if (count >= 13) return 'diamond';
+    if (count >= 9) return 'gold';
+    if (count >= 5) return 'silver';
+    if (count >= 1) return 'bronze';
+    return 'none';
+  };
+  const getDietTier = (count) => {
+    if (count >= 16) return 'diamond';
+    if (count >= 11) return 'gold';
+    if (count >= 6) return 'silver';
+    if (count >= 1) return 'bronze';
+    return 'none';
+  };
+  const getCommentTier = (count) => {
+    if (count >= 16) return 'diamond';
+    if (count >= 11) return 'gold';
+    if (count >= 6) return 'silver';
+    if (count >= 1) return 'bronze';
+    return 'none';
+  };
+
+  const emptyTotals = {
+    bronze: 0,
+    silver: 0,
+    gold: 0,
+    diamond: 0
+  };
+  const totals = {
+    workout: { ...emptyTotals },
+    diet: { ...emptyTotals },
+    memberComment: { ...emptyTotals },
+    trainerComment: { ...emptyTotals }
+  };
+
+  result.rows.forEach(row => {
+    const workoutTier = getWorkoutTier(parseInt(row.workout_days || 0, 10));
+    const dietTier = getDietTier(parseInt(row.diet_days || 0, 10));
+    const memberTier = getCommentTier(parseInt(row.member_comment_count || 0, 10));
+    const trainerTier = getCommentTier(parseInt(row.trainer_comment_count || 0, 10));
+
+    if (workoutTier !== 'none') totals.workout[workoutTier] += 1;
+    if (dietTier !== 'none') totals.diet[dietTier] += 1;
+    if (memberTier !== 'none') totals.memberComment[memberTier] += 1;
+    if (trainerTier !== 'none') totals.trainerComment[trainerTier] += 1;
+  });
+
+  return totals;
+};
+
 const initializeDatabase = async () => {
   await runMigration(
     'create_app_user_daily_stats_20260205',
@@ -570,5 +636,6 @@ module.exports = {
   getWorkoutCalendarSummary,
   getDietCalendarSummary,
   getAchievementSummary,
-  getAchievementSummaries
+  getAchievementSummaries,
+  getAchievementMedalTotals
 };

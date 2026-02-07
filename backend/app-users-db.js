@@ -312,6 +312,28 @@ const getAppUserByUsername = async (username) => {
   }
 };
 
+// 이름/전화번호로 앱 유저 조회 (아이디/비밀번호 찾기용)
+const getAppUserByNamePhone = async (name, phoneDigits) => {
+  try {
+    const query = `
+      SELECT id, username, name, phone, is_trainer, is_active
+      FROM app_users
+      WHERE name = $1
+        AND regexp_replace(phone, '[^0-9]', '', 'g') = $2
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    const result = await pool.query(query, [name, phoneDigits]);
+    if (result.rows.length === 0) {
+      return null;
+    }
+    return result.rows[0];
+  } catch (error) {
+    console.error('[PostgreSQL] 앱 유저 이름/전화번호 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 앱 유저 추가
 const addAppUser = async (userData) => {
   try {
@@ -485,6 +507,7 @@ module.exports = {
   getAppUsers,
   getAppUserById,
   getAppUserByUsername,
+  getAppUserByNamePhone,
   getTrainerMembers,
   addAppUser,
   updateAppUser,

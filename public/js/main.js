@@ -312,6 +312,112 @@ window.addEventListener('DOMContentLoaded', function() {
             document.getElementById('login-result').innerText = result.message;
         }
     });
+
+    // 아이디/비밀번호 찾기 모달
+    const recoverBtn = document.getElementById('recover-account-btn');
+    const recoverModalBg = document.getElementById('recoverAccountModalBg');
+    const recoverModal = document.getElementById('recoverAccountModal');
+    const recoverCloseBtn = document.getElementById('recoverAccountCloseBtn');
+    const recoverUsernameTab = document.getElementById('recoverUsernameTab');
+    const recoverPasswordTab = document.getElementById('recoverPasswordTab');
+    const recoverSubmitBtn = document.getElementById('recover-submit-btn');
+    const recoverResult = document.getElementById('recover-result');
+    let recoverMode = 'username';
+
+    const setRecoverTab = (mode) => {
+        recoverMode = mode;
+        if (recoverUsernameTab && recoverPasswordTab) {
+            if (mode === 'username') {
+                recoverUsernameTab.style.background = '#1976d2';
+                recoverUsernameTab.style.color = '#fff';
+                recoverUsernameTab.style.border = 'none';
+                recoverPasswordTab.style.background = '#fff';
+                recoverPasswordTab.style.color = '#1976d2';
+                recoverPasswordTab.style.border = '1px solid #1976d2';
+            } else {
+                recoverPasswordTab.style.background = '#1976d2';
+                recoverPasswordTab.style.color = '#fff';
+                recoverPasswordTab.style.border = 'none';
+                recoverUsernameTab.style.background = '#fff';
+                recoverUsernameTab.style.color = '#1976d2';
+                recoverUsernameTab.style.border = '1px solid #1976d2';
+            }
+        }
+        if (recoverResult) {
+            recoverResult.textContent = '';
+            recoverResult.style.color = '#d32f2f';
+        }
+    };
+
+    if (recoverBtn && recoverModalBg && recoverModal) {
+        recoverBtn.addEventListener('click', () => {
+            recoverModalBg.style.display = 'block';
+            recoverModal.style.display = 'block';
+            setRecoverTab('username');
+        });
+    }
+    if (recoverCloseBtn && recoverModalBg && recoverModal) {
+        recoverCloseBtn.addEventListener('click', () => {
+            recoverModalBg.style.display = 'none';
+            recoverModal.style.display = 'none';
+        });
+        recoverModalBg.addEventListener('click', (e) => {
+            if (e.target === recoverModalBg) {
+                recoverModalBg.style.display = 'none';
+                recoverModal.style.display = 'none';
+            }
+        });
+    }
+    if (recoverUsernameTab) {
+        recoverUsernameTab.addEventListener('click', () => setRecoverTab('username'));
+    }
+    if (recoverPasswordTab) {
+        recoverPasswordTab.addEventListener('click', () => setRecoverTab('password'));
+    }
+    if (recoverSubmitBtn) {
+        recoverSubmitBtn.addEventListener('click', async () => {
+            const name = document.getElementById('recover-name')?.value.trim();
+            const phone = document.getElementById('recover-phone')?.value.trim();
+            const email = document.getElementById('recover-email')?.value.trim();
+            if (!name || !phone || !email) {
+                if (recoverResult) {
+                    recoverResult.textContent = '이름, 전화번호, 이메일을 모두 입력해주세요.';
+                    recoverResult.style.color = '#d32f2f';
+                }
+                return;
+            }
+            recoverSubmitBtn.disabled = true;
+            const originalText = recoverSubmitBtn.textContent;
+            recoverSubmitBtn.textContent = '처리 중...';
+            try {
+                const res = await fetch('/api/auth/recover', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, phone, email, type: recoverMode })
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    if (recoverResult) {
+                        recoverResult.textContent = result.message || '요청이 완료되었습니다.';
+                        recoverResult.style.color = '#2e7d32';
+                    }
+                } else {
+                    if (recoverResult) {
+                        recoverResult.textContent = result.message || '요청 처리 중 오류가 발생했습니다.';
+                        recoverResult.style.color = '#d32f2f';
+                    }
+                }
+            } catch (error) {
+                if (recoverResult) {
+                    recoverResult.textContent = '요청 처리 중 오류가 발생했습니다.';
+                    recoverResult.style.color = '#d32f2f';
+                }
+            } finally {
+                recoverSubmitBtn.disabled = false;
+                recoverSubmitBtn.textContent = originalText;
+            }
+        });
+    }
     // 아이디 중복 체크 (debounce 적용)
     let usernameCheckTimeout = null;
     const usernameInput = document.getElementById('signup-username');

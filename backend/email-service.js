@@ -89,6 +89,51 @@ class EmailService {
         }
     }
 
+    // 유저앱 아이디/비밀번호 찾기 이메일 전송
+    async sendAppUserRecoveryEmail({ recipientEmail, name, username, tempPassword, mode }) {
+        try {
+            const isPassword = mode === 'password';
+            const subject = isPassword
+                ? '[스탠다드멤버스] 비밀번호 재설정 안내'
+                : '[스탠다드멤버스] 아이디 찾기 안내';
+            const passwordBlock = isPassword
+                ? `
+                    <p style="margin: 16px 0 0 0; font-size: 15px;">
+                        임시 비밀번호: <strong>${tempPassword}</strong>
+                    </p>
+                    <p style="margin: 8px 0 0 0; color: #6b7280; font-size: 13px;">
+                        로그인 후 반드시 비밀번호를 변경해주세요.
+                    </p>
+                `
+                : '';
+            const mailOptions = {
+                from: process.env.EMAIL_USER,
+                to: recipientEmail,
+                subject,
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                        <h2 style="color: #1976d2;">안녕하세요, ${name}님</h2>
+                        <p style="margin: 12px 0; font-size: 15px;">
+                            요청하신 유저앱 계정 정보입니다.
+                        </p>
+                        <p style="margin: 8px 0; font-size: 15px;">
+                            아이디: <strong>${username}</strong>
+                        </p>
+                        ${passwordBlock}
+                        <p style="margin-top: 20px; color: #6b7280; font-size: 12px;">
+                            본 메일은 요청에 의해 발송되었습니다. 본인이 요청하지 않았다면 관리자에게 문의해주세요.
+                        </p>
+                    </div>
+                `
+            };
+            const result = await this.transporter.sendMail(mailOptions);
+            return { success: true, messageId: result.messageId };
+        } catch (error) {
+            console.error('[EmailService] 유저앱 계정 이메일 전송 오류:', error);
+            throw error;
+        }
+    }
+
     // 계약서 내용 생성
     generateContractContent(memberData) {
         try {

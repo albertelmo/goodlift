@@ -361,6 +361,39 @@ h2, h3 {
     box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
+.recover-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    min-height: 32px;
+}
+
+.recover-modal-title {
+    margin: 0;
+    font-size: 1rem;
+    color: #333;
+    line-height: 1;
+}
+
+.recover-modal-close {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: #666;
+    font-size: 20px;
+    cursor: pointer;
+    align-self: center;
+}
+
 .form-box {
     background: var(--card-bg);
     padding: 36px 32px 28px 32px;

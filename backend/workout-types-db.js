@@ -322,6 +322,43 @@ const getWorkoutTypes = async (filters = {}) => {
   }
 };
 
+// 운동종류 ID 목록 조회 (순서 유지)
+const getWorkoutTypesByIds = async (ids = []) => {
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return [];
+    }
+    const query = `
+      SELECT 
+        wt.id,
+        wt.name,
+        wt.type,
+        wt.category_1_id,
+        c1.name as category_1_name,
+        wt.category_2_id,
+        c2.name as category_2_name,
+        wt.category_3_id,
+        c3.name as category_3_name,
+        wt.category_4_id,
+        c4.name as category_4_name,
+        wt.created_at,
+        wt.updated_at
+      FROM workout_types wt
+      LEFT JOIN workout_categories_1 c1 ON wt.category_1_id = c1.id
+      LEFT JOIN workout_categories_2 c2 ON wt.category_2_id = c2.id
+      LEFT JOIN workout_categories_3 c3 ON wt.category_3_id = c3.id
+      LEFT JOIN workout_categories_4 c4 ON wt.category_4_id = c4.id
+      WHERE wt.id = ANY($1::uuid[])
+      ORDER BY array_position($1::uuid[], wt.id)
+    `;
+    const result = await pool.query(query, [ids]);
+    return result.rows;
+  } catch (error) {
+    console.error('[PostgreSQL] 운동종류 ID 목록 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 운동종류 단일 조회
 const getWorkoutTypeById = async (id) => {
   try {
@@ -482,6 +519,7 @@ module.exports = {
   deleteCategory,
   // 운동종류 함수들
   getWorkoutTypes,
+  getWorkoutTypesByIds,
   getWorkoutTypeById,
   addWorkoutType,
   updateWorkoutType,

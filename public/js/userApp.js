@@ -56,6 +56,30 @@ function render(container) {
         </div>
       </div>
       
+      <!-- 운동 가이드 설정 섹션 -->
+      <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+          <h4 style="margin:0;color:#333;font-size:0.9rem;">운동 가이드 설정</h4>
+          <div style="display:flex;align-items:stretch;gap:8px;">
+            <input type="text" id="user-app-guide-search" placeholder="운동 이름 검색..." style="width:200px;padding:4px 8px;border:1px solid #ddd;border-radius:3px;font-size:0.75rem;box-sizing:border-box;margin:0;font-family:inherit;">
+            <button id="user-app-guide-save-btn" class="header-text-btn" style="background:#1976d2 !important;color:#fff !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;margin:0;font-family:inherit;white-space:nowrap;">
+              저장
+            </button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:#fff;border-radius:4px;padding:8px;min-height:220px;">
+            <div style="font-size:0.75rem;color:#666;margin-bottom:6px;">전체 운동 목록</div>
+            <div id="user-app-guide-available-list" style="max-height:280px;overflow-y:auto;"></div>
+          </div>
+          <div style="background:#fff;border-radius:4px;padding:8px;min-height:220px;">
+            <div style="font-size:0.75rem;color:#666;margin-bottom:6px;">가이드에 표시될 목록</div>
+            <div id="user-app-guide-selected-list" style="max-height:280px;overflow-y:auto;"></div>
+          </div>
+        </div>
+        <div style="font-size:0.7rem;color:#888;margin-top:6px;">좌측에서 추가 → 우측에서 순서 변경 후 저장하세요.</div>
+      </div>
+
       <!-- 운동종류 관리 섹션 -->
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -181,6 +205,22 @@ function setupEventListeners(container) {
       }
     });
   }
+
+  // 운동 가이드 검색 입력창
+  const workoutGuideSearchInput = container.querySelector('#user-app-guide-search');
+  if (workoutGuideSearchInput) {
+    workoutGuideSearchInput.addEventListener('input', () => {
+      workoutGuideSearchTerm = workoutGuideSearchInput.value.trim().toLowerCase();
+      updateWorkoutGuideUI();
+    });
+  }
+
+  const workoutGuideSaveBtn = container.querySelector('#user-app-guide-save-btn');
+  if (workoutGuideSaveBtn) {
+    workoutGuideSaveBtn.addEventListener('click', async () => {
+      await saveWorkoutGuideSettings();
+    });
+  }
   
   const refreshBtn = container.querySelector('#user-app-activity-refresh-btn');
   if (refreshBtn) {
@@ -205,6 +245,7 @@ async function loadData() {
     loadActivityStats(),
     loadMembers(),
     loadWorkoutTypes(),
+    loadWorkoutGuideSettings(),
     loadCategories(1),
     loadCategories(2),
     loadCategories(3),
@@ -524,6 +565,10 @@ let membersActiveTab = 'members';
 let activityCurrentPage = 1;
 let activitySortColumn = 'name';
 let activitySortDirection = 'asc';
+let workoutGuideSettings = { items: [] };
+let workoutGuideLoaded = false;
+let workoutTypesLoaded = false;
+let workoutGuideSearchTerm = '';
 
 function renderMembersList(members) {
   const listContainer = document.getElementById('user-app-members-list');
@@ -902,6 +947,8 @@ async function loadWorkoutTypes() {
     // 원본 데이터를 전역 변수에 저장 (검색 필터링용)
     window.allWorkoutTypes = workoutTypes;
     renderWorkoutTypesList(workoutTypes);
+    workoutTypesLoaded = true;
+    updateWorkoutGuideUI();
   } catch (error) {
     console.error('운동종류 조회 오류:', error);
     const listContainer = document.getElementById('user-app-workout-types-list');
@@ -909,6 +956,333 @@ async function loadWorkoutTypes() {
       listContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#d32f2f;font-size:0.75rem;">운동종류를 불러오는 중 오류가 발생했습니다.</div>';
     }
   }
+}
+
+async function loadWorkoutGuideSettings() {
+  try {
+    const response = await fetch('/api/app-settings/workout-guide');
+    if (!response.ok) throw new Error('운동 가이드 설정 조회 실패');
+    const data = await response.json();
+    workoutGuideSettings.items = Array.isArray(data.items) ? data.items : [];
+    workoutGuideLoaded = true;
+    updateWorkoutGuideUI();
+  } catch (error) {
+    console.error('운동 가이드 설정 조회 오류:', error);
+    workoutGuideLoaded = true;
+    updateWorkoutGuideUI();
+  }
+}
+
+function updateWorkoutGuideUI() {
+  if (!workoutGuideLoaded || !workoutTypesLoaded) return;
+  renderWorkoutGuideSelector(window.allWorkoutTypes || []);
+}
+
+function renderWorkoutGuideSelector(workoutTypes) {
+  const availableList = document.getElementById('user-app-guide-available-list');
+  const selectedList = document.getElementById('user-app-guide-selected-list');
+  if (!availableList || !selectedList) return;
+
+  const typesById = new Map(workoutTypes.map(type => [type.id, type]));
+  const selectedIds = Array.isArray(workoutGuideSettings.items) ? workoutGuideSettings.items : [];
+  const filteredSelectedIds = selectedIds.filter(id => typesById.has(id));
+  if (filteredSelectedIds.length !== selectedIds.length) {
+    workoutGuideSettings.items = filteredSelectedIds;
+  }
+  const selectedSet = new Set(workoutGuideSettings.items);
+
+  const buildMeta = (type) => {
+    const categories = [
+      type.category_1_name,
+      type.category_2_name,
+      type.category_3_name,
+      type.category_4_name
+    ].filter(Boolean).join(' / ');
+    const parts = [];
+    if (categories) parts.push(categories);
+    if (type.type) parts.push(type.type);
+    return parts.join(' · ');
+  };
+
+  const availableItems = workoutTypes.filter(type => !selectedSet.has(type.id)).filter(type => {
+    if (!workoutGuideSearchTerm) return true;
+    return (type.name || '').toLowerCase().includes(workoutGuideSearchTerm);
+  });
+  const selectedItems = workoutGuideSettings.items.map(id => typesById.get(id)).filter(Boolean);
+
+  availableList.innerHTML = availableItems.length === 0
+    ? '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">표시할 운동이 없습니다.</div>'
+    : availableItems.map(type => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid #eee;gap:8px;">
+        <div style="min-width:0;">
+          <div style="font-size:0.78rem;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(type.name)}</div>
+          <div style="font-size:0.7rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(buildMeta(type))}</div>
+        </div>
+        <button class="guide-add-btn" data-id="${type.id}" style="background:#e3f2fd;color:#1976d2;border:none;padding:2px 6px;border-radius:2px;cursor:pointer;font-size:0.7rem;white-space:nowrap;">
+          추가
+        </button>
+      </div>
+    `).join('');
+
+  selectedList.innerHTML = selectedItems.length === 0
+    ? '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">선택된 운동이 없습니다.</div>'
+    : selectedItems.map((type, index) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid #eee;gap:8px;">
+        <div style="min-width:0;display:flex;align-items:center;gap:6px;">
+          <span style="font-size:0.7rem;color:#999;">${index + 1}</span>
+          <div style="min-width:0;">
+            <div style="font-size:0.78rem;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(type.name)}</div>
+            <div style="font-size:0.7rem;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(buildMeta(type))}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="guide-edit-btn" data-id="${type.id}" title="편집" aria-label="편집" style="background:#e3f2fd;color:#1976d2;border:none;padding:1px 6px;border-radius:2px;cursor:pointer;font-size:0.8rem;line-height:1;box-shadow:none;margin-top:0;">✎</button>
+          <button class="guide-move-up-btn" data-index="${index}" title="위로" aria-label="위로" style="background:#fff;border:1px solid #ddd;color:#333;padding:1px 6px;border-radius:2px;cursor:pointer;font-size:0.8rem;line-height:1;box-shadow:none;margin-top:0;">▲</button>
+          <button class="guide-move-down-btn" data-index="${index}" title="아래로" aria-label="아래로" style="background:#fff;border:1px solid #ddd;color:#333;padding:1px 6px;border-radius:2px;cursor:pointer;font-size:0.8rem;line-height:1;box-shadow:none;margin-top:0;">▼</button>
+          <button class="guide-remove-btn" data-index="${index}" title="삭제" aria-label="삭제" style="background:#fbe9e7;color:#d32f2f;border:none;padding:1px 6px;border-radius:2px;cursor:pointer;font-size:0.8rem;line-height:1;box-shadow:none;margin-top:0;">✕</button>
+        </div>
+      </div>
+    `).join('');
+
+  availableList.querySelectorAll('.guide-add-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      if (!id || selectedSet.has(id)) return;
+      workoutGuideSettings.items = [...workoutGuideSettings.items, id];
+      updateWorkoutGuideUI();
+    });
+  });
+
+  selectedList.querySelectorAll('.guide-remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const index = parseInt(btn.getAttribute('data-index'), 10);
+      if (Number.isNaN(index)) return;
+      workoutGuideSettings.items = workoutGuideSettings.items.filter((_, i) => i !== index);
+      updateWorkoutGuideUI();
+    });
+  });
+
+  selectedList.querySelectorAll('.guide-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.getAttribute('data-id');
+      const workoutType = workoutTypes.find(type => type.id === id);
+      if (workoutType) {
+        showWorkoutGuideEditModal(workoutType);
+      }
+    });
+  });
+
+  selectedList.querySelectorAll('.guide-move-up-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const index = parseInt(btn.getAttribute('data-index'), 10);
+      if (Number.isNaN(index) || index === 0) return;
+      const items = [...workoutGuideSettings.items];
+      [items[index - 1], items[index]] = [items[index], items[index - 1]];
+      workoutGuideSettings.items = items;
+      updateWorkoutGuideUI();
+    });
+  });
+
+  selectedList.querySelectorAll('.guide-move-down-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const index = parseInt(btn.getAttribute('data-index'), 10);
+      if (Number.isNaN(index) || index >= workoutGuideSettings.items.length - 1) return;
+      const items = [...workoutGuideSettings.items];
+      [items[index + 1], items[index]] = [items[index], items[index + 1]];
+      workoutGuideSettings.items = items;
+      updateWorkoutGuideUI();
+    });
+  });
+}
+
+async function saveWorkoutGuideSettings() {
+  const saveBtn = document.getElementById('user-app-guide-save-btn');
+  const originalText = saveBtn ? saveBtn.textContent : '';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = '저장 중...';
+  }
+  try {
+    const response = await fetch('/api/app-settings/workout-guide', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: workoutGuideSettings.items })
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || '저장 실패');
+    }
+    alert('운동 가이드 목록이 저장되었습니다.');
+  } catch (error) {
+    alert(error.message || '저장 중 오류가 발생했습니다.');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText || '저장';
+    }
+  }
+}
+
+async function showWorkoutGuideEditModal(workoutType) {
+  const modalBg = document.createElement('div');
+  modalBg.className = 'modal-bg';
+  modalBg.style.cssText = 'position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
+
+  const modal = document.createElement('div');
+  const isMobile = window.innerWidth < 600;
+  const minWidthStyle = isMobile ? 'min-width:300px;' : 'min-width:420px;';
+  modal.style.cssText = `position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:16px;border-radius:8px;${minWidthStyle}max-width:92vw;max-height:90vh;overflow-y:auto;font-size:0.85rem;box-sizing:border-box;`;
+
+  modal.innerHTML = `
+    <h3 style="margin:0 0 12px 0;color:#1976d2;font-size:1rem;">운동 가이드 편집</h3>
+    <div style="font-size:0.85rem;color:#666;margin-bottom:12px;">${escapeHtml(workoutType.name)}</div>
+    <div style="margin-bottom:10px;">
+      <label style="display:block;margin-bottom:6px;font-weight:600;color:#333;">설명</label>
+      <textarea id="guide-desc-input" rows="4" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;resize:vertical;"></textarea>
+    </div>
+    <div style="margin-bottom:10px;">
+      <label style="display:block;margin-bottom:6px;font-weight:600;color:#333;">외부 링크</label>
+      <input type="text" id="guide-external-link-input" placeholder="https://..." style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.85rem;box-sizing:border-box;">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="display:block;margin-bottom:6px;font-weight:600;color:#333;">영상</label>
+      <div id="guide-video-preview" style="margin-bottom:6px;color:#888;font-size:0.8rem;">불러오는 중...</div>
+      <input type="file" id="guide-video-file" accept="video/*" style="font-size:0.8rem;">
+    </div>
+    <div id="guide-edit-result" style="min-height:18px;color:#d32f2f;margin-bottom:10px;font-size:0.8rem;"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+      <button type="button" id="guide-video-delete-btn" style="background:#fbe9e7;color:#d32f2f;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">영상 삭제</button>
+      <button type="button" id="guide-video-upload-btn" style="background:#e3f2fd;color:#1976d2;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">영상 업로드</button>
+      <button type="button" id="guide-text-save-btn" style="background:#1976d2;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.8rem;">텍스트 저장</button>
+      <button type="button" id="guide-edit-close-btn" style="background:#eee;color:#1976d2;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.8rem;">닫기</button>
+    </div>
+  `;
+
+  document.body.appendChild(modalBg);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    document.body.removeChild(modalBg);
+    document.body.removeChild(modal);
+  };
+  modalBg.addEventListener('click', closeModal);
+  modal.querySelector('#guide-edit-close-btn').addEventListener('click', closeModal);
+
+  const descInput = modal.querySelector('#guide-desc-input');
+  const externalLinkInput = modal.querySelector('#guide-external-link-input');
+  const preview = modal.querySelector('#guide-video-preview');
+  const resultDiv = modal.querySelector('#guide-edit-result');
+  const videoDeleteBtn = modal.querySelector('#guide-video-delete-btn');
+
+  const setResult = (msg, isError = true) => {
+    resultDiv.style.color = isError ? '#d32f2f' : '#2e7d32';
+    resultDiv.textContent = msg || '';
+  };
+
+  let guideData = null;
+  try {
+    const res = await fetch(`/api/workout-guides/${encodeURIComponent(workoutType.id)}`);
+    const data = await res.json();
+    guideData = data.guide || {};
+  } catch (error) {
+    guideData = {};
+  }
+
+  descInput.value = guideData.description || '';
+  externalLinkInput.value = guideData.external_link || '';
+
+  const renderVideoPreview = () => {
+    if (guideData.video_url) {
+      preview.innerHTML = `
+        <video controls style="width:100%;max-height:220px;border-radius:6px;" src="${guideData.video_url}"></video>
+        <div style="margin-top:4px;font-size:0.75rem;color:#666;">${escapeHtml(guideData.video_filename || '')}</div>
+      `;
+      videoDeleteBtn.style.display = 'inline-block';
+    } else {
+      preview.textContent = '등록된 영상이 없습니다.';
+      videoDeleteBtn.style.display = 'none';
+    }
+  };
+  renderVideoPreview();
+
+  modal.querySelector('#guide-text-save-btn').addEventListener('click', async () => {
+    setResult('저장 중...', false);
+    try {
+      const res = await fetch(`/api/workout-guides/${encodeURIComponent(workoutType.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          description: descInput.value.trim() || null,
+          external_link: externalLinkInput.value.trim() || null
+        })
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || '저장 실패');
+      }
+      const data = await res.json();
+      guideData = data.guide || guideData;
+      setResult('저장 완료', false);
+      updateWorkoutGuideUI();
+    } catch (error) {
+      setResult(error.message || '저장 중 오류가 발생했습니다.');
+    }
+  });
+
+  modal.querySelector('#guide-video-upload-btn').addEventListener('click', async () => {
+    const fileInput = modal.querySelector('#guide-video-file');
+    const file = fileInput.files[0];
+    if (!file) {
+      setResult('업로드할 동영상을 선택해주세요.');
+      return;
+    }
+    setResult('업로드 중...', false);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const currentUser = localStorage.getItem('username');
+      if (currentUser) {
+        formData.append('currentUser', currentUser);
+      }
+      const res = await fetch(`/api/workout-guides/${encodeURIComponent(workoutType.id)}/video`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || '업로드 실패');
+      }
+      const fresh = await fetch(`/api/workout-guides/${encodeURIComponent(workoutType.id)}`);
+      const freshData = await fresh.json();
+      guideData = freshData.guide || guideData;
+      renderVideoPreview();
+      setResult('업로드 완료', false);
+      updateWorkoutGuideUI();
+    } catch (error) {
+      setResult(error.message || '업로드 중 오류가 발생했습니다.');
+    }
+  });
+
+  videoDeleteBtn.addEventListener('click', async () => {
+    if (!confirm('영상을 삭제하시겠습니까?')) return;
+    setResult('삭제 중...', false);
+    try {
+      const res = await fetch(`/api/workout-guides/${encodeURIComponent(workoutType.id)}/video`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || '삭제 실패');
+      }
+      guideData.video_url = null;
+      guideData.video_filename = null;
+      renderVideoPreview();
+      setResult('삭제 완료', false);
+      updateWorkoutGuideUI();
+    } catch (error) {
+      setResult(error.message || '삭제 중 오류가 발생했습니다.');
+    }
+  });
 }
 
 // 정렬 상태 관리 (기본값: 이름순 오름차순)
