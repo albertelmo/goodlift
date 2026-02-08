@@ -3369,12 +3369,12 @@ function setupActivityLogEvents() {
     console.log('[로그 이벤트] 로그 아이템 개수:', logItems.length);
     
     // 로그 클릭 핸들러 함수
-            const handleLogClick = async (item) => {
-                const logId = item.getAttribute('data-log-id');
-                const appUserId = item.getAttribute('data-app-user-id');
-                const memberName = item.getAttribute('data-member-name');
+    const handleLogClick = async (item) => {
+        const logId = item.getAttribute('data-log-id');
+        const appUserId = item.getAttribute('data-app-user-id');
+        const memberName = item.getAttribute('data-member-name');
                 const activityType = item.getAttribute('data-activity-type') || '';
-                const isUnread = item.classList.contains('app-activity-log-item-unread');
+        const isUnread = item.classList.contains('app-activity-log-item-unread');
         
         console.log('[로그 클릭]', { logId, appUserId, memberName, isUnread });
         
@@ -3422,9 +3422,9 @@ function setupActivityLogEvents() {
                         if (activityType === 'announcement') {
                             showAnnouncementsModal();
                             return;
-                        }
-                        
-                        // 2. app_user_id 확인 및 회원 연결 로직
+                }
+                
+                // 2. app_user_id 확인 및 회원 연결 로직
                 // app_user_id가 유효하고 memberName이 있는 경우에만 연결 옵션 제공
                 // 기존 로그는 app_user_id가 null일 수 있으므로 안전하게 처리
                 const hasValidAppUserId = appUserId && appUserId !== 'null' && appUserId !== '' && appUserId !== 'undefined';

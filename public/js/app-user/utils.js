@@ -56,6 +56,7 @@ export function getTimeAgo(dateString) {
     if (!dateString) return '';
     
     const date = new Date(dateString);
+    if (Number.isNaN(date.getTime())) return '';
     const now = new Date();
     const diffMs = now - date;
     const diffSeconds = Math.floor(diffMs / 1000);
