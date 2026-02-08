@@ -112,6 +112,23 @@ async function createActivityLogForTrainer(appUserId, activityType, message, rec
       related_record_id: recordId,
       record_date: recordDate
     });
+
+    let trainerAppUserId = null;
+    try {
+      const trainerAppUser = await appUsersDB.getAppUserByUsername(member.trainer);
+      if (trainerAppUser?.id) {
+        trainerAppUserId = trainerAppUser.id;
+      }
+    } catch (e) {
+      // noop
+    }
+
+    enqueuePushForTrainerActivity({
+      trainerAppUserId,
+      activityType,
+      activityMessage,
+      recordDate
+    });
   } catch (error) {
     // 로그 생성 실패해도 주요 기능에는 영향 없도록 에러만 기록
     console.error('[Activity Log] 활동 로그 생성 실패:', error);
@@ -1926,6 +1943,35 @@ function enqueuePushForMemberActivity({ appUserId, activityType, activityMessage
             await sendPushToSubscriptions(subscriptions, payload);
         } catch (error) {
             console.error('[Push] 회원 활동 알림 전송 오류:', error);
+        }
+    });
+}
+
+function enqueuePushForTrainerActivity({ trainerAppUserId, activityType, activityMessage, recordDate }) {
+    if (!trainerAppUserId) {
+        return;
+    }
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return;
+    }
+    const { url } = buildActivityPushTarget(activityType, recordDate);
+    const categoryTitle = activityType?.startsWith('diet')
+        ? '식단 알림'
+        : activityType?.startsWith('workout')
+            ? '운동 알림'
+            : '';
+    const payload = JSON.stringify({
+        title: categoryTitle,
+        body: activityMessage || '',
+        url
+    });
+    setImmediate(async () => {
+        try {
+            const subscriptions = await pushSubscriptionsDB.getActiveSubscriptions(trainerAppUserId);
+            if (!subscriptions || subscriptions.length === 0) return;
+            await sendPushToSubscriptions(subscriptions, payload);
+        } catch (error) {
+            console.error('[Push] 트레이너 활동 알림 전송 오류:', error);
         }
     });
 }
