@@ -421,6 +421,7 @@ export function navigateToScreen(screen) {
                         'Notification' in window
                     );
                     const isIOS = () => /iP(ad|hone|od)/.test(navigator.userAgent);
+                    const isAndroid = () => /Android/i.test(navigator.userAgent);
                     const isStandalone = () => (
                         window.matchMedia && window.matchMedia('(display-mode: standalone)').matches
                     ) || window.navigator.standalone === true;
@@ -440,6 +441,37 @@ export function navigateToScreen(screen) {
                         if (!isPushSupported()) return null;
                         const existing = await navigator.serviceWorker.getRegistration('/');
                         return existing || navigator.serviceWorker.register('/sw.js');
+                    };
+
+                    const showAppToast = (message, duration = 2600) => {
+                        if (!message) return;
+                        let container = document.getElementById('app-toast-container');
+                        if (!container) {
+                            container = document.createElement('div');
+                            container.id = 'app-toast-container';
+                            document.body.appendChild(container);
+                        }
+                        const toast = document.createElement('div');
+                        toast.className = 'app-toast';
+                        toast.textContent = message;
+                        container.appendChild(toast);
+                        requestAnimationFrame(() => {
+                            toast.classList.add('is-visible');
+                        });
+                        setTimeout(() => {
+                            toast.classList.remove('is-visible');
+                            setTimeout(() => toast.remove(), 200);
+                        }, duration);
+                    };
+
+                    const showNotificationGuideToast = () => {
+                        if (isIOS()) {
+                            showAppToast('설정 > 앱 > Safari > 팝업 차단 Off 로 설정해주세요.');
+                            return;
+                        }
+                        if (isAndroid()) {
+                            showAppToast('휴대폰 설정 > 앱 > Chrome > 알림에서 알림이 꺼져 있으면 켜주세요.');
+                        }
                     };
 
                     if (!isPushSupported()) {
@@ -470,6 +502,7 @@ export function navigateToScreen(screen) {
                             if (Notification.permission === 'denied') {
                                 setToggleState(false);
                                 showStatus('알림 권한이 차단되어 있습니다. 설정에서 허용해주세요.', true);
+                                showNotificationGuideToast();
                                 return;
                             }
 
@@ -478,6 +511,7 @@ export function navigateToScreen(screen) {
                                 if (permission !== 'granted') {
                                     setToggleState(false);
                                     showStatus('알림 권한이 허용되지 않았습니다.', true);
+                                    showNotificationGuideToast();
                                     return;
                                 }
                             }
@@ -555,6 +589,7 @@ export function navigateToScreen(screen) {
                             if (Notification.permission === 'denied') {
                                 setToggleState(false);
                                 showStatus('알림 권한이 차단되어 있습니다. 설정에서 허용해주세요.', true);
+                                showNotificationGuideToast();
                                 return;
                             }
 
@@ -563,6 +598,7 @@ export function navigateToScreen(screen) {
                                 if (permission !== 'granted') {
                                     setToggleState(false);
                                     showStatus('알림 권한이 허용되지 않았습니다.', true);
+                                    showNotificationGuideToast();
                                     return;
                                 }
                             }

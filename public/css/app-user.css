@@ -324,6 +324,35 @@ body.app-user-active {
     touch-action: manipulation;
 }
 
+#app-toast-container {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 24px;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 10050;
+}
+
+.app-toast {
+    background: rgba(0, 0, 0, 0.85);
+    color: #fff;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    max-width: min(90vw, 420px);
+    text-align: center;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.app-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 .app-guide-modal {
     position: fixed;
     inset: 0;
@@ -651,6 +680,7 @@ body.app-user-active {
     padding: 0;
     vertical-align: middle;
     box-sizing: border-box;
+    cursor: pointer;
 }
 
 /* 햄버거 메뉴 (사이드 드로어) */
@@ -1094,13 +1124,121 @@ body.app-user-active {
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.app-activity-log-item-read {
-    /* 기본 스타일 유지 */
-}
-
 .app-activity-log-item-read:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.app-announcement-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.app-announcement-badge {
+    background: #ff4444;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+
+.app-log-unread-badge {
+    background: #ff4444;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    margin-left: 6px;
+}
+
+.app-announcement-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.app-announcement-item {
+    background: var(--app-surface);
+    border-radius: var(--app-radius);
+    padding: 12px 16px;
+    box-shadow: var(--app-shadow);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.app-announcement-item-unread {
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+.app-announcement-item-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.app-announcement-item-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--app-text);
+    line-height: 1.4;
+}
+
+.app-announcement-item-meta {
+    font-size: 13px;
+    color: var(--app-text-muted);
+}
+
+.app-announcement-indicator {
+    width: 10px;
+    height: 10px;
+    background: var(--app-primary);
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.app-announcement-detail-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--app-text);
+    margin-bottom: 4px;
+}
+
+.app-announcement-detail-date {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    margin-bottom: 12px;
+}
+
+.app-announcement-detail-content {
+    font-size: 14px;
+    color: var(--app-text);
+    line-height: 1.6;
+    white-space: pre-line;
+}
+
+.app-announcement-detail-images {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.app-announcement-detail-image {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid var(--app-border);
+    background: #f5f5f5;
 }
 
 .app-activity-log-content {
@@ -1118,6 +1256,7 @@ body.app-user-active {
     margin: 0;
     font-weight: 600;
     display: -webkit-box;
+    line-clamp: 2;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
@@ -2592,11 +2731,6 @@ body.app-user-active {
     align-items: flex-start;
 }
 
-/* 텍스트 기록 전용 스타일 */
-.app-workout-item-main-text {
-    /* 텍스트 기록의 경우 info 영역이 없으므로 전체 너비 사용 */
-}
-
 .app-workout-item-type-container-text {
     /* 텍스트 기록의 경우 전체 너비를 사용하고 체크박스까지 포함 */
     width: 100%;
@@ -3562,7 +3696,6 @@ body.app-user-active {
     /* 레이아웃 */
     display: block !important;
     flex-shrink: 0 !important;
-    vertical-align: top !important;
     
     /* 시각적 스타일 */
     background: var(--app-primary) !important;

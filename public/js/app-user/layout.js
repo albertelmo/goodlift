@@ -161,6 +161,18 @@ function setupEventListeners() {
         hamburgerBtn.addEventListener('click', openHamburgerMenu);
     }
 
+    // 헤더 타이틀 클릭 시 새로고침
+    const headerTitle = document.querySelector('.app-header-title');
+    if (headerTitle) {
+        const reloadHandler = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            window.location.reload();
+        };
+        headerTitle.addEventListener('click', reloadHandler);
+        headerTitle.addEventListener('touchstart', reloadHandler, { passive: false });
+    }
+
     // 햄버거 메뉴 닫기
     const drawerClose = document.getElementById('app-drawer-close');
     const drawerOverlay = document.getElementById('app-drawer-overlay');

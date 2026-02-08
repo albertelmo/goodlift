@@ -43,6 +43,9 @@ function render(container) {
             <button id="user-app-activity-tab-btn" class="header-text-btn" style="background:#fff !important;color:#1976d2 !important;border:1px solid #1976d2 !important;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
               회원 활동관리
             </button>
+            <button id="user-app-announcements-btn" class="header-text-btn" style="background:#fff !important;color:#1976d2 !important;border:1px solid #1976d2 !important;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
+              공지사항
+            </button>
             <button id="user-app-member-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
               회원 추가
             </button>
@@ -158,6 +161,13 @@ function setupEventListeners(container) {
   if (addMemberBtn) {
     addMemberBtn.addEventListener('click', () => {
       showMemberAddModal();
+    });
+  }
+
+  const announcementsBtn = container.querySelector('#user-app-announcements-btn');
+  if (announcementsBtn) {
+    announcementsBtn.addEventListener('click', () => {
+      showAnnouncementsAdminModal();
     });
   }
 
@@ -525,24 +535,35 @@ async function loadMembers() {
         const membersResponse = await fetch('/api/members');
         if (membersResponse.ok) {
           const members = await membersResponse.json();
+          const centerMap = {};
           members.forEach(member => {
             if (memberNamesWithLink.includes(member.name)) {
               const trainerUsername = member.trainer || '';
-              // 트레이너 username을 name으로 변환
               const trainerName = trainerUsername ? (trainerNameMap[trainerUsername] || trainerUsername) : '-';
               trainerMap[member.name] = trainerName;
+              centerMap[member.name] = member.center || '미지정';
             }
           });
+          // app_users에 trainer/center 정보 추가 (이름으로 변환됨)
+          const membersWithTrainer = appUsers.map(user => ({
+            ...user,
+            trainer: user.member_name ? (trainerMap[user.member_name] || '-') : '-',
+            center: user.member_name ? (centerMap[user.member_name] || '미지정') : '미지정'
+          }));
+          membersCached = membersWithTrainer;
+          renderMembersList(membersCached);
+          return;
         }
       } catch (error) {
         console.error('회원 트레이너 정보 조회 오류:', error);
       }
     }
     
-    // app_users에 trainer 정보 추가 (이름으로 변환됨)
+    // app_users에 trainer/center 정보 추가 (이름으로 변환됨)
     const membersWithTrainer = appUsers.map(user => ({
       ...user,
-      trainer: user.member_name ? (trainerMap[user.member_name] || '-') : '-'
+      trainer: user.member_name ? (trainerMap[user.member_name] || '-') : '-',
+      center: '미지정'
     }));
     membersCached = membersWithTrainer;
     renderMembersList(membersCached);
@@ -569,6 +590,7 @@ let workoutGuideSettings = { items: [] };
 let workoutGuideLoaded = false;
 let workoutTypesLoaded = false;
 let workoutGuideSearchTerm = '';
+let announcementsCached = [];
 
 function renderMembersList(members) {
   const listContainer = document.getElementById('user-app-members-list');
@@ -738,6 +760,435 @@ function getCommentTierFromCount(count) {
   if (count >= 6) return 'silver';
   if (count >= 1) return 'bronze';
   return 'none';
+}
+
+async function loadAnnouncementsAdmin() {
+  try {
+    const response = await fetch('/api/announcements?include_inactive=true');
+    if (!response.ok) throw new Error('공지사항 조회 실패');
+    const data = await response.json();
+    announcementsCached = data.items || [];
+  } catch (error) {
+    console.error('공지사항 조회 오류:', error);
+    announcementsCached = [];
+  }
+}
+
+function showAnnouncementsAdminModal() {
+  const modalBg = document.createElement('div');
+  modalBg.className = 'modal-bg';
+  modalBg.style.cssText = 'position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:12px;border-radius:8px;width:92vw;max-width:480px;max-height:80vh;overflow-y:auto;font-size:0.75rem;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h3 style="margin:0;color:#1976d2;font-size:0.9rem;">공지사항 관리</h3>
+      <button class="announcement-admin-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div style="background:#f5f5f5;border-radius:6px;padding:8px;margin-bottom:10px;">
+      <div style="font-weight:600;color:#333;margin-bottom:6px;">공지사항 추가</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <input type="text" id="announcement-title-input" placeholder="제목" style="padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.75rem;">
+        <textarea id="announcement-content-input" placeholder="내용" rows="4" style="padding:6px 8px;border:1px solid #ddd;border-radius:4px;font-size:0.75rem;resize:vertical;"></textarea>
+        <div style="display:flex;justify-content:flex-end;">
+          <button id="announcement-add-btn" class="header-text-btn" style="background:#1976d2 !important;color:#fff !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">추가</button>
+        </div>
+      </div>
+    </div>
+    <div id="announcement-admin-list" style="display:flex;flex-direction:column;gap:8px;">
+      <div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">불러오는 중...</div>
+    </div>
+  `;
+
+  document.body.appendChild(modalBg);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modalBg.remove();
+    modal.remove();
+  };
+  modalBg.addEventListener('click', closeModal);
+  modal.querySelector('.announcement-admin-close').addEventListener('click', closeModal);
+
+  const renderList = () => {
+    const listEl = modal.querySelector('#announcement-admin-list');
+    if (!listEl) return;
+    if (announcementsCached.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center;padding:12px;color:#888;">공지사항이 없습니다.</div>';
+      return;
+    }
+    listEl.innerHTML = announcementsCached.map(item => {
+      const statusText = item.is_active ? '사용중' : '삭제됨';
+      const statusColor = item.is_active ? '#4caf50' : '#999';
+      return `
+        <div style="border:1px solid #eee;border-radius:6px;padding:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title || '')}</div>
+            <div style="font-size:0.7rem;color:#888;">${escapeHtml(item.created_at || '')}</div>
+          </div>
+          <span style="font-size:0.7rem;color:#fff;background:${statusColor};padding:2px 6px;border-radius:10px;">${statusText}</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <button class="announcement-images-btn" data-id="${item.id}" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">이미지</button>
+            <button class="announcement-send-btn" data-id="${item.id}" style="background:#e3f2fd;color:#1976d2;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">보내기</button>
+            <button class="announcement-delete-btn" data-id="${item.id}" style="background:#fbe9e7;color:#d32f2f;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">삭제</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    listEl.querySelectorAll('.announcement-send-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const item = announcementsCached.find(a => a.id === id);
+        if (item) showAnnouncementSendModal(item);
+      });
+    });
+    listEl.querySelectorAll('.announcement-images-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const item = announcementsCached.find(a => a.id === id);
+        if (item) showAnnouncementImagesModal(item);
+      });
+    });
+    listEl.querySelectorAll('.announcement-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-id');
+        if (!confirm('공지사항을 삭제하시겠습니까?')) return;
+        try {
+          const res = await fetch(`/api/announcements/${id}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error('삭제 실패');
+          await loadAnnouncementsAdmin();
+          renderList();
+        } catch (error) {
+          alert('삭제 중 오류가 발생했습니다.');
+        }
+      });
+    });
+  };
+
+  const addBtn = modal.querySelector('#announcement-add-btn');
+  if (addBtn) {
+    addBtn.addEventListener('click', async () => {
+      const titleEl = modal.querySelector('#announcement-title-input');
+      const contentEl = modal.querySelector('#announcement-content-input');
+      const title = titleEl?.value?.trim();
+      const content = contentEl?.value?.trim();
+      if (!title || !content) {
+        alert('제목과 내용을 입력해주세요.');
+        return;
+      }
+      try {
+        const createdBy = localStorage.getItem('username') || null;
+        const res = await fetch('/api/announcements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, content, created_by: createdBy })
+        });
+        if (!res.ok) throw new Error('추가 실패');
+        if (titleEl) titleEl.value = '';
+        if (contentEl) contentEl.value = '';
+        await loadAnnouncementsAdmin();
+        renderList();
+      } catch (error) {
+        alert('공지사항 추가 중 오류가 발생했습니다.');
+      }
+    });
+  }
+
+  loadAnnouncementsAdmin().then(renderList);
+}
+
+function showAnnouncementSendModal(announcement) {
+  const modalBg = document.createElement('div');
+  modalBg.className = 'modal-bg';
+  modalBg.style.cssText = 'position:fixed;z-index:1002;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;z-index:1003;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:12px;border-radius:8px;width:92vw;max-width:426px;max-height:80vh;overflow-y:auto;font-size:0.75rem;box-sizing:border-box;';
+
+  const members = (membersCached || []).filter(m => !m.is_trainer);
+  const trainers = (membersCached || []).filter(m => m.is_trainer);
+  const centerValues = Array.from(new Set(members.map(m => (m.center || '미지정'))));
+  let centerFilter = 'all';
+  const selectedIds = new Set();
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h3 style="margin:0;color:#1976d2;font-size:0.9rem;">공지사항 보내기</h3>
+      <button class="announcement-send-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(announcement.title || '')}</div>
+    <div style="margin-bottom:8px;color:#666;font-size:0.72rem;">수신 회원을 선택하세요.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#333;">
+          <input type="checkbox" id="announcement-select-filtered" />
+          필터된 회원 전체 선택
+        </label>
+        <select id="announcement-center-filter" style="padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.72rem;">
+          <option value="all">전체 센터</option>
+          ${centerValues.map(center => `<option value="${escapeHtml(center)}">${escapeHtml(center)}</option>`).join('')}
+        </select>
+        <span id="announcement-filter-count" style="font-size:0.72rem;color:#666;"></span>
+      </div>
+      <button id="announcement-send-confirm" class="header-text-btn" style="background:#1976d2 !important;color:#fff !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">보내기</button>
+    </div>
+    <div id="announcement-recipients" style="display:flex;flex-direction:column;gap:6px;">
+      <div style="text-align:center;padding:12px;color:#888;">대상을 불러오는 중...</div>
+    </div>
+  `;
+
+  document.body.appendChild(modalBg);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modalBg.remove();
+    modal.remove();
+  };
+  modalBg.addEventListener('click', closeModal);
+  modal.querySelector('.announcement-send-close').addEventListener('click', closeModal);
+
+  const filterSelect = modal.querySelector('#announcement-center-filter');
+  const selectFiltered = modal.querySelector('#announcement-select-filtered');
+  const listContainer = modal.querySelector('#announcement-recipients');
+  const countEl = modal.querySelector('#announcement-filter-count');
+
+  const getMemberCenter = (member) => member.center || '미지정';
+
+  const renderRecipients = () => {
+    const filteredMembers = centerFilter === 'all'
+      ? members
+      : members.filter(m => getMemberCenter(m) === centerFilter);
+    if (countEl) {
+      countEl.textContent = `필터된 회원 ${filteredMembers.length}명`;
+    }
+    if (!listContainer) return;
+    if (members.length === 0 && trainers.length === 0) {
+      listContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#888;">대상이 없습니다.</div>';
+      return;
+    }
+    listContainer.innerHTML = `
+      ${members.length > 0 ? `
+        <div style="font-weight:600;color:#333;margin:4px 0;">회원</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:4px;">
+          ${filteredMembers.map(m => `
+            <label style="display:flex;align-items:center;gap:4px;border:1px solid #eee;border-radius:4px;padding:2px 4px;font-size:0.64rem;line-height:1.1;">
+              <input type="checkbox" class="announcement-recipient-checkbox" data-id="${m.id}" data-center="${escapeHtml(getMemberCenter(m))}" ${selectedIds.has(m.id) ? 'checked' : ''} />
+              <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${escapeHtml(m.name)} (${escapeHtml(m.username)}) · ${escapeHtml(getMemberCenter(m))}
+              </span>
+            </label>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${trainers.length > 0 ? `
+        <div style="font-weight:600;color:#333;margin:8px 0 4px;">트레이너</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:4px;">
+          ${trainers.map(t => `
+            <label style="display:flex;align-items:center;gap:4px;border:1px solid #eee;border-radius:4px;padding:2px 4px;font-size:0.64rem;line-height:1.1;">
+              <input type="checkbox" class="announcement-recipient-checkbox" data-id="${t.id}" ${selectedIds.has(t.id) ? 'checked' : ''} />
+              <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${escapeHtml(t.name)} (${escapeHtml(t.username)})
+              </span>
+            </label>
+          `).join('')}
+        </div>
+      ` : ''}
+    `;
+
+    listContainer.querySelectorAll('.announcement-recipient-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const id = cb.getAttribute('data-id');
+        if (!id) return;
+        if (cb.checked) {
+          selectedIds.add(id);
+        } else {
+          selectedIds.delete(id);
+        }
+        updateSelectFilteredState();
+      });
+    });
+  };
+
+  const updateSelectFilteredState = () => {
+    if (!selectFiltered) return;
+    const filteredIds = (centerFilter === 'all'
+      ? members
+      : members.filter(m => getMemberCenter(m) === centerFilter)).map(m => m.id);
+    if (filteredIds.length === 0) {
+      selectFiltered.checked = false;
+      return;
+    }
+    selectFiltered.checked = filteredIds.every(id => selectedIds.has(id));
+  };
+
+  if (filterSelect) {
+    filterSelect.addEventListener('change', () => {
+      centerFilter = filterSelect.value || 'all';
+      renderRecipients();
+      updateSelectFilteredState();
+    });
+  }
+
+  if (selectFiltered) {
+    selectFiltered.addEventListener('change', () => {
+      const filteredIds = (centerFilter === 'all'
+        ? members
+        : members.filter(m => getMemberCenter(m) === centerFilter)).map(m => m.id);
+      filteredIds.forEach(id => {
+        if (selectFiltered.checked) {
+          selectedIds.add(id);
+        } else {
+          selectedIds.delete(id);
+        }
+      });
+      renderRecipients();
+      updateSelectFilteredState();
+    });
+  }
+
+  renderRecipients();
+
+  const sendBtn = modal.querySelector('#announcement-send-confirm');
+  if (sendBtn) {
+    sendBtn.addEventListener('click', async () => {
+    const selectedIds = Array.from(modal.querySelectorAll('.announcement-recipient-checkbox'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.getAttribute('data-id'));
+      if (selectedIds.length === 0) {
+        alert('보낼 회원을 선택해주세요.');
+        return;
+      }
+      if (!confirm(`선택한 ${selectedIds.length}명에게 공지사항을 보낼까요?`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/announcements/${announcement.id}/send`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            app_user_ids: selectedIds,
+            send_to_all: false
+          })
+        });
+        if (!res.ok) throw new Error('발송 실패');
+        alert('공지사항을 발송했습니다.');
+        closeModal();
+      } catch (error) {
+        alert('공지사항 발송 중 오류가 발생했습니다.');
+      }
+    });
+  }
+}
+
+function showAnnouncementImagesModal(announcement) {
+  const modalBg = document.createElement('div');
+  modalBg.className = 'modal-bg';
+  modalBg.style.cssText = 'position:fixed;z-index:1002;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;z-index:1003;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:12px;border-radius:8px;width:92vw;max-width:640px;max-height:80vh;overflow-y:auto;font-size:0.75rem;box-sizing:border-box;';
+
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h3 style="margin:0;color:#1976d2;font-size:0.9rem;">공지사항 이미지</h3>
+      <button class="announcement-images-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(announcement.title || '')}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
+      <input type="file" id="announcement-images-input" accept="image/*" multiple style="font-size:0.72rem;">
+      <span id="announcement-images-status" style="font-size:0.7rem;color:#666;"></span>
+    </div>
+    <div id="announcement-images-list" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(80px, 1fr));gap:8px;"></div>
+  `;
+
+  document.body.appendChild(modalBg);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modalBg.remove();
+    modal.remove();
+  };
+  modalBg.addEventListener('click', closeModal);
+  modal.querySelector('.announcement-images-close').addEventListener('click', closeModal);
+
+  const statusEl = modal.querySelector('#announcement-images-status');
+  const listEl = modal.querySelector('#announcement-images-list');
+
+  const renderImages = (images) => {
+    if (!listEl) return;
+    if (!images || images.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center;padding:12px;color:#888;">이미지가 없습니다.</div>';
+      return;
+    }
+    listEl.innerHTML = images.map(img => `
+      <div style="border:1px solid #eee;border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:6px;">
+        <img src="${escapeHtml(img.url || '')}" alt="공지 이미지" style="width:100%;height:120px;object-fit:contain;border-radius:4px;background:#f5f5f5;">
+        <button class="announcement-image-delete-btn" data-id="${img.id}" style="background:#fbe9e7;color:#d32f2f;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">삭제</button>
+      </div>
+    `).join('');
+
+    listEl.querySelectorAll('.announcement-image-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const imageId = btn.getAttribute('data-id');
+        if (!imageId) return;
+        if (!confirm('이미지를 삭제하시겠습니까?')) return;
+        try {
+          const res = await fetch(`/api/announcements/${announcement.id}/images/${imageId}`, { method: 'DELETE' });
+          if (!res.ok) throw new Error('삭제 실패');
+          const data = await res.json();
+          updateAnnouncementCacheImages(announcement.id, data.images || []);
+          renderImages(data.images || []);
+        } catch (error) {
+          alert('이미지 삭제 중 오류가 발생했습니다.');
+        }
+      });
+    });
+  };
+
+  renderImages(announcement.image_urls || []);
+
+  const input = modal.querySelector('#announcement-images-input');
+  if (input) {
+    input.addEventListener('change', async () => {
+      const files = Array.from(input.files || []);
+      if (files.length === 0) return;
+      statusEl.textContent = '업로드 중...';
+      const currentUser = localStorage.getItem('username') || '';
+      for (const file of files) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('currentUser', currentUser);
+          const res = await fetch(`/api/announcements/${announcement.id}/images`, {
+            method: 'POST',
+            body: formData
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.message || '업로드 실패');
+          }
+          const data = await res.json();
+          updateAnnouncementCacheImages(announcement.id, data.images || []);
+          renderImages(data.images || []);
+        } catch (error) {
+          alert(error.message || '이미지 업로드 중 오류가 발생했습니다.');
+          break;
+        }
+      }
+      statusEl.textContent = '';
+      input.value = '';
+    });
+  }
+}
+
+function updateAnnouncementCacheImages(id, images) {
+  const index = announcementsCached.findIndex(item => item.id === id);
+  if (index === -1) return;
+  announcementsCached[index] = {
+    ...announcementsCached[index],
+    image_urls: images
+  };
 }
 
 function renderTierBadge(label, tier) {

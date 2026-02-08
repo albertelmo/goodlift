@@ -2,7 +2,7 @@
 
 import { formatDate, getToday, escapeHtml, getTimeAgo } from './utils.js';
 import { getUserSettings, updateUserSettings } from './api.js';
-import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead } from './api.js';
+import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead, getAnnouncementsInbox, getAnnouncementDetail, markAnnouncementAsRead } from './api.js';
 import { showWorkoutGuideDetailModal } from './guide-modal.js';
 
 let currentUser = null;
@@ -22,6 +22,8 @@ let activityLogs = null; // 트레이너 활동 로그
 let activityLogsUnreadCount = 0; // 읽지 않은 로그 개수
 let memberActivityLogs = null; // 회원 활동 로그
 let memberActivityLogsUnreadCount = 0; // 회원 활동 로그 읽지 않은 개수
+let announcementsInbox = [];
+let announcementsUnreadCount = 0;
 
 // 활동 로그 자동 업데이트를 위한 인터벌 ID
 let activityLogsUpdateInterval = null;
@@ -45,7 +47,8 @@ export async function init(userData) {
         loadWorkoutGuideItems(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
-        loadMemberActivityLogs()
+        loadMemberActivityLogs(),
+        loadAnnouncementsInbox()
     ]);
     await loadTrainerMemberMedalStatus();
     render();
@@ -92,17 +95,12 @@ function startActivityLogsAutoUpdate() {
     const updateActivityLogs = () => {
         if (document.visibilityState === 'visible' && !document.hidden) {
             const isTrainer = currentUser?.isTrainer === true;
-            if (isTrainer) {
-                loadActivityLogs().then(() => {
-                    // 읽지 않은 개수가 변경되었으면 UI 업데이트
-                    updateActivityLogsUI();
-                });
-            } else {
-                loadMemberActivityLogs().then(() => {
-                    // 읽지 않은 개수가 변경되었으면 UI 업데이트
-                    updateActivityLogsUI();
-                });
-            }
+            const logsPromise = isTrainer
+                ? loadActivityLogs().then(() => updateActivityLogsUI())
+                : loadMemberActivityLogs().then(() => updateActivityLogsUI());
+            Promise.all([logsPromise, loadAnnouncementsInbox().then(() => updateAnnouncementsUI())]).catch(() => {
+                // noop
+            });
         }
     };
     
@@ -145,18 +143,7 @@ function updateActivityLogsUI() {
         const logsList = container.querySelector('.app-activity-logs-list');
         
         if (sectionTitle && logsList) {
-            // 읽지 않은 개수 뱃지 업데이트
-            let badge = sectionTitle.querySelector('span');
-            if (activityLogsUnreadCount > 0) {
-                if (!badge) {
-                    badge = document.createElement('span');
-                    badge.style.cssText = 'background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;';
-                    sectionTitle.appendChild(badge);
-                }
-                badge.textContent = activityLogsUnreadCount;
-            } else if (badge) {
-                badge.remove();
-            }
+            updateLogUnreadBadge(activityLogsUnreadCount, true);
             
             // 로그 목록 업데이트 (전체 교체하지 않고 필요한 부분만)
             if (activityLogs && activityLogs.length > 0) {
@@ -192,18 +179,7 @@ function updateActivityLogsUI() {
         const logsList = container.querySelector('.app-activity-logs-list');
         
         if (sectionTitle && logsList) {
-            // 읽지 않은 개수 뱃지 업데이트
-            let badge = sectionTitle.querySelector('span');
-            if (memberActivityLogsUnreadCount > 0) {
-                if (!badge) {
-                    badge = document.createElement('span');
-                    badge.style.cssText = 'background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;';
-                    sectionTitle.appendChild(badge);
-                }
-                badge.textContent = memberActivityLogsUnreadCount;
-            } else if (badge) {
-                badge.remove();
-            }
+            updateLogUnreadBadge(memberActivityLogsUnreadCount, false);
             
             // 로그 목록 업데이트
             if (memberActivityLogs && memberActivityLogs.length > 0) {
@@ -233,6 +209,44 @@ function updateActivityLogsUI() {
                 setupMemberActivityLogEvents();
             }
         }
+    }
+}
+
+function updateAnnouncementsUI() {
+    const buttons = document.querySelectorAll('.app-announcement-open-btn');
+    buttons.forEach(btn => {
+        const existingBadge = btn.querySelector('.app-announcement-badge');
+        if (announcementsUnreadCount > 0) {
+            if (existingBadge) {
+                existingBadge.textContent = announcementsUnreadCount;
+            } else {
+                const badge = document.createElement('span');
+                badge.className = 'app-announcement-badge';
+                badge.textContent = announcementsUnreadCount;
+                btn.appendChild(badge);
+            }
+        } else if (existingBadge) {
+            existingBadge.remove();
+        }
+    });
+}
+
+function updateLogUnreadBadge(count, isTrainer) {
+    const btnId = isTrainer ? 'mark-all-read-btn' : 'mark-all-member-read-btn';
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    const existing = btn.querySelector('.app-log-unread-badge');
+    if (count > 0) {
+        if (existing) {
+            existing.textContent = count;
+        } else {
+            const badge = document.createElement('span');
+            badge.className = 'app-log-unread-badge';
+            badge.textContent = count;
+            btn.appendChild(badge);
+        }
+    } else if (existing) {
+        existing.remove();
     }
 }
 
@@ -722,6 +736,28 @@ async function loadMemberActivityLogs() {
 }
 
 /**
+ * 공지사항 수신함 조회
+ */
+async function loadAnnouncementsInbox() {
+    const appUserId = currentUser?.id;
+    if (!appUserId) {
+        announcementsInbox = [];
+        announcementsUnreadCount = 0;
+        return;
+    }
+    
+    try {
+        const result = await getAnnouncementsInbox(appUserId, { limit: 50 });
+        announcementsInbox = result.items || [];
+        announcementsUnreadCount = result.unreadCount || 0;
+    } catch (error) {
+        console.error('공지사항 조회 오류:', error);
+        announcementsInbox = [];
+        announcementsUnreadCount = 0;
+    }
+}
+
+/**
  * 회원의 연결된 트레이너 목록 조회
  */
 async function loadMemberTrainers() {
@@ -882,6 +918,11 @@ function getActivityLogTarget(item) {
  * 활동 로그 클릭 시 해당 화면으로 이동 (날짜 포함)
  */
 async function navigateFromActivityLog(item) {
+    const activityType = item?.getAttribute('data-activity-type') || '';
+    if (activityType === 'announcement') {
+        showAnnouncementsModal();
+        return;
+    }
     const target = getActivityLogTarget(item);
     if (!target) return;
     localStorage.setItem('pendingNavScreen', target.screen);
@@ -1244,16 +1285,20 @@ function render() {
             ${isTrainer ? `
             <!-- 활동 로그 섹션 (트레이너: 맨 위로 이동) -->
             <div class="app-dashboard-section">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 12px;">
                     <h2 class="app-section-title" style="margin: 0;">
-                        📋 회원 활동 로그
-                        ${activityLogsUnreadCount > 0 ? `<span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>` : ''}
+                        🔔 알림
                     </h2>
-                    ${activityLogs && activityLogsUnreadCount > 0 ? `
-                        <button id="mark-all-read-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
-                            전체 읽음 처리
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button type="button" class="app-btn-secondary app-announcement-open-btn" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
+                            공지사항
+                            ${announcementsUnreadCount > 0 ? `<span class="app-announcement-badge">${announcementsUnreadCount}</span>` : ''}
                         </button>
-                    ` : ''}
+                        <button id="mark-all-read-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
+                            전체 읽음
+                            ${activityLogsUnreadCount > 0 ? `<span class="app-log-unread-badge">${activityLogsUnreadCount}</span>` : ''}
+                        </button>
+                    </div>
                 </div>
                 <div class="app-activity-logs-list">
                     ${activityLogs && activityLogs.length > 0 ? activityLogs.map(log => {
@@ -1357,16 +1402,20 @@ function render() {
             <!-- 회원 활동 로그 섹션 (일반 회원) -->
             ${!isTrainer ? `
             <div class="app-dashboard-section">
-                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 12px;">
                     <h2 class="app-section-title" style="margin: 0;">
-                        🔔 활동 알림
-                        ${memberActivityLogsUnreadCount > 0 ? `<span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>` : ''}
+                        🔔 알림
                     </h2>
-                    ${memberActivityLogs && memberActivityLogsUnreadCount > 0 ? `
-                        <button id="mark-all-member-read-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
-                            전체 읽음 처리
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button type="button" class="app-btn-secondary app-announcement-open-btn" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
+                            공지사항
+                            ${announcementsUnreadCount > 0 ? `<span class="app-announcement-badge">${announcementsUnreadCount}</span>` : ''}
                         </button>
-                    ` : ''}
+                        <button id="mark-all-member-read-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.875rem; white-space: nowrap;">
+                            전체 읽음
+                            ${memberActivityLogsUnreadCount > 0 ? `<span class="app-log-unread-badge">${memberActivityLogsUnreadCount}</span>` : ''}
+                        </button>
+                    </div>
                 </div>
                 <div class="app-activity-logs-list app-activity-logs-list-member">
                     ${memberActivityLogs && memberActivityLogs.length > 0 ? memberActivityLogs.map(log => {
@@ -1722,6 +1771,8 @@ function render() {
         setupMemberActivityLogEvents();
     }
 
+    setupAnnouncementButtons();
+
     if (!isTrainer) {
         const achievementBtn = document.getElementById('app-achievement-btn');
         if (achievementBtn) {
@@ -1771,6 +1822,24 @@ function render() {
             });
         });
     }
+}
+
+function setupAnnouncementButtons() {
+    const buttons = document.querySelectorAll('.app-announcement-open-btn');
+    buttons.forEach(btn => {
+        if (btn._announcementBtnSetup) return;
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showAnnouncementsModal();
+        });
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showAnnouncementsModal();
+        }, { passive: false });
+        btn._announcementBtnSetup = true;
+    });
 }
 
 /**
@@ -2081,6 +2150,196 @@ function createModal() {
     modalBg.className = 'app-modal-bg';
     modalBg.innerHTML = '<div class="app-modal"></div>';
     return modalBg;
+}
+
+function renderAnnouncementsListHtml() {
+    if (!announcementsInbox || announcementsInbox.length === 0) {
+        return '<div style="padding: 16px; text-align: center; color: var(--app-text-muted);">공지사항이 없습니다.</div>';
+    }
+    return announcementsInbox.map(item => {
+        const timeAgo = getTimeAgo(item.created_at || item.delivered_at);
+        const isUnread = !item.read_at;
+        return `
+            <div class="app-announcement-item ${isUnread ? 'app-announcement-item-unread' : 'app-announcement-item-read'}"
+                 data-delivery-id="${item.delivery_id}">
+                <div class="app-announcement-item-content">
+                    <div class="app-announcement-item-title">${escapeHtml(item.title || '공지사항')}</div>
+                    <div class="app-announcement-item-meta">${timeAgo}</div>
+                </div>
+                ${isUnread ? '<div class="app-announcement-indicator"></div>' : '<div style="width: 10px; flex-shrink: 0;"></div>'}
+            </div>
+        `;
+    }).join('');
+}
+
+function showAnnouncementsModal() {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    modal.classList.add('app-announcement-modal');
+
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>공지사항</h2>
+            <button class="app-modal-close" aria-label="닫기">×</button>
+        </div>
+        <div class="app-modal-form">
+            <div class="app-announcement-list">
+                ${renderAnnouncementsListHtml()}
+            </div>
+        </div>
+        <div class="app-modal-actions">
+            <button type="button" class="app-btn-secondary app-announcement-close-btn">닫기</button>
+        </div>
+    `;
+
+    document.body.appendChild(modalBg);
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+
+    const closeBtn = modal.querySelector('.app-modal-close');
+    const closeBtn2 = modal.querySelector('.app-announcement-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeBtn2) closeBtn2.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+
+    modal.querySelectorAll('.app-announcement-item').forEach(item => {
+        item.addEventListener('click', async () => {
+            const deliveryId = item.getAttribute('data-delivery-id');
+            await handleAnnouncementItemClick(deliveryId, item);
+        });
+        item.addEventListener('touchstart', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const deliveryId = item.getAttribute('data-delivery-id');
+            await handleAnnouncementItemClick(deliveryId, item);
+        }, { passive: false });
+    });
+}
+
+async function handleAnnouncementItemClick(deliveryId, itemEl) {
+    if (!deliveryId) return;
+    const appUserId = currentUser?.id;
+    if (!appUserId) return;
+
+    const existing = announcementsInbox.find(item => item.delivery_id === deliveryId);
+    const isUnread = existing && !existing.read_at;
+    if (isUnread) {
+        try {
+            await markAnnouncementAsRead(deliveryId, appUserId);
+            existing.read_at = new Date().toISOString();
+            announcementsUnreadCount = Math.max(0, announcementsUnreadCount - 1);
+            updateAnnouncementsUI();
+            if (itemEl) {
+                itemEl.classList.remove('app-announcement-item-unread');
+                itemEl.classList.add('app-announcement-item-read');
+                const indicator = itemEl.querySelector('.app-announcement-indicator');
+                if (indicator) indicator.remove();
+            }
+        } catch (error) {
+            console.error('공지사항 읽음 처리 오류:', error);
+        }
+    }
+
+    try {
+        const detailRes = await getAnnouncementDetail(deliveryId, appUserId);
+        const detail = detailRes?.item || existing;
+        if (detail) {
+            showAnnouncementDetailModal(detail);
+        }
+    } catch (error) {
+        console.error('공지사항 상세 조회 오류:', error);
+        if (existing) {
+            showAnnouncementDetailModal(existing);
+        }
+    }
+}
+
+function showAnnouncementDetailModal(detail) {
+    const modalBg = createModal();
+    const modal = modalBg.querySelector('.app-modal');
+    modal.classList.add('app-announcement-modal');
+    const formattedDate = formatAnnouncementDate(detail.created_at || detail.delivered_at);
+    const images = normalizeAnnouncementImages(detail.image_urls);
+
+    modal.innerHTML = `
+        <div class="app-modal-header">
+            <h2>${escapeHtml(detail.title || '공지사항')}</h2>
+            <button class="app-modal-close" aria-label="닫기">×</button>
+        </div>
+        <div class="app-modal-form">
+            <div class="app-announcement-detail-date">${escapeHtml(formattedDate)}</div>
+            ${images.length > 0 ? `
+                <div class="app-announcement-detail-images">
+                    ${images.map(img => `
+                        <img src="${escapeHtml(img.url || '')}" alt="공지 이미지" class="app-announcement-detail-image">
+                    `).join('')}
+                </div>
+            ` : ''}
+            <div class="app-announcement-detail-content">${escapeHtml(detail.content || '')}</div>
+        </div>
+        <div class="app-modal-actions">
+            <button type="button" class="app-btn-secondary app-announcement-close-btn">닫기</button>
+        </div>
+    `;
+
+    document.body.appendChild(modalBg);
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                document.body.removeChild(modalBg);
+            }
+        }, 200);
+    };
+    const closeBtn = modal.querySelector('.app-modal-close');
+    const closeBtn2 = modal.querySelector('.app-announcement-close-btn');
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (closeBtn2) closeBtn2.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+}
+
+function formatAnnouncementDate(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+}
+
+function normalizeAnnouncementImages(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+        return [];
+    }
 }
 
 /**
@@ -2601,7 +2860,8 @@ export async function refresh() {
         loadMonthlyDietSummary(),
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
-        loadMemberActivityLogs()
+        loadMemberActivityLogs(),
+        loadAnnouncementsInbox()
     ]);
     await loadTrainerMemberMedalStatus();
     render();
@@ -2710,12 +2970,7 @@ function setupMemberActivityLogEvents() {
                         if (indicator) indicator.remove();
                     });
                     memberActivityLogsUnreadCount = 0;
-                    const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                    if (sectionTitle) {
-                        const badge = sectionTitle.querySelector('span');
-                        if (badge) badge.remove();
-                    }
-                    if (btn) btn.style.display = 'none';
+                    updateLogUnreadBadge(0, false);
                     if (memberActivityLogs) {
                         memberActivityLogs.forEach(log => { log.is_read = true; });
                     }
@@ -2758,21 +3013,7 @@ function setupMemberActivityLogEvents() {
                             const indicator = item.querySelector('.app-activity-log-indicator');
                             if (indicator) indicator.remove();
                             memberActivityLogsUnreadCount = Math.max(0, memberActivityLogsUnreadCount - 1);
-                            const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                            if (sectionTitle) {
-                                const badge = sectionTitle.querySelector('span');
-                                if (memberActivityLogsUnreadCount > 0) {
-                                    if (badge) {
-                                        badge.textContent = memberActivityLogsUnreadCount;
-                                    } else {
-                                        sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${memberActivityLogsUnreadCount}</span>`;
-                                    }
-                                } else {
-                                    if (badge) badge.remove();
-                                    const markAllBtn = document.getElementById('mark-all-member-read-btn');
-                                    if (markAllBtn) markAllBtn.style.display = 'none';
-                                }
-                            }
+                            updateLogUnreadBadge(memberActivityLogsUnreadCount, false);
                             const log = memberActivityLogs.find(l => l.id === logId);
                             if (log) log.is_read = true;
                         }
@@ -2832,9 +3073,6 @@ function setupMemberActivityLogEvents() {
                         }
                     } else {
                         if (badge) badge.remove();
-                        // 전체 읽음 처리 버튼 숨김
-                        const markAllBtn = document.getElementById('mark-all-member-read-btn');
-                        if (markAllBtn) markAllBtn.style.display = 'none';
                     }
                 }
                 
@@ -2906,9 +3144,8 @@ function setupMemberActivityLogEvents() {
                 if (badge) badge.remove();
             }
             
-            // 버튼 비활성화 (제거하지 않고 숨김 처리)
             if (btn) {
-                btn.style.display = 'none';
+                btn.disabled = false;
             }
             
             // 로그 데이터 업데이트
@@ -3009,12 +3246,7 @@ function setupActivityLogEvents() {
                         if (indicator) indicator.remove();
                     });
                     activityLogsUnreadCount = 0;
-                    const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                    if (sectionTitle) {
-                        const badge = sectionTitle.querySelector('span');
-                        if (badge) badge.remove();
-                    }
-                    if (btn) btn.style.display = 'none';
+                    updateLogUnreadBadge(0, true);
                     if (activityLogs) {
                         activityLogs.forEach(log => { log.is_read = true; });
                     }
@@ -3050,6 +3282,7 @@ function setupActivityLogEvents() {
                     const logId = item.getAttribute('data-log-id');
                     const appUserId = item.getAttribute('data-app-user-id');
                     const memberName = item.getAttribute('data-member-name');
+                    const activityType = item.getAttribute('data-activity-type') || '';
                     const isUnread = item.classList.contains('app-activity-log-item-unread');
                     
                     if (!logId) return;
@@ -3080,8 +3313,6 @@ function setupActivityLogEvents() {
                                     }
                                 } else {
                                     if (badge) badge.remove();
-                                    const markAllBtn = document.getElementById('mark-all-read-btn');
-                                    if (markAllBtn) markAllBtn.parentElement.remove();
                                 }
                             }
                             
@@ -3089,6 +3320,11 @@ function setupActivityLogEvents() {
                             if (log) {
                                 log.is_read = true;
                             }
+                        }
+                        
+                        if (activityType === 'announcement') {
+                            showAnnouncementsModal();
+                            return;
                         }
                         
                         // 회원 연결 로직
@@ -3133,11 +3369,12 @@ function setupActivityLogEvents() {
     console.log('[로그 이벤트] 로그 아이템 개수:', logItems.length);
     
     // 로그 클릭 핸들러 함수
-    const handleLogClick = async (item) => {
-        const logId = item.getAttribute('data-log-id');
-        const appUserId = item.getAttribute('data-app-user-id');
-        const memberName = item.getAttribute('data-member-name');
-        const isUnread = item.classList.contains('app-activity-log-item-unread');
+            const handleLogClick = async (item) => {
+                const logId = item.getAttribute('data-log-id');
+                const appUserId = item.getAttribute('data-app-user-id');
+                const memberName = item.getAttribute('data-member-name');
+                const activityType = item.getAttribute('data-activity-type') || '';
+                const isUnread = item.classList.contains('app-activity-log-item-unread');
         
         console.log('[로그 클릭]', { logId, appUserId, memberName, isUnread });
         
@@ -3173,22 +3410,7 @@ function setupActivityLogEvents() {
                     activityLogsUnreadCount = Math.max(0, activityLogsUnreadCount - 1);
                     
                     // 헤더의 읽지 않은 개수 업데이트
-                    const sectionTitle = container.querySelector('.app-dashboard-section h2.app-section-title');
-                    if (sectionTitle) {
-                        const badge = sectionTitle.querySelector('span');
-                        if (activityLogsUnreadCount > 0) {
-                            if (badge) {
-                                badge.textContent = activityLogsUnreadCount;
-                            } else {
-                                sectionTitle.innerHTML += ` <span style="background: #ff4444; color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">${activityLogsUnreadCount}</span>`;
-                            }
-                        } else {
-                            if (badge) badge.remove();
-                            // 전체 읽음 처리 버튼도 제거
-                            const markAllBtn = document.getElementById('mark-all-read-btn');
-                            if (markAllBtn) markAllBtn.parentElement.remove();
-                        }
-                    }
+                    updateLogUnreadBadge(activityLogsUnreadCount, true);
                     
                     // 로그 데이터 업데이트
                     const log = activityLogs.find(l => l.id === logId);
@@ -3197,7 +3419,12 @@ function setupActivityLogEvents() {
                     }
                 }
                 
-                // 2. app_user_id 확인 및 회원 연결 로직
+                        if (activityType === 'announcement') {
+                            showAnnouncementsModal();
+                            return;
+                        }
+                        
+                        // 2. app_user_id 확인 및 회원 연결 로직
                 // app_user_id가 유효하고 memberName이 있는 경우에만 연결 옵션 제공
                 // 기존 로그는 app_user_id가 null일 수 있으므로 안전하게 처리
                 const hasValidAppUserId = appUserId && appUserId !== 'null' && appUserId !== '' && appUserId !== 'undefined';
@@ -3295,9 +3522,8 @@ function setupActivityLogEvents() {
                 if (badge) badge.remove();
             }
             
-            // 버튼 비활성화 (제거하지 않고 숨김 처리)
             if (btn) {
-                btn.style.display = 'none';
+                btn.disabled = false;
             }
             
             // 로그 데이터 업데이트

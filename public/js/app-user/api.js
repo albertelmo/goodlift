@@ -926,6 +926,28 @@ export async function markAllActivityLogsAsRead(trainerUsername) {
     return await patch('/trainer-activity-logs/read-all', { trainer_username: trainerUsername });
 }
 
+// ========== 공지사항 API ==========
+
+export async function getAnnouncementsInbox(appUserId, filters = {}) {
+    const params = new URLSearchParams();
+    params.append('app_user_id', appUserId);
+    if (filters.limit) params.append('limit', filters.limit);
+    const endpoint = `/announcements/inbox?${params.toString()}`;
+    return get(endpoint);
+}
+
+export async function getAnnouncementDetail(deliveryId, appUserId) {
+    const params = new URLSearchParams();
+    params.append('app_user_id', appUserId);
+    return get(`/announcements/inbox/${deliveryId}?${params.toString()}`);
+}
+
+export async function markAnnouncementAsRead(deliveryId, appUserId) {
+    return patch(`/announcements/inbox/${deliveryId}/read`, {
+        app_user_id: appUserId
+    });
+}
+
 // 운동기록 순서 변경
 export async function reorderWorkoutRecords(appUserId, workoutDate, order) {
     return await patch('/workout-records/reorder', {

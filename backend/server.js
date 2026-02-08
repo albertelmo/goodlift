@@ -39,6 +39,8 @@ const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
 const appUserActivityEventsDB = require('./app-user-activity-events-db');
 const achievementsDB = require('./achievements-db');
+const announcementsDB = require('./announcements-db');
+const announcementDeliveriesDB = require('./announcement-deliveries-db');
 const workoutCommentsDB = require('./workout-comments-db');
 const dietDailyCommentsDB = require('./diet-daily-comments-db');
 const consultationRecordsDB = require('./consultation-records-db');
@@ -431,6 +433,7 @@ const DIET_IMAGES_DIR = path.join(UPLOADS_DIR, 'diet-images');
 const CONSULTATION_VIDEOS_DIR = path.join(UPLOADS_DIR, 'consultation-videos');
 const WORKOUT_GUIDE_VIDEOS_DIR = path.join(UPLOADS_DIR, 'workout-guide-videos');
 const CONSULTATION_IMAGES_DIR = path.join(UPLOADS_DIR, 'consultation-images');
+const ANNOUNCEMENT_IMAGES_DIR = path.join(UPLOADS_DIR, 'announcement-images');
 const TRAINER_PROFILES_DIR = path.join(UPLOADS_DIR, 'trainer-profiles');
 
 // 디렉토리 자동 생성
@@ -455,6 +458,10 @@ const ensureDirectories = () => {
     if (!fs.existsSync(CONSULTATION_IMAGES_DIR)) {
       fs.mkdirSync(CONSULTATION_IMAGES_DIR, { recursive: true });
       console.log(`[Consultation] 상담기록 사진 디렉토리 생성: ${CONSULTATION_IMAGES_DIR}`);
+    }
+    if (!fs.existsSync(ANNOUNCEMENT_IMAGES_DIR)) {
+      fs.mkdirSync(ANNOUNCEMENT_IMAGES_DIR, { recursive: true });
+      console.log(`[Announcement] 공지사항 사진 디렉토리 생성: ${ANNOUNCEMENT_IMAGES_DIR}`);
     }
     if (!fs.existsSync(TRAINER_PROFILES_DIR)) {
       fs.mkdirSync(TRAINER_PROFILES_DIR, { recursive: true });
@@ -633,6 +640,15 @@ userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조
 appSettingsDB.initializeDatabase(); // 전역 앱 설정 테이블 초기화
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
+// 공지사항 테이블을 먼저 만든 뒤 발송 테이블 초기화
+(async () => {
+    try {
+        await announcementsDB.initializeDatabase();
+        await announcementDeliveriesDB.initializeDatabase();
+    } catch (error) {
+        console.error('[PostgreSQL] 공지사항 테이블 초기화 오류:', error);
+    }
+})();
 workoutCommentsDB.initializeDatabase(); // 운동 코멘트 테이블 초기화
 dietDailyCommentsDB.initializeDatabase(); // 식단 하루 코멘트 테이블 초기화
 consultationRecordsDB.initializeDatabase(); // 상담기록 테이블 초기화
@@ -974,6 +990,23 @@ const consultationImageUpload = multer({
         // 이미지 파일만 허용
         const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
         if (allowedMimes.includes(file.mimetype) || 
+            file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            cb(null, true);
+        } else {
+            cb(new Error('이미지 파일만 업로드 가능합니다. (jpg, jpeg, png, gif, webp)'), false);
+        }
+    }
+});
+
+// 공지사항 사진 업로드 설정
+const announcementImageUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: parseInt(process.env.ANNOUNCEMENT_IMAGE_MAX_SIZE || '10485760', 10) // 기본 10MB
+    },
+    fileFilter: (req, file, cb) => {
+        const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowedMimes.includes(file.mimetype) ||
             file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             cb(null, true);
         } else {
@@ -1947,6 +1980,27 @@ function enqueuePushForMemberActivity({ appUserId, activityType, activityMessage
     });
 }
 
+function enqueuePushForAnnouncement({ appUserId, title, body }) {
+    if (!appUserId) return;
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return;
+    }
+    const payload = JSON.stringify({
+        title: title || '공지사항',
+        body: body || '',
+        url: '/?screen=home'
+    });
+    setImmediate(async () => {
+        try {
+            const subscriptions = await pushSubscriptionsDB.getActiveSubscriptions(appUserId);
+            if (!subscriptions || subscriptions.length === 0) return;
+            await sendPushToSubscriptions(subscriptions, payload);
+        } catch (error) {
+            console.error('[Push] 공지사항 알림 전송 오류:', error);
+        }
+    });
+}
+
 function enqueuePushForTrainerActivity({ trainerAppUserId, activityType, activityMessage, recordDate }) {
     if (!trainerAppUserId) {
         return;
@@ -2069,6 +2123,276 @@ app.post('/api/push/send', async (req, res) => {
     } catch (error) {
         console.error('[API] 푸시 전송 오류:', error);
         res.status(500).json({ message: error.message || '푸시 전송 중 오류가 발생했습니다.' });
+    }
+});
+
+// ============================================
+// Announcements API
+// ============================================
+app.get('/api/announcements', async (req, res) => {
+    try {
+        const includeInactive = req.query.include_inactive === 'true';
+        const items = await announcementsDB.getAnnouncements({ includeInactive });
+        res.json({ items });
+    } catch (error) {
+        console.error('[API] 공지사항 목록 조회 오류:', error);
+        res.status(500).json({ message: '공지사항 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.post('/api/announcements', async (req, res) => {
+    try {
+        const { title, content, created_by } = req.body;
+        if (!title || !content) {
+            return res.status(400).json({ message: '제목과 내용을 입력해주세요.' });
+        }
+        const created = await announcementsDB.addAnnouncement({
+            title,
+            content,
+            createdBy: created_by || null
+        });
+        res.json({ announcement: created });
+    } catch (error) {
+        console.error('[API] 공지사항 추가 오류:', error);
+        res.status(500).json({ message: '공지사항 추가 중 오류가 발생했습니다.' });
+    }
+});
+
+app.delete('/api/announcements/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updated = await announcementsDB.deactivateAnnouncement(id);
+        if (!updated) {
+            return res.status(404).json({ message: '공지사항을 찾을 수 없습니다.' });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[API] 공지사항 삭제 오류:', error);
+        res.status(500).json({ message: '공지사항 삭제 중 오류가 발생했습니다.' });
+    }
+});
+
+app.post('/api/announcements/:id/send', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { app_user_ids = [], send_to_all = false } = req.body;
+        const announcement = await announcementsDB.getAnnouncementById(id);
+        if (!announcement || announcement.is_active !== true) {
+            return res.status(404).json({ message: '공지사항을 찾을 수 없습니다.' });
+        }
+
+        let recipientIds = Array.isArray(app_user_ids) ? app_user_ids : [];
+        if (send_to_all) {
+            const users = await appUsersDB.getAppUsers({ is_active: true });
+            recipientIds = users.map(user => user.id);
+        }
+
+        recipientIds = recipientIds.filter(Boolean);
+        if (recipientIds.length === 0) {
+            return res.status(400).json({ message: '발송할 회원이 없습니다.' });
+        }
+
+        const deliveryType = send_to_all ? 'all' : 'selected';
+        const deliveryResult = await announcementDeliveriesDB.addDeliveries(id, recipientIds, deliveryType);
+
+        let senderName = announcement.created_by || '관리자';
+        try {
+            if (announcement.created_by) {
+                const sender = await appUsersDB.getAppUserByUsername(announcement.created_by);
+                if (sender?.name) {
+                    senderName = sender.name;
+                }
+            }
+        } catch (e) {
+            // noop
+        }
+
+        const logMessage = `공지사항이 도착했습니다: ${announcement.title}`;
+        const recipientsInfo = await appUsersDB.getAppUsersByIds(recipientIds);
+        const recipientsMap = new Map(recipientsInfo.map(user => [user.id, user]));
+        setImmediate(async () => {
+            for (const appUserId of recipientIds) {
+                try {
+                    const recipient = recipientsMap.get(appUserId);
+                    if (recipient?.is_trainer) {
+                        await activityLogsDB.addActivityLog({
+                            trainer_username: recipient.username,
+                            member_name: senderName || '공지사항',
+                            app_user_id: appUserId,
+                            activity_type: 'announcement',
+                            activity_message: logMessage,
+                            related_record_id: announcement.id,
+                            record_date: null
+                        });
+                    } else {
+                        await memberActivityLogsDB.addActivityLog({
+                            app_user_id: appUserId,
+                            trainer_username: announcement.created_by || 'admin',
+                            trainer_name: senderName,
+                            activity_type: 'announcement',
+                            activity_message: logMessage,
+                            related_record_id: announcement.id,
+                            record_date: null
+                        });
+                    }
+                    enqueuePushForAnnouncement({
+                        appUserId,
+                        title: '공지사항',
+                        body: announcement.title
+                    });
+                } catch (error) {
+                    console.error('[Announcement] 로그/푸시 처리 오류:', error);
+                }
+            }
+        });
+
+        res.json({ success: true, delivered: deliveryResult.count || recipientIds.length });
+    } catch (error) {
+        console.error('[API] 공지사항 발송 오류:', error);
+        res.status(500).json({ message: '공지사항 발송 중 오류가 발생했습니다.' });
+    }
+});
+
+// 공지사항 사진 업로드
+app.post('/api/announcements/:id/images', announcementImageUpload.single('file'), async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { currentUser } = req.body;
+
+        if (!req.file) {
+            return res.status(400).json({ message: '사진 파일을 선택해주세요.' });
+        }
+
+        const announcement = await announcementsDB.getAnnouncementById(id);
+        if (!announcement) {
+            return res.status(404).json({ message: '공지사항을 찾을 수 없습니다.' });
+        }
+
+        const maxImages = parseInt(process.env.ANNOUNCEMENT_IMAGE_MAX_COUNT || '4', 10);
+        const existingImages = announcement.image_urls ? (Array.isArray(announcement.image_urls) ? announcement.image_urls : JSON.parse(announcement.image_urls)) : [];
+        if (existingImages.length >= maxImages) {
+            return res.status(400).json({ message: `사진은 최대 ${maxImages}개까지 업로드 가능합니다.` });
+        }
+
+        const date = new Date();
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const imageId = uuidv4();
+        const fileExt = path.extname(req.file.originalname);
+        const imageDir = path.join(ANNOUNCEMENT_IMAGES_DIR, String(year), month, id);
+        const imageFileName = `${imageId}${fileExt}`;
+        const imagePath = path.join(imageDir, imageFileName);
+
+        if (!fs.existsSync(imageDir)) {
+            fs.mkdirSync(imageDir, { recursive: true });
+        }
+
+        fs.writeFileSync(imagePath, req.file.buffer);
+
+        const relativePath = path.join('uploads', 'announcement-images', String(year), month, id, imageFileName).replace(/\\/g, '/');
+        const imageMetadata = {
+            id: imageId,
+            url: `/${relativePath}`,
+            filename: req.file.originalname,
+            file_size: req.file.size,
+            mime_type: req.file.mimetype,
+            uploaded_at: new Date().toISOString(),
+            uploaded_by: currentUser || null
+        };
+
+        existingImages.push(imageMetadata);
+        await announcementsDB.updateAnnouncement(id, { image_urls: existingImages });
+
+        res.json({ image: imageMetadata, images: existingImages });
+    } catch (error) {
+        console.error('[API] 공지사항 사진 업로드 오류:', error);
+        res.status(500).json({ message: '사진 업로드에 실패했습니다.' });
+    }
+});
+
+// 공지사항 사진 삭제
+app.delete('/api/announcements/:id/images/:imageId', async (req, res) => {
+    try {
+        const { id, imageId } = req.params;
+        const announcement = await announcementsDB.getAnnouncementById(id);
+        if (!announcement) {
+            return res.status(404).json({ message: '공지사항을 찾을 수 없습니다.' });
+        }
+
+        let images = announcement.image_urls ? (Array.isArray(announcement.image_urls) ? announcement.image_urls : JSON.parse(announcement.image_urls)) : [];
+        const imageToDelete = images.find(img => img.id === imageId);
+        if (!imageToDelete) {
+            return res.status(404).json({ message: '사진을 찾을 수 없습니다.' });
+        }
+
+        if (imageToDelete.url) {
+            const urlPath = imageToDelete.url.replace(/^\/uploads\//, '');
+            const filePath = path.join(UPLOADS_DIR, urlPath);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        }
+
+        images = images.filter(img => img.id !== imageId);
+        await announcementsDB.updateAnnouncement(id, { image_urls: images });
+
+        res.json({ message: '사진이 삭제되었습니다.', images });
+    } catch (error) {
+        console.error('[API] 공지사항 사진 삭제 오류:', error);
+        res.status(500).json({ message: '사진 삭제에 실패했습니다.' });
+    }
+});
+
+app.get('/api/announcements/inbox', async (req, res) => {
+    try {
+        const { app_user_id, limit } = req.query;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const items = await announcementDeliveriesDB.getInbox(app_user_id, {
+            limit: limit ? parseInt(limit, 10) : 30
+        });
+        const unreadCount = await announcementDeliveriesDB.getUnreadCount(app_user_id);
+        res.json({ items, unreadCount });
+    } catch (error) {
+        console.error('[API] 공지사항 수신함 조회 오류:', error);
+        res.status(500).json({ message: '공지사항 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.get('/api/announcements/inbox/:deliveryId', async (req, res) => {
+    try {
+        const { deliveryId } = req.params;
+        const { app_user_id } = req.query;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const detail = await announcementDeliveriesDB.getDeliveryDetail(deliveryId, app_user_id);
+        if (!detail) {
+            return res.status(404).json({ message: '공지사항을 찾을 수 없습니다.' });
+        }
+        res.json({ item: detail });
+    } catch (error) {
+        console.error('[API] 공지사항 상세 조회 오류:', error);
+        res.status(500).json({ message: '공지사항 상세 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.patch('/api/announcements/inbox/:deliveryId/read', async (req, res) => {
+    try {
+        const { deliveryId } = req.params;
+        const { app_user_id } = req.body;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const updated = await announcementDeliveriesDB.markAsRead(deliveryId, app_user_id);
+        if (!updated) {
+            return res.status(404).json({ message: '공지사항을 찾을 수 없습니다.' });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[API] 공지사항 읽음 처리 오류:', error);
+        res.status(500).json({ message: '공지사항 읽음 처리 중 오류가 발생했습니다.' });
     }
 });
 

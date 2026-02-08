@@ -217,6 +217,10 @@ const getAppUsers = async (filters = {}) => {
       conditions.push(`is_active = $${paramIndex++}`);
       params.push(filters.is_active);
     }
+    if (filters.is_trainer !== undefined) {
+      conditions.push(`is_trainer = $${paramIndex++}`);
+      params.push(filters.is_trainer);
+    }
     if (filters.username) {
       conditions.push(`username = $${paramIndex++}`);
       params.push(filters.username);
@@ -231,6 +235,24 @@ const getAppUsers = async (filters = {}) => {
     return result.rows;
   } catch (error) {
     console.error('[PostgreSQL] 앱 유저 조회 오류:', error);
+    throw error;
+  }
+};
+
+// IDs로 앱 유저 조회
+const getAppUsersByIds = async (ids = []) => {
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) return [];
+    const query = `
+      SELECT id, username, name, phone, member_name, trainer, is_trainer, is_active,
+             created_at, updated_at, last_login_at, last_seen_at
+      FROM app_users
+      WHERE id = ANY($1::uuid[])
+    `;
+    const result = await pool.query(query, [ids]);
+    return result.rows;
+  } catch (error) {
+    console.error('[PostgreSQL] 앱 유저 ID 목록 조회 오류:', error);
     throw error;
   }
 };
@@ -505,6 +527,7 @@ const initializeDatabase = async () => {
 module.exports = {
   initializeDatabase,
   getAppUsers,
+  getAppUsersByIds,
   getAppUserById,
   getAppUserByUsername,
   getAppUserByNamePhone,
