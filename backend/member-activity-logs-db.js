@@ -6,6 +6,9 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+const CREATED_AT_EXPR = process.env.NODE_ENV === 'production'
+  ? "(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')"
+  : "(created_at AT TIME ZONE 'Asia/Seoul')";
 
 // 회원 활동 로그 테이블 생성
 const createMemberActivityLogsTable = async () => {
@@ -375,7 +378,7 @@ const getActivityLogs = async (appUserId, filters = {}) => {
         related_record_id,
         record_date,
         is_read,
-        to_char(created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
+        to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
       FROM member_activity_logs
       WHERE app_user_id = $1
     `;

@@ -5,6 +5,12 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+const CREATED_AT_EXPR = process.env.NODE_ENV === 'production'
+  ? "(created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')"
+  : "(created_at AT TIME ZONE 'Asia/Seoul')";
+const UPDATED_AT_EXPR = process.env.NODE_ENV === 'production'
+  ? "(updated_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')"
+  : "(updated_at AT TIME ZONE 'Asia/Seoul')";
 
 const createAnnouncementsTable = async () => {
   try {
@@ -112,8 +118,8 @@ const addAnnouncement = async ({ title, content, createdBy = null, imageUrls = n
 const getAnnouncements = async ({ includeInactive = false, limit = 200 } = {}) => {
   let query = `
     SELECT id, title, content, image_urls, created_by, is_active,
-           to_char(created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at,
-           to_char(updated_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as updated_at
+           to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at,
+           to_char(${UPDATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as updated_at
     FROM announcements
   `;
   const params = [];
@@ -132,8 +138,8 @@ const getAnnouncements = async ({ includeInactive = false, limit = 200 } = {}) =
 const getAnnouncementById = async (id) => {
   const query = `
     SELECT id, title, content, image_urls, created_by, is_active,
-           to_char(created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at,
-           to_char(updated_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as updated_at
+           to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at,
+           to_char(${UPDATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as updated_at
     FROM announcements
     WHERE id = $1
   `;
@@ -162,8 +168,8 @@ const updateAnnouncement = async (id, updates = {}) => {
     SET ${fields.join(', ')}, updated_at = NOW() AT TIME ZONE 'Asia/Seoul'
     WHERE id = $${idx}
     RETURNING id, title, content, image_urls, created_by, is_active,
-      to_char(created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at,
-      to_char(updated_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as updated_at
+      to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at,
+      to_char(${UPDATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as updated_at
   `;
   const result = await pool.query(query, values);
   return result.rows[0] ? parseAnnouncementRow(result.rows[0]) : null;

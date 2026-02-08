@@ -5,6 +5,12 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+const CREATED_AT_EXPR = process.env.NODE_ENV === 'production'
+  ? "(a.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')"
+  : "(a.created_at AT TIME ZONE 'Asia/Seoul')";
+const DELIVERED_AT_EXPR = process.env.NODE_ENV === 'production'
+  ? "(d.delivered_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')"
+  : "(d.delivered_at AT TIME ZONE 'Asia/Seoul')";
 
 const createAnnouncementDeliveriesTable = async () => {
   try {
@@ -117,12 +123,12 @@ const getInbox = async (appUserId, { limit = 30, offset = 0 } = {}) => {
       d.id as delivery_id,
       d.announcement_id,
       d.read_at,
-      d.delivered_at,
+      to_char(${DELIVERED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as delivered_at,
       a.title,
       a.content,
       a.image_urls,
       a.created_by,
-      to_char(a.created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
+      to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
     FROM announcement_deliveries d
     INNER JOIN announcements a ON a.id = d.announcement_id
     WHERE d.app_user_id = $1
@@ -153,12 +159,12 @@ const getDeliveryDetail = async (deliveryId, appUserId) => {
       d.id as delivery_id,
       d.announcement_id,
       d.read_at,
-      d.delivered_at,
+      to_char(${DELIVERED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as delivered_at,
       a.title,
       a.content,
       a.image_urls,
       a.created_by,
-      to_char(a.created_at AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
+      to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as created_at
     FROM announcement_deliveries d
     INNER JOIN announcements a ON a.id = d.announcement_id
     WHERE d.id = $1

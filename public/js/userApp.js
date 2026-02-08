@@ -908,7 +908,7 @@ function showAnnouncementSendModal(announcement) {
   modal.style.cssText = 'position:fixed;z-index:1003;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:12px;border-radius:8px;width:92vw;max-width:426px;max-height:80vh;overflow-y:auto;font-size:0.75rem;box-sizing:border-box;';
 
   const members = (membersCached || []).filter(m => !m.is_trainer);
-  const trainers = (membersCached || []).filter(m => m.is_trainer);
+  let trainersList = (membersCached || []).filter(m => m.is_trainer);
   const centerValues = Array.from(new Set(members.map(m => (m.center || '미지정'))));
   let centerFilter = 'all';
   const selectedIds = new Set();
@@ -925,6 +925,11 @@ function showAnnouncementSendModal(announcement) {
           <input type="checkbox" id="announcement-select-filtered" />
           필터된 회원 전체 선택
         </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:#333;">
+          <input type="checkbox" id="announcement-include-trainers" />
+          트레이너 포함
+        </label>
+        <span id="announcement-trainer-count" style="font-size:0.72rem;color:#666;"></span>
         <select id="announcement-center-filter" style="padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:0.72rem;">
           <option value="all">전체 센터</option>
           ${centerValues.map(center => `<option value="${escapeHtml(center)}">${escapeHtml(center)}</option>`).join('')}
@@ -950,15 +955,25 @@ function showAnnouncementSendModal(announcement) {
 
   const filterSelect = modal.querySelector('#announcement-center-filter');
   const selectFiltered = modal.querySelector('#announcement-select-filtered');
+  const includeTrainersCheckbox = modal.querySelector('#announcement-include-trainers');
   const listContainer = modal.querySelector('#announcement-recipients');
   const countEl = modal.querySelector('#announcement-filter-count');
+  const trainerCountEl = modal.querySelector('#announcement-trainer-count');
+  const sendBtn = modal.querySelector('#announcement-send-confirm');
 
   const getMemberCenter = (member) => member.center || '미지정';
+  const getTrainerIds = () => new Set((trainersList || []).map(t => t.id).filter(Boolean));
 
   const renderRecipients = () => {
     const filteredMembers = centerFilter === 'all'
       ? members
       : members.filter(m => getMemberCenter(m) === centerFilter);
+    const trainerIds = getTrainerIds();
+    if (includeTrainersCheckbox?.checked) {
+      trainerIds.forEach(id => selectedIds.add(id));
+    } else {
+      trainerIds.forEach(id => selectedIds.delete(id));
+    }
     if (countEl) {
       countEl.textContent = `필터된 회원 ${filteredMembers.length}명`;
     }
@@ -981,10 +996,10 @@ function showAnnouncementSendModal(announcement) {
           `).join('')}
         </div>
       ` : ''}
-      ${trainers.length > 0 ? `
+      ${(trainersList || []).length > 0 ? `
         <div style="font-weight:600;color:#333;margin:8px 0 4px;">트레이너</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:4px;">
-          ${trainers.map(t => `
+          ${(trainersList || []).map(t => `
             <label style="display:flex;align-items:center;gap:4px;border:1px solid #eee;border-radius:4px;padding:2px 4px;font-size:0.64rem;line-height:1.1;">
               <input type="checkbox" class="announcement-recipient-checkbox" data-id="${t.id}" ${selectedIds.has(t.id) ? 'checked' : ''} />
               <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -1006,6 +1021,7 @@ function showAnnouncementSendModal(announcement) {
           selectedIds.delete(id);
         }
         updateSelectFilteredState();
+        updateSendCount();
       });
     });
   };
@@ -1020,6 +1036,20 @@ function showAnnouncementSendModal(announcement) {
       return;
     }
     selectFiltered.checked = filteredIds.every(id => selectedIds.has(id));
+  };
+
+  const updateSendCount = () => {
+    if (!sendBtn) return;
+    const trainerIds = getTrainerIds();
+    let trainerSelected = 0;
+    selectedIds.forEach(id => {
+      if (trainerIds.has(id)) trainerSelected += 1;
+    });
+    const total = selectedIds.size;
+    sendBtn.textContent = `보내기 (${total}명)`;
+    if (trainerCountEl) {
+      trainerCountEl.textContent = `트레이너 선택 ${trainerSelected}명`;
+    }
   };
 
   if (filterSelect) {
@@ -1044,22 +1074,43 @@ function showAnnouncementSendModal(announcement) {
       });
       renderRecipients();
       updateSelectFilteredState();
+      updateSendCount();
+    });
+  }
+
+  if (includeTrainersCheckbox) {
+    includeTrainersCheckbox.addEventListener('change', () => {
+      renderRecipients();
+      updateSelectFilteredState();
+      updateSendCount();
     });
   }
 
   renderRecipients();
+  updateSendCount();
 
-  const sendBtn = modal.querySelector('#announcement-send-confirm');
+  (async () => {
+    try {
+      const res = await fetch('/api/app-users?include_trainers=true&only_trainers=true');
+      if (!res.ok) return;
+      const trainerAppUsers = await res.json();
+      trainersList = Array.isArray(trainerAppUsers) ? trainerAppUsers : [];
+      renderRecipients();
+      updateSelectFilteredState();
+      updateSendCount();
+    } catch (error) {
+      // noop
+    }
+  })();
+
   if (sendBtn) {
     sendBtn.addEventListener('click', async () => {
-    const selectedIds = Array.from(modal.querySelectorAll('.announcement-recipient-checkbox'))
-      .filter(cb => cb.checked)
-      .map(cb => cb.getAttribute('data-id'));
-      if (selectedIds.length === 0) {
+      const selected = Array.from(selectedIds);
+      if (selected.length === 0) {
         alert('보낼 회원을 선택해주세요.');
         return;
       }
-      if (!confirm(`선택한 ${selectedIds.length}명에게 공지사항을 보낼까요?`)) {
+      if (!confirm(`선택한 ${selected.length}명에게 공지사항을 보낼까요?`)) {
         return;
       }
       try {
@@ -1067,7 +1118,7 @@ function showAnnouncementSendModal(announcement) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            app_user_ids: selectedIds,
+            app_user_ids: selected,
             send_to_all: false
           })
         });

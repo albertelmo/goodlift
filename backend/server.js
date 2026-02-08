@@ -1331,6 +1331,8 @@ app.get('/api/app-users', async (req, res) => {
         if (req.query.trainer) filters.trainer = req.query.trainer;
         if (req.query.is_active !== undefined) filters.is_active = req.query.is_active === 'true';
         if (req.query.username) filters.username = req.query.username;
+        const includeTrainers = req.query.include_trainers === 'true';
+        const onlyTrainers = req.query.only_trainers === 'true';
         
         const appUsers = await appUsersDB.getAppUsers(filters);
         
@@ -1352,6 +1354,17 @@ app.get('/api/app-users', async (req, res) => {
                     }
                 });
             }
+        }
+        
+        if (includeTrainers && onlyTrainers) {
+            const trainersOnly = appUsers.filter(appUser => trainerUsernames.has(appUser.username));
+            res.json(trainersOnly);
+            return;
+        }
+        
+        if (includeTrainers) {
+            res.json(appUsers);
+            return;
         }
         
         // 트레이너 제외 (트레이너 username에 해당하는 app_user 제외)
