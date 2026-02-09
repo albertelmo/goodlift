@@ -165,6 +165,35 @@ const getSubscriptionStatus = async (appUserId) => {
   return (result.rows[0]?.count || 0) > 0;
 };
 
+const getSubscriptionsByUser = async (appUserId) => {
+  const query = `
+    SELECT id, app_user_id, endpoint, user_agent, platform, is_active, created_at, updated_at
+    FROM push_subscriptions
+    WHERE app_user_id = $1
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+  `;
+  const result = await pool.query(query, [appUserId]);
+  return result.rows;
+};
+
+const getSubscriptionStatuses = async (appUserIds) => {
+  if (!Array.isArray(appUserIds) || appUserIds.length === 0) {
+    return [];
+  }
+  const query = `
+    SELECT app_user_id, COUNT(*)::int AS count
+    FROM push_subscriptions
+    WHERE app_user_id = ANY($1) AND is_active = true
+    GROUP BY app_user_id
+  `;
+  const result = await pool.query(query, [appUserIds]);
+  return result.rows.map(row => ({
+    app_user_id: row.app_user_id,
+    enabled: (row.count || 0) > 0,
+    count: row.count || 0
+  }));
+};
+
 const deactivateByEndpoint = async (endpoint) => {
   if (!endpoint) return 0;
   const query = `
@@ -182,5 +211,7 @@ module.exports = {
   deactivateSubscription,
   getActiveSubscriptions,
   getSubscriptionStatus,
+  getSubscriptionsByUser,
+  getSubscriptionStatuses,
   deactivateByEndpoint
 };

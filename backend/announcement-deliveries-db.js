@@ -11,6 +11,9 @@ const CREATED_AT_EXPR = process.env.NODE_ENV === 'production'
 const DELIVERED_AT_EXPR = process.env.NODE_ENV === 'production'
   ? "(d.delivered_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')"
   : "(d.delivered_at AT TIME ZONE 'Asia/Seoul')";
+const READ_AT_EXPR = process.env.NODE_ENV === 'production'
+  ? "(d.read_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Seoul')"
+  : "(d.read_at AT TIME ZONE 'Asia/Seoul')";
 
 const createAnnouncementDeliveriesTable = async () => {
   try {
@@ -175,6 +178,51 @@ const getDeliveryDetail = async (deliveryId, appUserId) => {
   return result.rows[0] ? parseDeliveryRow(result.rows[0]) : null;
 };
 
+const getReadStats = async (announcementIds) => {
+  if (!Array.isArray(announcementIds) || announcementIds.length === 0) {
+    return [];
+  }
+  const query = `
+    SELECT
+      announcement_id,
+      COUNT(*)::int AS total_count,
+      COUNT(read_at)::int AS read_count
+    FROM announcement_deliveries
+    WHERE announcement_id = ANY($1)
+    GROUP BY announcement_id
+  `;
+  const result = await pool.query(query, [announcementIds]);
+  return result.rows;
+};
+
+const getReadDetails = async (announcementId) => {
+  const query = `
+    SELECT
+      d.app_user_id,
+      d.read_at,
+      to_char(${DELIVERED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as delivered_at,
+      to_char(${READ_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"') as read_at_formatted,
+      u.username,
+      u.name,
+      u.member_name,
+      u.is_trainer
+    FROM announcement_deliveries d
+    LEFT JOIN app_users u ON u.id = d.app_user_id
+    WHERE d.announcement_id = $1
+    ORDER BY d.read_at DESC NULLS LAST, d.delivered_at DESC
+  `;
+  const result = await pool.query(query, [announcementId]);
+  return result.rows.map(row => ({
+    app_user_id: row.app_user_id,
+    username: row.username,
+    name: row.name,
+    member_name: row.member_name,
+    is_trainer: row.is_trainer,
+    delivered_at: row.delivered_at,
+    read_at: row.read_at_formatted || null
+  }));
+};
+
 const markAsRead = async (deliveryId, appUserId) => {
   const query = `
     UPDATE announcement_deliveries
@@ -192,6 +240,8 @@ module.exports = {
   getInbox,
   getUnreadCount,
   getDeliveryDetail,
+  getReadStats,
+  getReadDetails,
   markAsRead
 };
 

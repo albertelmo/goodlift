@@ -2057,6 +2057,46 @@ app.get('/api/push/status', async (req, res) => {
     }
 });
 
+app.get('/api/push/status-batch', async (req, res) => {
+    try {
+        const { app_user_ids } = req.query;
+        if (!app_user_ids) {
+            return res.status(400).json({ message: '앱 유저 ID 목록이 필요합니다.' });
+        }
+        const appUserIds = app_user_ids
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean);
+        if (appUserIds.length === 0) {
+            return res.json({ results: [] });
+        }
+        const uuidRegex = /^[0-9a-fA-F-]{36}$/;
+        const validIds = appUserIds.filter(id => uuidRegex.test(id));
+        if (validIds.length === 0) {
+            return res.json({ results: [] });
+        }
+        const results = await pushSubscriptionsDB.getSubscriptionStatuses(validIds);
+        res.json({ results });
+    } catch (error) {
+        console.error('[API] 푸시 상태 일괄 조회 오류:', error);
+        res.status(500).json({ message: '푸시 상태 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.get('/api/push/subscriptions', async (req, res) => {
+    try {
+        const { app_user_id } = req.query;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const items = await pushSubscriptionsDB.getSubscriptionsByUser(app_user_id);
+        res.json({ items });
+    } catch (error) {
+        console.error('[API] 푸시 구독 목록 조회 오류:', error);
+        res.status(500).json({ message: '푸시 구독 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 app.post('/api/push/subscribe', async (req, res) => {
     try {
         const { app_user_id, subscription, user_agent, platform } = req.body;
@@ -2150,6 +2190,27 @@ app.get('/api/announcements', async (req, res) => {
     } catch (error) {
         console.error('[API] 공지사항 목록 조회 오류:', error);
         res.status(500).json({ message: '공지사항 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.get('/api/announcements/read-stats', async (req, res) => {
+    try {
+        const { announcement_ids } = req.query;
+        if (!announcement_ids) {
+            return res.status(400).json({ message: '공지사항 ID 목록이 필요합니다.' });
+        }
+        const ids = announcement_ids
+            .split(',')
+            .map(id => id.trim())
+            .filter(Boolean);
+        if (ids.length === 0) {
+            return res.json({ results: [] });
+        }
+        const results = await announcementDeliveriesDB.getReadStats(ids);
+        res.json({ results });
+    } catch (error) {
+        console.error('[API] 공지사항 읽음 통계 조회 오류:', error);
+        res.status(500).json({ message: '읽음 통계 조회 중 오류가 발생했습니다.' });
     }
 });
 
@@ -2263,6 +2324,17 @@ app.post('/api/announcements/:id/send', async (req, res) => {
     } catch (error) {
         console.error('[API] 공지사항 발송 오류:', error);
         res.status(500).json({ message: '공지사항 발송 중 오류가 발생했습니다.' });
+    }
+});
+
+app.get('/api/announcements/:id/read-status', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const items = await announcementDeliveriesDB.getReadDetails(id);
+        res.json({ items });
+    } catch (error) {
+        console.error('[API] 공지사항 읽음 상태 조회 오류:', error);
+        res.status(500).json({ message: '읽음 상태 조회 중 오류가 발생했습니다.' });
     }
 });
 

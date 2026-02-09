@@ -505,6 +505,7 @@ async function showActivityEventsModal({ label, eventType, actorRole, source }) 
 
 async function loadMembers() {
   try {
+    pushStatusCache.clear();
     const response = await fetch('/api/app-users');
     if (!response.ok) throw new Error('회원 조회 실패');
     
@@ -591,10 +592,212 @@ let workoutGuideLoaded = false;
 let workoutTypesLoaded = false;
 let workoutGuideSearchTerm = '';
 let announcementsCached = [];
+const announcementReadStats = new Map();
+const pushStatusCache = new Map();
+
+function setPushStatusBadge(element, state) {
+  if (!element) return;
+  const baseStyle = 'padding:2px 6px;border-radius:2px;font-size:0.7rem;color:#fff;display:inline-block;';
+  if (state === 'on') {
+    element.textContent = 'ON';
+    element.style.cssText = `${baseStyle}background:#4caf50;`;
+    return;
+  }
+  if (state === 'off') {
+    element.textContent = 'OFF';
+    element.style.cssText = `${baseStyle}background:#999;`;
+    return;
+  }
+  if (state === 'error') {
+    element.textContent = '확인불가';
+    element.style.cssText = `${baseStyle}background:#d32f2f;`;
+    return;
+  }
+  element.textContent = '확인중';
+  element.style.cssText = `${baseStyle}background:#bdbdbd;`;
+}
+
+function getPushDeviceLabel(item) {
+  const platform = (item.platform || '').toLowerCase();
+  const ua = (item.user_agent || '').toLowerCase();
+  if (platform.includes('ios') || ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')) {
+    return 'iPhone/iPad';
+  }
+  if (platform.includes('android') || ua.includes('android')) {
+    return 'Android';
+  }
+  if (platform.includes('windows') || ua.includes('windows')) {
+    return 'Windows';
+  }
+  if (platform.includes('mac') || ua.includes('mac os')) {
+    return 'macOS';
+  }
+  return item.platform || '알수없음';
+}
+
+function formatPushDeviceDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+async function showPushDevicesModal(appUserId) {
+  const member = (membersCached || []).find(item => item.id === appUserId);
+  const titleText = member?.name ? `${member.name} (${member.username || '-'})` : '기기별 알림 설정';
+
+  const modalBg = document.createElement('div');
+  modalBg.className = 'modal-bg';
+  modalBg.style.cssText = 'position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:10px;border-radius:6px;width:90vw;max-width:560px;max-height:70vh;overflow-y:auto;font-size:0.72rem;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3 style="margin:0;color:#1976d2;font-size:0.85rem;">기기별 알림 설정</h3>
+      <button class="push-devices-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div style="color:#666;font-size:0.7rem;margin-bottom:8px;">${escapeHtml(titleText)}</div>
+    <div class="push-devices-loading" style="text-align:center;padding:10px;color:#888;font-size:0.7rem;">불러오는 중...</div>
+    <div class="push-devices-content"></div>
+  `;
+
+  document.body.appendChild(modalBg);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modalBg.remove();
+    modal.remove();
+  };
+  modalBg.addEventListener('click', closeModal);
+  modal.querySelector('.push-devices-close').addEventListener('click', closeModal);
+
+  try {
+    const response = await fetch(`/api/push/subscriptions?app_user_id=${encodeURIComponent(appUserId)}`);
+    if (!response.ok) throw new Error('푸시 구독 목록 조회 실패');
+    const data = await response.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+
+    const content = modal.querySelector('.push-devices-content');
+    const loading = modal.querySelector('.push-devices-loading');
+    if (loading) loading.remove();
+
+    if (items.length === 0) {
+      content.innerHTML = '<div style="text-align:center;padding:12px;color:#888;">등록된 기기가 없습니다.</div>';
+      return;
+    }
+
+    const rows = items.map(item => {
+      const deviceLabel = getPushDeviceLabel(item);
+      const statusText = item.is_active ? 'ON' : 'OFF';
+      const statusColor = item.is_active ? '#4caf50' : '#999';
+      return `
+        <tr style="border-bottom:1px solid #eee;">
+          <td style="padding:4px 6px;white-space:nowrap;">${escapeHtml(deviceLabel)}</td>
+          <td style="padding:4px 6px;color:#666;">${escapeHtml(item.platform || '-')}</td>
+          <td style="padding:4px 6px;color:#666;">${escapeHtml(formatPushDeviceDate(item.updated_at))}</td>
+          <td style="padding:4px 6px;text-align:center;">
+            <span style="padding:2px 6px;border-radius:2px;font-size:0.68rem;color:#fff;background:${statusColor};">${statusText}</span>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    content.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;">
+        <thead>
+          <tr style="background:#f5f5f5;border-bottom:1px solid #ddd;">
+            <th style="padding:4px 6px;text-align:left;font-size:0.72rem;">기기</th>
+            <th style="padding:4px 6px;text-align:left;font-size:0.72rem;">플랫폼</th>
+            <th style="padding:4px 6px;text-align:left;font-size:0.72rem;">마지막 갱신</th>
+            <th style="padding:4px 6px;text-align:center;font-size:0.72rem;">상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+      <div style="margin-top:6px;color:#999;font-size:0.64rem;">* 상태는 해당 기기의 알림 설정을 의미합니다.</div>
+    `;
+  } catch (error) {
+    const content = modal.querySelector('.push-devices-content');
+    const loading = modal.querySelector('.push-devices-loading');
+    if (loading) loading.remove();
+    content.innerHTML = '<div style="text-align:center;padding:12px;color:#d32f2f;">기기 목록을 불러오지 못했습니다.</div>';
+    console.error('푸시 구독 목록 조회 오류:', error);
+  }
+}
+
+function updatePushStatusBadges(appUserIds, fallbackState = null) {
+  appUserIds.forEach(appUserId => {
+    const badge = document.querySelector(`.push-status-badge[data-app-user-id="${appUserId}"]`);
+    if (!badge) return;
+    if (fallbackState) {
+      setPushStatusBadge(badge, fallbackState);
+      return;
+    }
+    const enabled = pushStatusCache.get(appUserId);
+    if (enabled === undefined) {
+      setPushStatusBadge(badge, 'loading');
+    } else {
+      setPushStatusBadge(badge, enabled ? 'on' : 'off');
+    }
+  });
+}
+
+async function loadPushStatusesForMembers(members) {
+  if (!Array.isArray(members) || members.length === 0) return;
+  const appUserIds = members.map(member => member.id).filter(Boolean);
+  if (appUserIds.length === 0) return;
+
+  const missingIds = appUserIds.filter(id => !pushStatusCache.has(id));
+  updatePushStatusBadges(appUserIds);
+
+  if (missingIds.length === 0) return;
+  try {
+    const response = await fetch(`/api/push/status-batch?app_user_ids=${encodeURIComponent(missingIds.join(','))}`);
+    if (!response.ok) throw new Error('푸시 상태 조회 실패');
+    const data = await response.json();
+    const results = Array.isArray(data.results) ? data.results : [];
+    const resultMap = new Map(results.map(item => [item.app_user_id, !!item.enabled]));
+    missingIds.forEach(id => {
+      pushStatusCache.set(id, resultMap.get(id) || false);
+    });
+    updatePushStatusBadges(appUserIds);
+    if (membersSortColumn === 'push_status') {
+      renderMembersList(membersCached);
+    }
+  } catch (error) {
+    console.error('푸시 상태 조회 오류(일괄):', error);
+    try {
+      const responses = await Promise.all(missingIds.map(id =>
+        fetch(`/api/push/status?app_user_id=${encodeURIComponent(id)}`)
+      ));
+      const results = await Promise.all(responses.map(res => res.ok ? res.json() : null));
+      results.forEach((item, index) => {
+        const id = missingIds[index];
+        if (item && typeof item.enabled === 'boolean') {
+          pushStatusCache.set(id, item.enabled);
+        }
+      });
+      updatePushStatusBadges(appUserIds);
+      if (membersSortColumn === 'push_status') {
+        renderMembersList(membersCached);
+      }
+    } catch (fallbackError) {
+      console.error('푸시 상태 조회 오류(개별):', fallbackError);
+      updatePushStatusBadges(appUserIds, 'error');
+    }
+  }
+}
 
 function renderMembersList(members) {
   const listContainer = document.getElementById('user-app-members-list');
   if (!listContainer) return;
+
+  if (membersSortColumn === 'push_status') {
+    loadPushStatusesForMembers(members);
+  }
   
   // 제목에 회원 수 표시
   const titleElement = document.getElementById('user-app-members-title');
@@ -608,12 +811,26 @@ function renderMembersList(members) {
   }
   
   // 정렬된 회원 목록 생성
+  const getPushStatusValue = (member) => {
+    const enabled = pushStatusCache.get(member.id);
+    if (enabled === true) return 2;
+    if (enabled === false) return 1;
+    return 0;
+  };
+
   const sortedMembers = [...members].sort((a, b) => {
     if (membersSortColumn === 'name') {
       const aValue = (a.name || '').trim();
       const bValue = (b.name || '').trim();
       const comparison = aValue.localeCompare(bValue, 'ko', { numeric: true });
       return membersSortDirection === 'asc' ? comparison : -comparison;
+    } else if (membersSortColumn === 'push_status') {
+      const aValue = getPushStatusValue(a);
+      const bValue = getPushStatusValue(b);
+      if (membersSortDirection === 'asc') {
+        return aValue - bValue;
+      }
+      return bValue - aValue;
     } else if (membersSortColumn === 'created_at') {
       // 생성일 기준 정렬
       const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -656,6 +873,9 @@ function renderMembersList(members) {
           <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">전화번호</th>
           <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">회원명</th>
           <th style="padding:4px 6px;text-align:left;font-weight:600;color:#333;font-size:0.75rem;">트레이너</th>
+          <th class="members-sort-header" data-column="push_status" style="padding:4px 6px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;cursor:pointer;user-select:none;position:relative;" onmouseover="this.style.backgroundColor='#e0e0e0'" onmouseout="this.style.backgroundColor='transparent'">
+            알림${getSortIcon('push_status')}
+          </th>
           <th style="padding:4px 6px;text-align:center;font-weight:600;color:#333;font-size:0.75rem;">상태</th>
         </tr>
       </thead>
@@ -670,6 +890,9 @@ function renderMembersList(members) {
         <td style="padding:4px 6px;color:#666;">${escapeHtml(member.phone || '-')}</td>
         <td style="padding:4px 6px;color:#666;">${member.member_name ? escapeHtml(member.member_name) : '-'}</td>
         <td style="padding:4px 6px;color:#666;">${member.trainer ? escapeHtml(member.trainer) : '-'}</td>
+        <td style="padding:4px 6px;text-align:center;">
+          <span class="push-status-badge" data-app-user-id="${member.id || ''}">확인중</span>
+        </td>
         <td style="padding:4px 6px;text-align:center;">
           <span style="padding:2px 6px;border-radius:2px;font-size:0.7rem;background:${member.is_active ? '#4caf50' : '#999'};color:#fff;">
             ${member.is_active ? '활성' : '비활성'}
@@ -692,8 +915,7 @@ function renderMembersList(members) {
   listContainer.innerHTML = html;
   
   // 정렬 헤더 클릭 이벤트
-  const sortHeader = listContainer.querySelector('.members-sort-header');
-  if (sortHeader) {
+  listContainer.querySelectorAll('.members-sort-header').forEach(sortHeader => {
     sortHeader.addEventListener('click', () => {
       const column = sortHeader.getAttribute('data-column');
       if (membersSortColumn === column) {
@@ -707,7 +929,7 @@ function renderMembersList(members) {
       membersCurrentPage = 1;
       renderMembersList(members);
     });
-  }
+  });
   
   listContainer.querySelectorAll('button[data-page]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -736,6 +958,19 @@ function renderMembersList(members) {
       }
     });
   });
+
+  listContainer.querySelectorAll('.push-status-badge').forEach(badge => {
+    badge.style.cursor = 'pointer';
+    badge.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const appUserId = badge.getAttribute('data-app-user-id');
+      if (appUserId) {
+        showPushDevicesModal(appUserId);
+      }
+    });
+  });
+
+  loadPushStatusesForMembers(pagedMembers);
 }
 
 function getWorkoutTierFromDays(days) {
@@ -771,6 +1006,148 @@ async function loadAnnouncementsAdmin() {
   } catch (error) {
     console.error('공지사항 조회 오류:', error);
     announcementsCached = [];
+  }
+}
+
+async function loadAnnouncementReadStats(items) {
+  if (!Array.isArray(items) || items.length === 0) {
+    announcementReadStats.clear();
+    return;
+  }
+  const ids = items.map(item => item.id).filter(Boolean);
+  if (ids.length === 0) {
+    announcementReadStats.clear();
+    return;
+  }
+  try {
+    const response = await fetch(`/api/announcements/read-stats?announcement_ids=${encodeURIComponent(ids.join(','))}`);
+    if (!response.ok) throw new Error('읽음 통계 조회 실패');
+    const data = await response.json();
+    const results = Array.isArray(data.results) ? data.results : [];
+    announcementReadStats.clear();
+    results.forEach(row => {
+      announcementReadStats.set(row.announcement_id, {
+        total: parseInt(row.total_count || 0, 10),
+        read: parseInt(row.read_count || 0, 10)
+      });
+    });
+  } catch (error) {
+    console.error('읽음 통계 조회 오류:', error);
+  }
+}
+
+function formatAnnouncementReadStat(itemId) {
+  const stats = announcementReadStats.get(itemId);
+  if (!stats) return '읽음 -';
+  return `읽음 ${stats.read}/${stats.total}`;
+}
+
+function formatAnnouncementUserLabel(item) {
+  if (!item) return '-';
+  const name = item.name || '회원';
+  const username = item.username ? ` (${item.username})` : '';
+  const memberName = item.member_name ? ` · ${item.member_name}` : '';
+  const role = item.is_trainer ? '트레이너' : '회원';
+  return `${name}${username} · ${role}${memberName}`;
+}
+
+function formatAnnouncementReadAt(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatAnnouncementDateOnly(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+async function showAnnouncementReadStatusModal(announcement) {
+  const modalBg = document.createElement('div');
+  modalBg.className = 'modal-bg';
+  modalBg.style.cssText = 'position:fixed;z-index:1002;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.5);';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;z-index:1003;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:12px;border-radius:8px;width:92vw;max-width:520px;max-height:80vh;overflow-y:auto;font-size:0.75rem;box-sizing:border-box;';
+  modal.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h3 style="margin:0;color:#1976d2;font-size:0.9rem;">읽음 현황</h3>
+      <button class="announcement-read-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:#666;">×</button>
+    </div>
+    <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(announcement.title || '')}</div>
+    <div class="announcement-read-summary" style="margin-bottom:8px;color:#666;font-size:0.72rem;">불러오는 중...</div>
+    <div class="announcement-read-content" style="display:flex;flex-direction:column;gap:8px;"></div>
+  `;
+
+  document.body.appendChild(modalBg);
+  document.body.appendChild(modal);
+
+  const closeModal = () => {
+    modalBg.remove();
+    modal.remove();
+  };
+  modalBg.addEventListener('click', closeModal);
+  modal.querySelector('.announcement-read-close').addEventListener('click', closeModal);
+
+  try {
+    const res = await fetch(`/api/announcements/${announcement.id}/read-status`);
+    if (!res.ok) throw new Error('읽음 현황 조회 실패');
+    const data = await res.json();
+    const items = Array.isArray(data.items) ? data.items : [];
+    const readItems = items.filter(item => item.read_at);
+    const unreadItems = items.filter(item => !item.read_at);
+
+    const summaryEl = modal.querySelector('.announcement-read-summary');
+    if (summaryEl) {
+      summaryEl.textContent = `읽음 ${readItems.length} / 전체 ${items.length}`;
+    }
+
+    const contentEl = modal.querySelector('.announcement-read-content');
+    if (!contentEl) return;
+    if (items.length === 0) {
+      contentEl.innerHTML = '<div style="text-align:center;padding:12px;color:#888;">수신 대상이 없습니다.</div>';
+      return;
+    }
+
+    const renderList = (title, list, isRead) => `
+      <div style="border:1px solid #eee;border-radius:6px;padding:8px;">
+        <div style="font-weight:600;color:#333;margin-bottom:6px;">${title} (${list.length})</div>
+        ${list.length === 0 ? '<div style="text-align:center;padding:8px;color:#888;">없음</div>' : `
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f5f5f5;border-bottom:1px solid #ddd;">
+                <th style="padding:4px 6px;text-align:left;font-size:0.7rem;">회원</th>
+                <th style="padding:4px 6px;text-align:left;font-size:0.7rem;">시간</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${list.map(item => `
+                <tr style="border-bottom:1px solid #eee;">
+                  <td style="padding:4px 6px;">${escapeHtml(formatAnnouncementUserLabel(item))}</td>
+                  <td style="padding:4px 6px;color:#666;">${escapeHtml(isRead ? formatAnnouncementReadAt(item.read_at) : formatAnnouncementReadAt(item.delivered_at))}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `}
+      </div>
+    `;
+
+    contentEl.innerHTML = `
+      ${renderList('읽음', readItems, true)}
+      ${renderList('읽지않음', unreadItems, false)}
+    `;
+  } catch (error) {
+    const summaryEl = modal.querySelector('.announcement-read-summary');
+    const contentEl = modal.querySelector('.announcement-read-content');
+    if (summaryEl) summaryEl.textContent = '읽음 현황을 불러오지 못했습니다.';
+    if (contentEl) {
+      contentEl.innerHTML = '<div style="text-align:center;padding:12px;color:#d32f2f;">데이터를 불러오지 못했습니다.</div>';
+    }
+    console.error('읽음 현황 조회 오류:', error);
   }
 }
 
@@ -825,10 +1202,12 @@ function showAnnouncementsAdminModal() {
         <div style="border:1px solid #eee;border-radius:6px;padding:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="flex:1;min-width:0;">
             <div style="font-weight:600;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.title || '')}</div>
-            <div style="font-size:0.7rem;color:#888;">${escapeHtml(item.created_at || '')}</div>
+            <div style="font-size:0.7rem;color:#888;">${escapeHtml(formatAnnouncementDateOnly(item.created_at))}</div>
+            <div style="font-size:0.7rem;color:#666;">${escapeHtml(formatAnnouncementReadStat(item.id))}</div>
           </div>
           <span style="font-size:0.7rem;color:#fff;background:${statusColor};padding:2px 6px;border-radius:10px;">${statusText}</span>
           <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <button class="announcement-read-btn" data-id="${item.id}" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">읽음현황</button>
             <button class="announcement-images-btn" data-id="${item.id}" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">이미지</button>
             <button class="announcement-send-btn" data-id="${item.id}" style="background:#e3f2fd;color:#1976d2;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">보내기</button>
             <button class="announcement-delete-btn" data-id="${item.id}" style="background:#fbe9e7;color:#d32f2f;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">삭제</button>
@@ -849,6 +1228,13 @@ function showAnnouncementsAdminModal() {
         const id = btn.getAttribute('data-id');
         const item = announcementsCached.find(a => a.id === id);
         if (item) showAnnouncementImagesModal(item);
+      });
+    });
+    listEl.querySelectorAll('.announcement-read-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.getAttribute('data-id');
+        const item = announcementsCached.find(a => a.id === id);
+        if (item) showAnnouncementReadStatusModal(item);
       });
     });
     listEl.querySelectorAll('.announcement-delete-btn').forEach(btn => {
@@ -896,7 +1282,11 @@ function showAnnouncementsAdminModal() {
     });
   }
 
-  loadAnnouncementsAdmin().then(renderList);
+  (async () => {
+    await loadAnnouncementsAdmin();
+    await loadAnnouncementReadStats(announcementsCached);
+    renderList();
+  })();
 }
 
 function showAnnouncementSendModal(announcement) {
