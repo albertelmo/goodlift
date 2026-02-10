@@ -32,6 +32,7 @@ const workoutRecordsDB = require('./workout-records-db');
 const workoutTypesDB = require('./workout-types-db');
 const favoriteWorkoutsDB = require('./app-user-favorite-workouts-db');
 const userSettingsDB = require('./app-user-settings-db');
+const trainerMemberNotesDB = require('./trainer-member-notes-db');
 const appSettingsDB = require('./app-settings-db');
 const workoutGuidesDB = require('./workout-guides-db');
 const dietRecordsDB = require('./diet-records-db');
@@ -637,6 +638,7 @@ favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_us
 dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
 achievementsDB.initializeDatabase(); // 업적 집계 테이블 초기화/백필
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
+trainerMemberNotesDB.initializeDatabase(); // trainer_member_notes는 app_users를 참조
 appSettingsDB.initializeDatabase(); // 전역 앱 설정 테이블 초기화
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
@@ -4603,6 +4605,48 @@ app.patch('/api/user-settings', async (req, res) => {
     } catch (error) {
         console.error('[API] 사용자 설정 업데이트 오류:', error);
         res.status(500).json({ message: '사용자 설정 업데이트 중 오류가 발생했습니다.' });
+    }
+});
+
+// 트레이너-회원 노트 조회
+app.get('/api/trainer-member-notes', async (req, res) => {
+    try {
+        const { trainer_username, app_user_id } = req.query;
+        if (!trainer_username || !app_user_id) {
+            return res.status(400).json({ message: 'trainer_username, app_user_id가 필요합니다.' });
+        }
+        const note = await trainerMemberNotesDB.getNote(trainer_username, app_user_id);
+        if (!note) {
+            return res.json({
+                trainer_username,
+                app_user_id,
+                content: '',
+                updated_at: null
+            });
+        }
+        res.json(note);
+    } catch (error) {
+        console.error('[API] 트레이너-회원 노트 조회 오류:', error);
+        res.status(500).json({ message: '노트 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 트레이너-회원 노트 저장
+app.post('/api/trainer-member-notes', async (req, res) => {
+    try {
+        const { trainer_username, app_user_id, content } = req.body || {};
+        if (!trainer_username || !app_user_id) {
+            return res.status(400).json({ message: 'trainer_username, app_user_id가 필요합니다.' });
+        }
+        const note = await trainerMemberNotesDB.upsertNote(
+            trainer_username,
+            app_user_id,
+            typeof content === 'string' ? content : ''
+        );
+        res.json(note);
+    } catch (error) {
+        console.error('[API] 트레이너-회원 노트 저장 오류:', error);
+        res.status(500).json({ message: '노트 저장 중 오류가 발생했습니다.' });
     }
 });
 

@@ -238,6 +238,25 @@ function setupButtonEventListeners() {
             }
             return;
         }
+
+        // 노트 버튼 클릭 (트레이너-회원)
+        if (btnId === 'workout-note-btn') {
+            if (eventType === 'touchstart') {
+                return;
+            }
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                await showTrainerMemberNoteModal();
+            } catch (error) {
+                console.error('[Workout] 노트 버튼 클릭 오류:', error);
+            }
+            return;
+        }
         
         // 메모 버튼 클릭
         if (btnId === 'workout-memo-btn') {
@@ -457,6 +476,7 @@ async function render() {
     const canLeaveComment = !isReadOnly && (connectedMemberAppUserId || !isTrainer);
     const trainerUsername = currentUser?.trainer;
     const isMemberView = !isTrainer && !connectedMemberAppUserId;
+    const showMemberNoteButton = Boolean(isTrainer && connectedMemberAppUserId);
     let commentButtonLabel = '💬 운동 코멘트 남기기';
     if (canLeaveComment && isMemberView) {
         commentButtonLabel = '💬 트레이너에게 말걸기';
@@ -484,8 +504,8 @@ async function render() {
             <div class="app-workout-top-bar">
                 <div class="app-workout-month-display">${year}년 ${month}월${memberDisplay}</div>
                 <div class="app-workout-top-buttons">
+                    ${showMemberNoteButton ? `<button class="app-workout-today-btn" id="workout-note-btn" title="회원 노트">노트</button>` : ''}
                     <button class="app-workout-today-btn" id="workout-list-btn" title="최근 30일 목록">목록</button>
-                    <button class="app-workout-today-btn" id="workout-today-btn" title="오늘로 이동">오늘</button>
                     <button class="app-workout-today-btn" id="workout-memo-btn" title="메모 보기">메모</button>
                 </div>
             </div>
@@ -968,6 +988,114 @@ async function showMemoModal() {
     } catch (error) {
         console.error('메모 모달 표시 오류:', error);
         alert('메모를 불러오는 중 오류가 발생했습니다.');
+    }
+}
+
+async function showTrainerMemberNoteModal() {
+    const currentUser = getCurrentUser();
+    const trainerUsername = currentUser?.username || currentUser?.trainer || '';
+    const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+    if (!trainerUsername || !connectedMemberAppUserId) {
+        alert('회원 노트를 열 수 없습니다.');
+        return;
+    }
+    
+    const modalHtml = `
+        <div class="app-modal-bg" id="workout-note-modal-bg">
+            <div class="app-modal" id="workout-note-modal">
+                <div class="app-modal-header">
+                    <h2>회원 노트</h2>
+                    <button class="app-modal-close-btn" id="workout-note-modal-close">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="app-modal-content" style="max-height: 70vh; overflow-y: auto; padding: 16px;">
+                    <textarea id="workout-note-textarea" style="width: 100%; max-width: 100%; min-height: 210px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; resize: vertical; font-size: 14px; line-height: 1.5; box-sizing: border-box;" placeholder="회원에 대한 노트를 입력하세요."></textarea>
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+                        <div id="workout-note-status" style="font-size: 12px; color: var(--app-text-muted);"></div>
+                        <button class="app-btn-primary" id="workout-note-save-btn" style="padding: 8px 14px;">저장</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    const existingModal = document.getElementById('workout-note-modal-bg');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    const modalBg = document.getElementById('workout-note-modal-bg');
+    const modal = document.getElementById('workout-note-modal');
+    const closeBtn = document.getElementById('workout-note-modal-close');
+    const textarea = document.getElementById('workout-note-textarea');
+    const saveBtn = document.getElementById('workout-note-save-btn');
+    const statusEl = document.getElementById('workout-note-status');
+    
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        document.removeEventListener('keydown', escHandler);
+        setTimeout(() => {
+            modalBg.remove();
+        }, 300);
+    };
+    
+    closeBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            closeModal();
+        }
+    });
+    
+    const escHandler = (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+        }
+    };
+    document.addEventListener('keydown', escHandler);
+    
+    try {
+        const { getTrainerMemberNote, saveTrainerMemberNote } = await import('../api.js');
+        const note = await getTrainerMemberNote(trainerUsername, connectedMemberAppUserId);
+        if (textarea) {
+            textarea.value = note?.content || '';
+        }
+        
+        saveBtn.addEventListener('click', async () => {
+            const content = textarea ? textarea.value : '';
+            saveBtn.disabled = true;
+            saveBtn.textContent = '저장중...';
+            try {
+                await saveTrainerMemberNote(trainerUsername, connectedMemberAppUserId, content);
+                if (statusEl) {
+                    statusEl.textContent = '저장됨';
+                }
+                closeModal();
+            } catch (error) {
+                console.error('[Workout] 노트 저장 오류:', error);
+                if (statusEl) {
+                    statusEl.textContent = '저장 실패';
+                }
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '저장';
+            }
+        });
+    } catch (error) {
+        console.error('[Workout] 노트 로드 오류:', error);
+        if (statusEl) {
+            statusEl.textContent = '노트를 불러오지 못했습니다.';
+        }
     }
 }
 

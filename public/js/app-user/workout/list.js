@@ -188,6 +188,34 @@ function buildGuideItem(item) {
     };
 }
 
+function formatVolumeKg(total) {
+    if (!isFinite(total) || total <= 0) {
+        return '0kg';
+    }
+    const rounded = Math.round(total * 10) / 10;
+    if (Number.isInteger(rounded)) {
+        return `${rounded}kg`;
+    }
+    return `${rounded.toFixed(1)}kg`;
+}
+
+function calculateVolumeForRecords(records = []) {
+    let total = 0;
+    let hasVolume = false;
+    records.forEach(record => {
+        const sets = Array.isArray(record.sets) ? record.sets : [];
+        sets.forEach(set => {
+            const weight = parseFloat(set.weight);
+            const reps = parseFloat(set.reps);
+            if (isFinite(weight) && isFinite(reps)) {
+                total += weight * reps;
+                hasVolume = true;
+            }
+        });
+    });
+    return { hasVolume, total };
+}
+
 /**
  * 백그라운드에서 나머지 데이터 로드
  */
@@ -707,12 +735,16 @@ async function render(records, options = {}) {
         // 2. 날짜 섹션 생성 (운동기록이 있는 경우만 표시)
         // dateRecords.length > 0 조건은 allDates가 이미 운동기록이 있는 날짜만 포함하므로 항상 true
         if (dateRecords.length > 0) {
+            const volumeInfo = calculateVolumeForRecords(dateRecords);
+            const dateSummaryText = volumeInfo.hasVolume
+                ? `볼륨 : ${formatVolumeKg(volumeInfo.total)}`
+                : `${dateRecords.length}건`;
             html += `
                 <div class="app-workout-date-section">
                     <div class="app-workout-date-header">
                         <div class="app-workout-date-left">
                             <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
-                            <span class="app-workout-date-count">${dateRecords.length}건</span>
+                            <span class="app-workout-date-count">${dateSummaryText}</span>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
                             ${!isReadOnly && !suppressControls ? `

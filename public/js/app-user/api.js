@@ -508,6 +508,30 @@ export async function getDietRecords(appUserId, filters = {}) {
     });
 }
 
+// ========== 트레이너-회원 노트 ==========
+
+export async function getTrainerMemberNote(trainerUsername, appUserId) {
+    if (!trainerUsername || !appUserId) {
+        throw new Error('trainer_username, app_user_id가 필요합니다.');
+    }
+    const params = new URLSearchParams({
+        trainer_username: trainerUsername,
+        app_user_id: appUserId
+    });
+    return get(`/trainer-member-notes?${params.toString()}`);
+}
+
+export async function saveTrainerMemberNote(trainerUsername, appUserId, content) {
+    if (!trainerUsername || !appUserId) {
+        throw new Error('trainer_username, app_user_id가 필요합니다.');
+    }
+    return post('/trainer-member-notes', {
+        trainer_username: trainerUsername,
+        app_user_id: appUserId,
+        content: content || ''
+    });
+}
+
 /**
  * 식단기록 단일 조회
  */

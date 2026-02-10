@@ -683,6 +683,16 @@ body.app-user-active {
     cursor: pointer;
 }
 
+.app-header-logo {
+    height: 32px;
+    width: auto;
+    max-width: 100%;
+    display: block;
+    margin: 0 auto;
+    object-fit: contain;
+    transform: translateY(2px);
+}
+
 /* 햄버거 메뉴 (사이드 드로어) */
 .app-drawer-overlay {
     position: fixed;

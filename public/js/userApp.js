@@ -2605,9 +2605,22 @@ async function autoMatchMember(modal, appUser) {
     if (exactMatch) {
       // 이미 연결되어 있는지 확인
       if (appUser.member_name === exactMatch.name) {
-        matchResult.innerHTML = `<span style="color:#4caf50;">✓ 연결됨: ${escapeHtml(exactMatch.name)}</span>`;
+        matchResult.innerHTML = `
+          <span style="color:#4caf50;">✓ 연결됨: ${escapeHtml(exactMatch.name)}</span>
+          <button type="button" class="member-select-alt-btn" style="margin-left:8px;background:#e3f2fd;color:#1976d2;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:0.7rem;">다른 회원 선택</button>
+        `;
       } else {
-        matchResult.innerHTML = `<span style="color:#1976d2;">💡 동일 이름 발견: ${escapeHtml(exactMatch.name)} - 연결 버튼을 클릭하세요</span>`;
+        matchResult.innerHTML = `
+          <span style="color:#1976d2;">✓ 동일 이름 자동 연결됨: ${escapeHtml(exactMatch.name)}</span>
+          <button type="button" class="member-select-alt-btn" style="margin-left:8px;background:#e3f2fd;color:#1976d2;border:none;padding:2px 6px;border-radius:3px;cursor:pointer;font-size:0.7rem;">다른 회원 선택</button>
+        `;
+        await linkMemberToAppUser(appUser.id, exactMatch.name, modal);
+      }
+      const altBtn = matchResult.querySelector('.member-select-alt-btn');
+      if (altBtn) {
+        altBtn.addEventListener('click', () => {
+          showMemberSelectModal(members, appUser, modal);
+        });
       }
     }
   } catch (error) {
@@ -2629,14 +2642,11 @@ async function searchAndLinkMember(modal, appUser) {
     const exactMatch = members.find(m => m.name === appUser.name);
     
     if (exactMatch) {
-      // 동일 이름이 있으면 바로 연결 제안
-      if (confirm(`"${exactMatch.name}" 회원으로 연결하시겠습니까?`)) {
-        await linkMemberToAppUser(appUser.id, exactMatch.name, modal);
-      }
-    } else {
-      // 동일 이름이 없으면 회원 목록 선택 모달 표시
-      showMemberSelectModal(members, appUser, modal);
+      // 동일 이름이면 자동 연결 후 선택 모달도 열 수 있게 함
+      await linkMemberToAppUser(appUser.id, exactMatch.name, modal);
     }
+    // 언제든 회원 목록에서 재선택 가능
+    showMemberSelectModal(members, appUser, modal);
   } catch (error) {
     console.error('회원 검색 오류:', error);
     const matchResult = modal.querySelector('#member-match-result');

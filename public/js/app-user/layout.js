@@ -69,7 +69,9 @@ function render() {
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
             </button>
-            <div class="app-header-title">스탠다드 멤버스</div>
+            <div class="app-header-title">
+                <img src="/img/members logo.png" alt="스탠다드 멤버스" class="app-header-logo">
+            </div>
             <button class="app-header-icon-btn" id="app-achievement-btn" aria-label="업적 보기" style="display:none;">
                 🏅
             </button>
