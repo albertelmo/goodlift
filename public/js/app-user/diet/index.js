@@ -273,7 +273,7 @@ async function render() {
     let memberDisplay = '';
     
     if (viewingTrainerName) {
-        memberDisplay = ` (${viewingTrainerName} 트레이너의 식단기록)`;
+        memberDisplay = ` (${viewingTrainerName}님)`;
     }
     // connectedMemberAppUserId가 있는 경우는 병렬 호출에서 처리하므로 여기서는 처리하지 않음
 
@@ -406,7 +406,7 @@ async function render() {
         
         // memberDisplay 업데이트 (앱 유저 정보가 로드된 후)
         if (appUser && connectedMemberAppUserId && appUser.name) {
-            memberDisplay = ` (${appUser.name}님의 식단기록)`;
+            memberDisplay = ` (${appUser.name}님)`;
             const monthDisplayEl = document.querySelector('.app-diet-month-display');
             if (monthDisplayEl) {
                 monthDisplayEl.textContent = `${year}년 ${month}월${memberDisplay}`;
@@ -446,7 +446,7 @@ async function updateMonthDisplay() {
             const appUserResponse = await fetch(`/api/app-users/${connectedMemberAppUserId}`);
             if (appUserResponse.ok) {
                 const appUser = await appUserResponse.json();
-                memberDisplay = ` (${appUser.name}님의 식단기록)`;
+                memberDisplay = ` (${appUser.name}님)`;
             }
         } catch (error) {
             console.error('앱 유저 정보 조회 오류:', error);

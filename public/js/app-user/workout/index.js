@@ -1,6 +1,5 @@
 // 운동기록 메인 화면
 
-import { init as initList } from './list.js';
 import { showWorkoutSelectModal, showTextRecordModal, preloadWorkoutData } from './add.js';
 import { getCurrentUser } from '../index.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
@@ -190,6 +189,25 @@ function setupButtonEventListeners() {
             e.stopPropagation();
         }
         
+        // 목록보기 버튼 클릭
+        if (btnId === 'workout-list-btn') {
+            if (eventType === 'touchstart') {
+                return;
+            }
+            
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            
+            try {
+                await showRecentListModal();
+            } catch (error) {
+                console.error('[Workout] 목록보기 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+
         // 오늘 버튼 클릭
         if (btnId === 'workout-today-btn') {
             if (eventType === 'touchstart') {
@@ -430,7 +448,7 @@ async function render() {
     let memberDisplay = '';
     
     if (viewingTrainerName) {
-        memberDisplay = ` (${viewingTrainerName} 트레이너의 운동기록)`;
+        memberDisplay = ` (${viewingTrainerName}님)`;
     }
     // connectedMemberAppUserId가 있는 경우는 병렬 호출에서 처리하므로 여기서는 처리하지 않음
     
@@ -466,6 +484,7 @@ async function render() {
             <div class="app-workout-top-bar">
                 <div class="app-workout-month-display">${year}년 ${month}월${memberDisplay}</div>
                 <div class="app-workout-top-buttons">
+                    <button class="app-workout-today-btn" id="workout-list-btn" title="최근 30일 목록">목록</button>
                     <button class="app-workout-today-btn" id="workout-today-btn" title="오늘로 이동">오늘</button>
                     <button class="app-workout-today-btn" id="workout-memo-btn" title="메모 보기">메모</button>
                 </div>
@@ -598,7 +617,7 @@ async function render() {
         
         // memberDisplay 업데이트 (앱 유저 정보가 로드된 후)
         if (appUser && connectedMemberAppUserId && appUser.name) {
-            memberDisplay = ` (${appUser.name}님의 운동기록)`;
+            memberDisplay = ` (${appUser.name}님)`;
             const monthDisplayEl = document.querySelector('.app-workout-month-display');
             if (monthDisplayEl) {
                 monthDisplayEl.textContent = `${year}년 ${month}월${memberDisplay}`;
@@ -682,14 +701,14 @@ async function updateMonthDisplay() {
     let memberDisplay = '';
     
     if (viewingTrainerName) {
-        memberDisplay = ` (${viewingTrainerName} 트레이너의 운동기록)`;
+        memberDisplay = ` (${viewingTrainerName}님)`;
     } else if (connectedMemberAppUserId) {
         // 유저앱 회원 정보 조회하여 이름 표시
         try {
             const appUserResponse = await fetch(`/api/app-users/${connectedMemberAppUserId}`);
             if (appUserResponse.ok) {
                 const appUser = await appUserResponse.json();
-                memberDisplay = ` (${appUser.name}님의 운동기록)`;
+                memberDisplay = ` (${appUser.name}님)`;
             }
         } catch (error) {
             console.error('앱 유저 정보 조회 오류:', error);
@@ -950,4 +969,210 @@ async function showMemoModal() {
         console.error('메모 모달 표시 오류:', error);
         alert('메모를 불러오는 중 오류가 발생했습니다.');
     }
+}
+
+async function showRecentListModal() {
+    let showErrorFn = null;
+    try {
+        const { getWorkoutRecords } = await import('../api.js');
+        const { formatDate, getToday, showLoading, showError, formatDateShort, escapeHtml, formatWeight } = await import('../utils.js');
+        showErrorFn = showError;
+        
+        const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+        const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+        if (!targetAppUserId) {
+            alert('사용자 정보를 찾을 수 없습니다.');
+            return;
+        }
+        
+        const todayStr = getToday();
+        const today = new Date(todayStr);
+        today.setHours(0, 0, 0, 0);
+        const startDate = new Date(today);
+        startDate.setDate(startDate.getDate() - 29);
+        const startDateStr = formatDate(startDate);
+        
+        const modalHtml = `
+            <div class="app-modal-bg" id="workout-list-modal-bg">
+                <div class="app-modal" id="workout-list-modal">
+                    <div class="app-modal-header">
+                        <h2>최근 30일 운동기록</h2>
+                        <button class="app-modal-close-btn" id="workout-list-modal-close">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="app-modal-content" style="max-height: 70vh; overflow-y: auto; padding: 16px;">
+                        <div id="workout-recent-list-container"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        const existingModal = document.getElementById('workout-list-modal-bg');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modalBg = document.getElementById('workout-list-modal-bg');
+        const modal = document.getElementById('workout-list-modal');
+        const closeBtn = document.getElementById('workout-list-modal-close');
+        const content = document.getElementById('workout-recent-list-container');
+        
+        setTimeout(() => {
+            modalBg.classList.add('app-modal-show');
+            modal.classList.add('app-modal-show');
+        }, 10);
+        
+        const closeModal = () => {
+            modalBg.classList.remove('app-modal-show');
+            modal.classList.remove('app-modal-show');
+            document.removeEventListener('keydown', escHandler);
+            setTimeout(() => {
+                modalBg.remove();
+            }, 300);
+        };
+        
+        closeBtn.addEventListener('click', closeModal);
+        modalBg.addEventListener('click', (e) => {
+            if (e.target === modalBg) {
+                closeModal();
+            }
+        });
+        
+        const escHandler = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        };
+        document.addEventListener('keydown', escHandler);
+        
+        if (content) {
+            showLoading(content);
+        }
+        
+        const records = await getWorkoutRecords(targetAppUserId, {
+            startDate: startDateStr,
+            endDate: todayStr
+        });
+        
+        if (content) {
+            renderRecentList(records, content, {
+                formatDateShort,
+                escapeHtml,
+                formatWeight
+            });
+        }
+    } catch (error) {
+        console.error('최근 운동기록 모달 표시 오류:', error);
+        const content = document.getElementById('workout-recent-list-container');
+        if (content && showErrorFn) {
+            showErrorFn(content, '운동기록을 불러오는 중 오류가 발생했습니다.');
+        } else {
+            alert('운동기록을 불러오는 중 오류가 발생했습니다.');
+        }
+    }
+}
+
+function renderRecentList(records, container, utils) {
+    const { formatDateShort, escapeHtml, formatWeight } = utils;
+    const safeRecords = Array.isArray(records) ? records : [];
+    if (!container) return;
+    if (safeRecords.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--app-text-muted);">등록된 운동기록이 없습니다.</div>';
+        return;
+    }
+    
+    const groupedByDate = {};
+    safeRecords.forEach(record => {
+        let dateStr = record.workout_date;
+        if (dateStr instanceof Date) {
+            dateStr = dateStr.toISOString().split('T')[0];
+        } else if (typeof dateStr === 'string') {
+            dateStr = dateStr.split('T')[0];
+        }
+        if (!groupedByDate[dateStr]) {
+            groupedByDate[dateStr] = [];
+        }
+        groupedByDate[dateStr].push(record);
+    });
+    
+    const dates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
+    let html = '<div class="app-workout-list">';
+    dates.forEach(dateStr => {
+        const dateObj = new Date(dateStr);
+        const dateRecords = groupedByDate[dateStr] || [];
+        html += `
+            <div class="app-workout-date-section">
+                <div class="app-workout-date-header">
+                    <div class="app-workout-date-left">
+                        <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
+                        <span class="app-workout-date-count">${dateRecords.length}건</span>
+                    </div>
+                </div>
+                <div class="app-workout-items">
+        `;
+        dateRecords.forEach(record => {
+            html += renderRecentListItem(record, { escapeHtml, formatWeight });
+        });
+        html += '</div></div>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+function renderRecentListItem(record, utils) {
+    const { escapeHtml, formatWeight } = utils;
+    const workoutTypeName = escapeHtml(record.workout_type_name || record.text_content || '미지정');
+    const workoutTypeType = record.workout_type_type || null;
+    const notes = record.notes ? escapeHtml(record.notes) : '';
+    const sets = record.sets || [];
+    const duration = record.duration_minutes ? `${record.duration_minutes}분` : null;
+    
+    if (record.is_text_record) {
+        const textContent = record.text_content ? escapeHtml(record.text_content) : '';
+        return `
+            <div class="app-workout-item app-workout-item-text" data-record-id="${record.id}">
+                <div class="app-workout-item-main app-workout-item-main-text">
+                    <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        <div class="app-workout-item-text-content" style="white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
+                    </div>
+                </div>
+                ${notes ? `<div class="app-workout-item-notes">${notes}</div>` : ''}
+            </div>
+        `;
+    }
+    
+    let infoHtml = '';
+    if (workoutTypeType === '시간' && duration) {
+        infoHtml = `<div class="app-workout-item-duration-container"><span class="app-workout-item-duration">⏱ ${duration}</span></div>`;
+    } else if (workoutTypeType === '세트' && sets.length > 0) {
+        const setsInfo = sets.map(set => {
+            const weight = formatWeight(set.weight);
+            const reps = set.reps !== null && set.reps !== undefined ? `${set.reps}회` : '-';
+            return `
+                <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
+                    <span class="app-workout-item-set-number">${set.set_number}</span>
+                    <span class="app-workout-item-set-info">${weight} × ${reps}</span>
+                </div>
+            `;
+        }).join('');
+        infoHtml = `<div class="app-workout-item-sets">${setsInfo}</div>`;
+    }
+    
+    return `
+        <div class="app-workout-item" data-record-id="${record.id}">
+            <div class="app-workout-item-main">
+                <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                    <div class="app-workout-item-type">${workoutTypeName}</div>
+                </div>
+                ${infoHtml ? `<div class="app-workout-item-info">${infoHtml}</div>` : ''}
+            </div>
+            ${notes ? `<div class="app-workout-item-notes">${notes}</div>` : ''}
+        </div>
+    `;
 }

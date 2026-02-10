@@ -14,6 +14,7 @@ const TIMER_SETTINGS_STORAGE_KEY = 'workout_rest_timer_settings';
 const FAVORITES_ONLY_STORAGE_KEY = 'workout_show_favorites_only';
 let workoutGuideMap = new Map();
 let calendarUpdateTimer = null;
+let suppressControls = false;
 
 function scheduleCalendarUpdate() {
     if (!window.updateCalendarWorkoutRecords) {
@@ -450,12 +451,43 @@ export async function filterByDate(dateStr) {
     await render(currentRecords);
 }
 
+export async function renderRecordsToContainer(records, container, options = {}) {
+    const {
+        appUserId = null,
+        readOnly = true,
+        hideControls = true
+    } = options;
+    const prevState = {
+        appUserId: currentAppUserId,
+        isReadOnly,
+        filterDate: currentFilterDate,
+        records: currentRecords,
+        suppressControls
+    };
+    if (appUserId) {
+        currentAppUserId = appUserId;
+    }
+    isReadOnly = readOnly;
+    suppressControls = Boolean(hideControls);
+    currentFilterDate = null;
+    currentRecords = Array.isArray(records) ? records : [];
+    
+    await render(currentRecords, { containerOverride: container, skipListeners: true });
+    
+    currentAppUserId = prevState.appUserId;
+    isReadOnly = prevState.isReadOnly;
+    currentFilterDate = prevState.filterDate;
+    currentRecords = prevState.records;
+    suppressControls = prevState.suppressControls;
+}
+
 /**
  * 운동기록 목록 렌더링
  */
-async function render(records) {
+async function render(records, options = {}) {
+    const { containerOverride = null, skipListeners = false } = options;
     // workout-list-wrapper 또는 app-user-content 찾기
-    let container = document.getElementById('workout-list-wrapper');
+    let container = containerOverride || document.getElementById('workout-list-wrapper');
     if (!container) {
         container = document.getElementById('app-user-content');
     }
@@ -683,14 +715,16 @@ async function render(records) {
                             <span class="app-workout-date-count">${dateRecords.length}건</span>
                         </div>
                         <div style="display: flex; gap: 8px; align-items: center;">
-                            ${!isReadOnly ? `
+                            ${!isReadOnly && !suppressControls ? `
                             <button class="app-workout-timer-btn" data-date="${normalizedDate}" aria-label="복사" style="padding: 6px 12px; font-size: 13px; white-space: nowrap;">
                                 복사
                             </button>
                             ` : ''}
+                            ${!suppressControls ? `
                             <button class="app-workout-timer-btn" data-date="${normalizedDate}" aria-label="타이머" ${isReadOnly ? 'disabled style="opacity: 0.5; cursor: not-allowed;"' : ''}>
                                 타이머<span class="app-workout-timer-text">${timerDisplayText}</span>
                             </button>
+                            ` : ''}
                         </div>
                     </div>
                     <div class="app-workout-items">
@@ -720,12 +754,14 @@ async function render(records) {
         });
     });
     
-    // 클릭 이벤트 리스너 추가
-    setupClickListeners();
-    
-    // 드래그 앤 드롭 초기화
-    if (!isReadOnly) {
-        initializeSortable();
+    if (!skipListeners) {
+        // 클릭 이벤트 리스너 추가
+        setupClickListeners();
+        
+        // 드래그 앤 드롭 초기화
+        if (!isReadOnly) {
+            initializeSortable();
+        }
     }
 }
 
@@ -780,6 +816,7 @@ function renderWorkoutItem(record) {
             <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
                 <div class="app-workout-item-main app-workout-item-main-text">
                     <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: row; align-items: flex-start; gap: 8px; flex: 1;">
+                        ${suppressControls ? '' : `
                         <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0; margin-top: 2px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="4" y1="7" x2="20" y2="7"></line>
@@ -787,22 +824,27 @@ function renderWorkoutItem(record) {
                                 <line x1="4" y1="17" x2="20" y2="17"></line>
                             </svg>
                         </div>
+                        `}
                         <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
                             ${renderWorkoutLevelBadges(record)}
                             <div class="app-workout-item-text-content" style="white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
                         </div>
+                        ${!isReadOnly && !suppressControls ? `
                         <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                         </button>
+                        ` : ''}
+                        ${!isReadOnly && !suppressControls ? `
                         <div class="app-workout-item-duration-container" style="flex-shrink: 0;">
                             <input type="checkbox" class="app-workout-item-checkbox" 
                                    data-record-id="${record.id}" 
                                    data-type="record" 
                                    ${checked}>
                         </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -836,10 +878,12 @@ function renderWorkoutItem(record) {
         infoHtml = `
             <div class="app-workout-item-duration-container">
                 <span class="app-workout-item-duration ${completedClass}">⏱ ${duration}</span>
+                ${!isReadOnly && !suppressControls ? `
                 <input type="checkbox" class="app-workout-item-checkbox" 
                        data-record-id="${record.id}" 
                        data-type="record" 
                        ${checked}>
+                ` : ''}
             </div>
         `;
     } else if (workoutTypeType === '세트' && sets.length > 0) {
@@ -856,7 +900,7 @@ function renderWorkoutItem(record) {
                 <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
                     <span class="app-workout-item-set-number ${completedClass}">${set.set_number}</span>
                     <span class="app-workout-item-set-info ${completedClass}">${weight} × ${reps}</span>
-                    ${!isReadOnly ? `
+                    ${!isReadOnly && !suppressControls ? `
                     <input type="checkbox" class="app-workout-item-checkbox" 
                            data-record-id="${record.id}" 
                            data-set-id="${set.id}" 
@@ -868,7 +912,7 @@ function renderWorkoutItem(record) {
         }).join('');
         infoHtml = `
             <div class="app-workout-item-sets">
-                ${!isReadOnly ? `
+                ${!isReadOnly && !suppressControls ? `
                 <div class="app-workout-item-set-controls" style="display: flex; gap: 16px; align-items: center; justify-content: flex-start; margin-bottom: 8px; height: 24px;">
                     <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 18px; font-weight: bold; line-height: 24px; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
                     <span style="font-size: 14px; color: #333; line-height: 24px; height: 24px; display: inline-flex; align-items: center; margin: 0; padding: 0;">세트</span>
@@ -890,6 +934,7 @@ function renderWorkoutItem(record) {
             <div class="app-workout-item-main">
                 <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 4px;">
                     <div style="display: flex; align-items: center; gap: 6px;">
+                    ${suppressControls ? '' : `
                     <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="4" y1="7" x2="20" y2="7"></line>
@@ -897,6 +942,7 @@ function renderWorkoutItem(record) {
                             <line x1="4" y1="17" x2="20" y2="17"></line>
                         </svg>
                     </div>
+                    `}
                         ${(() => {
                             const guideItem = workoutGuideMap.get(String(record.workout_type_id || ''));
                             if (!guideItem) {
@@ -908,12 +954,14 @@ function renderWorkoutItem(record) {
                                 </button>
                             `;
                         })()}
+                        ${!isReadOnly && !suppressControls ? `
                         <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                         </button>
+                        ` : ''}
                         ${renderWorkoutLevelBadges(record)}
                     </div>
                 </div>
