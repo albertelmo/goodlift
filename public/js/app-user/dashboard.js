@@ -885,13 +885,25 @@ function getMedalTierStyle(tier) {
 function renderMemberMedalBadges(appUserId) {
     const status = trainerMemberMedalStatus[appUserId];
     if (!status) return '';
-    const workoutTier = status.workout?.tier || 'none';
-    const dietTier = status.diet?.tier || 'none';
-    const workoutLabel = getWorkoutMedalLabel(workoutTier);
-    const dietLabel = getDietMedalLabel(dietTier);
+    const workoutDays = status.workout?.days || 0;
+    const dietDays = status.diet?.days || 0;
+    const parts = [];
+    if (workoutDays > 0) {
+        const workoutTier = status.workout?.tier || 'none';
+        const workoutLabel = getWorkoutMedalLabel(workoutTier);
+        parts.push(`🏋️ ${workoutLabel}`);
+    }
+    if (dietDays > 0) {
+        const dietTier = status.diet?.tier || 'none';
+        const dietLabel = getDietMedalLabel(dietTier);
+        parts.push(`🥗 ${dietLabel}`);
+    }
+    if (parts.length === 0) {
+        return '';
+    }
     return `
         <span style="font-size:0.72rem;color:var(--app-text-muted);">
-            🏋️ ${workoutLabel} · 🥗 ${dietLabel}
+            ${parts.join(' · ')}
         </span>
     `;
 }
@@ -1445,14 +1457,14 @@ function render() {
             ${isTrainer ? `
             <div class="app-dashboard-section">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                    <h2 class="app-section-title" style="margin: 0;">
-                        👥 ${trainerMembers && trainerMembers.length > 0 ? `나의 회원 (${trainerMembers.length}명)` : '나의 회원'}
+                    <h2 class="app-section-title" style="margin: 0; font-size: 1.05rem;">
+                        👥 ${trainerMembers && trainerMembers.length > 0 ? `회원(${trainerMembers.length}명)` : '회원'}
                     </h2>
                     <div style="display: flex; align-items: center; gap: 8px;">
                         ${(() => {
                             const connectedAppUserId = localStorage.getItem('connectedMemberAppUserId');
                             if (connectedAppUserId && connectedAppUserInfo) {
-                                return `<span style="font-size: 0.875rem; color: var(--app-primary); font-weight: 500;">${escapeHtml(connectedAppUserInfo.name || '회원')} 회원과 연결중</span>`;
+                                return `<span style="font-size: 0.875rem; color: var(--app-primary); font-weight: 500;">${escapeHtml(connectedAppUserInfo.name || '회원')} 🟢</span>`;
                             }
                             return '';
                         })()}

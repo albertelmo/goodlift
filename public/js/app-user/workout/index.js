@@ -1234,12 +1234,16 @@ function renderRecentList(records, container, utils) {
     dates.forEach(dateStr => {
         const dateObj = new Date(dateStr);
         const dateRecords = groupedByDate[dateStr] || [];
+        const volumeInfo = calculateRecentListVolume(dateRecords);
+        const summaryText = volumeInfo.hasVolume
+            ? `볼륨 : ${formatRecentListVolume(volumeInfo.total)}`
+            : `${dateRecords.length}건`;
         html += `
             <div class="app-workout-date-section">
                 <div class="app-workout-date-header">
                     <div class="app-workout-date-left">
                         <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
-                        <span class="app-workout-date-count">${dateRecords.length}건</span>
+                        <span class="app-workout-date-count">${summaryText}</span>
                     </div>
                 </div>
                 <div class="app-workout-items">
@@ -1251,6 +1255,49 @@ function renderRecentList(records, container, utils) {
     });
     html += '</div>';
     container.innerHTML = html;
+}
+
+function formatRecentListVolume(total) {
+    if (!isFinite(total) || total <= 0) {
+        return '0kg';
+    }
+    const rounded = Math.round(total * 10) / 10;
+    if (Number.isInteger(rounded)) {
+        return `${rounded}kg`;
+    }
+    return `${rounded.toFixed(1)}kg`;
+}
+
+function calculateRecentListVolume(records = []) {
+    let total = 0;
+    let hasVolume = false;
+    records.forEach(record => {
+        let sets = [];
+        if (Array.isArray(record.sets)) {
+            sets = record.sets;
+        } else if (typeof record.sets === 'string') {
+            try {
+                const parsed = JSON.parse(record.sets);
+                if (Array.isArray(parsed)) {
+                    sets = parsed;
+                }
+            } catch (error) {
+                // ignore parse errors
+            }
+        }
+        if (sets.length > 0) {
+            hasVolume = true;
+        }
+        sets.forEach(set => {
+            const weight = parseFloat(set.weight);
+            const reps = parseFloat(set.reps);
+            if (isFinite(weight) && isFinite(reps)) {
+                total += weight * reps;
+                hasVolume = true;
+            }
+        });
+    });
+    return { hasVolume, total };
 }
 
 function renderRecentListItem(record, utils) {

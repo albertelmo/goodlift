@@ -203,7 +203,22 @@ function calculateVolumeForRecords(records = []) {
     let total = 0;
     let hasVolume = false;
     records.forEach(record => {
-        const sets = Array.isArray(record.sets) ? record.sets : [];
+        let sets = [];
+        if (Array.isArray(record.sets)) {
+            sets = record.sets;
+        } else if (typeof record.sets === 'string') {
+            try {
+                const parsed = JSON.parse(record.sets);
+                if (Array.isArray(parsed)) {
+                    sets = parsed;
+                }
+            } catch (error) {
+                // ignore parse errors
+            }
+        }
+        if (sets.length > 0) {
+            hasVolume = true;
+        }
         sets.forEach(set => {
             const weight = parseFloat(set.weight);
             const reps = parseFloat(set.reps);
@@ -647,7 +662,16 @@ async function render(records, options = {}) {
         });
     }
     
-    let html = '<div class="app-workout-list">';
+    const overallVolumeInfo = calculateVolumeForRecords(records);
+    const overallSummaryText = overallVolumeInfo.hasVolume
+        ? `전체 볼륨 : ${formatVolumeKg(overallVolumeInfo.total)}`
+        : `전체 ${records.length}건`;
+    let html = `
+        <div style="display:flex;justify-content:flex-end;align-items:center;margin:4px 0 8px;color:var(--app-text-muted);font-size:12px;">
+            ${overallSummaryText}
+        </div>
+        <div class="app-workout-list">
+    `;
     
     // 렌더링 로직
     // 운동기록이 있는 날짜만 렌더링
