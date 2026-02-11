@@ -1348,6 +1348,18 @@ body.app-user-active {
     line-height: 1;
 }
 
+.app-bottom-nav-icon-image {
+    font-size: 0;
+    line-height: 0;
+}
+
+.app-bottom-nav-icon img {
+    width: 22px;
+    height: 22px;
+    display: block;
+    object-fit: contain;
+}
+
 .app-bottom-nav-label {
     font-size: 12px;
     font-weight: 500;
@@ -1453,6 +1465,15 @@ body.app-user-active {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    isolation: isolate;
+}
+
+.app-workout-top-bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--app-surface);
+    z-index: -1;
 }
 
 .app-workout-month-display {
@@ -1503,6 +1524,15 @@ body.app-user-active {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    isolation: isolate;
+}
+
+.app-diet-top-bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--app-surface);
+    z-index: -1;
 }
 
 .app-diet-month-display {

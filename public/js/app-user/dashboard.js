@@ -1628,6 +1628,8 @@ function render() {
             ` : ''}
         </div>
     `;
+
+    updateDietBottomNavIconFromCard();
     
     // 회원 목록 클릭 이벤트 설정
     if (!isTrainer) {
@@ -1834,6 +1836,14 @@ function render() {
             });
         });
     }
+}
+
+function updateDietBottomNavIconFromCard() {
+    const sourceIcon = document.querySelector('#diet-summary-card .app-card-icon');
+    const targetIcon = document.querySelector('.app-bottom-nav-item[data-screen="diet"] .app-bottom-nav-icon');
+    if (!sourceIcon || !targetIcon) return;
+    targetIcon.innerHTML = sourceIcon.innerHTML;
+    targetIcon.classList.remove('app-bottom-nav-icon-image');
 }
 
 function setupAnnouncementButtons() {
