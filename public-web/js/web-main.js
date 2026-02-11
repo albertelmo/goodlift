@@ -28,9 +28,9 @@ function setActiveNav(slug) {
   });
 }
 
-async function fetchPage(slug) {
+async function fetchJson(pathname) {
   const baseUrl = window.location.origin;
-  const url = new URL(`/api/web/pages/${encodeURIComponent(slug)}`, baseUrl);
+  const url = new URL(pathname, baseUrl);
   url.searchParams.set('t', Date.now().toString());
   const res = await fetch(url.toString(), {
     cache: 'no-store',
@@ -40,9 +40,18 @@ async function fetchPage(slug) {
     }
   });
   if (!res.ok) {
-    throw new Error(`페이지 조회 실패 (${res.status})`);
+    throw new Error(`요청 실패 (${res.status})`);
   }
   return res.json();
+}
+
+async function fetchPage(slug) {
+  return fetchJson(`/api/web/pages/${encodeURIComponent(slug)}`);
+}
+
+async function fetchCenters() {
+  const data = await fetchJson('/api/web/centers');
+  return Array.isArray(data.centers) ? data.centers : [];
 }
 
 function renderBackgroundList(urls) {
@@ -64,17 +73,29 @@ function renderBackgroundList(urls) {
   `;
 }
 
-function renderCenterPage(page) {
-  const content = page.content || {};
-  const highlights = Array.isArray(content.highlights) ? content.highlights : [];
+function renderCenterPage(page, centers = []) {
+  const centerItems = Array.isArray(centers) ? centers : [];
+  if (centerItems.length === 0) {
+    return '<div class="web-section-desc">등록된 센터가 없습니다.</div>';
+  }
   return `
     <section>
-      <h1 class="web-section-title">${escapeHtml(content.title || page.title || slugLabels.center)}</h1>
-      <div class="web-section-subtitle">${escapeHtml(content.subtitle || '')}</div>
-      <div class="web-section-desc">${escapeHtml(content.description || '')}</div>
-      <div class="web-highlight-list">
-        ${highlights.map(item => `<div class="web-highlight-item">${escapeHtml(item)}</div>`).join('')}
-      </div>
+      ${centerItems.map((center, idx) => `
+        <div class="web-center-block ${idx > 0 ? 'web-center-block-divider' : ''}">
+          <h2 class="web-section-title">${escapeHtml(center.title || center.name || '')}</h2>
+          ${center.subtitle ? `<div class="web-section-subtitle">${escapeHtml(center.subtitle)}</div>` : ''}
+          ${center.description ? `<div class="web-section-desc">${escapeHtml(center.description)}</div>` : ''}
+          ${Array.isArray(center.image_urls) && center.image_urls.length > 0 ? `
+            <div class="web-center-image-list">
+              ${center.image_urls.map((url, imgIdx) => `
+                <figure class="web-center-image-item">
+                  <img src="${window.location.origin}/${url}" alt="센터 이미지 ${imgIdx + 1}">
+                </figure>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `).join('')}
     </section>
   `;
 }
@@ -117,11 +138,11 @@ function renderReviewPage(page) {
   `;
 }
 
-function renderPage(slug, page) {
+function renderPage(slug, page, centers) {
   if (!contentEl) return;
   const backgroundSection = renderBackgroundList(page.content?.background_images);
   if (slug === 'center') {
-    contentEl.innerHTML = renderCenterPage(page) + backgroundSection;
+    contentEl.innerHTML = renderCenterPage(page, centers) + backgroundSection;
   } else if (slug === 'service') {
     contentEl.innerHTML = renderServicePage(page) + backgroundSection;
   } else if (slug === 'review') {
@@ -137,8 +158,13 @@ async function loadPage(slug) {
   setActiveNav(safeSlug);
   contentEl.innerHTML = '<div class="web-loading">로딩 중...</div>';
   try {
-    const page = await fetchPage(safeSlug);
-    renderPage(safeSlug, page);
+    if (safeSlug === 'center') {
+      const [page, centers] = await Promise.all([fetchPage(safeSlug), fetchCenters()]);
+      renderPage(safeSlug, page, centers);
+    } else {
+      const page = await fetchPage(safeSlug);
+      renderPage(safeSlug, page);
+    }
   } catch (error) {
     console.error('[Web] 페이지 로드 실패:', error);
     contentEl.innerHTML = '<div class="web-loading">콘텐츠를 불러올 수 없습니다.</div>';

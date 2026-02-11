@@ -54,6 +54,7 @@ const elmoApiRouter = require('./elmo-api-router');
 const webApiRouter = require('./web-api-router');
 const { ELMO_IMAGES_DIR } = require('./elmo-utils');
 const webPagesDB = require('./web-pages-db');
+const webCentersDB = require('./web-centers-db');
 const { initializeMigrationSystem, runMigration } = require('./migrations-manager');
 const { createPerformanceIndexes } = require('./index-migration');
 
@@ -661,6 +662,7 @@ elmoUsersDB.initializeDatabase(); // Elmo 사용자 테이블 초기화
 elmoCalendarRecordsDB.initializeDatabase(); // Elmo 캘린더 기록 테이블 초기화
 pushSubscriptionsDB.initializeDatabase(); // 푸시 구독 테이블 초기화
 webPagesDB.initializeDatabase(); // Web 페이지 테이블 초기화
+webCentersDB.initializeDatabase(); // Web 센터 프로필 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {

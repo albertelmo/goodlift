@@ -25,6 +25,8 @@ const DEFAULT_CONTENT = {
 
 let currentSlug = 'center';
 let currentData = null;
+let currentCenters = [];
+let currentCenterName = '';
 
 function render(container) {
   if (!container) return;
@@ -97,11 +99,19 @@ async function loadPage(slug, container) {
     }
     const data = await res.json();
     currentData = data;
-    renderEditor(slug, data.content || DEFAULT_CONTENT[slug], editor);
+    if (slug === 'center') {
+      await loadCenters(editor);
+    } else {
+      renderEditor(slug, data.content || DEFAULT_CONTENT[slug], editor);
+    }
   } catch (error) {
     console.error('[Web Admin] 페이지 로드 오류:', error);
     currentData = null;
-    renderEditor(slug, DEFAULT_CONTENT[slug], editor);
+    if (slug === 'center') {
+      editor.innerHTML = '<div style="color:#d32f2f;">센터 정보를 불러오지 못했습니다.</div>';
+    } else {
+      renderEditor(slug, DEFAULT_CONTENT[slug], editor);
+    }
     if (resultEl) {
       resultEl.style.color = '#d32f2f';
       resultEl.textContent = '페이지를 불러오지 못했습니다.';
@@ -121,6 +131,101 @@ function renderEditor(slug, content, container) {
   const backgroundImages = Array.isArray(safeContent.background_images) ? safeContent.background_images : [];
   container.dataset.backgroundImages = JSON.stringify(backgroundImages);
   bindEditorEvents(slug, container);
+}
+
+async function loadCenters(container) {
+  try {
+    const res = await fetch('/api/web/centers');
+    if (!res.ok) {
+      throw new Error('센터 목록 조회 실패');
+    }
+    const data = await res.json();
+    currentCenters = Array.isArray(data.centers) ? data.centers : [];
+    if (currentCenters.length > 0) {
+      currentCenterName = currentCenters[0].name;
+    } else {
+      currentCenterName = '';
+    }
+    renderCenterProfilesEditor(container);
+  } catch (error) {
+    console.error('[Web Admin] 센터 목록 조회 오류:', error);
+    container.innerHTML = '<div style="color:#d32f2f;">센터 목록을 불러오지 못했습니다.</div>';
+  }
+}
+
+function renderCenterProfilesEditor(container) {
+  if (!container) return;
+  const centerOptions = currentCenters.map(center => `
+    <option value="${escapeHtmlAttr(center.name)}">${escapeHtml(center.name)}</option>
+  `).join('');
+  container.innerHTML = `
+    <div style="display:grid;gap:12px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <label style="font-size:0.85rem;color:#555;">센터 선택</label>
+        <select id="web-center-select" style="padding:6px 10px;border:1px solid #ddd;border-radius:4px;min-width:200px;">
+          ${centerOptions}
+        </select>
+        <span id="web-center-count" style="font-size:0.8rem;color:#777;">${currentCenters.length}개</span>
+      </div>
+      <div id="web-center-editor-inner"></div>
+    </div>
+  `;
+  const select = container.querySelector('#web-center-select');
+  if (select) {
+    select.value = currentCenterName;
+    select.addEventListener('change', () => {
+      currentCenterName = select.value;
+      renderSelectedCenterEditor(container);
+    });
+  }
+  renderSelectedCenterEditor(container);
+}
+
+function renderSelectedCenterEditor(container) {
+  const inner = container.querySelector('#web-center-editor-inner');
+  if (!inner) return;
+  const selected = currentCenters.find(center => center.name === currentCenterName) || {
+    name: currentCenterName,
+    title: '',
+    subtitle: '',
+    description: '',
+    image_urls: []
+  };
+  inner.dataset.centerImages = JSON.stringify(selected.image_urls || []);
+  inner.innerHTML = `
+    ${renderCenterImagesEditor(selected.image_urls || [])}
+    <label style="font-size:0.85rem;color:#555;">제목</label>
+    <input id="web-center-title" value="${escapeHtmlAttr(selected.title || '')}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;">
+    <label style="font-size:0.85rem;color:#555;">부제목</label>
+    <input id="web-center-subtitle" value="${escapeHtmlAttr(selected.subtitle || '')}" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;">
+    <label style="font-size:0.85rem;color:#555;">설명</label>
+    <textarea id="web-center-description" rows="4" style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;">${escapeHtml(selected.description || '')}</textarea>
+  `;
+}
+
+function renderCenterImagesEditor(images = []) {
+  const safeImages = Array.isArray(images) ? images : [];
+  return `
+    <div style="margin-bottom:16px;padding-bottom:12px;border-bottom:1px solid #e0e0e0;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:0.9rem;color:#333;font-weight:600;">센터 이미지 (최대 10장)</span>
+        <span data-center-image-count style="font-size:0.8rem;color:#777;">${safeImages.length}/10</span>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
+        <input id="web-center-image-input" type="file" accept="image/*" multiple style="flex:1;min-width:200px;">
+        <button type="button" data-action="upload-center-image" style="border:1px solid #1976d2;background:#1976d2;color:#fff;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.8rem;">업로드</button>
+      </div>
+      <div id="web-center-image-list" style="display:grid;gap:8px;">
+        ${safeImages.map((url, idx) => `
+          <div style="display:flex;align-items:center;gap:10px;border:1px solid #eee;border-radius:8px;padding:8px;background:#fff;">
+            <img src="/${url}" alt="센터 이미지 ${idx + 1}" style="width:72px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+            <div style="flex:1;font-size:0.8rem;color:#666;word-break:break-all;">${escapeHtml(url)}</div>
+            <button type="button" data-action="remove-center-image" data-url="${escapeHtmlAttr(url)}" style="border:1px solid #ddd;background:#fff;color:#333;padding:4px 10px;border-radius:4px;cursor:pointer;">삭제</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function renderBackgroundEditorSection(backgroundImages = []) {
@@ -260,6 +365,10 @@ function bindEditorEvents(slug, container) {
       uploadBackgrounds(container);
     } else if (action === 'remove-bg') {
       removeBackground(container, actionEl.dataset.url);
+    } else if (action === 'upload-center-image') {
+      uploadCenterImages(container);
+    } else if (action === 'remove-center-image') {
+      removeCenterImage(container, actionEl.dataset.url);
     }
   };
 }
@@ -434,8 +543,10 @@ async function saveCurrent(container) {
   if (!editor) return;
   let content;
   if (currentSlug === 'center') {
-    content = readCenterContent(editor);
-  } else if (currentSlug === 'service') {
+    await saveCenterProfile(container);
+    return;
+  }
+  if (currentSlug === 'service') {
     content = readServiceContent(editor);
   } else {
     content = readReviewContent(editor);
@@ -472,22 +583,168 @@ async function saveCurrent(container) {
   }
 }
 
-function readCenterContent(editor) {
-  const title = editor.querySelector('#web-center-title')?.value || '';
-  const subtitle = editor.querySelector('#web-center-subtitle')?.value || '';
-  const description = editor.querySelector('#web-center-description')?.value || '';
-  const highlights = Array.from(editor.querySelectorAll('[data-highlight-idx]'))
-    .map(input => input.value)
-    .filter(text => text.trim() !== '');
-  const background_images = getBackgroundImages(editor);
-  return {
-    title,
-    subtitle,
-    description,
-    highlights,
-    background_images
+async function saveCenterProfile(container) {
+  const resultEl = container.querySelector('#web-admin-result');
+  const editor = container.querySelector('#web-admin-editor') || container;
+  if (!editor) return;
+  const name = currentCenterName;
+  if (!name) return;
+  const payload = {
+    title: editor.querySelector('#web-center-title')?.value || '',
+    subtitle: editor.querySelector('#web-center-subtitle')?.value || '',
+    description: editor.querySelector('#web-center-description')?.value || '',
+    image_urls: getCenterImagesFromState(container)
   };
+  if (resultEl) {
+    resultEl.style.color = '#666';
+    resultEl.textContent = '저장 중...';
+  }
+  try {
+    const res = await fetch(`/api/web/centers/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      throw new Error('센터 저장 실패');
+    }
+    const updated = await res.json();
+    const idx = currentCenters.findIndex(center => center.name === name);
+    if (idx >= 0) {
+      currentCenters[idx] = {
+        ...currentCenters[idx],
+        title: updated.title || '',
+        subtitle: updated.subtitle || '',
+        description: updated.description || '',
+        image_urls: Array.isArray(updated.image_urls) ? updated.image_urls : []
+      };
+    }
+    if (resultEl) {
+      resultEl.style.color = '#2e7d32';
+      resultEl.textContent = '저장 완료';
+    }
+  } catch (error) {
+    console.error('[Web Admin] 센터 저장 오류:', error);
+    if (resultEl) {
+      resultEl.style.color = '#d32f2f';
+      resultEl.textContent = '저장 실패';
+    }
+  }
 }
+
+function getCenterImagesFromState(container) {
+  try {
+    const data = container.querySelector('#web-center-editor-inner')?.dataset.centerImages || '[]';
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function setCenterImagesState(container, images) {
+  const inner = container.querySelector('#web-center-editor-inner');
+  if (!inner) return;
+  inner.dataset.centerImages = JSON.stringify(images || []);
+  renderCenterImageList(container, images || []);
+}
+
+function renderCenterImageList(container, images) {
+  const list = container.querySelector('#web-center-image-list');
+  if (!list) return;
+  list.innerHTML = (images || []).map((url, idx) => `
+    <div style="display:flex;align-items:center;gap:10px;border:1px solid #eee;border-radius:8px;padding:8px;background:#fff;">
+      <img src="/${url}" alt="센터 이미지 ${idx + 1}" style="width:72px;height:48px;object-fit:cover;border-radius:6px;border:1px solid #ddd;">
+      <div style="flex:1;font-size:0.8rem;color:#666;word-break:break-all;">${escapeHtml(url)}</div>
+      <button type="button" data-action="remove-center-image" data-url="${escapeHtmlAttr(url)}" style="border:1px solid #ddd;background:#fff;color:#333;padding:4px 10px;border-radius:4px;cursor:pointer;">삭제</button>
+    </div>
+  `).join('');
+  const count = container.querySelector('[data-center-image-count]');
+  if (count) {
+    count.textContent = `${images.length}/10`;
+  }
+}
+
+async function uploadCenterImages(container) {
+  const input = container.querySelector('#web-center-image-input');
+  if (!input || !input.files) return;
+  const files = Array.from(input.files);
+  if (files.length === 0) return;
+  const existing = getCenterImagesFromState(container);
+  if (existing.length >= 10) {
+    alert('센터 이미지는 최대 10장까지 가능합니다.');
+    return;
+  }
+  const available = 10 - existing.length;
+  const uploadFiles = files.slice(0, available);
+  const formData = new FormData();
+  uploadFiles.forEach(file => formData.append('images', file));
+  const resultEl = container.querySelector('#web-admin-result');
+  if (resultEl) {
+    resultEl.style.color = '#666';
+    resultEl.textContent = '업로드 중...';
+  }
+  try {
+    const res = await fetch(`/api/web/centers/${encodeURIComponent(currentCenterName)}/images`, {
+      method: 'POST',
+      body: formData
+    });
+    if (!res.ok) {
+      throw new Error('업로드 실패');
+    }
+    const updated = await res.json();
+    const nextImages = Array.isArray(updated.image_urls) ? updated.image_urls : existing;
+    setCenterImagesState(container, nextImages);
+    input.value = '';
+    if (resultEl) {
+      resultEl.style.color = '#2e7d32';
+      resultEl.textContent = '업로드 완료';
+    }
+  } catch (error) {
+    console.error('[Web Admin] 센터 이미지 업로드 오류:', error);
+    if (resultEl) {
+      resultEl.style.color = '#d32f2f';
+      resultEl.textContent = '업로드 실패';
+    }
+  }
+}
+
+async function removeCenterImage(container, url) {
+  if (!url) return;
+  const confirmed = window.confirm('센터 이미지를 삭제하시겠습니까?');
+  if (!confirmed) return;
+  const resultEl = container.querySelector('#web-admin-result');
+  if (resultEl) {
+    resultEl.style.color = '#666';
+    resultEl.textContent = '삭제 중...';
+  }
+  try {
+    const res = await fetch(`/api/web/centers/${encodeURIComponent(currentCenterName)}/images`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!res.ok) {
+      throw new Error('삭제 실패');
+    }
+    const updated = await res.json();
+    const nextImages = Array.isArray(updated.image_urls)
+      ? updated.image_urls
+      : getCenterImagesFromState(container).filter(item => item !== url);
+    setCenterImagesState(container, nextImages);
+    if (resultEl) {
+      resultEl.style.color = '#2e7d32';
+      resultEl.textContent = '삭제 완료';
+    }
+  } catch (error) {
+    console.error('[Web Admin] 센터 이미지 삭제 오류:', error);
+    if (resultEl) {
+      resultEl.style.color = '#d32f2f';
+      resultEl.textContent = '삭제 실패';
+    }
+  }
+}
+
 
 function readServiceContent(editor) {
   const title = editor.querySelector('#web-service-title')?.value || '';

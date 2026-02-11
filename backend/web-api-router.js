@@ -5,6 +5,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const { v4: uuidv4 } = require('uuid');
 const webPagesDB = require('./web-pages-db');
+const webCentersDB = require('./web-centers-db');
 
 const webApiRouter = express.Router();
 
@@ -19,6 +20,7 @@ const getUploadsDir = () => {
 
 const UPLOADS_DIR = getUploadsDir();
 const WEB_BACKGROUNDS_DIR = path.join(UPLOADS_DIR, 'web-backgrounds');
+const WEB_CENTER_IMAGES_DIR = path.join(UPLOADS_DIR, 'web-center-images');
 
 const ensureDir = (dirPath) => {
   if (!fs.existsSync(dirPath)) {
@@ -58,11 +60,58 @@ const saveWebBackgroundImage = async (file) => {
   return path.join('uploads', 'web-backgrounds', year, month, filename).replace(/\\/g, '/');
 };
 
+const centerImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 10
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype && file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('이미지 파일만 업로드 가능합니다.'), false);
+    }
+  }
+});
+
+const saveCenterImage = async (file, centerName) => {
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const imageId = uuidv4();
+  const safeCenter = String(centerName || 'center').replace(/[^\w\-가-힣]/g, '_');
+  const dir = path.join(WEB_CENTER_IMAGES_DIR, safeCenter, year, month);
+  ensureDir(dir);
+  const filename = `${imageId}.jpg`;
+  const filePath = path.join(dir, filename);
+  await sharp(file.buffer)
+    .rotate()
+    .resize(1920, 1080, { fit: 'inside', withoutEnlargement: true })
+    .jpeg({ quality: 72, progressive: true })
+    .toFile(filePath);
+  return path.join('uploads', 'web-center-images', safeCenter, year, month, filename).replace(/\\/g, '/');
+};
+
 const normalizeUploadsPath = (url) => {
   if (!url) return null;
   const cleaned = String(url).replace(/^\/+/, '');
   const withoutPrefix = cleaned.replace(/^uploads[\/\\]/, '');
   return path.join(UPLOADS_DIR, withoutPrefix);
+};
+
+const fetchCentersFromJson = async () => {
+  const centersPath = path.join(__dirname, '../data/centers.json');
+  if (!fs.existsSync(centersPath)) return [];
+  const raw = fs.readFileSync(centersPath, 'utf-8');
+  if (!raw) return [];
+  try {
+    const centers = JSON.parse(raw);
+    return Array.isArray(centers) ? centers : [];
+  } catch (error) {
+    console.error('[Web API] centers.json 파싱 오류:', error);
+    return [];
+  }
 };
 
 webApiRouter.get('/pages', async (req, res) => {
@@ -188,6 +237,115 @@ webApiRouter.delete('/pages/:slug/backgrounds', async (req, res) => {
   } catch (error) {
     console.error('[Web API] 배경 이미지 삭제 오류:', error);
     res.status(500).json({ message: '배경 이미지 삭제 중 오류가 발생했습니다.' });
+  }
+});
+
+// 센터 목록 + 센터별 프로필 조회
+webApiRouter.get('/centers', async (req, res) => {
+  try {
+    const centersRes = await fetchCentersFromJson();
+    const profiles = await webCentersDB.listCenterProfiles();
+    const profileMap = new Map(profiles.map(profile => [profile.center_name, profile]));
+    const results = centersRes.map(center => {
+      const profile = profileMap.get(center.name) || {};
+      return {
+        name: center.name,
+        title: profile.title || '',
+        subtitle: profile.subtitle || '',
+        description: profile.description || '',
+        image_urls: Array.isArray(profile.image_urls) ? profile.image_urls : []
+      };
+    });
+    res.json({ centers: results });
+  } catch (error) {
+    console.error('[Web API] 센터 프로필 조회 오류:', error);
+    res.status(500).json({ message: '센터 프로필 조회 중 오류가 발생했습니다.' });
+  }
+});
+
+// 센터 프로필 저장
+webApiRouter.put('/centers/:name', async (req, res) => {
+  try {
+    const centerName = decodeURIComponent(req.params.name || '');
+    if (!centerName) {
+      return res.status(400).json({ message: '센터 이름이 필요합니다.' });
+    }
+    const { title, subtitle, description, image_urls } = req.body || {};
+    const updated = await webCentersDB.upsertCenterProfile(centerName, {
+      title,
+      subtitle,
+      description,
+      image_urls: Array.isArray(image_urls) ? image_urls : []
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('[Web API] 센터 프로필 저장 오류:', error);
+    res.status(500).json({ message: '센터 프로필 저장 중 오류가 발생했습니다.' });
+  }
+});
+
+// 센터 이미지 업로드 (센터별 최대 10장)
+webApiRouter.post('/centers/:name/images', centerImageUpload.array('images', 10), async (req, res) => {
+  try {
+    const centerName = decodeURIComponent(req.params.name || '');
+    if (!centerName) {
+      return res.status(400).json({ message: '센터 이름이 필요합니다.' });
+    }
+    const files = req.files || [];
+    if (files.length === 0) {
+      return res.status(400).json({ message: '업로드할 이미지가 없습니다.' });
+    }
+    const profile = await webCentersDB.getCenterProfile(centerName);
+    const currentImages = Array.isArray(profile?.image_urls) ? profile.image_urls : [];
+    if (currentImages.length + files.length > 10) {
+      return res.status(400).json({ message: '센터 이미지 최대 10장까지 가능합니다.' });
+    }
+    const savedUrls = [];
+    for (const file of files) {
+      const url = await saveCenterImage(file, centerName);
+      savedUrls.push(url);
+    }
+    const updated = await webCentersDB.upsertCenterProfile(centerName, {
+      title: profile?.title || '',
+      subtitle: profile?.subtitle || '',
+      description: profile?.description || '',
+      image_urls: [...currentImages, ...savedUrls]
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('[Web API] 센터 이미지 업로드 오류:', error);
+    res.status(500).json({ message: '센터 이미지 업로드 중 오류가 발생했습니다.' });
+  }
+});
+
+// 센터 이미지 삭제
+webApiRouter.delete('/centers/:name/images', async (req, res) => {
+  try {
+    const centerName = decodeURIComponent(req.params.name || '');
+    const { url } = req.body || {};
+    if (!centerName) {
+      return res.status(400).json({ message: '센터 이름이 필요합니다.' });
+    }
+    if (!url) {
+      return res.status(400).json({ message: '삭제할 이미지 URL이 필요합니다.' });
+    }
+    const profile = await webCentersDB.getCenterProfile(centerName);
+    const currentImages = Array.isArray(profile?.image_urls) ? profile.image_urls : [];
+    const nextImages = currentImages.filter(item => item !== url);
+    const filePath = normalizeUploadsPath(url);
+    if (filePath && filePath.startsWith(UPLOADS_DIR) && fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    const updated = await webCentersDB.upsertCenterProfile(centerName, {
+      title: profile?.title || '',
+      subtitle: profile?.subtitle || '',
+      description: profile?.description || '',
+      image_urls: nextImages
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('[Web API] 센터 이미지 삭제 오류:', error);
+    res.status(500).json({ message: '센터 이미지 삭제 중 오류가 발생했습니다.' });
   }
 });
 

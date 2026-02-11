@@ -175,6 +175,36 @@ body {
   display: block;
 }
 
+.web-center-block {
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+}
+
+.web-center-block-divider {
+  border-top: 1px solid #eee;
+  margin-top: 12px;
+}
+
+.web-center-image-list {
+  display: grid;
+  gap: 12px;
+}
+
+.web-center-image-item {
+  margin: 0;
+}
+
+.web-center-image-item img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: cover;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid #eee;
+}
+
 @media (max-width: 720px) {
   .web-header-inner {
     flex-direction: column;
