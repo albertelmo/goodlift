@@ -51,7 +51,9 @@ const elmoCalendarRecordsDB = require('./elmo-calendar-records-db');
 const pushSubscriptionsDB = require('./push-subscriptions-db');
 const webpush = require('web-push');
 const elmoApiRouter = require('./elmo-api-router');
+const webApiRouter = require('./web-api-router');
 const { ELMO_IMAGES_DIR } = require('./elmo-utils');
+const webPagesDB = require('./web-pages-db');
 const { initializeMigrationSystem, runMigration } = require('./migrations-manager');
 const { createPerformanceIndexes } = require('./index-migration');
 
@@ -658,6 +660,7 @@ consultationSharesDB.initializeDatabase(); // 상담기록 공유 토큰 테이�
 elmoUsersDB.initializeDatabase(); // Elmo 사용자 테이블 초기화
 elmoCalendarRecordsDB.initializeDatabase(); // Elmo 캘린더 기록 테이블 초기화
 pushSubscriptionsDB.initializeDatabase(); // 푸시 구독 테이블 초기화
+webPagesDB.initializeDatabase(); // Web 페이지 테이블 초기화
 
 // 트레이너를 app_users 테이블에 자동 등록
 async function syncTrainersToAppUsers() {
@@ -1091,6 +1094,20 @@ app.use('/elmo', (req, res, next) => {
     fallthrough: false // /elmo 경로는 여기서만 처리
 }));
 
+// ========== Web 서비스 ==========
+// Web 정적 파일 서빙 (HTML은 캐시 방지)
+app.use('/web', (req, res, next) => {
+    if (req.path === '/' || req.path === '/index.html') {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+    }
+    next();
+}, express.static(path.join(__dirname, '../public-web'), {
+    index: 'index.html',
+    fallthrough: false
+}));
+
 // Elmo 전용 PWA manifest
 app.get('/elmo/manifest.json', (req, res) => {
     res.setHeader('Content-Type', 'application/manifest+json');
@@ -1105,6 +1122,9 @@ app.get('/elmo/sw.js', (req, res) => {
 
 // Elmo API 라우터 연결
 app.use('/api/elmo', elmoApiRouter);
+
+// Web API 라우터 연결
+app.use('/api/web', webApiRouter);
 
 // ========== 기존 서비스 (변경 없음) ==========
 app.use(express.static(path.join(__dirname, '../public')));

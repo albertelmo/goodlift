@@ -13,6 +13,7 @@ import { strategy } from './strategy.js';
 import { ledger } from './ledger.js';
 import { trainerLedger } from './trainer-ledger.js';
 import { userApp } from './userApp.js';
+import { web } from './web.js';
 import { showAppUserSection } from './app-user/index.js';
 
 // 권한 체크 헬퍼 함수 (SU 역할 추가)
@@ -642,6 +643,7 @@ const adminHamburgerItems = [
     { label: '👤 회원', id: 'Member', content: '<div class="member-container"><div class="member-mobile-tabs"><button class="member-tab-btn active" data-tab="list">📋 목록</button><button class="member-tab-btn" data-tab="search">🔍 검색</button><button class="member-tab-btn" data-tab="add">➕ 추가</button></div><div class="member-flex-wrap"><div id="member-search" class="member-tab-content"></div><div id="member-add" class="member-tab-content"></div><div id="member-list" class="member-tab-content active"></div></div></div>' },
     { label: '💰 지출', id: 'Expense', content: '<div id="expense-root"></div>' },
     { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
+    { label: '🌐 웹', id: 'Web', content: '<div id="web-root"></div>' },
     { label: '💾 DB', id: 'Database', content: '<div id="database-root"></div>' },
     { label: '👥 트레이너', id: 'Trainer', content: '<div id="trainer-list-loading" style="text-align:center;padding:20px;color:#888;display:none;">불러오는 중...</div><div id="trainer-list"></div>' },
     { label: '📱 유저앱', id: 'UserApp', content: '<div id="user-app-root"></div>' },
@@ -937,6 +939,8 @@ function renderTabContent(tabId, tabContent) {
         sales.render(tabContent.querySelector('#sales-root') || tabContent);
     } else if (tabId === 'Trainer') {
         trainer.loadList();
+    } else if (tabId === 'Web') {
+        web.render(tabContent.querySelector('#web-root') || tabContent);
     } else if (tabId === 'Ledger') {
         ledger.render(tabContent.querySelector('#ledger-root') || tabContent);
     } else if (tabId === 'UserApp') {
