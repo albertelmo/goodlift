@@ -193,10 +193,12 @@ function formatVolumeKg(total) {
         return '0kg';
     }
     const rounded = Math.round(total * 10) / 10;
-    if (Number.isInteger(rounded)) {
-        return `${rounded}kg`;
-    }
-    return `${rounded.toFixed(1)}kg`;
+    const hasDecimal = !Number.isInteger(rounded);
+    const formatted = rounded.toLocaleString('en-US', {
+        minimumFractionDigits: hasDecimal ? 1 : 0,
+        maximumFractionDigits: hasDecimal ? 1 : 0
+    });
+    return `${formatted}kg`;
 }
 
 function calculateVolumeForRecords(records = []) {
