@@ -34,7 +34,7 @@ function render(container) {
       
       <!-- 회원 관리 섹션 -->
       <div style="background:#f5f5f5;padding:12px;border-radius:8px;margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
           <h4 id="user-app-members-title" style="margin:0;color:#333;font-size:0.9rem;">회원 관리</h4>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
             <button id="user-app-members-tab-btn" class="header-text-btn" style="background:#1976d2 !important;color:#fff !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
@@ -48,6 +48,17 @@ function render(container) {
             </button>
             <button id="user-app-member-add-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:4px 10px;border-radius:3px;cursor:pointer;font-size:0.75rem;">
               회원 추가
+            </button>
+          </div>
+        </div>
+        <div id="user-app-activity-controls" style="display:none;background:#fff;border-radius:4px;padding:6px 8px;border:1px solid #eee;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+            <button id="user-app-activity-prev-month" class="header-text-btn" style="background:#fff !important;color:#1976d2 !important;border:1px solid #1976d2 !important;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">
+              이전달
+            </button>
+            <input type="month" id="user-app-activity-month" style="padding:3px 6px;border:1px solid #ddd;border-radius:3px;font-size:0.7rem;">
+            <button id="user-app-activity-next-month" class="header-text-btn" style="background:#fff !important;color:#1976d2 !important;border:1px solid #1976d2 !important;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:0.7rem;">
+              다음달
             </button>
           </div>
         </div>
@@ -181,6 +192,31 @@ function setupEventListeners(container) {
       setMembersTab('activity');
     });
   }
+
+  const activityMonthInput = container.querySelector('#user-app-activity-month');
+  const activityPrevMonthBtn = container.querySelector('#user-app-activity-prev-month');
+  const activityNextMonthBtn = container.querySelector('#user-app-activity-next-month');
+  if (activityMonthInput) {
+    ensureActivityMonthValue();
+    activityMonthInput.value = activityMonthValue;
+    activityMonthInput.addEventListener('change', () => {
+      if (activityMonthInput.value) {
+        setActivityMonthValue(activityMonthInput.value);
+      }
+    });
+  }
+  if (activityPrevMonthBtn) {
+    activityPrevMonthBtn.addEventListener('click', () => {
+      ensureActivityMonthValue();
+      setActivityMonthValue(addMonthsToValue(activityMonthValue, -1));
+    });
+  }
+  if (activityNextMonthBtn) {
+    activityNextMonthBtn.addEventListener('click', () => {
+      ensureActivityMonthValue();
+      setActivityMonthValue(addMonthsToValue(activityMonthValue, 1));
+    });
+  }
   
   // 운동종류 추가 버튼
   const addWorkoutTypeBtn = container.querySelector('#user-app-workout-type-add-btn');
@@ -270,6 +306,7 @@ function setMembersTab(tab) {
   const membersTabBtn = document.getElementById('user-app-members-tab-btn');
   const activityTabBtn = document.getElementById('user-app-activity-tab-btn');
   const addMemberBtn = document.getElementById('user-app-member-add-btn');
+  const activityControls = document.getElementById('user-app-activity-controls');
   if (membersList && activityList) {
     membersList.style.display = tab === 'members' ? 'block' : 'none';
     activityList.style.display = tab === 'activity' ? 'block' : 'none';
@@ -294,7 +331,13 @@ function setMembersTab(tab) {
   if (addMemberBtn) {
     addMemberBtn.style.display = tab === 'members' ? 'inline-block' : 'none';
   }
+  if (activityControls) {
+    activityControls.style.display = tab === 'activity' ? 'block' : 'none';
+  }
+  updateMembersSectionTitle((membersCached || []).length);
   if (tab === 'activity') {
+    ensureActivityMonthValue();
+    updateActivityMonthUI();
     activityCurrentPage = 1;
     renderMemberActivityList(membersCached);
   }
@@ -302,6 +345,60 @@ function setMembersTab(tab) {
 
 function getDateString(date) {
   return date.toISOString().split('T')[0];
+}
+
+function ensureActivityMonthValue() {
+  if (!activityMonthValue) {
+    activityMonthValue = getCurrentMonthValue();
+  }
+}
+
+function getCurrentMonthValue() {
+  const today = new Date();
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function addMonthsToValue(value, delta) {
+  const [year, month] = value.split('-').map(Number);
+  const date = new Date(year, month - 1 + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function updateActivityMonthUI() {
+  const monthInput = document.getElementById('user-app-activity-month');
+  ensureActivityMonthValue();
+  if (monthInput && monthInput.value !== activityMonthValue) {
+    monthInput.value = activityMonthValue;
+  }
+}
+
+function setActivityMonthValue(value) {
+  if (!value || !/^\d{4}-\d{2}$/.test(value)) {
+    return;
+  }
+  activityMonthValue = value;
+  updateActivityMonthUI();
+  if (membersActiveTab === 'activity') {
+    activityCurrentPage = 1;
+    renderMemberActivityList(membersCached);
+  }
+}
+
+function getMonthRangeFromValue(value) {
+  const [year, month] = value.split('-').map(Number);
+  const monthStart = new Date(year, month - 1, 1);
+  const monthEnd = new Date(year, month, 0);
+  return {
+    startDate: getDateString(monthStart),
+    endDate: getDateString(monthEnd)
+  };
+}
+
+function updateMembersSectionTitle(count) {
+  const titleElement = document.getElementById('user-app-members-title');
+  if (!titleElement) return;
+  const label = membersActiveTab === 'activity' ? '회원 활동관리' : '회원 관리';
+  titleElement.textContent = `${label} (${count}명)`;
 }
 
 function setActivityDateRange(days) {
@@ -587,6 +684,7 @@ let membersActiveTab = 'members';
 let activityCurrentPage = 1;
 let activitySortColumn = 'name';
 let activitySortDirection = 'asc';
+let activityMonthValue = null;
 let workoutGuideSettings = { items: [] };
 let workoutGuideLoaded = false;
 let workoutTypesLoaded = false;
@@ -800,10 +898,7 @@ function renderMembersList(members) {
   }
   
   // 제목에 회원 수 표시
-  const titleElement = document.getElementById('user-app-members-title');
-  if (titleElement) {
-    titleElement.textContent = `회원 관리 (${members.length}명)`;
-  }
+  updateMembersSectionTitle(members.length);
   
   if (members.length === 0) {
     listContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">등록된 회원이 없습니다.</div>';
@@ -1669,16 +1764,11 @@ async function renderMemberActivityList(members) {
     return;
   }
   
-  const titleElement = document.getElementById('user-app-members-title');
-  if (titleElement) {
-    titleElement.textContent = `회원 관리 (${members.length}명)`;
-  }
+  updateMembersSectionTitle(members.length);
   
-  const today = new Date();
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-  const startDate = getDateString(monthStart);
-  const endDate = getDateString(monthEnd);
+  ensureActivityMonthValue();
+  updateActivityMonthUI();
+  const { startDate, endDate } = getMonthRangeFromValue(activityMonthValue);
   
   let summaries = {};
   try {
