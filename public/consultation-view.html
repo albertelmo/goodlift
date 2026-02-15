@@ -31,7 +31,22 @@
             padding-bottom: 8px;
         }
         
-        .consultation-view-header h1 {
+        .consultation-view-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .consultation-view-title-logo {
+            height: 24px;
+            width: auto;
+            flex-shrink: 0;
+            display: block;
+        }
+        
+        .consultation-view-title h1 {
             margin: 0;
             font-size: 20px;
             color: #333;
@@ -160,7 +175,11 @@
                 padding-bottom: 12px;
             }
             
-            .consultation-view-header h1 {
+            .consultation-view-title-logo {
+                height: 20px;
+            }
+            
+            .consultation-view-title h1 {
                 font-size: 18px;
             }
             
@@ -222,7 +241,11 @@
                 padding: 10px;
             }
             
-            .consultation-view-header h1 {
+            .consultation-view-title-logo {
+                height: 18px;
+            }
+            
+            .consultation-view-title h1 {
                 font-size: 16px;
             }
             
@@ -281,7 +304,10 @@
         <div id="error" class="consultation-view-error" style="display:none;"></div>
         <div id="content" style="display:none;">
             <div class="consultation-view-header" style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                <h1 style="margin: 0; flex: 1;">상담기록</h1>
+                <div class="consultation-view-title">
+                    <img src="/img/members logo.png" alt="스탠다드 멤버스" class="consultation-view-title-logo">
+                    <h1>상담기록</h1>
+                </div>
                 <div id="trainerInfo" style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;"></div>
             </div>
             <div id="consultationData"></div>
