@@ -983,13 +983,15 @@ function renderWorkoutItem(record) {
         const cardClass = isCompleted ? 'app-workout-item app-workout-item-all-completed app-workout-item-text' : 'app-workout-item app-workout-item-text';
         const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
         const checked = isCompleted ? 'checked' : '';
+        const badgesHtml = renderWorkoutLevelBadges(record);
         
         return `
             <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
                 <div class="app-workout-item-main app-workout-item-main-text">
                     <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: column; align-items: flex-start; gap: 8px; flex: 1;">
-                        ${suppressControls ? '' : `
+                        ${(!suppressControls || badgesHtml) ? `
                         <div style="position: absolute; top: 6px; left: 6px; display: flex; align-items: center; gap: 6px;">
+                            ${suppressControls ? '' : `
                             <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="4" y1="7" x2="20" y2="7"></line>
@@ -997,9 +999,10 @@ function renderWorkoutItem(record) {
                                     <line x1="4" y1="17" x2="20" y2="17"></line>
                                 </svg>
                             </div>
-                            ${renderWorkoutLevelBadges(record)}
+                            ` : ''}
+                            ${badgesHtml}
                         </div>
-                        `}
+                        ` : ''}
                         ${!isReadOnly && !suppressControls ? `
                         <div style="position: absolute; top: 6px; right: 12px; display: flex; align-items: center; gap: 6px;">
                             <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
@@ -1227,14 +1230,18 @@ function showCompletedCheckModal(record) {
             let prevRecordCompleted = null;
             let prevSetCompleted = null;
             let setId = null;
+            let prevRecordSnapshot = null;
             
             try {
+                prevRecordSnapshot = JSON.parse(JSON.stringify(record));
+                
                 if (type === 'record') {
                     prevRecordCompleted = record.is_completed || false;
                     record.is_completed = isChecked;
                 } else if (type === 'set') {
                     setId = checkbox.getAttribute('data-set-id');
-                    const set = record.sets.find(s => s.id === setId);
+                    const normalizedSetId = setId === 'null' ? null : setId;
+                    const set = record.sets.find(s => s.id === normalizedSetId);
                     if (set) {
                         prevSetCompleted = set.is_completed || false;
                         set.is_completed = isChecked;
@@ -1253,7 +1260,12 @@ function showCompletedCheckModal(record) {
                 if (type === 'record') {
                     await updateWorkoutRecordCompleted(record.id, currentAppUserId, isChecked);
                 } else if (type === 'set') {
-                    await updateWorkoutSetCompleted(record.id, setId, currentAppUserId, isChecked);
+                    const normalizedSetId = setId === 'null' ? null : setId;
+                    if (!normalizedSetId) {
+                        queueRecordSave(record.id, record, prevRecordSnapshot);
+                        return;
+                    }
+                    await updateWorkoutSetCompleted(record.id, normalizedSetId, currentAppUserId, isChecked);
                 }
             } catch (error) {
                 console.error('완료 상태 업데이트 오류:', error);
@@ -1985,6 +1997,7 @@ function setupClickListeners() {
                     id: set.id,
                     is_completed: set.is_completed || false
                 }));
+                const prevRecordSnapshot = JSON.parse(JSON.stringify(record));
                 
                 // 낙관적 UI 업데이트
                 record.sets.forEach(set => {
@@ -1994,12 +2007,17 @@ function setupClickListeners() {
                 scheduleCalendarUpdate();
                 
                 try {
-                    // 모든 세트의 완료 상태 업데이트
-                    const { updateWorkoutSetCompleted } = await import('../api.js');
-                    const updatePromises = record.sets.map(set => 
-                        updateWorkoutSetCompleted(recordId, set.id, currentAppUserId, isChecked)
-                    );
-                    await Promise.all(updatePromises);
+                    const hasPendingSetId = record.sets.some(set => !set.id);
+                    if (hasPendingSetId) {
+                        queueRecordSave(recordId, record, prevRecordSnapshot);
+                    } else {
+                        // 모든 세트의 완료 상태 업데이트
+                        const { updateWorkoutSetCompleted } = await import('../api.js');
+                        const updatePromises = record.sets.map(set => 
+                            updateWorkoutSetCompleted(recordId, set.id, currentAppUserId, isChecked)
+                        );
+                        await Promise.all(updatePromises);
+                    }
                     
                     // 체크된 경우에만 모달 처리 (체크 해제 시에는 모달 표시 안 함)
                     if (isChecked) {
@@ -2046,6 +2064,7 @@ function setupClickListeners() {
                 let prevRecordCompleted = null;
                 let prevSetCompleted = null;
                 let setId = null;
+                let prevRecordSnapshot = null;
                 
                 // currentAppUserId 확인
                 if (!currentAppUserId) {
@@ -2072,6 +2091,8 @@ function setupClickListeners() {
                         dateStr = dateStr.split('T')[0];
                     }
                     
+                    prevRecordSnapshot = JSON.parse(JSON.stringify(record));
+                    
                     if (type === 'record') {
                         prevRecordCompleted = record.is_completed || false;
                         record.is_completed = isChecked;
@@ -2083,7 +2104,8 @@ function setupClickListeners() {
                             alert('세트 정보를 찾을 수 없습니다.');
                             return;
                         }
-                        const set = record.sets?.find(s => s.id === setId);
+                        const normalizedSetId = setId === 'null' ? null : setId;
+                        const set = record.sets?.find(s => s.id === normalizedSetId);
                         if (set) {
                             prevSetCompleted = set.is_completed || false;
                             set.is_completed = isChecked;
@@ -2109,8 +2131,13 @@ function setupClickListeners() {
                         await updateWorkoutRecordCompleted(recordId, currentAppUserId, isChecked);
                     } else if (type === 'set') {
                         // 세트 완료 상태 업데이트
-                        const { updateWorkoutSetCompleted } = await import('../api.js');
-                        await updateWorkoutSetCompleted(recordId, setId, currentAppUserId, isChecked);
+                        const normalizedSetId = setId === 'null' ? null : setId;
+                        if (!normalizedSetId) {
+                            queueRecordSave(recordId, record, prevRecordSnapshot);
+                        } else {
+                            const { updateWorkoutSetCompleted } = await import('../api.js');
+                            await updateWorkoutSetCompleted(recordId, normalizedSetId, currentAppUserId, isChecked);
+                        }
                     }
                     
                     // 체크된 경우에만 모달 처리 (체크 해제 시에는 모달 표시 안 함)
