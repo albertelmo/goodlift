@@ -283,10 +283,12 @@
                                         fetch('/api/pwa/version')
                                             .then(res => res.json())
                                             .then(data => {
-                                                latestDetectedVersion = data.version;
+                                                if (currentVersion && data.version && data.version !== currentVersion) {
+                                                    latestDetectedVersion = data.version;
+                                                    showUpdateBanner();
+                                                }
                                             })
                                             .catch(() => {});
-                                        showUpdateBanner();
                                     }
                                 });
                             });

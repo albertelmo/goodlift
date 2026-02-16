@@ -82,6 +82,117 @@ function setCachedShowFavoritesOnly(value) {
 let commentsByDate = {}; // 날짜별 코멘트 데이터
 
 let isReadOnly = false;
+const pendingRecordSaves = new Map();
+const recordSaveVersions = new Map();
+const RECORD_SAVE_DEBOUNCE_MS = 300;
+
+function queueRecordSave(recordId, recordSnapshot, prevRecord) {
+    const existing = pendingRecordSaves.get(recordId);
+    const nextVersion = (recordSaveVersions.get(recordId) || 0) + 1;
+    recordSaveVersions.set(recordId, nextVersion);
+    
+    const entry = existing || { timerId: null, pendingRecord: null, prevRecord: null, version: 0 };
+    entry.version = nextVersion;
+    entry.pendingRecord = JSON.parse(JSON.stringify(recordSnapshot));
+    if (!entry.prevRecord && prevRecord) {
+        entry.prevRecord = prevRecord;
+    }
+    
+    if (entry.timerId) {
+        clearTimeout(entry.timerId);
+    }
+    entry.timerId = setTimeout(() => {
+        flushRecordSave(recordId).catch(error => {
+            console.error('레코드 저장 처리 오류:', error);
+        });
+    }, RECORD_SAVE_DEBOUNCE_MS);
+    
+    pendingRecordSaves.set(recordId, entry);
+}
+
+async function flushRecordSave(recordId) {
+    const entry = pendingRecordSaves.get(recordId);
+    if (!entry) {
+        return;
+    }
+    pendingRecordSaves.delete(recordId);
+    
+    const version = entry.version;
+    const recordSnapshot = entry.pendingRecord;
+    if (!recordSnapshot) {
+        return;
+    }
+    
+    const recordIndex = currentRecords.findIndex(r => r.id === recordId);
+    if (recordIndex === -1) {
+        return;
+    }
+    
+    try {
+        const { updateWorkoutRecord } = await import('../api.js');
+        const updatedRecord = await updateWorkoutRecord(recordId, {
+            app_user_id: currentAppUserId,
+            workout_date: recordSnapshot.workout_date,
+            workout_type_id: recordSnapshot.workout_type_id,
+            duration_minutes: recordSnapshot.duration_minutes,
+            sets: (recordSnapshot.sets || []).map(set => ({
+                id: set.id,
+                set_number: set.set_number,
+                weight: set.weight,
+                reps: set.reps,
+                is_completed: set.is_completed || false
+            })),
+            notes: recordSnapshot.notes
+        });
+        
+        if (!updatedRecord) {
+            throw new Error('업데이트된 레코드를 받지 못했습니다.');
+        }
+        
+        if ((recordSaveVersions.get(recordId) || 0) !== version) {
+            return;
+        }
+        
+        // 날짜 정규화 (YYYY-MM-DD 형식으로 변환)
+        if (updatedRecord.workout_date) {
+            if (updatedRecord.workout_date instanceof Date) {
+                const year = updatedRecord.workout_date.getFullYear();
+                const month = String(updatedRecord.workout_date.getMonth() + 1).padStart(2, '0');
+                const day = String(updatedRecord.workout_date.getDate()).padStart(2, '0');
+                updatedRecord.workout_date = `${year}-${month}-${day}`;
+            } else if (typeof updatedRecord.workout_date === 'string') {
+                updatedRecord.workout_date = updatedRecord.workout_date.split('T')[0];
+            }
+        }
+        
+        // 해당 카드만 업데이트
+        if (recordIndex !== -1) {
+            // 기존 레코드의 날짜를 보존 (필터링을 위해)
+            const originalDate = currentRecords[recordIndex].workout_date;
+            currentRecords[recordIndex] = updatedRecord;
+            // 날짜가 변경되지 않았는지 확인
+            if (originalDate && updatedRecord.workout_date !== originalDate) {
+                updatedRecord.workout_date = originalDate;
+            }
+            // 현재 필터 날짜로 다시 렌더링 (전체 목록은 유지)
+            await render(currentRecords);
+        }
+        
+        scheduleCalendarUpdate();
+    } catch (error) {
+        if ((recordSaveVersions.get(recordId) || 0) !== version) {
+            return;
+        }
+        
+        console.error('세트 업데이트 오류:', error);
+        if (recordIndex !== -1 && entry.prevRecord) {
+            currentRecords[recordIndex] = entry.prevRecord;
+            await render(currentRecords);
+            scheduleCalendarUpdate();
+        }
+        alert('세트 업데이트 중 오류가 발생했습니다.');
+    }
+}
 
 /**
  * 운동기록 목록 초기화
@@ -664,14 +775,17 @@ async function render(records, options = {}) {
         });
     }
     
+    const hasAnyComments = allDates.some(date => (commentsByDate[date] || []).length > 0);
     const overallVolumeInfo = calculateVolumeForRecords(records);
     const overallSummaryText = overallVolumeInfo.hasVolume
         ? `전체 볼륨 : ${formatVolumeKg(overallVolumeInfo.total)}`
         : `전체 ${records.length}건`;
     let html = `
+        ${hasAnyComments ? '' : `
         <div style="display:flex;justify-content:flex-end;align-items:center;margin:4px 0 8px;color:var(--app-text-muted);font-size:12px;">
             ${overallSummaryText}
         </div>
+        `}
         <div class="app-workout-list">
     `;
     
@@ -873,36 +987,38 @@ function renderWorkoutItem(record) {
         return `
             <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
                 <div class="app-workout-item-main app-workout-item-main-text">
-                    <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: row; align-items: flex-start; gap: 8px; flex: 1;">
+                    <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: column; align-items: flex-start; gap: 8px; flex: 1;">
                         ${suppressControls ? '' : `
-                        <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0; margin-top: 2px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="4" y1="7" x2="20" y2="7"></line>
-                                <line x1="4" y1="12" x2="20" y2="12"></line>
-                                <line x1="4" y1="17" x2="20" y2="17"></line>
-                            </svg>
+                        <div style="position: absolute; top: 6px; left: 6px; display: flex; align-items: center; gap: 6px;">
+                            <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="4" y1="7" x2="20" y2="7"></line>
+                                    <line x1="4" y1="12" x2="20" y2="12"></line>
+                                    <line x1="4" y1="17" x2="20" y2="17"></line>
+                                </svg>
+                            </div>
+                            ${renderWorkoutLevelBadges(record)}
                         </div>
                         `}
-                        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px;">
-                            ${renderWorkoutLevelBadges(record)}
+                        ${!isReadOnly && !suppressControls ? `
+                        <div style="position: absolute; top: 6px; right: 12px; display: flex; align-items: center; gap: 6px;">
+                            <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                            </button>
+                            <div class="app-workout-item-duration-container" style="flex-shrink: 0;">
+                                <input type="checkbox" class="app-workout-item-checkbox" 
+                                       data-record-id="${record.id}" 
+                                       data-type="record" 
+                                       ${checked}>
+                            </div>
+                        </div>
+                        ` : ''}
+                        <div style="display: flex; flex-direction: column; gap: 6px; width: 100%; padding-top: 28px;">
                             <div class="app-workout-item-text-content" style="white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
                         </div>
-                        ${!isReadOnly && !suppressControls ? `
-                        <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                            </svg>
-                        </button>
-                        ` : ''}
-                        ${!isReadOnly && !suppressControls ? `
-                        <div class="app-workout-item-duration-container" style="flex-shrink: 0;">
-                            <input type="checkbox" class="app-workout-item-checkbox" 
-                                   data-record-id="${record.id}" 
-                                   data-type="record" 
-                                   ${checked}>
-                        </div>
-                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -990,10 +1106,9 @@ function renderWorkoutItem(record) {
     return `
         <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
             <div class="app-workout-item-main">
-                <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 4px;">
-                    <div style="display: flex; align-items: center; gap: 6px;">
+                <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 6px;">
                     ${suppressControls ? '' : `
-                    <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
+                    <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; position: absolute; top: 6px; left: 6px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="4" y1="7" x2="20" y2="7"></line>
                             <line x1="4" y1="12" x2="20" y2="12"></line>
@@ -1001,6 +1116,7 @@ function renderWorkoutItem(record) {
                         </svg>
                     </div>
                     `}
+                    <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
                         ${(() => {
                             const guideItem = workoutGuideMap.get(String(record.workout_type_id || ''));
                             if (!guideItem) {
@@ -2048,10 +2164,15 @@ function setupClickListeners() {
                 if (removeSetBtn.disabled) return;
                 
                 const recordId = removeSetBtn.getAttribute('data-record-id');
-                const record = currentRecords.find(r => r.id === recordId);
+                const recordIndex = currentRecords.findIndex(r => r.id === recordId);
+                if (recordIndex === -1) return;
+                const record = currentRecords[recordIndex];
                 if (!record || !record.sets || record.sets.length <= 1) return;
                 
+                let prevRecord = null;
                 try {
+                    prevRecord = JSON.parse(JSON.stringify(record));
+                    
                     // 마지막 세트 삭제
                     const updatedSets = record.sets.slice(0, -1);
                     // 세트 번호 재정렬
@@ -2059,58 +2180,23 @@ function setupClickListeners() {
                         set.set_number = i + 1;
                     });
                     
-                    const { updateWorkoutRecord } = await import('../api.js');
-                    const updatedRecord = await updateWorkoutRecord(recordId, {
-                        app_user_id: currentAppUserId,
-                        workout_date: record.workout_date,
-                        workout_type_id: record.workout_type_id,
-                        duration_minutes: record.duration_minutes,
-                        sets: updatedSets.map(set => ({
-                            id: set.id,
-                            set_number: set.set_number,
-                            weight: set.weight,
-                            reps: set.reps,
-                            is_completed: set.is_completed || false
-                        })),
-                        notes: record.notes
-                    });
+                    // 낙관적 UI 업데이트
+                    currentRecords[recordIndex] = {
+                        ...record,
+                        sets: updatedSets
+                    };
+                    await render(currentRecords);
                     
-                    if (!updatedRecord) {
-                        throw new Error('업데이트된 레코드를 받지 못했습니다.');
-                    }
-                    
-                    // 날짜 정규화 (YYYY-MM-DD 형식으로 변환)
-                    if (updatedRecord.workout_date) {
-                        if (updatedRecord.workout_date instanceof Date) {
-                            const year = updatedRecord.workout_date.getFullYear();
-                            const month = String(updatedRecord.workout_date.getMonth() + 1).padStart(2, '0');
-                            const day = String(updatedRecord.workout_date.getDate()).padStart(2, '0');
-                            updatedRecord.workout_date = `${year}-${month}-${day}`;
-                        } else if (typeof updatedRecord.workout_date === 'string') {
-                            updatedRecord.workout_date = updatedRecord.workout_date.split('T')[0];
-                        }
-                    }
-                    
-                    // 해당 카드만 업데이트
-                    const recordIndex = currentRecords.findIndex(r => r.id === recordId);
-                    if (recordIndex !== -1) {
-                        // 기존 레코드의 날짜를 보존 (필터링을 위해)
-                        const originalDate = currentRecords[recordIndex].workout_date;
-                        currentRecords[recordIndex] = updatedRecord;
-                        // 날짜가 변경되지 않았는지 확인
-                        if (originalDate && updatedRecord.workout_date !== originalDate) {
-                            updatedRecord.workout_date = originalDate;
-                        }
-                        // 현재 필터 날짜로 다시 렌더링 (전체 목록은 유지)
-                        await render(currentRecords);
-                    }
-                    
-                    // 캘린더 업데이트
-                    if (window.updateCalendarWorkoutRecords) {
-                        window.updateCalendarWorkoutRecords();
-                    }
+                    scheduleCalendarUpdate();
+                    queueRecordSave(recordId, { ...record, sets: updatedSets }, prevRecord);
                 } catch (error) {
                     console.error('세트 삭제 오류:', error);
+                    // 실패 시 롤백
+                    if (recordIndex !== -1 && prevRecord) {
+                        currentRecords[recordIndex] = prevRecord;
+                        await render(currentRecords);
+                        scheduleCalendarUpdate();
+                    }
                     alert('세트 삭제 중 오류가 발생했습니다.');
                 }
                 });
@@ -2125,10 +2211,15 @@ function setupClickListeners() {
                     e.stopPropagation();
                     
                     const recordId = addSetBtn.getAttribute('data-record-id');
-                    const record = currentRecords.find(r => r.id === recordId);
+                    const recordIndex = currentRecords.findIndex(r => r.id === recordId);
+                    if (recordIndex === -1) return;
+                    const record = currentRecords[recordIndex];
                     if (!record || !record.sets) return;
                     
+                    let prevRecord = null;
                     try {
+                        prevRecord = JSON.parse(JSON.stringify(record));
+                        
                         // 마지막 세트의 정보를 복사하여 새 세트 추가
                         const lastSet = record.sets[record.sets.length - 1];
                         const newSet = {
@@ -2141,58 +2232,24 @@ function setupClickListeners() {
                     
                     const updatedSets = [...record.sets, newSet];
                     
-                    const { updateWorkoutRecord } = await import('../api.js');
-                    const updatedRecord = await updateWorkoutRecord(recordId, {
-                        app_user_id: currentAppUserId,
-                        workout_date: record.workout_date,
-                        workout_type_id: record.workout_type_id,
-                        duration_minutes: record.duration_minutes,
-                        sets: updatedSets.map(set => ({
-                            id: set.id,
-                            set_number: set.set_number,
-                            weight: set.weight,
-                            reps: set.reps,
-                            is_completed: set.is_completed || false
-                        })),
-                        notes: record.notes
-                    });
+                    // 낙관적 UI 업데이트
+                    currentRecords[recordIndex] = {
+                        ...record,
+                        sets: updatedSets
+                    };
+                    await render(currentRecords);
                     
-                    if (!updatedRecord) {
-                        throw new Error('업데이트된 레코드를 받지 못했습니다.');
-                    }
-                    
-                    // 날짜 정규화 (YYYY-MM-DD 형식으로 변환)
-                    if (updatedRecord.workout_date) {
-                        if (updatedRecord.workout_date instanceof Date) {
-                            const year = updatedRecord.workout_date.getFullYear();
-                            const month = String(updatedRecord.workout_date.getMonth() + 1).padStart(2, '0');
-                            const day = String(updatedRecord.workout_date.getDate()).padStart(2, '0');
-                            updatedRecord.workout_date = `${year}-${month}-${day}`;
-                        } else if (typeof updatedRecord.workout_date === 'string') {
-                            updatedRecord.workout_date = updatedRecord.workout_date.split('T')[0];
-                        }
-                    }
-                    
-                    // 해당 카드만 업데이트
-                    const recordIndex = currentRecords.findIndex(r => r.id === recordId);
-                    if (recordIndex !== -1) {
-                        // 기존 레코드의 날짜를 보존 (필터링을 위해)
-                        const originalDate = currentRecords[recordIndex].workout_date;
-                        currentRecords[recordIndex] = updatedRecord;
-                        // 날짜가 변경되지 않았는지 확인
-                        if (originalDate && updatedRecord.workout_date !== originalDate) {
-                            updatedRecord.workout_date = originalDate;
-                        }
-                        // 현재 필터 날짜로 다시 렌더링 (전체 목록은 유지)
-                        await render(currentRecords);
-                    }
-                    
-                    // 캘린더 업데이트
-                    if (window.updateCalendarWorkoutRecords) {
-                        window.updateCalendarWorkoutRecords();
-                    }
+                    scheduleCalendarUpdate();
+                    queueRecordSave(recordId, { ...record, sets: updatedSets }, prevRecord);
                 } catch (error) {
                     console.error('세트 추가 오류:', error);
+                    // 실패 시 롤백
+                    const recordIndex = currentRecords.findIndex(r => r.id === recordId);
+                    if (recordIndex !== -1 && prevRecord) {
+                        currentRecords[recordIndex] = prevRecord;
+                        await render(currentRecords);
+                        scheduleCalendarUpdate();
+                    }
                     alert('세트 추가 중 오류가 발생했습니다.');
                 }
             });

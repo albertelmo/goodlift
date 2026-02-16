@@ -2621,6 +2621,7 @@ body.app-user-active {
 
 .app-workout-item-text-content {
     display: block;
+    font-size: 16px;
 }
 
 .app-workout-level-group {

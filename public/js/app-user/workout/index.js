@@ -1302,6 +1302,41 @@ function calculateRecentListVolume(records = []) {
     return { hasVolume, total };
 }
 
+function renderRecentListBadges(record) {
+    const levelLabels = {
+        high: '상',
+        medium: '중',
+        low: '하'
+    };
+    const badges = [];
+    if (record.condition_level) {
+        const label = levelLabels[record.condition_level] || record.condition_level;
+        badges.push({ text: `컨디션 ${label}`, level: record.condition_level });
+    }
+    if (record.intensity_level) {
+        const label = levelLabels[record.intensity_level] || record.intensity_level;
+        badges.push({ text: `운동강도 ${label}`, level: record.intensity_level });
+    }
+    if (record.fatigue_level) {
+        const label = levelLabels[record.fatigue_level] || record.fatigue_level;
+        badges.push({ text: `피로도 ${label}`, level: record.fatigue_level, reverse: true });
+    }
+    
+    if (badges.length === 0) {
+        return '';
+    }
+    
+    return `
+        <div class="app-workout-level-badges">
+            ${badges.map(badge => {
+                const level = badge.level || 'medium';
+                const dataLevel = badge.reverse ? `${level}-reverse` : level;
+                return `<span class="app-workout-level-badge" data-level="${dataLevel}">${badge.text}</span>`;
+            }).join('')}
+        </div>
+    `;
+}
+
 function renderRecentListItem(record, utils) {
     const { escapeHtml, formatWeight } = utils;
     const workoutTypeName = escapeHtml(record.workout_type_name || record.text_content || '미지정');
@@ -1312,10 +1347,12 @@ function renderRecentListItem(record, utils) {
     
     if (record.is_text_record) {
         const textContent = record.text_content ? escapeHtml(record.text_content) : '';
+        const badgesHtml = renderRecentListBadges(record);
         return `
             <div class="app-workout-item app-workout-item-text" data-record-id="${record.id}">
                 <div class="app-workout-item-main app-workout-item-main-text">
                     <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+                        ${badgesHtml}
                         <div class="app-workout-item-text-content" style="white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
                     </div>
                 </div>
@@ -1324,6 +1361,7 @@ function renderRecentListItem(record, utils) {
         `;
     }
     
+    const badgesHtml = renderRecentListBadges(record);
     let infoHtml = '';
     if (workoutTypeType === '시간' && duration) {
         infoHtml = `<div class="app-workout-item-duration-container"><span class="app-workout-item-duration">⏱ ${duration}</span></div>`;
@@ -1346,6 +1384,7 @@ function renderRecentListItem(record, utils) {
             <div class="app-workout-item-main">
                 <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 4px;">
                     <div class="app-workout-item-type">${workoutTypeName}</div>
+                    ${badgesHtml}
                 </div>
                 ${infoHtml ? `<div class="app-workout-item-info">${infoHtml}</div>` : ''}
             </div>
