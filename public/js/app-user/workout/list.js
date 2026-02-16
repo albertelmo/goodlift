@@ -985,40 +985,50 @@ function renderWorkoutItem(record) {
         const checked = isCompleted ? 'checked' : '';
         const badgesHtml = renderWorkoutLevelBadges(record);
         
+        const dragHandleHtml = suppressControls
+            ? ''
+            : `
+                <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="4" y1="7" x2="20" y2="7"></line>
+                        <line x1="4" y1="12" x2="20" y2="12"></line>
+                        <line x1="4" y1="17" x2="20" y2="17"></line>
+                    </svg>
+                </div>
+            `;
+        const topLeftControls = (!suppressControls || badgesHtml)
+            ? `
+                <div style="position: absolute; top: 6px; left: 6px; display: flex; align-items: center; gap: 6px;">
+                    ${dragHandleHtml}
+                    ${badgesHtml}
+                </div>
+            `
+            : '';
+        const topRightControls = (!isReadOnly && !suppressControls)
+            ? `
+                <div style="position: absolute; top: 6px; right: 12px; display: flex; align-items: center; gap: 6px;">
+                    <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                    <div class="app-workout-item-duration-container" style="flex-shrink: 0;">
+                        <input type="checkbox" class="app-workout-item-checkbox" 
+                               data-record-id="${record.id}" 
+                               data-type="record" 
+                               ${checked}>
+                    </div>
+                </div>
+            `
+            : '';
+        
         return `
             <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
                 <div class="app-workout-item-main app-workout-item-main-text">
                     <div class="app-workout-item-type-container app-workout-item-type-container-text" style="flex-direction: column; align-items: flex-start; gap: 8px; flex: 1;">
-                        ${(!suppressControls || badgesHtml) ? `
-                        <div style="position: absolute; top: 6px; left: 6px; display: flex; align-items: center; gap: 6px;">
-                            ${suppressControls ? '' : `
-                            <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="4" y1="7" x2="20" y2="7"></line>
-                                    <line x1="4" y1="12" x2="20" y2="12"></line>
-                                    <line x1="4" y1="17" x2="20" y2="17"></line>
-                                </svg>
-                            </div>
-                            ` : ''}
-                            ${badgesHtml}
-                        </div>
-                        ` : ''}
-                        ${!isReadOnly && !suppressControls ? `
-                        <div style="position: absolute; top: 6px; right: 12px; display: flex; align-items: center; gap: 6px;">
-                            <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                </svg>
-                            </button>
-                            <div class="app-workout-item-duration-container" style="flex-shrink: 0;">
-                                <input type="checkbox" class="app-workout-item-checkbox" 
-                                       data-record-id="${record.id}" 
-                                       data-type="record" 
-                                       ${checked}>
-                            </div>
-                        </div>
-                        ` : ''}
+                        ${topLeftControls}
+                        ${topRightControls}
                         <div style="display: flex; flex-direction: column; gap: 6px; width: 100%; padding-top: 28px;">
                             <div class="app-workout-item-text-content" style="white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
                         </div>
