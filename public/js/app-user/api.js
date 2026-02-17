@@ -200,6 +200,13 @@ export async function post(endpoint, data) {
 }
 
 /**
+ * 트레이너 월간 AI 분석 (운동 + 식단)
+ */
+export async function requestMonthlyAiAnalysis(data) {
+    return post('/ai/member-monthly-analysis', data);
+}
+
+/**
  * 앱 유저 접속 핑 (활성 통계용)
  */
 export async function postAppUserPing(appUserId) {

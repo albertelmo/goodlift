@@ -409,6 +409,235 @@ async function syncTrialWithSession(session, action = 'create') {
 // 이메일 서비스 모듈
 const emailService = require('./email-service');
 
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_API_BASE = process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta';
+const MAX_GEMINI_WORKOUT_RECORDS = 200;
+const MAX_GEMINI_DIET_RECORDS = 200;
+
+const formatDateToYMD = (date) => {
+  if (!(date instanceof Date)) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getMonthRange = (baseDate = new Date()) => {
+  const year = baseDate.getFullYear();
+  const month = baseDate.getMonth();
+  const start = new Date(year, month, 1);
+  const end = new Date(year, month + 1, 0);
+  return {
+    startDate: formatDateToYMD(start),
+    endDate: formatDateToYMD(end)
+  };
+};
+
+const buildWorkoutAnalysisPayload = (records, { startDate, endDate, maxRecords }) => {
+  const limit = Math.max(1, Math.min(maxRecords || MAX_GEMINI_WORKOUT_RECORDS, MAX_GEMINI_WORKOUT_RECORDS));
+  const trimmed = records.slice(0, limit);
+  const typeCounts = {};
+  let totalDuration = 0;
+  let completedCount = 0;
+  let textCount = 0;
+  let totalSets = 0;
+
+  const mappedRecords = trimmed.map(record => {
+    const typeName = record.workout_type_name || (record.is_text_record ? '텍스트기록' : '미지정');
+    typeCounts[typeName] = (typeCounts[typeName] || 0) + 1;
+    if (record.duration_minutes) {
+      totalDuration += Number(record.duration_minutes) || 0;
+    }
+    if (record.is_completed) {
+      completedCount += 1;
+    }
+    if (record.is_text_record) {
+      textCount += 1;
+    }
+    if (Array.isArray(record.sets)) {
+      totalSets += record.sets.length;
+    }
+
+    return {
+      workout_date: record.workout_date,
+      workout_type_name: record.workout_type_name,
+      workout_type_type: record.workout_type_type,
+      duration_minutes: record.duration_minutes,
+      notes: record.notes,
+      condition_level: record.condition_level,
+      intensity_level: record.intensity_level,
+      fatigue_level: record.fatigue_level,
+      is_completed: record.is_completed,
+      is_text_record: record.is_text_record,
+      text_content: record.text_content,
+      sets: Array.isArray(record.sets)
+        ? record.sets.map(set => ({
+            set_number: set.set_number,
+            weight: set.weight,
+            reps: set.reps,
+            is_completed: set.is_completed
+          }))
+        : []
+    };
+  });
+
+  const recordCount = trimmed.length;
+  const avgDuration = recordCount > 0 ? Math.round((totalDuration / recordCount) * 10) / 10 : 0;
+
+  return {
+    summary: {
+      record_count: recordCount,
+      date_range: {
+        start_date: startDate || null,
+        end_date: endDate || null
+      },
+      total_duration_minutes: totalDuration,
+      avg_duration_minutes: avgDuration,
+      completed_count: completedCount,
+      text_record_count: textCount,
+      total_sets: totalSets,
+      workout_type_counts: typeCounts
+    },
+    records: mappedRecords
+  };
+};
+
+const buildDietAnalysisPayload = (records, { startDate, endDate, maxRecords }) => {
+  const limit = Math.max(1, Math.min(maxRecords || MAX_GEMINI_DIET_RECORDS, MAX_GEMINI_DIET_RECORDS));
+  const trimmed = records.slice(0, limit);
+  const mealTypeCounts = {};
+  const evaluationCounts = {};
+  let withImageCount = 0;
+  let commentTotal = 0;
+
+  const mappedRecords = trimmed.map(record => {
+    const mealType = record.meal_type || 'unknown';
+    mealTypeCounts[mealType] = (mealTypeCounts[mealType] || 0) + 1;
+    if (record.trainer_evaluation) {
+      evaluationCounts[record.trainer_evaluation] = (evaluationCounts[record.trainer_evaluation] || 0) + 1;
+    }
+    if (record.image_url || record.image_thumbnail_url) {
+      withImageCount += 1;
+    }
+    if (record.comment_count) {
+      commentTotal += Number(record.comment_count) || 0;
+    }
+
+    return {
+      meal_date: record.meal_date,
+      meal_time: record.meal_time,
+      meal_type: record.meal_type,
+      notes: record.notes,
+      trainer_evaluation: record.trainer_evaluation,
+      comment_count: record.comment_count || 0
+    };
+  });
+
+  return {
+    summary: {
+      record_count: trimmed.length,
+      date_range: {
+        start_date: startDate || null,
+        end_date: endDate || null
+      },
+      meal_type_counts: mealTypeCounts,
+      trainer_evaluation_counts: evaluationCounts,
+      with_image_count: withImageCount,
+      comment_total: commentTotal
+    },
+    records: mappedRecords
+  };
+};
+
+const buildMemberMonthlyAnalysisPayload = (workoutRecords, dietRecords, { startDate, endDate, maxWorkoutRecords, maxDietRecords }) => {
+  const workoutPayload = buildWorkoutAnalysisPayload(workoutRecords, {
+    startDate,
+    endDate,
+    maxRecords: maxWorkoutRecords
+  });
+  const dietPayload = buildDietAnalysisPayload(dietRecords, {
+    startDate,
+    endDate,
+    maxRecords: maxDietRecords
+  });
+  return {
+    summary: {
+      date_range: workoutPayload.summary.date_range,
+      workout: workoutPayload.summary,
+      diet: dietPayload.summary
+    },
+    workout_records: workoutPayload.records,
+    diet_records: dietPayload.records
+  };
+};
+
+const normalizeGeminiModelName = (modelName) => {
+  if (!modelName) return 'gemini-1.5-flash';
+  return String(modelName).replace(/^models\//, '').trim();
+};
+
+const requestGeminiAnalysis = async ({ question, payload }) => {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY가 설정되지 않았습니다.');
+  }
+
+  const normalizedModel = normalizeGeminiModelName(GEMINI_MODEL);
+  const endpoint = `${GEMINI_API_BASE}/models/${normalizedModel}:generateContent?key=${GEMINI_API_KEY}`;
+  const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS) || 30000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
+  const prompt = [
+    '너는 헬스/운동 기록 분석가다.',
+    '아래 JSON 데이터만 사용해서 질문에 답하라.',
+    '데이터에 없는 내용은 추측하지 말고, 부족하면 부족하다고 말하라.',
+    '결과는 한국어로 간결하게 요약하고, 핵심 인사이트와 개선 제안을 포함하라.',
+    '',
+    `질문: ${question}`,
+    '',
+    `데이터: ${JSON.stringify(payload)}`
+  ].join('\n');
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: prompt }]
+          }
+        ]
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Gemini API 타임아웃 (${timeoutMs}ms)`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    const elapsedMs = Date.now() - startedAt;
+    console.log(`[Gemini] request ${normalizedModel} ${elapsedMs}ms`);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini API 오류: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json();
+  const candidate = data?.candidates?.[0];
+  const text = candidate?.content?.parts?.[0]?.text;
+  return text || '분석 결과를 생성하지 못했습니다.';
+};
+
 const app = express();
 const PORT = 3000;
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
@@ -2546,6 +2775,111 @@ app.get('/api/workout-records/stats', async (req, res) => {
     } catch (error) {
         console.error('[API] 운동기록 통계 조회 오류:', error);
         res.status(500).json({ message: '운동기록 통계 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// Gemini 운동기록 분석 (자연어 질문 -> 안전한 조회 -> 분석 결과)
+app.post('/api/ai/workout-analysis', async (req, res) => {
+    try {
+        const { app_user_id, start_date, end_date, question, max_records } = req.body || {};
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 분석을 수행할 수 없습니다.' });
+        }
+
+        const filters = {};
+        if (start_date) filters.startDate = start_date;
+        if (end_date) filters.endDate = end_date;
+
+        const records = await workoutRecordsDB.getWorkoutRecords(app_user_id, filters);
+        const payload = buildWorkoutAnalysisPayload(records, {
+            startDate: start_date,
+            endDate: end_date,
+            maxRecords: Number(max_records) || undefined
+        });
+
+        if (payload.summary.record_count === 0) {
+            return res.json({
+                analysis: '분석할 운동기록이 없습니다.',
+                summary: payload.summary
+            });
+        }
+
+        const analysis = await requestGeminiAnalysis({
+            question: question || '최근 운동기록을 분석해줘.',
+            payload
+        });
+
+        res.json({
+            analysis,
+            summary: payload.summary
+        });
+    } catch (error) {
+        console.error('[API] Gemini 운동기록 분석 오류:', error);
+        res.status(500).json({ message: error.message || 'Gemini 분석 중 오류가 발생했습니다.' });
+    }
+});
+
+// Gemini 회원 월간 분석 (운동 + 식단)
+app.post('/api/ai/member-monthly-analysis', async (req, res) => {
+    try {
+        const { app_user_id, start_date, end_date, question, max_workout_records, max_diet_records } = req.body || {};
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(403).json({ message: '트레이너 모드에서는 분석을 수행할 수 없습니다.' });
+        }
+
+        let startDate = start_date;
+        let endDate = end_date;
+        if (!startDate || !endDate) {
+            const range = getMonthRange();
+            startDate = startDate || range.startDate;
+            endDate = endDate || range.endDate;
+        }
+
+        const filters = {};
+        if (startDate) filters.startDate = startDate;
+        if (endDate) filters.endDate = endDate;
+
+        const [workoutRecords, dietRecords] = await Promise.all([
+            workoutRecordsDB.getWorkoutRecords(app_user_id, filters),
+            dietRecordsDB.getDietRecords(app_user_id, filters)
+        ]);
+
+        const payload = buildMemberMonthlyAnalysisPayload(workoutRecords, dietRecords, {
+            startDate,
+            endDate,
+            maxWorkoutRecords: Number(max_workout_records) || undefined,
+            maxDietRecords: Number(max_diet_records) || undefined
+        });
+
+        const workoutCount = payload.summary.workout?.record_count || 0;
+        const dietCount = payload.summary.diet?.record_count || 0;
+        if (workoutCount === 0 && dietCount === 0) {
+            return res.json({
+                analysis: '분석할 운동/식단 기록이 없습니다.',
+                summary: payload.summary
+            });
+        }
+
+        const analysis = await requestGeminiAnalysis({
+            question: question || '이번달 운동/식단 기록을 함께 분석해줘.',
+            payload
+        });
+
+        res.json({
+            analysis,
+            summary: payload.summary
+        });
+    } catch (error) {
+        console.error('[API] Gemini 월간 분석 오류:', error);
+        res.status(500).json({ message: error.message || 'Gemini 분석 중 오류가 발생했습니다.' });
     }
 });
 

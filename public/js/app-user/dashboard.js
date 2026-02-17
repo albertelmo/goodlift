@@ -2,7 +2,7 @@
 
 import { formatDate, getToday, escapeHtml, getTimeAgo } from './utils.js';
 import { getUserSettings, updateUserSettings } from './api.js';
-import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead, getAnnouncementsInbox, getAnnouncementDetail, markAnnouncementAsRead } from './api.js';
+import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead, getAnnouncementsInbox, getAnnouncementDetail, markAnnouncementAsRead, requestMonthlyAiAnalysis } from './api.js';
 import { showWorkoutGuideDetailModal } from './guide-modal.js';
 
 let currentUser = null;
@@ -24,6 +24,7 @@ let memberActivityLogs = null; // 회원 활동 로그
 let memberActivityLogsUnreadCount = 0; // 회원 활동 로그 읽지 않은 개수
 let announcementsInbox = [];
 let announcementsUnreadCount = 0;
+const DEFAULT_AI_QUESTION = '이번달 운동/식단 기록을 분석해줘.';
 
 // 활동 로그 자동 업데이트를 위한 인터벌 ID
 let activityLogsUpdateInterval = null;
@@ -943,6 +944,65 @@ async function navigateFromActivityLog(item) {
     navigateToScreen(target.screen);
 }
 
+function getMonthValue(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+}
+
+function formatDateToYMD(date) {
+    if (!(date instanceof Date)) return '';
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getMonthRangeFromValue(monthValue) {
+    if (!monthValue || !monthValue.includes('-')) {
+        const today = new Date();
+        const start = new Date(today.getFullYear(), today.getMonth(), 1);
+        const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        return { startDate: formatDateToYMD(start), endDate: formatDateToYMD(end) };
+    }
+    const [year, month] = monthValue.split('-').map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0);
+    return { startDate: formatDateToYMD(start), endDate: formatDateToYMD(end) };
+}
+
+function buildTrainerMemberOptions(selectedId) {
+    const options = [];
+    const seen = new Set();
+    if (connectedAppUserInfo?.id) {
+        options.push({
+            id: connectedAppUserInfo.id,
+            label: `${connectedAppUserInfo.name || '회원'} (연결됨)`
+        });
+        seen.add(connectedAppUserInfo.id);
+    }
+    if (Array.isArray(trainerMembers)) {
+        trainerMembers.forEach(member => {
+            if (!member?.app_user_id || seen.has(member.app_user_id)) return;
+            options.push({
+                id: member.app_user_id,
+                label: member.name || '회원'
+            });
+            seen.add(member.app_user_id);
+        });
+    }
+    if (options.length === 0) {
+        return '<option value="">회원 없음</option>';
+    }
+    return options.map(option => `
+        <option value="${option.id}" ${option.id === selectedId ? 'selected' : ''}>${escapeHtml(option.label)}</option>
+    `).join('');
+}
+
+function formatAnalysisHtml(text) {
+    return escapeHtml(text || '').replace(/\n/g, '<br>');
+}
+
 /**
  * 대시보드 렌더링
  */
@@ -958,6 +1018,11 @@ function render() {
     // member_name 확인 (null, undefined, 빈 문자열 체크)
     const memberName = currentUser?.member_name;
     const hasMemberName = memberName && typeof memberName === 'string' && memberName.trim() !== '';
+
+    const connectedMemberId = localStorage.getItem('connectedMemberAppUserId');
+    const aiSelectedMemberId = connectedMemberId || connectedAppUserInfo?.id || (trainerMembers && trainerMembers[0]?.app_user_id) || '';
+    const aiMonthValue = getMonthValue();
+    const aiMemberOptionsHtml = buildTrainerMemberOptions(aiSelectedMemberId);
     
     // 다음 세션 표시 텍스트 (트레이너가 아닌 경우에만)
     let nextSessionText = '예정된 세션이 없습니다';
@@ -1540,6 +1605,29 @@ function render() {
                 </div>
             </div>
             ` : ''}
+
+            ${isTrainer ? `
+            <div class="app-dashboard-section" id="trainer-ai-analysis-section">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+                    <h2 class="app-section-title" style="margin: 0; font-size: 1.05rem;">🤖 AI 분석</h2>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <select id="trainer-ai-member-select" style="padding: 6px 10px; border: 1px solid var(--app-border); border-radius: 6px; font-size: 0.9rem; background: #fff; min-width: 180px;">
+                            ${aiMemberOptionsHtml}
+                        </select>
+                        <input type="month" id="trainer-ai-month" value="${aiMonthValue}" style="padding: 6px 10px; border: 1px solid var(--app-border); border-radius: 6px; font-size: 0.9rem;">
+                        <button id="trainer-ai-request-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.9rem; white-space: nowrap;" ${aiSelectedMemberId ? '' : 'disabled'}>
+                            분석 요청
+                        </button>
+                    </div>
+                </div>
+                <div style="margin-bottom: 8px;">
+                    <input type="text" id="trainer-ai-question" value="${escapeHtml(DEFAULT_AI_QUESTION)}" placeholder="질문을 입력하세요" style="width: 100%; padding: 8px 10px; border: 1px solid var(--app-border); border-radius: 6px; font-size: 0.9rem; box-sizing: border-box;">
+                </div>
+                <div id="trainer-ai-analysis-result" style="background: #fff; border: 1px solid var(--app-border); border-radius: 8px; padding: 12px; min-height: 120px; font-size: 0.9rem; color: var(--app-text);">
+                    ${aiSelectedMemberId ? '회원과 기간을 선택한 뒤 분석 요청을 눌러주세요.' : '연결된 회원이 없습니다.'}
+                </div>
+            </div>
+            ` : ''}
             
             ${!isTrainer ? `
             <div class="app-achievement-modal" id="app-achievement-modal">
@@ -1761,6 +1849,7 @@ function render() {
     // 회원 검색 버튼 클릭 이벤트 설정
     if (isTrainer) {
         setupSearchMemberButton();
+        setupTrainerAiAnalysisSection();
     }
     
     // 일반 회원만 카드 클릭 이벤트 설정
@@ -1836,6 +1925,58 @@ function render() {
             });
         });
     }
+}
+
+function setupTrainerAiAnalysisSection() {
+    const section = document.getElementById('trainer-ai-analysis-section');
+    if (!section) return;
+    const button = section.querySelector('#trainer-ai-request-btn');
+    const memberSelect = section.querySelector('#trainer-ai-member-select');
+    const monthInput = section.querySelector('#trainer-ai-month');
+    const questionInput = section.querySelector('#trainer-ai-question');
+    const resultEl = section.querySelector('#trainer-ai-analysis-result');
+
+    if (!button || button._aiSetup) return;
+    button._aiSetup = true;
+
+    button.addEventListener('click', async () => {
+        if (!memberSelect || !resultEl) return;
+        const memberId = memberSelect.value;
+        if (!memberId) {
+            alert('회원 선택이 필요합니다.');
+            return;
+        }
+        const monthValue = monthInput?.value || getMonthValue();
+        const { startDate, endDate } = getMonthRangeFromValue(monthValue);
+        const question = (questionInput?.value || '').trim() || DEFAULT_AI_QUESTION;
+
+        button.disabled = true;
+        const prevLabel = button.textContent;
+        button.textContent = '분석 중...';
+        resultEl.innerHTML = 'AI 분석을 요청하는 중입니다...';
+
+        try {
+            const response = await requestMonthlyAiAnalysis({
+                app_user_id: memberId,
+                start_date: startDate,
+                end_date: endDate,
+                question
+            });
+            const workoutCount = response?.summary?.workout?.record_count || 0;
+            const dietCount = response?.summary?.diet?.record_count || 0;
+            const summaryText = `운동 ${workoutCount}건 · 식단 ${dietCount}건 (${startDate} ~ ${endDate})`;
+            resultEl.innerHTML = `
+                <div style="font-size:0.8rem;color:var(--app-text-muted);margin-bottom:8px;">${escapeHtml(summaryText)}</div>
+                <div>${formatAnalysisHtml(response?.analysis || '분석 결과가 없습니다.')}</div>
+            `;
+        } catch (error) {
+            console.error('AI 분석 요청 오류:', error);
+            resultEl.innerHTML = `<div style="color:#d32f2f;">${escapeHtml(error.message || 'AI 분석 요청 중 오류가 발생했습니다.')}</div>`;
+        } finally {
+            button.disabled = false;
+            button.textContent = prevLabel;
+        }
+    });
 }
 
 function updateDietBottomNavIconFromCard() {
