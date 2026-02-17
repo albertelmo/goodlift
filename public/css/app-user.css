@@ -1604,6 +1604,14 @@ body.app-user-active {
     -ms-user-select: text;
 }
 
+/* AI 분석 결과는 선택/복사 가능하도록 허용 */
+#trainer-ai-analysis-result {
+    user-select: text;
+    -webkit-user-select: text;
+    -ms-user-select: text;
+}
+
+
 /* 식단 목록 스타일 */
 .app-diet-list {
     display: flex;

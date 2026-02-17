@@ -1609,7 +1609,10 @@ function render() {
             ${isTrainer ? `
             <div class="app-dashboard-section" id="trainer-ai-analysis-section">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
-                    <h2 class="app-section-title" style="margin: 0; font-size: 1.05rem;">🤖 AI 분석</h2>
+                    <h2 class="app-section-title" style="margin: 0; font-size: 1.05rem; display: flex; align-items: center; gap: 8px;">
+                        <img src="/img/gemini-logo.svg" alt="Gemini" style="width: 20px; height: 20px; display: inline-block;">
+                        Gemini 분석
+                    </h2>
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                         <select id="trainer-ai-member-select" style="padding: 6px 10px; border: 1px solid var(--app-border); border-radius: 6px; font-size: 0.9rem; background: #fff; min-width: 180px;">
                             ${aiMemberOptionsHtml}
@@ -1617,6 +1620,9 @@ function render() {
                         <input type="month" id="trainer-ai-month" value="${aiMonthValue}" style="padding: 6px 10px; border: 1px solid var(--app-border); border-radius: 6px; font-size: 0.9rem;">
                         <button id="trainer-ai-request-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.9rem; white-space: nowrap;" ${aiSelectedMemberId ? '' : 'disabled'}>
                             분석 요청
+                        </button>
+                        <button id="trainer-ai-selectall-btn" class="app-btn-secondary" style="padding: 6px 12px; font-size: 0.9rem; white-space: nowrap;">
+                            전체 선택
                         </button>
                     </div>
                 </div>
@@ -1931,6 +1937,7 @@ function setupTrainerAiAnalysisSection() {
     const section = document.getElementById('trainer-ai-analysis-section');
     if (!section) return;
     const button = section.querySelector('#trainer-ai-request-btn');
+    const selectAllButton = section.querySelector('#trainer-ai-selectall-btn');
     const memberSelect = section.querySelector('#trainer-ai-member-select');
     const monthInput = section.querySelector('#trainer-ai-month');
     const questionInput = section.querySelector('#trainer-ai-question');
@@ -1939,7 +1946,12 @@ function setupTrainerAiAnalysisSection() {
     if (!button || button._aiSetup) return;
     button._aiSetup = true;
 
-    button.addEventListener('click', async () => {
+    const updateButtonState = () => {
+        if (!button || !memberSelect) return;
+        button.disabled = !memberSelect.value;
+    };
+
+    const runAnalysis = async () => {
         if (!memberSelect || !resultEl) return;
         const memberId = memberSelect.value;
         if (!memberId) {
@@ -1976,7 +1988,45 @@ function setupTrainerAiAnalysisSection() {
             button.disabled = false;
             button.textContent = prevLabel;
         }
+    };
+
+    button.addEventListener('click', (e) => {
+        e.preventDefault();
+        runAnalysis();
     });
+    button.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        runAnalysis();
+    }, { passive: false });
+
+    if (memberSelect) {
+        memberSelect.addEventListener('change', updateButtonState);
+        updateButtonState();
+    }
+
+    if (selectAllButton && !selectAllButton._selectAllSetup) {
+        selectAllButton._selectAllSetup = true;
+        const selectAll = () => {
+            if (!resultEl) return;
+            const selection = window.getSelection();
+            if (!selection) return;
+            const range = document.createRange();
+            range.selectNodeContents(resultEl);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            resultEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        };
+        selectAllButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            selectAll();
+        });
+        selectAllButton.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectAll();
+        }, { passive: false });
+    }
 }
 
 function updateDietBottomNavIconFromCard() {

@@ -438,7 +438,6 @@ const buildWorkoutAnalysisPayload = (records, { startDate, endDate, maxRecords }
   const limit = Math.max(1, Math.min(maxRecords || MAX_GEMINI_WORKOUT_RECORDS, MAX_GEMINI_WORKOUT_RECORDS));
   const trimmed = records.slice(0, limit);
   const typeCounts = {};
-  let totalDuration = 0;
   let completedCount = 0;
   let textCount = 0;
   let totalSets = 0;
@@ -446,9 +445,6 @@ const buildWorkoutAnalysisPayload = (records, { startDate, endDate, maxRecords }
   const mappedRecords = trimmed.map(record => {
     const typeName = record.workout_type_name || (record.is_text_record ? '텍스트기록' : '미지정');
     typeCounts[typeName] = (typeCounts[typeName] || 0) + 1;
-    if (record.duration_minutes) {
-      totalDuration += Number(record.duration_minutes) || 0;
-    }
     if (record.is_completed) {
       completedCount += 1;
     }
@@ -463,7 +459,6 @@ const buildWorkoutAnalysisPayload = (records, { startDate, endDate, maxRecords }
       workout_date: record.workout_date,
       workout_type_name: record.workout_type_name,
       workout_type_type: record.workout_type_type,
-      duration_minutes: record.duration_minutes,
       notes: record.notes,
       condition_level: record.condition_level,
       intensity_level: record.intensity_level,
@@ -483,8 +478,6 @@ const buildWorkoutAnalysisPayload = (records, { startDate, endDate, maxRecords }
   });
 
   const recordCount = trimmed.length;
-  const avgDuration = recordCount > 0 ? Math.round((totalDuration / recordCount) * 10) / 10 : 0;
-
   return {
     summary: {
       record_count: recordCount,
@@ -492,8 +485,6 @@ const buildWorkoutAnalysisPayload = (records, { startDate, endDate, maxRecords }
         start_date: startDate || null,
         end_date: endDate || null
       },
-      total_duration_minutes: totalDuration,
-      avg_duration_minutes: avgDuration,
       completed_count: completedCount,
       text_record_count: textCount,
       total_sets: totalSets,
@@ -593,6 +584,8 @@ const requestGeminiAnalysis = async ({ question, payload }) => {
     '아래 JSON 데이터만 사용해서 질문에 답하라.',
     '데이터에 없는 내용은 추측하지 말고, 부족하면 부족하다고 말하라.',
     '결과는 한국어로 간결하게 요약하고, 핵심 인사이트와 개선 제안을 포함하라.',
+    '출력에서 DB 필드명(is_completed, is_text_record 등)은 그대로 쓰지 말고, 사용자 친화 용어로 바꿔라.',
+    '예: is_completed -> 운동완료, is_text_record -> 텍스트 기록, text_content -> 텍스트 내용, workout_type_name -> 운동명, meal_type -> 식사구분',
     '',
     `질문: ${question}`,
     '',
