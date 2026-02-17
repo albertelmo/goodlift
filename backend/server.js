@@ -584,7 +584,7 @@ const requestGeminiAnalysis = async ({ question, payload }) => {
 
   const normalizedModel = normalizeGeminiModelName(GEMINI_MODEL);
   const endpoint = `${GEMINI_API_BASE}/models/${normalizedModel}:generateContent?key=${GEMINI_API_KEY}`;
-  const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS) || 30000;
+  const timeoutMs = Number(process.env.GEMINI_TIMEOUT_MS) || 60000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
