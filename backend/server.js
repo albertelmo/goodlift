@@ -49,6 +49,8 @@ const consultationSharesDB = require('./consultation-shares-db');
 const elmoUsersDB = require('./elmo-users-db');
 const elmoCalendarRecordsDB = require('./elmo-calendar-records-db');
 const pushSubscriptionsDB = require('./push-subscriptions-db');
+const adminPushSubscriptionsDB = require('./admin-push-subscriptions-db');
+const adminPushSettingsDB = require('./admin-push-settings-db');
 const webpush = require('web-push');
 const elmoApiRouter = require('./elmo-api-router');
 const webApiRouter = require('./web-api-router');
@@ -372,7 +374,8 @@ async function syncTrialWithSession(session, action = 'create') {
         trainer: session.trainer,
         member_name: session.member
       };
-      await trialsDB.addTrial(trial);
+      const createdTrial = await trialsDB.addTrial(trial);
+      enqueuePushForConsultationChange({ action: 'create', record: createdTrial });
     } else if (action === 'update') {
       // trial 업데이트
       const existingTrial = await trialsDB.getTrialBySessionId(session.id);
@@ -394,7 +397,8 @@ async function syncTrialWithSession(session, action = 'create') {
           trainer: session.trainer,
           member_name: session.member
         };
-        await trialsDB.addTrial(trial);
+        const createdTrial = await trialsDB.addTrial(trial);
+        enqueuePushForConsultationChange({ action: 'create', record: createdTrial });
       }
     } else if (action === 'delete') {
       // trial 삭제
@@ -883,6 +887,8 @@ consultationSharesDB.initializeDatabase(); // 상담기록 공유 토큰 테이�
 elmoUsersDB.initializeDatabase(); // Elmo 사용자 테이블 초기화
 elmoCalendarRecordsDB.initializeDatabase(); // Elmo 캘린더 기록 테이블 초기화
 pushSubscriptionsDB.initializeDatabase(); // 푸시 구독 테이블 초기화
+adminPushSubscriptionsDB.initializeDatabase(); // 관리자 푸시 구독 테이블 초기화
+adminPushSettingsDB.initializeDatabase(); // 관리자 푸시 설정 테이블 초기화
 webPagesDB.initializeDatabase(); // Web 페이지 테이블 초기화
 webCentersDB.initializeDatabase(); // Web 센터 프로필 테이블 초기화
 
@@ -1290,6 +1296,38 @@ app.use(express.json());
 // 권한 체크 헬퍼 함수 (SU 역할 추가)
 function isAdminOrSu(userAccount) {
     return userAccount && (userAccount.role === 'admin' || userAccount.role === 'su');
+}
+
+function getTrainerDisplayName(trainerValue) {
+    const trimmed = String(trainerValue || '').trim();
+    if (!trimmed) return '';
+    try {
+        if (!fs.existsSync(DATA_PATH)) return trimmed;
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        if (!raw) return trimmed;
+        const accounts = JSON.parse(raw);
+        const trainerAccount = accounts.find(acc => acc.role === 'trainer' && acc.username === trimmed);
+        if (trainerAccount && trainerAccount.name) {
+            return trainerAccount.name;
+        }
+    } catch (error) {
+        console.error('[Push] 트레이너 이름 조회 오류:', error);
+    }
+    return trimmed;
+}
+
+function getConsultationDateTimeLabel(record) {
+    if (record?.date && record?.time) {
+        const dateText = String(record.date).trim();
+        const timeText = String(record.time).trim().slice(0, 5);
+        if (dateText && timeText) {
+            return ` · ${dateText} ${timeText}`;
+        }
+        if (dateText) {
+            return ` · ${dateText}`;
+        }
+    }
+    return '';
 }
 
 // manifest.json을 올바른 Content-Type으로 제공
@@ -2171,6 +2209,229 @@ function normalizeSubscription(row) {
     };
 }
 
+const getAdminAccounts = () => {
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+        const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+        if (raw) accounts = JSON.parse(raw);
+    }
+    return accounts.filter(isAdminOrSu);
+};
+
+const getAdminUsernames = () => {
+    return getAdminAccounts()
+        .map(account => account.username)
+        .filter(Boolean);
+};
+
+const formatSalesAmount = (amount) => {
+    if (amount === undefined || amount === null) return '';
+    const numeric = Number(amount);
+    if (Number.isNaN(numeric)) return '';
+    return `${numeric.toLocaleString('ko-KR')}원`;
+};
+
+async function getEnabledAdminUsernames() {
+    const usernames = getAdminUsernames();
+    if (usernames.length === 0) return [];
+    const settingsMap = await adminPushSettingsDB.getSettingsMap(usernames);
+    return usernames.filter(username => settingsMap.get(username) !== false);
+}
+
+function buildSalesPushMessage(action, sale) {
+    const memberName = sale?.memberName || sale?.member_name || '회원';
+    const amountText = formatSalesAmount(sale?.amount);
+    const dateText = sale?.date ? ` (${sale.date})` : '';
+    let actionLabel = '변경';
+    if (action === 'create') actionLabel = '추가';
+    if (action === 'update') actionLabel = '수정';
+    if (action === 'delete') actionLabel = '삭제';
+    const amountPart = amountText ? ` · 금액 ${amountText}` : '';
+    return `${memberName} 매출이 ${actionLabel}되었습니다${dateText}${amountPart}`;
+}
+
+function enqueuePushForSalesChange({ action, sale }) {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return;
+    }
+    setImmediate(async () => {
+        try {
+            const usernames = await getEnabledAdminUsernames();
+            if (usernames.length === 0) return;
+            const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
+            if (!subscriptions || subscriptions.length === 0) return;
+            const payload = JSON.stringify({
+                title: '매출 알림',
+                body: buildSalesPushMessage(action, sale),
+                url: '/?tab=Sales'
+            });
+            await sendPushToSubscriptions(subscriptions, payload);
+        } catch (error) {
+            console.error('[Push] 매출 알림 전송 오류:', error);
+        }
+    });
+}
+
+function buildConsultationPushMessage(action, record) {
+    const name = record?.name || record?.member_name || '상담';
+    const dateTimeLabel = getConsultationDateTimeLabel(record);
+    const center = record?.center ? ` · ${record.center}` : '';
+    const trainerName = getTrainerDisplayName(record?.trainer_username || record?.trainer);
+    const trainer = trainerName ? ` · ${trainerName}` : '';
+    if (action === 'create') {
+        return `${name} 상담기록이 추가되었습니다${dateTimeLabel}${center}${trainer}`;
+    }
+    if (action === 'registered') {
+        return `${name} 상담이 등록으로 변경되었습니다${dateTimeLabel}${center}${trainer}`;
+    }
+    return `${name} 상담기록이 변경되었습니다${dateTimeLabel}${center}${trainer}`;
+}
+
+function buildMemberPushMessage({ action, memberName, trainerName, sessionChange, newSessions, statusChange }) {
+    const safeMemberName = memberName || '회원';
+    const safeTrainerName = trainerName || '담당 트레이너';
+    const parts = [];
+    if (action === 'create' && Number.isFinite(newSessions)) {
+        parts.push(`신규 ${newSessions}회`);
+    }
+    if (action === 'update') {
+        if (Number.isFinite(sessionChange) && sessionChange !== 0) {
+            const sign = sessionChange > 0 ? '+' : '';
+            parts.push(`세션 ${sign}${sessionChange}회`);
+        }
+        if (statusChange?.from && statusChange?.to && statusChange.from !== statusChange.to) {
+            parts.push(`상태 ${statusChange.from}→${statusChange.to}`);
+        }
+    }
+    const detailText = parts.length > 0 ? ` · ${parts.join(' · ')}` : '';
+    const actionText = action === 'create' ? '회원이 추가되었습니다' : '회원 정보가 변경되었습니다';
+    return `${safeMemberName} ${actionText} · ${safeTrainerName}${detailText}`;
+}
+
+function enqueuePushForMemberChange(payload) {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return;
+    }
+    setImmediate(async () => {
+        try {
+            const usernames = await getEnabledAdminUsernames();
+            if (usernames.length === 0) return;
+            const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
+            if (!subscriptions || subscriptions.length === 0) return;
+            const pushPayload = JSON.stringify({
+                title: '회원 알림',
+                body: buildMemberPushMessage(payload),
+                url: '/?tab=Member'
+            });
+            await sendPushToSubscriptions(subscriptions, pushPayload);
+        } catch (error) {
+            console.error('[Push] 회원 알림 전송 오류:', error);
+        }
+    });
+}
+
+function formatExpenseDateTime(value) {
+    if (!value) return '';
+    if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+            value = parsed;
+        } else {
+            if (trimmed.includes('T')) {
+                return trimmed.replace('T', ' ').slice(0, 16);
+            }
+            return trimmed.slice(0, 16);
+        }
+    }
+    if (value instanceof Date) {
+        const year = value.getFullYear();
+        const month = String(value.getMonth() + 1).padStart(2, '0');
+        const day = String(value.getDate()).padStart(2, '0');
+        const hours = String(value.getHours()).padStart(2, '0');
+        const minutes = String(value.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}`;
+    }
+    return String(value).trim();
+}
+
+function buildExpensePushMessage(expense) {
+    const type = expense?.expenseType || expense?.expense_type || 'meal';
+    const typeLabel = type === 'purchase' ? '구매' : type === 'personal' ? '개인지출' : '식대';
+    const trainerName = getTrainerDisplayName(expense?.trainer);
+    const amountText = formatSalesAmount(expense?.amount);
+    const datetimeText = formatExpenseDateTime(expense?.datetime);
+    const details = [];
+    if (datetimeText) details.push(datetimeText);
+    if (trainerName) details.push(`트레이너 ${trainerName}`);
+    if (amountText) details.push(`금액 ${amountText}`);
+    if (type === 'meal') {
+        const participants = expense?.participantTrainers || expense?.participant_trainers || [];
+        const participantNames = Array.isArray(participants)
+            ? participants.map(getTrainerDisplayName).filter(Boolean)
+            : [];
+        if (participantNames.length > 0) {
+            details.push(`함께 ${participantNames.join(', ')}`);
+        }
+    } else {
+        const item = expense?.purchaseItem || expense?.purchase_item || expense?.personalItem || '';
+        const center = expense?.center || '';
+        if (item) {
+            details.push(type === 'purchase' ? `구매 ${item}` : `내역 ${item}`);
+        }
+        if (center) {
+            details.push(`센터 ${center}`);
+        }
+    }
+    const detailText = details.length > 0 ? ` · ${details.join(' · ')}` : '';
+    return `${typeLabel} 지출${detailText}`;
+}
+
+function enqueuePushForExpenseChange(expense) {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return;
+    }
+    setImmediate(async () => {
+        try {
+            const usernames = await getEnabledAdminUsernames();
+            if (usernames.length === 0) return;
+            const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
+            if (!subscriptions || subscriptions.length === 0) return;
+            const payload = JSON.stringify({
+                title: '지출 알림',
+                body: buildExpensePushMessage(expense),
+                url: '/?tab=Expense'
+            });
+            await sendPushToSubscriptions(subscriptions, payload);
+        } catch (error) {
+            console.error('[Push] 지출 알림 전송 오류:', error);
+        }
+    });
+}
+
+function enqueuePushForConsultationChange({ action, record }) {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+        return;
+    }
+    setImmediate(async () => {
+        try {
+            const usernames = await getEnabledAdminUsernames();
+            if (usernames.length === 0) return;
+            const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
+            if (!subscriptions || subscriptions.length === 0) return;
+            const payload = JSON.stringify({
+                title: '상담 알림',
+                body: buildConsultationPushMessage(action, record),
+                url: '/?tab=Trial'
+            });
+            await sendPushToSubscriptions(subscriptions, payload);
+        } catch (error) {
+            console.error('[Push] 상담 알림 전송 오류:', error);
+        }
+    });
+}
+
 async function sendPushToSubscriptions(rows, payload) {
     const results = [];
     for (const row of rows) {
@@ -2360,6 +2621,129 @@ app.post('/api/push/subscribe', async (req, res) => {
     } catch (error) {
         console.error('[API] 푸시 구독 저장 오류:', error);
         res.status(500).json({ message: '푸시 구독 저장 중 오류가 발생했습니다.' });
+    }
+});
+
+// 관리자 푸시 상태 조회
+app.get('/api/admin/push/status', async (req, res) => {
+    try {
+        const { username } = req.query;
+        if (!username) {
+            return res.status(400).json({ message: 'username이 필요합니다.' });
+        }
+        const enabled = await adminPushSettingsDB.getPushEnabled(username);
+        const activeCount = await adminPushSubscriptionsDB.getActiveCountByUser(username);
+        res.json({ enabled, activeCount });
+    } catch (error) {
+        console.error('[API] 관리자 푸시 상태 조회 오류:', error);
+        res.status(500).json({ message: '관리자 푸시 상태 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 관리자 푸시 구독 목록 조회
+app.get('/api/admin/push/subscriptions', async (req, res) => {
+    try {
+        const { username } = req.query;
+        if (!username) {
+            return res.status(400).json({ message: 'username이 필요합니다.' });
+        }
+        const items = await adminPushSubscriptionsDB.getSubscriptionsByUser(username);
+        res.json({ items });
+    } catch (error) {
+        console.error('[API] 관리자 푸시 구독 목록 조회 오류:', error);
+        res.status(500).json({ message: '관리자 푸시 구독 목록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 관리자 푸시 설정 (계정 전체 on/off)
+app.post('/api/admin/push/settings', async (req, res) => {
+    try {
+        const { username, enabled, currentUser } = req.body;
+        if (!username) {
+            return res.status(400).json({ message: 'username이 필요합니다.' });
+        }
+        if (enabled === undefined) {
+            return res.status(400).json({ message: 'enabled 값이 필요합니다.' });
+        }
+        if (!currentUser) {
+            return res.status(400).json({ message: 'currentUser가 필요합니다.' });
+        }
+
+        const accounts = getAdminAccounts();
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        if (currentUser !== username && currentUserAccount.role !== 'su') {
+            return res.status(403).json({ message: '해당 계정의 설정만 변경할 수 있습니다.' });
+        }
+
+        const saved = await adminPushSettingsDB.setPushEnabled(username, Boolean(enabled));
+        res.json({ success: true, settings: saved });
+    } catch (error) {
+        console.error('[API] 관리자 푸시 설정 변경 오류:', error);
+        res.status(500).json({ message: '관리자 푸시 설정 변경 중 오류가 발생했습니다.' });
+    }
+});
+
+// 관리자 푸시 구독 등록
+app.post('/api/admin/push/subscribe', async (req, res) => {
+    try {
+        const { username, subscription, user_agent, platform, device_label, currentUser } = req.body;
+        if (!username) {
+            return res.status(400).json({ message: 'username이 필요합니다.' });
+        }
+        if (!subscription?.endpoint) {
+            return res.status(400).json({ message: 'subscription 정보가 필요합니다.' });
+        }
+        if (!currentUser) {
+            return res.status(400).json({ message: 'currentUser가 필요합니다.' });
+        }
+
+        const accounts = getAdminAccounts();
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        if (currentUser !== username && currentUserAccount.role !== 'su') {
+            return res.status(403).json({ message: '해당 계정으로만 구독할 수 있습니다.' });
+        }
+
+        const saved = await adminPushSubscriptionsDB.upsertSubscription(username, subscription, {
+            userAgent: user_agent,
+            platform,
+            deviceLabel: device_label
+        });
+        res.json({ success: true, subscription: saved });
+    } catch (error) {
+        console.error('[API] 관리자 푸시 구독 저장 오류:', error);
+        res.status(500).json({ message: '관리자 푸시 구독 저장 중 오류가 발생했습니다.' });
+    }
+});
+
+// 관리자 푸시 구독 해제
+app.post('/api/admin/push/unsubscribe', async (req, res) => {
+    try {
+        const { username, endpoint, currentUser } = req.body;
+        if (!username) {
+            return res.status(400).json({ message: 'username이 필요합니다.' });
+        }
+        if (!currentUser) {
+            return res.status(400).json({ message: 'currentUser가 필요합니다.' });
+        }
+        const accounts = getAdminAccounts();
+        const currentUserAccount = accounts.find(acc => acc.username === currentUser);
+        if (!isAdminOrSu(currentUserAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+        if (currentUser !== username && currentUserAccount.role !== 'su') {
+            return res.status(403).json({ message: '해당 계정으로만 해제할 수 있습니다.' });
+        }
+        const count = await adminPushSubscriptionsDB.deactivateSubscription(username, endpoint);
+        res.json({ success: true, updated: count });
+    } catch (error) {
+        console.error('[API] 관리자 푸시 구독 해제 오류:', error);
+        res.status(500).json({ message: '관리자 푸시 구독 해제 중 오류가 발생했습니다.' });
     }
 });
 
@@ -5759,6 +6143,12 @@ app.post('/api/members', async (req, res) => {
         };
         
         const member = await membersDB.addMember(newMember);
+        enqueuePushForMemberChange({
+            action: 'create',
+            memberName: member?.name || name,
+            trainerName: getTrainerDisplayName(member?.trainer || trainer),
+            newSessions: Number.isFinite(numSessions) ? numSessions : null
+        });
         
         // 신규 세션 통계 추가
         if (numSessions > 0) {
@@ -5877,7 +6267,19 @@ app.patch('/api/members/:name', async (req, res) => {
             updates.vipSession = Number(vipSession);
         }
         
+        const beforeMember = await membersDB.getMemberByName(name);
         const member = await membersDB.updateMember(name, updates);
+        const sessionChange = addSessions && !isNaN(Number(addSessions)) ? Number(addSessions) : 0;
+        const statusChanged = beforeMember?.status && member?.status && beforeMember.status !== member.status;
+        if ((sessionChange && sessionChange !== 0) || statusChanged) {
+            enqueuePushForMemberChange({
+                action: 'update',
+                memberName: member?.name || name,
+                trainerName: getTrainerDisplayName(member?.trainer || beforeMember?.trainer),
+                sessionChange,
+                statusChange: statusChanged ? { from: beforeMember.status, to: member.status } : null
+            });
+        }
         
         // 재등록 세션 통계 추가
         if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) !== 0) {
@@ -6831,6 +7233,7 @@ app.post('/api/trials', async (req, res) => {
     };
     
     const trial = await trialsDB.addTrial(newTrial);
+    enqueuePushForConsultationChange({ action: 'create', record: trial });
     res.json({ message: 'Trial이 추가되었습니다.', trial });
   } catch (error) {
     console.error('[API] Trial 추가 오류:', error);
@@ -6843,8 +7246,15 @@ app.patch('/api/trials/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    
+
+    const beforeTrial = await trialsDB.getTrialById(id);
     const trial = await trialsDB.updateTrial(id, updates);
+    if (trial && (updates.result === '등록' || trial.result === '등록')) {
+        const beforeResult = beforeTrial?.result || '';
+        if (beforeResult !== '등록') {
+            enqueuePushForConsultationChange({ action: 'registered', record: trial });
+        }
+    }
     res.json({ message: 'Trial이 수정되었습니다.', trial });
   } catch (error) {
     console.error('[API] Trial 수정 오류:', error);
@@ -8275,6 +8685,7 @@ app.post('/api/expenses', async (req, res) => {
         }
         
         const expense = await expensesDB.addExpense(expenseData);
+        enqueuePushForExpenseChange(expense);
         
         res.json({ 
             message: '지출 내역이 추가되었습니다.',
@@ -8727,6 +9138,7 @@ app.post('/api/sales', async (req, res) => {
         };
         
         const sale = await salesDB.addSale(saleData);
+        enqueuePushForSalesChange({ action: 'create', sale });
         
         res.json({ 
             message: '매출 내역이 추가되었습니다.',
@@ -8809,6 +9221,7 @@ app.patch('/api/sales/:id', async (req, res) => {
             return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
         }
         const updatedSale = await salesDB.updateSale(id, saleData);
+        enqueuePushForSalesChange({ action: 'update', sale: updatedSale });
         
         res.json({ 
             message: '매출 내역이 수정되었습니다.',
@@ -8849,7 +9262,8 @@ app.delete('/api/sales/:id', async (req, res) => {
             return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
         }
         
-        await salesDB.deleteSale(id);
+        const deletedSale = await salesDB.deleteSale(id);
+        enqueuePushForSalesChange({ action: 'delete', sale: deletedSale });
         
         res.json({ message: '매출 내역이 삭제되었습니다.' });
     } catch (error) {
@@ -8918,6 +9332,7 @@ app.post('/api/consultation-records', async (req, res) => {
         }
         
         const record = await consultationRecordsDB.addConsultationRecord(recordData);
+        enqueuePushForConsultationChange({ action: 'create', record });
         
         res.status(201).json(record);
     } catch (error) {

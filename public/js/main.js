@@ -1042,6 +1042,7 @@ async function showAccountSettingsModal() {
     const modal = document.getElementById('accountSettingsModal');
     const bg = document.getElementById('accountSettingsModalBg');
     const trainerOptionsSection = document.getElementById('trainerOptionsSection');
+    const adminPushSection = document.getElementById('adminPushSection');
     const role = localStorage.getItem('role');
     
     modal.style.display = 'block';
@@ -1056,6 +1057,15 @@ async function showAccountSettingsModal() {
         await loadTrainerOptions();
     } else {
         trainerOptionsSection.style.display = 'none';
+    }
+
+    if (isAdminOrSu(role)) {
+        if (adminPushSection) {
+            adminPushSection.style.display = 'block';
+            await loadAdminPushSettings();
+        }
+    } else if (adminPushSection) {
+        adminPushSection.style.display = 'none';
     }
 }
 
@@ -1104,6 +1114,198 @@ function updateToggleButton(btn, isOn, label) {
         btn.style.borderColor = '#666';
         btn.textContent = 'OFF';
     }
+}
+
+function isPushSupported() {
+    return (
+        'serviceWorker' in navigator &&
+        'PushManager' in window &&
+        'Notification' in window
+    );
+}
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+}
+
+async function getAdminPushRegistration() {
+    if (!isPushSupported()) return null;
+    const existing = await navigator.serviceWorker.getRegistration('/');
+    return existing || navigator.serviceWorker.register('/sw.js');
+}
+
+function getAdminPushElements() {
+    return {
+        toggleBtn: document.getElementById('adminPushToggle'),
+        registerBtn: document.getElementById('adminPushRegisterBtn'),
+        deviceLabelInput: document.getElementById('adminPushDeviceLabel'),
+        devicesContainer: document.getElementById('adminPushDevices'),
+        resultEl: document.getElementById('adminPushResult')
+    };
+}
+
+function setAdminPushResult(message, isError = false) {
+    const { resultEl } = getAdminPushElements();
+    if (!resultEl) return;
+    resultEl.style.color = isError ? '#d32f2f' : '#2e7d32';
+    resultEl.textContent = message || '';
+}
+
+async function loadAdminPushSettings() {
+    const username = localStorage.getItem('username');
+    if (!username) return;
+    const { toggleBtn, devicesContainer } = getAdminPushElements();
+    try {
+        const statusRes = await fetch(`/api/admin/push/status?username=${encodeURIComponent(username)}`);
+        const status = await statusRes.json();
+        if (toggleBtn) {
+            updateToggleButton(toggleBtn, status.enabled === true, '푸쉬');
+        }
+        await loadAdminPushDevices();
+    } catch (error) {
+        console.error('관리자 푸쉬 상태 조회 오류:', error);
+        if (devicesContainer) {
+            devicesContainer.textContent = '푸쉬 상태를 불러오지 못했습니다.';
+        }
+    }
+}
+
+async function loadAdminPushDevices() {
+    const username = localStorage.getItem('username');
+    if (!username) return;
+    const { devicesContainer } = getAdminPushElements();
+    if (!devicesContainer) return;
+    devicesContainer.textContent = '불러오는 중...';
+    try {
+        const res = await fetch(`/api/admin/push/subscriptions?username=${encodeURIComponent(username)}`);
+        const data = await res.json();
+        const items = Array.isArray(data.items) ? data.items : [];
+        if (items.length === 0) {
+            devicesContainer.textContent = '등록된 기기가 없습니다.';
+            return;
+        }
+        devicesContainer.innerHTML = items.map(item => {
+            const label = item.device_label || item.platform || '알 수 없음';
+            const status = item.is_active ? 'ON' : 'OFF';
+            return `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px;border-bottom:1px solid #f0f0f0;gap:8px;">
+                    <div style="min-width:0;">
+                        <div style="font-weight:600;color:#333;font-size:0.85rem;">${label}</div>
+                        <div style="font-size:0.75rem;color:#888;">${status}</div>
+                    </div>
+                    <button type="button" class="admin-push-device-remove" data-endpoint="${item.endpoint}" style="background:#f5f5f5;color:#666;border:1px solid #ddd;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75rem;white-space:nowrap;">해제</button>
+                </div>
+            `;
+        }).join('');
+
+        devicesContainer.querySelectorAll('.admin-push-device-remove').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const endpoint = btn.getAttribute('data-endpoint');
+                if (!endpoint) return;
+                await unsubscribeAdminPush(endpoint);
+            });
+        });
+    } catch (error) {
+        console.error('관리자 푸쉬 기기 목록 조회 오류:', error);
+        devicesContainer.textContent = '기기 목록을 불러오지 못했습니다.';
+    }
+}
+
+async function updateAdminPushSetting(enabled) {
+    const username = localStorage.getItem('username');
+    const currentUser = localStorage.getItem('username');
+    if (!username || !currentUser) return;
+    setAdminPushResult('처리 중...', false);
+    try {
+        const res = await fetch('/api/admin/push/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, enabled, currentUser })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.message || '설정 변경 실패');
+        }
+        setAdminPushResult('✅ 설정이 변경되었습니다.', false);
+        setTimeout(() => setAdminPushResult(''), 1500);
+    } catch (error) {
+        console.error('관리자 푸쉬 설정 변경 오류:', error);
+        setAdminPushResult(error.message || '설정 변경 중 오류가 발생했습니다.', true);
+        throw error;
+    }
+}
+
+async function ensureAdminPushSubscription() {
+    const username = localStorage.getItem('username');
+    const currentUser = localStorage.getItem('username');
+    if (!username || !currentUser) return;
+    if (!isPushSupported()) {
+        throw new Error('이 기기에서는 푸쉬 알림을 지원하지 않습니다.');
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+        throw new Error('알림 권한이 필요합니다.');
+    }
+    const reg = await getAdminPushRegistration();
+    if (!reg) {
+        throw new Error('서비스워커 등록에 실패했습니다.');
+    }
+    const keyRes = await fetch('/api/push/vapid-public-key');
+    const keyData = await keyRes.json();
+    if (!keyRes.ok || !keyData.publicKey) {
+        throw new Error(keyData.message || 'VAPID 키를 불러오지 못했습니다.');
+    }
+    let subscription = await reg.pushManager.getSubscription();
+    if (!subscription) {
+        subscription = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(keyData.publicKey)
+        });
+    }
+    const { deviceLabelInput } = getAdminPushElements();
+    const deviceLabel = deviceLabelInput?.value?.trim() || null;
+    const payload = {
+        username,
+        currentUser,
+        subscription,
+        user_agent: navigator.userAgent,
+        platform: navigator.platform || null,
+        device_label: deviceLabel
+    };
+    const res = await fetch('/api/admin/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.message || '구독 등록 실패');
+    }
+    await loadAdminPushDevices();
+}
+
+async function unsubscribeAdminPush(endpoint) {
+    const username = localStorage.getItem('username');
+    const currentUser = localStorage.getItem('username');
+    if (!username || !currentUser) return;
+    const res = await fetch('/api/admin/push/unsubscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, endpoint, currentUser })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        alert(data.message || '구독 해제 실패');
+        return;
+    }
+    await loadAdminPushDevices();
 }
 
 // 트레이너 옵션 업데이트
@@ -1195,6 +1397,36 @@ document.addEventListener('DOMContentLoaded', function() {
             // 실패 시 원래 상태로 복원
             if (document.getElementById('trainerOptionsResult').style.color === '#d32f2f') {
                 updateToggleButton(this, currentStatus, '월간보기');
+            }
+        };
+    }
+
+    // 관리자 푸쉬 토글/등록 버튼
+    const adminPushToggle = document.getElementById('adminPushToggle');
+    if (adminPushToggle) {
+        adminPushToggle.onclick = async function() {
+            const currentStatus = this.textContent === 'ON';
+            const newStatus = !currentStatus;
+            updateToggleButton(this, newStatus, '푸쉬');
+            try {
+                await updateAdminPushSetting(newStatus);
+            } catch (error) {
+                updateToggleButton(this, currentStatus, '푸쉬');
+            }
+        };
+    }
+
+    const adminPushRegisterBtn = document.getElementById('adminPushRegisterBtn');
+    if (adminPushRegisterBtn) {
+        adminPushRegisterBtn.onclick = async function() {
+            setAdminPushResult('등록 중...', false);
+            try {
+                await ensureAdminPushSubscription();
+                setAdminPushResult('✅ 이 기기가 등록되었습니다.', false);
+                setTimeout(() => setAdminPushResult(''), 1500);
+            } catch (error) {
+                console.error('관리자 푸쉬 구독 등록 오류:', error);
+                setAdminPushResult(error.message || '등록 중 오류가 발생했습니다.', true);
             }
         };
     }
