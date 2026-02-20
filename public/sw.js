@@ -34,7 +34,7 @@ self.addEventListener('notificationclick', event => {
   );
 });
 // Service Worker 캐시 버전 (캐시 무효화 필요 시에만 변경)
-const VERSION = '2026-02-03-logo-update';
+const VERSION = '2026-02-20-orientation-unlock';
 const CACHE_NAME = `goodlift-${VERSION}`;
 const RUNTIME_CACHE = `goodlift-runtime-${VERSION}`;
 
