@@ -13,6 +13,9 @@ let cachedTimerSettings = null; // 타이머 설정 캐시
 const TIMER_SETTINGS_STORAGE_KEY = 'workout_rest_timer_settings';
 const FAVORITES_ONLY_STORAGE_KEY = 'workout_show_favorites_only';
 let workoutGuideMap = new Map();
+let workoutGuideEnabled = true;
+let workoutGuidePreferenceLoaded = false;
+const monthlyWorkoutHistoryCache = new Map();
 let calendarUpdateTimer = null;
 let suppressControls = false;
 
@@ -238,7 +241,7 @@ async function preloadWorkoutUserSettings() {
     const showFavoritesOnly = getCachedShowFavoritesOnly();
     const hasFavoriteSettings = showFavoritesOnly !== null;
     
-    if (hasTimerSettings && hasFavoriteSettings) {
+    if (hasTimerSettings && hasFavoriteSettings && workoutGuidePreferenceLoaded) {
         return;
     }
     if (!currentAppUserId) {
@@ -259,6 +262,28 @@ async function preloadWorkoutUserSettings() {
     if (!hasFavoriteSettings) {
         setCachedShowFavoritesOnly(settings.show_favorites_only === true);
     }
+    if (!workoutGuidePreferenceLoaded) {
+        workoutGuideEnabled = settings.workout_guide_enabled === true;
+        workoutGuidePreferenceLoaded = true;
+    }
+}
+
+async function ensureWorkoutGuidePreferenceLoaded(forceRefresh = false) {
+    if (!forceRefresh && (workoutGuidePreferenceLoaded || !currentAppUserId)) {
+        return workoutGuideEnabled;
+    }
+    if (!currentAppUserId) {
+        return workoutGuideEnabled;
+    }
+    try {
+        const settings = await getUserSettings(currentAppUserId);
+        workoutGuideEnabled = settings?.workout_guide_enabled === true;
+        workoutGuidePreferenceLoaded = true;
+    } catch (error) {
+        console.error('운동 가이드 설정 조회 오류:', error);
+        workoutGuideEnabled = true;
+    }
+    return workoutGuideEnabled;
 }
 
 async function loadWorkoutGuideItems() {
@@ -297,6 +322,188 @@ function buildGuideItem(item) {
         videoUrl: item.guide_video_url || '',
         externalLink: item.guide_external_link || ''
     };
+}
+
+function getMonthRange(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
+    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`;
+    return { first, startDate, endDate };
+}
+
+function getMonthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function parseRecordDate(recordDate) {
+    if (!recordDate) return null;
+    if (recordDate instanceof Date) {
+        const year = recordDate.getFullYear();
+        const month = String(recordDate.getMonth() + 1).padStart(2, '0');
+        const day = String(recordDate.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    if (typeof recordDate === 'string') {
+        return recordDate.split('T')[0];
+    }
+    return null;
+}
+
+async function getMonthlyWorkoutHistory(appUserId, workoutTypeId, targetMonth) {
+    const monthKey = getMonthKey(targetMonth);
+    const cacheKey = `${appUserId}:${String(workoutTypeId)}:${monthKey}`;
+    if (monthlyWorkoutHistoryCache.has(cacheKey)) {
+        return monthlyWorkoutHistoryCache.get(cacheKey);
+    }
+    const { startDate, endDate } = getMonthRange(targetMonth);
+    const allRecords = await getWorkoutRecords(appUserId, { startDate, endDate });
+    const monthlyRecords = allRecords.filter(record => String(record.workout_type_id || '') === String(workoutTypeId || ''));
+    const recordsByDate = {};
+    monthlyRecords.forEach(record => {
+        const dateKey = parseRecordDate(record.workout_date);
+        if (!dateKey) return;
+        if (!recordsByDate[dateKey]) {
+            recordsByDate[dateKey] = [];
+        }
+        recordsByDate[dateKey].push(record);
+    });
+    const sortedDates = Object.keys(recordsByDate).sort((a, b) => new Date(b) - new Date(a));
+    const payload = { sortedDates, recordsByDate };
+    monthlyWorkoutHistoryCache.set(cacheKey, payload);
+    return payload;
+}
+
+async function showWorkoutMonthlyHistoryModal(appUserId, workoutTypeId, workoutName) {
+    const existingModal = document.getElementById('workout-monthly-history-modal-bg');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    const now = new Date();
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    let selectedMonth = new Date(currentMonth);
+    const modalHtml = `
+        <div class="app-modal-bg" id="workout-monthly-history-modal-bg">
+            <div class="app-modal workout-history-modal workout-monthly-history-modal" id="workout-monthly-history-modal">
+                <div class="app-modal-header">
+                    <h3>${escapeHtml(workoutName)} 히스토리</h3>
+                    <button class="app-modal-close-btn" id="workout-monthly-history-modal-close">×</button>
+                </div>
+                <div class="app-modal-form workout-history-form workout-monthly-history-form">
+                    <div class="workout-history-navigation workout-history-navigation-compact">
+                        <button type="button" class="workout-history-nav-btn" id="workout-monthly-history-prev" aria-label="이전 월">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="15 18 9 12 15 6"></polyline>
+                            </svg>
+                        </button>
+                        <div class="workout-history-date" id="workout-monthly-history-date"></div>
+                        <button type="button" class="workout-history-nav-btn" id="workout-monthly-history-next" aria-label="다음 월">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="workout-history-content workout-history-content-compact" id="workout-monthly-history-content">
+                        <div class="workout-history-loading">로딩 중...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modalBg = document.getElementById('workout-monthly-history-modal-bg');
+    const modal = document.getElementById('workout-monthly-history-modal');
+    const monthEl = document.getElementById('workout-monthly-history-date');
+    const contentEl = document.getElementById('workout-monthly-history-content');
+    const prevBtn = document.getElementById('workout-monthly-history-prev');
+    const nextBtn = document.getElementById('workout-monthly-history-next');
+    const closeBtn = document.getElementById('workout-monthly-history-modal-close');
+
+    const renderMonth = async () => {
+        monthEl.textContent = `${selectedMonth.getFullYear()}년 ${selectedMonth.getMonth() + 1}월`;
+        const canGoNext = selectedMonth < currentMonth;
+        nextBtn.style.opacity = canGoNext ? '1' : '0.3';
+        nextBtn.style.pointerEvents = canGoNext ? 'auto' : 'none';
+        nextBtn.classList.toggle('disabled', !canGoNext);
+        contentEl.innerHTML = `<div class="workout-history-loading">로딩 중...</div>`;
+        try {
+            const { sortedDates, recordsByDate } = await getMonthlyWorkoutHistory(appUserId, workoutTypeId, selectedMonth);
+            if (!sortedDates.length) {
+                contentEl.innerHTML = `
+                    <div class="workout-history-empty">
+                        <p>이 달에는 기록이 없습니다</p>
+                    </div>
+                `;
+                return;
+            }
+            const groupedHtml = sortedDates.map(dateKey => {
+                const dateObj = new Date(dateKey);
+                const records = recordsByDate[dateKey] || [];
+                const volumeInfo = calculateVolumeForRecords(records);
+                const dateSummaryText = volumeInfo.hasVolume
+                    ? `볼륨 : ${formatVolumeKg(volumeInfo.total)}`
+                    : `${records.length}건`;
+                const recordsHtml = records.map(record => renderWorkoutItem(record, {
+                    suppressControls: true,
+                    disableGuideButton: true
+                })).join('');
+                return `
+                    <div class="app-workout-date-section">
+                        <div class="app-workout-date-header">
+                            <div class="app-workout-date-left">
+                                <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
+                                <span class="app-workout-date-count">${dateSummaryText}</span>
+                            </div>
+                        </div>
+                        ${recordsHtml ? `<div class="app-workout-items">${recordsHtml}</div>` : '<div class="workout-history-empty"><p>기록 없음</p></div>'}
+                    </div>
+                `;
+            }).join('');
+            contentEl.innerHTML = `<div class="app-workout-list">${groupedHtml}</div>`;
+        } catch (error) {
+            console.error('월별 운동 히스토리 조회 오류:', error);
+            contentEl.innerHTML = `
+                <div class="workout-history-empty error">
+                    <p>히스토리를 불러오는 중 오류가 발생했습니다</p>
+                </div>
+            `;
+        }
+    };
+
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        setTimeout(() => {
+            if (modalBg.parentNode) {
+                modalBg.remove();
+            }
+        }, 200);
+    };
+
+    prevBtn.addEventListener('click', async () => {
+        selectedMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() - 1, 1);
+        await renderMonth();
+    });
+    nextBtn.addEventListener('click', async () => {
+        if (selectedMonth >= currentMonth) return;
+        selectedMonth = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1);
+        await renderMonth();
+    });
+    closeBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) {
+            closeModal();
+        }
+    });
+
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+    await renderMonth();
 }
 
 function formatVolumeKg(total) {
@@ -975,7 +1182,9 @@ function renderWorkoutLevelBadges(record) {
     `;
 }
 
-function renderWorkoutItem(record) {
+function renderWorkoutItem(record, options = {}) {
+    const hideControls = suppressControls || options.suppressControls === true;
+    const disableGuideButton = options.disableGuideButton === true;
     // 텍스트 기록인 경우
     if (record.is_text_record) {
         const textContent = record.text_content ? escapeHtml(record.text_content) : '';
@@ -985,7 +1194,7 @@ function renderWorkoutItem(record) {
         const checked = isCompleted ? 'checked' : '';
         const badgesHtml = renderWorkoutLevelBadges(record);
         
-        const dragHandleHtml = suppressControls
+        const dragHandleHtml = hideControls
             ? ''
             : `
                 <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; flex-shrink: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
@@ -996,7 +1205,7 @@ function renderWorkoutItem(record) {
                     </svg>
                 </div>
             `;
-        const topLeftControls = (!suppressControls || badgesHtml)
+        const topLeftControls = (!hideControls || badgesHtml)
             ? `
                 <div style="position: absolute; top: 6px; left: 6px; display: flex; align-items: center; gap: 6px;">
                     ${dragHandleHtml}
@@ -1004,7 +1213,7 @@ function renderWorkoutItem(record) {
                 </div>
             `
             : '';
-        const topRightControls = (!isReadOnly && !suppressControls)
+        const topRightControls = (!isReadOnly && !hideControls)
             ? `
                 <div style="position: absolute; top: 6px; right: 12px; display: flex; align-items: center; gap: 6px;">
                     <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정" style="flex-shrink: 0;">
@@ -1065,7 +1274,7 @@ function renderWorkoutItem(record) {
         infoHtml = `
             <div class="app-workout-item-duration-container">
                 <span class="app-workout-item-duration ${completedClass}">⏱ ${duration}</span>
-                ${!isReadOnly && !suppressControls ? `
+                ${!isReadOnly && !hideControls ? `
                 <input type="checkbox" class="app-workout-item-checkbox" 
                        data-record-id="${record.id}" 
                        data-type="record" 
@@ -1087,7 +1296,7 @@ function renderWorkoutItem(record) {
                 <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
                     <span class="app-workout-item-set-number ${completedClass}">${set.set_number}</span>
                     <span class="app-workout-item-set-info ${completedClass}">${weight} × ${reps}</span>
-                    ${!isReadOnly && !suppressControls ? `
+                    ${!isReadOnly && !hideControls ? `
                     <input type="checkbox" class="app-workout-item-checkbox" 
                            data-record-id="${record.id}" 
                            data-set-id="${set.id}" 
@@ -1099,7 +1308,7 @@ function renderWorkoutItem(record) {
         }).join('');
         infoHtml = `
             <div class="app-workout-item-sets">
-                ${!isReadOnly && !suppressControls ? `
+                ${!isReadOnly && !hideControls ? `
                 <div class="app-workout-item-set-controls" style="display: flex; gap: 16px; align-items: center; justify-content: flex-start; margin-bottom: 8px; height: 24px;">
                     <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 18px; font-weight: bold; line-height: 24px; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
                     <span style="font-size: 14px; color: #333; line-height: 24px; height: 24px; display: inline-flex; align-items: center; margin: 0; padding: 0;">세트</span>
@@ -1120,7 +1329,7 @@ function renderWorkoutItem(record) {
         <div class="${cardClass}" data-record-id="${record.id}" data-workout-date="${record.workout_date}" style="position: relative;">
             <div class="app-workout-item-main">
                 <div class="app-workout-item-type-container" style="flex-direction: column; align-items: flex-start; gap: 6px;">
-                    ${suppressControls ? '' : `
+                    ${hideControls ? '' : `
                     <div class="app-workout-item-drag-handle" style="cursor: grab; padding: 4px; opacity: 0.5; transition: opacity 0.2s; position: absolute; top: 6px; left: 6px;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.5'">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <line x1="4" y1="7" x2="20" y2="7"></line>
@@ -1132,16 +1341,16 @@ function renderWorkoutItem(record) {
                     <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
                         ${(() => {
                             const guideItem = workoutGuideMap.get(String(record.workout_type_id || ''));
-                            if (!guideItem) {
+                            if (disableGuideButton) {
                                 return `<div class="app-workout-item-type">${escapeHtml(workoutTypeName)}</div>`;
                             }
                             return `
-                                <button type="button" class="app-workout-item-type-btn" data-guide-id="${guideItem.id}">
+                                <button type="button" class="app-workout-item-type-btn" data-guide-id="${guideItem ? guideItem.id : ''}" data-workout-type-id="${escapeHtml(String(record.workout_type_id || ''))}" data-workout-name="${escapeHtml(workoutTypeName)}">
                                     ${escapeHtml(workoutTypeName)}
                                 </button>
                             `;
                         })()}
-                        ${!isReadOnly && !suppressControls ? `
+                        ${!isReadOnly && !hideControls ? `
                         <button class="app-workout-item-edit-btn" data-record-id="${record.id}" aria-label="수정">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
@@ -1929,14 +2138,19 @@ function setupClickListeners() {
 
         const guideButton = item.querySelector('.app-workout-item-type-btn');
         if (guideButton) {
-            guideButton.addEventListener('click', (e) => {
+            guideButton.addEventListener('click', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 const guideId = guideButton.getAttribute('data-guide-id');
+                const workoutTypeId = guideButton.getAttribute('data-workout-type-id');
+                const workoutName = guideButton.getAttribute('data-workout-name') || record.workout_type_name || '운동';
                 const guideItem = workoutGuideMap.get(String(guideId));
-                if (guideItem) {
+                const guideEnabled = await ensureWorkoutGuidePreferenceLoaded(true);
+                if (guideEnabled && guideItem) {
                     showWorkoutGuideDetailModal(guideItem);
+                    return;
                 }
+                await showWorkoutMonthlyHistoryModal(currentAppUserId, workoutTypeId, workoutName);
             });
         }
         

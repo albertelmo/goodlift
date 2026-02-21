@@ -4495,6 +4495,20 @@ body.app-user-active {
     background: var(--app-surface);
 }
 
+/* 월별 히스토리 모달 전용: 네비게이션 상하 여백 축소 */
+.workout-history-navigation-compact {
+    padding: 8px 12px;
+}
+
+.workout-history-content-compact {
+    padding: 0;
+}
+
+/* 월별 히스토리: 모달 폭은 유지하고 내부 여백만 줄여 카드 폭 확보 */
+.workout-monthly-history-form {
+    padding: 0;
+}
+
 .workout-history-date {
     font-size: 15px;
     font-weight: 600;
