@@ -388,7 +388,7 @@ async function showWorkoutMonthlyHistoryModal(appUserId, workoutTypeId, workoutN
         <div class="app-modal-bg" id="workout-monthly-history-modal-bg">
             <div class="app-modal workout-history-modal workout-monthly-history-modal" id="workout-monthly-history-modal">
                 <div class="app-modal-header">
-                    <h3>${escapeHtml(workoutName)} 히스토리</h3>
+                    <h3>${escapeHtml(workoutName)}</h3>
                     <button class="app-modal-close-btn" id="workout-monthly-history-modal-close">×</button>
                 </div>
                 <div class="app-modal-form workout-history-form workout-monthly-history-form">
@@ -2865,7 +2865,7 @@ async function showCopyDateModal(sourceDate) {
  * 운동기록 복사
  */
 async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
-    const { addWorkoutRecord } = await import('../api.js');
+    const { addWorkoutRecordsBatch } = await import('../api.js');
     
     // targetAppUserId가 제공되지 않으면 연결된 회원 또는 현재 사용자 사용
     if (!targetAppUserId) {
@@ -2877,11 +2877,10 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
         throw new Error('사용자 ID가 없습니다.');
     }
     
-    const copyPromises = records.map(async (record) => {
+    const batchRecords = records.map((record) => {
         // 텍스트 기록인 경우
         if (record.is_text_record === true) {
-            const workoutData = {
-                app_user_id: targetAppUserId,
+            return {
                 workout_date: targetDate,
                 is_text_record: true,
                 text_content: record.text_content || '',
@@ -2891,12 +2890,10 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
                 notes: null,
                 is_completed: false // 복사된 기록은 완료 상태 초기화
             };
-            return addWorkoutRecord(workoutData);
         }
         
         // 일반 기록인 경우
         const workoutData = {
-            app_user_id: targetAppUserId,
             workout_date: targetDate,
             workout_type_id: record.workout_type_id,
             notes: record.notes || null,
@@ -2922,10 +2919,12 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
             workoutData.sets = [{ set_number: 1, weight: 0, reps: 0 }];
         }
         
-        return addWorkoutRecord(workoutData);
+        return workoutData;
     });
-    
-    await Promise.all(copyPromises);
+
+    // 복사는 단일 배치 API로 처리하여 동시 다중 요청으로 인한 커넥션 경합을 방지한다.
+    const currentUser = getCurrentUser();
+    await addWorkoutRecordsBatch(targetAppUserId, batchRecords, currentUser);
 }
 
 /**
