@@ -1267,12 +1267,13 @@ function renderWorkoutItem(record, options = {}) {
     
     let infoHtml = '';
     
+    let durationInlineHtml = '';
     if (workoutTypeType === '시간' && duration) {
         const isCompleted = record.is_completed || false;
         const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
         const checked = isCompleted ? 'checked' : '';
-        infoHtml = `
-            <div class="app-workout-item-duration-container">
+        durationInlineHtml = `
+            <div class="app-workout-item-duration-container" style="margin-left: auto; font-size: 15px; color: var(--app-text-muted, #666);">
                 <span class="app-workout-item-duration ${completedClass}">⏱ ${duration}</span>
                 ${!isReadOnly && !hideControls ? `
                 <input type="checkbox" class="app-workout-item-checkbox" 
@@ -1338,7 +1339,7 @@ function renderWorkoutItem(record, options = {}) {
                         </svg>
                     </div>
                     `}
-                    <div style="display: flex; align-items: center; gap: 6px; width: 100%;">
+                    <div style="display: flex; align-items: center; gap: 6px; width: 100%; ${workoutTypeType !== '세트' && !hideControls ? 'margin-top: 28px;' : ''}">
                         ${(() => {
                             const guideItem = workoutGuideMap.get(String(record.workout_type_id || ''));
                             if (disableGuideButton) {
@@ -1359,6 +1360,7 @@ function renderWorkoutItem(record, options = {}) {
                         </button>
                         ` : ''}
                         ${renderWorkoutLevelBadges(record)}
+                        ${durationInlineHtml}
                     </div>
                 </div>
                 ${infoHtml ? `<div class="app-workout-item-info">${infoHtml}</div>` : ''}
@@ -3061,9 +3063,26 @@ function initializeSortable() {
                     const { invalidateWorkoutRecordsCache } = await import('../api.js');
                     invalidateWorkoutRecordsCache(targetAppUserId);
                     
+                    // currentRecords에 새 display_order 반영 (세트 체크 등 이후 render 시 순서 유지)
+                    const orderById = new Map(order.map(o => [o.id, o.order]));
+                    let dateStr = workoutDate;
+                    if (dateStr instanceof Date) {
+                        dateStr = formatDate(dateStr);
+                    } else if (typeof dateStr === 'string') {
+                        dateStr = dateStr.split('T')[0];
+                    }
+                    for (const rec of currentRecords) {
+                        let recDate = rec.workout_date;
+                        if (recDate instanceof Date) recDate = formatDate(recDate);
+                        else if (typeof recDate === 'string') recDate = recDate.split('T')[0];
+                        if (recDate === dateStr && orderById.has(rec.id)) {
+                            rec.display_order = orderById.get(rec.id);
+                        }
+                    }
+                    await render(currentRecords);
+                    
                     // 저장 확인: 캐시 무효화 후 즉시 재조회하여 실제 저장된 순서 확인 (캐시 우회)
                     try {
-                        // 캐시를 우회하여 직접 API 호출
                         const params = new URLSearchParams({ 
                             app_user_id: targetAppUserId,
                             start_date: workoutDate,
@@ -3080,7 +3099,6 @@ function initializeSortable() {
                             .filter(r => r.workout_date === workoutDate)
                             .map(r => ({ id: r.id, display_order: r.display_order }));
                         
-                        // 순서가 일치하는지 확인
                         const orderMap = new Map(order.map(item => [item.id, item.order]));
                         const verifyMap = new Map(verifyOrder.map(item => [item.id, item.display_order]));
                         
