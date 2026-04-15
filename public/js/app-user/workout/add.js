@@ -934,7 +934,9 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 }
             };
             
-            await showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoadRecord);
+            const workout = selectedWorkouts[workoutIndex];
+            const workoutType = workout?.type || null;
+            await showWorkoutHistoryModal(appUserId, workoutId, workoutName, workoutType, onLoadRecord);
         });
     });
     
@@ -1410,7 +1412,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
 /**
  * 운동 이력 모달 표시
  */
-async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoadRecord = null) {
+async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, workoutType = null, onLoadRecord = null) {
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     
@@ -1423,6 +1425,9 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
             <button class="app-modal-close" aria-label="닫기">×</button>
         </div>
         <div class="app-modal-form workout-history-form">
+            <div id="workout-history-pr-row" class="workout-history-pr-row" style="display: none;">
+                <div id="workout-history-pr" class="workout-history-pr"></div>
+            </div>
             <div id="workout-history-navigation" class="workout-history-navigation">
                 <button type="button" class="workout-history-nav-btn" id="workout-history-prev" aria-label="이전 날짜">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1462,13 +1467,34 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
     let sortedDates = [];
     let recordsByDate = {};
     let currentDateIndex = 0;
+    let prWeight = null;
     
     const renderCurrentDate = () => {
+        const prRowEl = modal.querySelector('#workout-history-pr-row');
+        const prEl = modal.querySelector('#workout-history-pr');
         const dateEl = modal.querySelector('#workout-history-date');
         const contentEl = modal.querySelector('#workout-history-content');
         const prevBtn = modal.querySelector('#workout-history-prev');
         const nextBtn = modal.querySelector('#workout-history-next');
         const loadBtn = modal.querySelector('#workout-history-load');
+        const isSetWorkout = workoutType === '세트';
+        
+        if (prEl) {
+            if (isSetWorkout) {
+                const prText = prWeight !== null && prWeight > 0
+                    ? formatWeight(prWeight)
+                    : '-';
+                prEl.textContent = `PR : ${prText}`;
+                if (prRowEl) {
+                    prRowEl.style.display = 'flex';
+                }
+            } else {
+                prEl.textContent = '';
+                if (prRowEl) {
+                    prRowEl.style.display = 'none';
+                }
+            }
+        }
         
         if (sortedDates.length === 0) {
             dateEl.textContent = '';
@@ -1587,6 +1613,21 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, onLoad
         });
         
         if (workoutRecords.length > 0) {
+            if (workoutType === '세트') {
+                workoutRecords.forEach(record => {
+                    if (!record?.sets || !Array.isArray(record.sets)) return;
+                    record.sets.forEach(set => {
+                        const weight = Number(set?.weight);
+                        const reps = Number(set?.reps);
+                        if (!Number.isFinite(reps) || reps <= 0) return;
+                        if (!Number.isFinite(weight)) return;
+                        if (prWeight === null || weight > prWeight) {
+                            prWeight = weight;
+                        }
+                    });
+                });
+            }
+            
             // 날짜별로 그룹화
             workoutRecords.forEach(record => {
                 const dateStr = record.workout_date;

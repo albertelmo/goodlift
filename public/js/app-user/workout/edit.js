@@ -18,6 +18,13 @@ export async function showEditModal(record, appUserId, onSuccess) {
         console.error('운동종류 조회 오류:', error);
     }
     
+    // 운동종류 이름 가나다순 정렬 (표시용)
+    workoutTypes = Array.isArray(workoutTypes)
+        ? workoutTypes.slice().sort((a, b) =>
+            String(a?.name || '').localeCompare(String(b?.name || ''), 'ko', { sensitivity: 'base' })
+        )
+        : [];
+    
     const currentWorkoutType = workoutTypes.find(t => t.id === record.workout_type_id);
     const workoutTypeType = currentWorkoutType ? (currentWorkoutType.type || '세트') : null;
     

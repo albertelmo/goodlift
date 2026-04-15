@@ -4495,6 +4495,23 @@ body.app-user-active {
     background: var(--app-surface);
 }
 
+.workout-history-pr-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 6px 16px 5px;
+    border-bottom: 1px solid var(--app-border);
+    background: linear-gradient(180deg, rgba(25, 118, 210, 0.06) 0%, rgba(25, 118, 210, 0.02) 100%);
+}
+
+.workout-history-pr {
+    font-size: 14px;
+    font-weight: 700;
+    color: #1976d2;
+    letter-spacing: -0.2px;
+}
+
 /* 월별 히스토리 모달 전용: 네비게이션 상하 여백 축소 */
 .workout-history-navigation-compact {
     padding: 8px 12px;
