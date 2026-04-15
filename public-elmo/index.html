@@ -260,11 +260,13 @@
     
     <script>
         // PWA 업데이트 시스템 (환경 상관없이 폴링 방식)
+        // 서버에서 updateBannerEnabled=true 일 때만 배너·폴링 (.env: PWA_UPDATE_BANNER_ENABLED=true, 미설정 시 비활성)
         (function() {
             let currentVersion = null;
             let newWorker = null;
             let latestDetectedVersion = null;
             let dismissedUntil = 0; // "나중에" 클릭 시 다시 알림 표시 시간
+            let updateBannerEnabled = null;
 
             
             // Service Worker 등록 (HTTPS 프로덕션용)
@@ -283,6 +285,7 @@
                                         fetch('/api/pwa/version')
                                             .then(res => res.json())
                                             .then(data => {
+                                                if (data.updateBannerEnabled !== true) return;
                                                 if (currentVersion && data.version && data.version !== currentVersion) {
                                                     latestDetectedVersion = data.version;
                                                     showUpdateBanner();
@@ -309,33 +312,36 @@
             }
 
             
-            // 초기 버전 로드
             fetch('/api/pwa/version')
                 .then(res => res.json())
                 .then(data => {
                     currentVersion = data.version;
-                    console.log('[Elmo PWA] 현재 버전:', currentVersion);
+                    updateBannerEnabled = data.updateBannerEnabled === true;
+                    console.log('[Elmo PWA] 현재 버전:', currentVersion, '업데이트 배너:', updateBannerEnabled);
+                    if (!updateBannerEnabled) return;
+                    setInterval(() => {
+                        if (!currentVersion) return;
+                        fetch('/api/pwa/version?t=' + Date.now())
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data.updateBannerEnabled !== true) {
+                                    updateBannerEnabled = false;
+                                    return;
+                                }
+                                if (data.version !== currentVersion) {
+                                    latestDetectedVersion = data.version;
+                                    console.log('[Elmo PWA] 새 버전 발견:', currentVersion, '→', data.version);
+                                    showUpdateBanner();
+                                }
+                            })
+                            .catch(() => {});
+                    }, 30000);
                 })
                 .catch(() => {});
             
-            // 30초마다 버전 체크 (모든 환경에서 동작)
-            setInterval(() => {
-                if (!currentVersion) return;
-                
-                fetch('/api/pwa/version?t=' + Date.now())
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.version !== currentVersion) {
-                            latestDetectedVersion = data.version;
-                            console.log('[Elmo PWA] 새 버전 발견:', currentVersion, '→', data.version);
-                            showUpdateBanner();
-                        }
-                    })
-                    .catch(() => {});
-            }, 30000); // 30초
-            
             // 업데이트 배너 표시
             function showUpdateBanner() {
+                if (updateBannerEnabled !== true) return;
                 // "나중에" 클릭 후 1시간이 지나지 않았으면 표시 안 함
                 if (Date.now() < dismissedUntil) {
                     return;

@@ -2172,10 +2172,17 @@ app.post('/api/debug-log', async (req, res) => {
 // PWA 버전 체크 API (30초 폴링 방식)
 // 환경 변수로 버전 관리: .env 파일에 PWA_VERSION=2026-01-31-v1 형식으로 설정
 const PWA_VERSION = process.env.PWA_VERSION || new Date().toISOString();
+// 미설정 시 기본 false — 명시적으로 true(또는 1/yes/on)일 때만 업데이트 배너·폴링 활성화
+const PWA_UPDATE_BANNER_RAW = process.env.PWA_UPDATE_BANNER_ENABLED;
+const PWA_UPDATE_BANNER_ENABLED =
+    PWA_UPDATE_BANNER_RAW === undefined || PWA_UPDATE_BANNER_RAW === ''
+        ? false
+        : ['true', '1', 'yes', 'on'].includes(String(PWA_UPDATE_BANNER_RAW).toLowerCase());
 app.get('/api/pwa/version', (req, res) => {
-    res.json({ 
+    res.json({
         version: PWA_VERSION,
-        timestamp: Date.now() 
+        timestamp: Date.now(),
+        updateBannerEnabled: PWA_UPDATE_BANNER_ENABLED
     });
 });
 
