@@ -43,19 +43,14 @@ export function updateSessions(sessions = []) {
  * 운동기록 데이터 업데이트 (경량 summary 형식 지원)
  */
 export function updateWorkoutRecords(workoutRecordsOrSummary) {
-    // 새로운 경량 summary 형식인지 확인
+    // 경량 summary 형식(빈 객체 포함): 월 단위 추가 로딩을 위해 기존 데이터에 병합
     // summary 형식: { '2024-01-01': { hasWorkout: true, allCompleted: true }, ... }
     if (workoutRecordsOrSummary && typeof workoutRecordsOrSummary === 'object' && !Array.isArray(workoutRecordsOrSummary)) {
-        // summary 객체의 첫 번째 값을 확인하여 형식 판단
-        const firstKey = Object.keys(workoutRecordsOrSummary)[0];
-        if (firstKey && workoutRecordsOrSummary[firstKey] && typeof workoutRecordsOrSummary[firstKey] === 'object' && 'hasWorkout' in workoutRecordsOrSummary[firstKey]) {
-            // summary 형식: 월 단위 추가 로딩을 위해 기존 데이터에 병합
-            workoutRecordsByDate = {
-                ...workoutRecordsByDate,
-                ...workoutRecordsOrSummary
-            };
-            return;
-        }
+        workoutRecordsByDate = {
+            ...workoutRecordsByDate,
+            ...workoutRecordsOrSummary
+        };
+        return;
     }
     
     // 기존 형식 (배열) - 하위 호환성 유지
