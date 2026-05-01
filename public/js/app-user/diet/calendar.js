@@ -28,7 +28,11 @@ export function init(container, onDateSelect, dietRecordsOrSummary = {}) {
 export function updateDietRecords(dietRecordsOrSummary) {
     // summary 형식: { '2024-01-01': { hasDiet: true, count: 3 }, ... }
     if (dietRecordsOrSummary && typeof dietRecordsOrSummary === 'object' && !Array.isArray(dietRecordsOrSummary)) {
-        dietRecordsByDate = dietRecordsOrSummary;
+        // 월 단위 추가 로딩을 위해 기존 데이터에 병합
+        dietRecordsByDate = {
+            ...dietRecordsByDate,
+            ...dietRecordsOrSummary
+        };
     } else {
         dietRecordsByDate = {};
     }

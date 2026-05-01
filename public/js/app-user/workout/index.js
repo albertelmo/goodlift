@@ -9,6 +9,9 @@ let isReadOnly = false;
 let lastButtonClickTime = 0; // 버튼 클릭 중복 방지용
 const BUTTON_CLICK_THROTTLE = 300; // 300ms 내 중복 클릭 방지
 const trainerNameCache = new Map();
+let workoutCalendarLoadedMonths = new Set();
+let workoutCalendarInFlight = new Map();
+let workoutCalendarMonthObserverSetup = false;
 
 async function resolveTrainerName(trainerUsername) {
     if (!trainerUsername) return null;
@@ -227,7 +230,7 @@ function setupButtonEventListeners() {
                 
                 setSelectedDate(today);
                 setCurrentMonth(today);
-                await loadWorkoutRecordsForCalendar();
+                await loadWorkoutRecordsForCalendar({ reset: true });
                 await updateMonthDisplay();
                 
                 const todayStr = formatDate(today);
@@ -745,26 +748,131 @@ async function updateMonthDisplay() {
  * 월 변경 감지 설정
  */
 function setupMonthUpdateObserver() {
-    // 캘린더가 다시 렌더링될 때마다 상단 연월 업데이트
+    // 화면 재렌더링 시 중복 리스너 등록 방지
+    if (workoutCalendarMonthObserverSetup) {
+        return;
+    }
+    workoutCalendarMonthObserverSetup = true;
+
+    // 캘린더가 다시 렌더링될 때마다 상단 연월 업데이트 + 현재 월 데이터 보장
     const observer = new MutationObserver(async () => {
+        if (!document.getElementById('workout-calendar-container')) {
+            return;
+        }
         await updateMonthDisplay();
+        await ensureWorkoutCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
     });
     
     const calendarContainer = document.getElementById('workout-calendar-container');
     if (calendarContainer) {
         observer.observe(calendarContainer, { childList: true, subtree: true });
     }
-    
-    // 주기적으로도 체크 (스와이프 후 업데이트)
-    setInterval(async () => {
+
+    document.addEventListener('calendar-rendered', async () => {
+        if (!document.getElementById('workout-calendar-container')) {
+            return;
+        }
         await updateMonthDisplay();
-    }, 500);
+        await ensureWorkoutCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
+    });
 }
 
 /**
  * 캘린더용 운동기록 로드 (병렬 호출을 위해 앱 유저 정보 조회 제거)
  */
-async function loadWorkoutRecordsForCalendar() {
+function formatLocalDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getMonthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthRange(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0);
+    return {
+        startDate: formatLocalDate(start),
+        endDate: formatLocalDate(end)
+    };
+}
+
+async function fetchWorkoutCalendarSummary(targetAppUserId, startDate, endDate) {
+    const { getWorkoutRecordsForCalendar } = await import('../api.js');
+    return getWorkoutRecordsForCalendar(targetAppUserId, startDate, endDate);
+}
+
+async function ensureWorkoutCalendarMonthLoaded(date, options = {}) {
+    const { prefetchAdjacent = false, force = false } = options;
+    const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+    const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+    const calendarContainer = document.getElementById('workout-calendar-container');
+    if (!targetAppUserId || !date || !calendarContainer) {
+        return;
+    }
+
+    const monthKey = getMonthKey(date);
+    if (!force && workoutCalendarLoadedMonths.has(monthKey)) {
+        return;
+    }
+    if (workoutCalendarInFlight.has(monthKey)) {
+        await workoutCalendarInFlight.get(monthKey);
+        return;
+    }
+
+    const { startDate, endDate } = getMonthRange(date);
+    const task = (async () => {
+        const summary = await fetchWorkoutCalendarSummary(targetAppUserId, startDate, endDate);
+        if (calendarContainer) {
+            const { updateWorkoutRecords, render: renderCalendar } = await import('./calendar.js');
+            updateWorkoutRecords(summary || {});
+            renderCalendar(calendarContainer);
+        }
+        workoutCalendarLoadedMonths.add(monthKey);
+    })().finally(() => {
+        workoutCalendarInFlight.delete(monthKey);
+    });
+
+    workoutCalendarInFlight.set(monthKey, task);
+    await task;
+
+    if (!prefetchAdjacent) {
+        return;
+    }
+
+    const prevMonth = new Date(date.getFullYear(), date.getMonth() - 1, 1);
+    const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    [prevMonth, nextMonth].forEach(monthDate => {
+        const neighborKey = getMonthKey(monthDate);
+        if (workoutCalendarLoadedMonths.has(neighborKey) || workoutCalendarInFlight.has(neighborKey)) {
+            return;
+        }
+        const range = getMonthRange(monthDate);
+        const prefetchTask = fetchWorkoutCalendarSummary(targetAppUserId, range.startDate, range.endDate)
+            .then(async (summary) => {
+                if (calendarContainer) {
+                    const { updateWorkoutRecords } = await import('./calendar.js');
+                    updateWorkoutRecords(summary || {});
+                }
+                workoutCalendarLoadedMonths.add(neighborKey);
+            })
+            .catch((error) => {
+                console.error('[Workout] 캘린더 인접 월 프리페치 오류:', error);
+            })
+            .finally(() => {
+                workoutCalendarInFlight.delete(neighborKey);
+            });
+        workoutCalendarInFlight.set(neighborKey, prefetchTask);
+    });
+}
+
+async function loadWorkoutRecordsForCalendar(options = {}) {
+    const { reset = false } = options;
     try {
         // 연결된 회원이 있으면 해당 회원의 app_user_id로 조회, 없으면 현재 사용자
         const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
@@ -776,24 +884,30 @@ async function loadWorkoutRecordsForCalendar() {
             throw new Error('사용자 ID가 없습니다.');
         }
         
-        // 캘린더용 경량 API 사용 (날짜별 완료 여부만)
-        const { getWorkoutRecordsForCalendar } = await import('../api.js');
         const { getToday } = await import('../utils.js');
         const today = getToday();
         const todayDate = new Date(today);
         const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
         const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
-        
-        const summary = await getWorkoutRecordsForCalendar(
+
+        if (reset) {
+            workoutCalendarLoadedMonths = new Set();
+        }
+
+        const summary = await fetchWorkoutCalendarSummary(
             targetAppUserId,
-            startDate.toISOString().split('T')[0],
-            endDate.toISOString().split('T')[0]
+            formatLocalDate(startDate),
+            formatLocalDate(endDate)
         );
+
+        workoutCalendarLoadedMonths.add(getMonthKey(new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1)));
+        workoutCalendarLoadedMonths.add(getMonthKey(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)));
+        workoutCalendarLoadedMonths.add(getMonthKey(new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 1)));
         
         // 캘린더 초기화
         const calendarContainer = document.getElementById('workout-calendar-container');
         if (calendarContainer) {
-            const { init: initCalendar, updateWorkoutRecords, updateSessions, render: renderCalendar, setSelectedDate } = await import('./calendar.js');
+            const { init: initCalendar, render: renderCalendar, setSelectedDate } = await import('./calendar.js');
             initCalendar(calendarContainer, async (selectedDate) => {
                 // 날짜 선택 시 목록 필터링
                 if (selectedDate) {
@@ -804,16 +918,19 @@ async function loadWorkoutRecordsForCalendar() {
                 }
                 // 월이 변경되면 상단 연월 표시 업데이트
                 await updateMonthDisplay();
+                await ensureWorkoutCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
             }, summary);
             
             // 세션 데이터는 render()에서 로드 후 전달
             renderCalendar(calendarContainer);
+            await ensureWorkoutCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
             
             const pendingScreen = localStorage.getItem('pendingNavScreen');
             const pendingDate = localStorage.getItem('pendingNavDate');
             if (pendingScreen === 'workout' && pendingDate) {
                 setSelectedDate(pendingDate);
                 renderCalendar(calendarContainer);
+                await ensureWorkoutCalendarMonthLoaded(new Date(pendingDate), { prefetchAdjacent: true });
             }
             
             // 운동기록 업데이트 함수를 전역에 저장 (목록 새로고침 시 사용)
@@ -824,19 +941,11 @@ async function loadWorkoutRecordsForCalendar() {
                     console.error('운동기록 업데이트 오류: app_user_id가 없습니다.');
                     return;
                 }
-                const { getWorkoutRecordsForCalendar } = await import('../api.js');
-                const { getToday } = await import('../utils.js');
-                const today = getToday();
-                const todayDate = new Date(today);
-                const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
-                const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
-                
-                const updatedSummary = await getWorkoutRecordsForCalendar(
-                    targetAppUserId,
-                    startDate.toISOString().split('T')[0],
-                    endDate.toISOString().split('T')[0]
-                );
-                updateWorkoutRecords(updatedSummary);
+                const selectedDateStr = getSelectedDate();
+                const targetDate = selectedDateStr ? new Date(selectedDateStr) : getCurrentMonth();
+                const monthKey = getMonthKey(targetDate);
+                workoutCalendarLoadedMonths.delete(monthKey);
+                await ensureWorkoutCalendarMonthLoaded(targetDate, { prefetchAdjacent: false, force: true });
                 renderCalendar(calendarContainer);
             };
         }

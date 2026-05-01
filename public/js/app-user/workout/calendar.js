@@ -49,8 +49,11 @@ export function updateWorkoutRecords(workoutRecordsOrSummary) {
         // summary 객체의 첫 번째 값을 확인하여 형식 판단
         const firstKey = Object.keys(workoutRecordsOrSummary)[0];
         if (firstKey && workoutRecordsOrSummary[firstKey] && typeof workoutRecordsOrSummary[firstKey] === 'object' && 'hasWorkout' in workoutRecordsOrSummary[firstKey]) {
-            // summary 형식
-            workoutRecordsByDate = workoutRecordsOrSummary;
+            // summary 형식: 월 단위 추가 로딩을 위해 기존 데이터에 병합
+            workoutRecordsByDate = {
+                ...workoutRecordsByDate,
+                ...workoutRecordsOrSummary
+            };
             return;
         }
     }

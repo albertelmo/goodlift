@@ -10,6 +10,9 @@ let isReadOnly = false;
 let lastButtonClickTime = 0; // 버튼 클릭 중복 방지용
 const BUTTON_CLICK_THROTTLE = 300; // 300ms 내 중복 클릭 방지
 const trainerNameCache = new Map();
+let dietCalendarLoadedMonths = new Set();
+let dietCalendarInFlight = new Map();
+let dietCalendarMonthObserverSetup = false;
 
 async function resolveTrainerName(trainerUsername) {
     if (!trainerUsername) return null;
@@ -142,7 +145,7 @@ function setupButtonEventListeners() {
                 
                 setSelectedDate(today);
                 setCurrentMonth(today);
-                await loadDietRecordsForCalendar();
+                await loadDietRecordsForCalendar({ reset: true });
                 await updateMonthDisplay();
                 
                 const todayStr = formatDate(today);
@@ -463,24 +466,129 @@ async function updateMonthDisplay() {
  * 월 변경 감지 설정
  */
 function setupMonthUpdateObserver() {
+    if (dietCalendarMonthObserverSetup) {
+        return;
+    }
+    dietCalendarMonthObserverSetup = true;
+
     const observer = new MutationObserver(async () => {
+        if (!document.getElementById('diet-calendar-container')) {
+            return;
+        }
         await updateMonthDisplay();
+        await ensureDietCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
     });
     
     const calendarContainer = document.getElementById('diet-calendar-container');
     if (calendarContainer) {
         observer.observe(calendarContainer, { childList: true, subtree: true });
     }
-    
-    setInterval(async () => {
+
+    document.addEventListener('calendar-rendered', async () => {
+        if (!document.getElementById('diet-calendar-container')) {
+            return;
+        }
         await updateMonthDisplay();
-    }, 500);
+        await ensureDietCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
+    });
 }
 
 /**
  * 캘린더용 식단기록 로드
  */
-async function loadDietRecordsForCalendar() {
+function formatLocalDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getMonthKey(date) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function getMonthRange(date) {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0);
+    return {
+        startDate: formatLocalDate(start),
+        endDate: formatLocalDate(end)
+    };
+}
+
+async function fetchDietCalendarSummary(targetAppUserId, startDate, endDate) {
+    const { getDietRecordsForCalendar } = await import('../api.js');
+    return getDietRecordsForCalendar(targetAppUserId, startDate, endDate);
+}
+
+async function ensureDietCalendarMonthLoaded(date, options = {}) {
+    const { prefetchAdjacent = false, force = false } = options;
+    const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+    const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+    const calendarContainer = document.getElementById('diet-calendar-container');
+    if (!targetAppUserId || !date || !calendarContainer) {
+        return;
+    }
+
+    const monthKey = getMonthKey(date);
+    if (!force && dietCalendarLoadedMonths.has(monthKey)) {
+        return;
+    }
+    if (dietCalendarInFlight.has(monthKey)) {
+        await dietCalendarInFlight.get(monthKey);
+        return;
+    }
+
+    const { startDate, endDate } = getMonthRange(date);
+    const task = (async () => {
+        const summary = await fetchDietCalendarSummary(targetAppUserId, startDate, endDate);
+        if (calendarContainer) {
+            const { updateDietRecords, render: renderCalendar } = await import('./calendar.js');
+            updateDietRecords(summary || {});
+            renderCalendar(calendarContainer);
+        }
+        dietCalendarLoadedMonths.add(monthKey);
+    })().finally(() => {
+        dietCalendarInFlight.delete(monthKey);
+    });
+
+    dietCalendarInFlight.set(monthKey, task);
+    await task;
+
+    if (!prefetchAdjacent) {
+        return;
+    }
+
+    const prevMonth = new Date(date.getFullYear(), date.getMonth() - 1, 1);
+    const nextMonth = new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    [prevMonth, nextMonth].forEach(monthDate => {
+        const neighborKey = getMonthKey(monthDate);
+        if (dietCalendarLoadedMonths.has(neighborKey) || dietCalendarInFlight.has(neighborKey)) {
+            return;
+        }
+        const range = getMonthRange(monthDate);
+        const prefetchTask = fetchDietCalendarSummary(targetAppUserId, range.startDate, range.endDate)
+            .then(async (summary) => {
+                if (calendarContainer) {
+                    const { updateDietRecords } = await import('./calendar.js');
+                    updateDietRecords(summary || {});
+                }
+                dietCalendarLoadedMonths.add(neighborKey);
+            })
+            .catch((error) => {
+                console.error('[Diet] 캘린더 인접 월 프리페치 오류:', error);
+            })
+            .finally(() => {
+                dietCalendarInFlight.delete(neighborKey);
+            });
+        dietCalendarInFlight.set(neighborKey, prefetchTask);
+    });
+}
+
+async function loadDietRecordsForCalendar(options = {}) {
+    const { reset = false } = options;
     try {
         const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
         const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
@@ -490,23 +598,30 @@ async function loadDietRecordsForCalendar() {
             throw new Error('사용자 ID가 없습니다.');
         }
         
-    const { getDietRecordsForCalendar } = await import('../api.js');
         const { getToday } = await import('../utils.js');
         const today = getToday();
         const todayDate = new Date(today);
         const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
         const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
-        
-        const summary = await getDietRecordsForCalendar(
+
+        if (reset) {
+            dietCalendarLoadedMonths = new Set();
+        }
+
+        const summary = await fetchDietCalendarSummary(
             targetAppUserId,
-            startDate.toISOString().split('T')[0],
-            endDate.toISOString().split('T')[0]
+            formatLocalDate(startDate),
+            formatLocalDate(endDate)
         );
+
+        dietCalendarLoadedMonths.add(getMonthKey(new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1)));
+        dietCalendarLoadedMonths.add(getMonthKey(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)));
+        dietCalendarLoadedMonths.add(getMonthKey(new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 1)));
         
         // 캘린더 초기화
         const calendarContainer = document.getElementById('diet-calendar-container');
     if (calendarContainer) {
-        const { init: initCalendar, updateDietRecords, render: renderCalendar, setSelectedDate } = await import('./calendar.js');
+        const { init: initCalendar, render: renderCalendar, setSelectedDate } = await import('./calendar.js');
             initCalendar(calendarContainer, async (selectedDate) => {
                 if (selectedDate) {
                     const { formatDate } = await import('../utils.js');
@@ -515,15 +630,18 @@ async function loadDietRecordsForCalendar() {
                     await listModule.filterByDate(selectedDateStr);
                 }
                 await updateMonthDisplay();
+                await ensureDietCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
             }, summary);
             
             renderCalendar(calendarContainer);
+            await ensureDietCalendarMonthLoaded(getCurrentMonth(), { prefetchAdjacent: true });
         
         const pendingScreen = localStorage.getItem('pendingNavScreen');
         const pendingDate = localStorage.getItem('pendingNavDate');
         if (pendingScreen === 'diet' && pendingDate) {
             setSelectedDate(pendingDate);
             renderCalendar(calendarContainer);
+            await ensureDietCalendarMonthLoaded(new Date(pendingDate), { prefetchAdjacent: true });
         }
             
             // 식단기록 업데이트 함수를 전역에 저장
@@ -533,19 +651,11 @@ async function loadDietRecordsForCalendar() {
                 if (!targetAppUserId) {
                     return;
                 }
-                const { getDietRecordsForCalendar } = await import('../api.js');
-                const { getToday } = await import('../utils.js');
-                const today = getToday();
-                const todayDate = new Date(today);
-                const startDate = new Date(todayDate.getFullYear(), todayDate.getMonth() - 1, 1);
-                const endDate = new Date(todayDate.getFullYear(), todayDate.getMonth() + 2, 0);
-                
-                const updatedSummary = await getDietRecordsForCalendar(
-                    targetAppUserId,
-                    startDate.toISOString().split('T')[0],
-                    endDate.toISOString().split('T')[0]
-                );
-                updateDietRecords(updatedSummary);
+                const selectedDateStr = getSelectedDate();
+                const targetDate = selectedDateStr ? new Date(selectedDateStr) : getCurrentMonth();
+                const monthKey = getMonthKey(targetDate);
+                dietCalendarLoadedMonths.delete(monthKey);
+                await ensureDietCalendarMonthLoaded(targetDate, { prefetchAdjacent: false, force: true });
                 renderCalendar(calendarContainer);
             };
         }
