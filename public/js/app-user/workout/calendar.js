@@ -54,8 +54,8 @@ export function updateWorkoutRecords(workoutRecordsOrSummary) {
     }
     
     // 기존 형식 (배열) - 하위 호환성 유지
-    workoutRecordsByDate = {};
     if (Array.isArray(workoutRecordsOrSummary)) {
+        const normalizedRecordsByDate = {};
         workoutRecordsOrSummary.forEach(record => {
             // workout_date가 Date 객체인 경우 문자열로 변환, 이미 문자열인 경우 그대로 사용
             let dateStr = record.workout_date;
@@ -77,12 +77,16 @@ export function updateWorkoutRecords(workoutRecordsOrSummary) {
             }
             
             if (dateStr) {
-                if (!workoutRecordsByDate[dateStr]) {
-                    workoutRecordsByDate[dateStr] = [];
+                if (!normalizedRecordsByDate[dateStr]) {
+                    normalizedRecordsByDate[dateStr] = [];
                 }
-                workoutRecordsByDate[dateStr].push(record);
+                normalizedRecordsByDate[dateStr].push(record);
             }
         });
+        workoutRecordsByDate = {
+            ...workoutRecordsByDate,
+            ...normalizedRecordsByDate
+        };
     }
 }
 

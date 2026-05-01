@@ -33,8 +33,6 @@ export function updateDietRecords(dietRecordsOrSummary) {
             ...dietRecordsByDate,
             ...dietRecordsOrSummary
         };
-    } else {
-        dietRecordsByDate = {};
     }
 }
 
