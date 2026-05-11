@@ -6496,6 +6496,30 @@ app.patch('/api/sessions/:id/attend', async (req, res) => {
     }
 });
 
+// 세션 출석 완료 취소 (완료 → 예정, 잔여 세션 +1)
+app.patch('/api/sessions/:id/unattend', async (req, res) => {
+    try {
+        const sessionId = req.params.id;
+        const result = await sessionsDB.revertSessionAttendance(sessionId);
+        if (!result.ok) {
+            if (result.code === 'NOT_FOUND') {
+                return res.status(404).json({ message: '세션을 찾을 수 없습니다.' });
+            }
+            if (result.code === 'NOT_COMPLETED') {
+                return res.status(400).json({
+                    message: '출석 완료된 세션만 해제할 수 있습니다.',
+                    status: result.status
+                });
+            }
+            return res.status(400).json({ message: '출석 해제를 할 수 없습니다.' });
+        }
+        res.json({ message: '출석이 해제되었습니다.', session: result.session });
+    } catch (error) {
+        console.error('[API] 출석 해제 오류:', error);
+        res.status(500).json({ message: '출석 해제에 실패했습니다.' });
+    }
+});
+
 // 세션 변경(날짜, 시간)
 app.patch('/api/sessions/:id', async (req, res) => {
     try {

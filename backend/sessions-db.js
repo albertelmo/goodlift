@@ -226,6 +226,65 @@ const getSessionById = async (id) => {
   }
 };
 
+/**
+ * 출석 완료 취소: status 완료 → 예정, 해당 회원 remain_sessions + 1 (단일 트랜잭션)
+ * @returns {{ ok: true, session: object } | { ok: false, code: 'NOT_FOUND' | 'NOT_COMPLETED', status?: string }}
+ */
+const revertSessionAttendance = async (sessionId) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const lockRes = await client.query(
+      'SELECT id, member, status FROM sessions WHERE id = $1 FOR UPDATE',
+      [sessionId]
+    );
+    if (lockRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { ok: false, code: 'NOT_FOUND' };
+    }
+    const locked = lockRes.rows[0];
+    if (locked.status !== '완료') {
+      await client.query('ROLLBACK');
+      return { ok: false, code: 'NOT_COMPLETED', status: locked.status };
+    }
+
+    const sessionRes = await client.query(
+      `UPDATE sessions
+       SET status = $1
+       WHERE id = $2 AND status = '완료'
+       RETURNING id, member, trainer, date::text, SUBSTRING(time::text, 1, 5) as time, status, "30min"`,
+      ['예정', sessionId]
+    );
+    if (sessionRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return { ok: false, code: 'NOT_COMPLETED' };
+    }
+
+    const memberRes = await client.query(
+      'UPDATE members SET remain_sessions = remain_sessions + 1 WHERE name = $1 RETURNING id, name',
+      [locked.member]
+    );
+    if (memberRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      throw new Error('회원을 찾을 수 없습니다.');
+    }
+
+    await client.query('COMMIT');
+    return { ok: true, session: sessionRes.rows[0] };
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (_) {
+      /* ignore */
+    }
+    console.error('[PostgreSQL] 출석 해제 오류:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
 // 날짜 범위로 세션 조회
 async function getSessionsByDateRange(startDate, endDate) {
   try {
@@ -397,5 +456,6 @@ module.exports = {
   checkTimeConflict,
   addMultipleSessions,
   deleteSessionsByMember,
+  revertSessionAttendance,
   pool
 }; 

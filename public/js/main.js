@@ -685,10 +685,10 @@ function showMainSection(role, name) {
     document.getElementById('logoutBtn').style.display = 'inline-block';
     document.getElementById('settingsBtn').style.display = 'inline-block';
     
-    // 관리자일 때만 secretBtn 표시 (센터관리자는 제외)
+    // su 계정일 때만 secretBtn 표시 (admin·트레이너·센터관리자 등 제외)
     const secretBtn = document.getElementById('secretBtn');
     if (secretBtn) {
-        secretBtn.style.display = isAdminOrSu(role) ? 'inline-block' : 'none';
+        secretBtn.style.display = role === 'su' ? 'inline-block' : 'none';
     }
     
     // 관리자일 때만 상담 버튼 표시 (트레이너는 제외)

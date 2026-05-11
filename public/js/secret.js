@@ -109,6 +109,31 @@ class SecretManager {
             sessionDeleteModalBg.addEventListener('click', () => this.closeSessionDeleteModal());
         }
 
+        const closeSessionUnattendBtn = document.getElementById('closeSessionUnattendBtn');
+        if (closeSessionUnattendBtn) {
+            closeSessionUnattendBtn.addEventListener('click', () => this.closeSessionUnattendModal());
+        }
+
+        const searchSessionUnattendBtn = document.getElementById('searchSessionUnattendBtn');
+        if (searchSessionUnattendBtn) {
+            searchSessionUnattendBtn.addEventListener('click', () => this.searchSessionUnattend());
+        }
+
+        const cancelSessionUnattendBtn = document.getElementById('cancelSessionUnattendBtn');
+        if (cancelSessionUnattendBtn) {
+            cancelSessionUnattendBtn.addEventListener('click', () => this.closeSessionUnattendModal());
+        }
+
+        const confirmSessionUnattendBtn = document.getElementById('confirmSessionUnattendBtn');
+        if (confirmSessionUnattendBtn) {
+            confirmSessionUnattendBtn.addEventListener('click', () => this.confirmSessionUnattend());
+        }
+
+        const sessionUnattendModalBg = document.getElementById('sessionUnattendModalBg');
+        if (sessionUnattendModalBg) {
+            sessionUnattendModalBg.addEventListener('click', () => this.closeSessionUnattendModal());
+        }
+
         // Enter 키 이벤트
         const memberNameInput = document.getElementById('memberNameInput');
         if (memberNameInput) {
@@ -134,6 +159,15 @@ class SecretManager {
             sessionMemberNameInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     this.searchSession();
+                }
+            });
+        }
+
+        const sessionUnattendMemberNameInput = document.getElementById('sessionUnattendMemberNameInput');
+        if (sessionUnattendMemberNameInput) {
+            sessionUnattendMemberNameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.searchSessionUnattend();
                 }
             });
         }
@@ -206,6 +240,7 @@ class SecretManager {
         const menuItems = [
             { id: 'memberDelete', title: '회원 삭제', description: '회원 정보 및 세션 삭제' },
             { id: 'sessionDelete', title: '세션 삭제', description: '특정 회원의 특정 세션 삭제' },
+            { id: 'sessionUnattend', title: '출석 해제', description: '출석 완료 세션을 예정으로 되돌리고 잔여 세션 복구' },
             { id: 'monthlyStatsReset', title: '월별 통계 초기화', description: '특정 월의 세션 통계를 0으로 초기화' }
         ];
 
@@ -252,6 +287,14 @@ class SecretManager {
             sessionDeleteBtn.addEventListener('click', () => {
                 this.closeAdminMenuModal();
                 this.showSessionDeleteModal();
+            });
+        }
+
+        const sessionUnattendBtn = document.getElementById('sessionUnattendBtn');
+        if (sessionUnattendBtn) {
+            sessionUnattendBtn.addEventListener('click', () => {
+                this.closeAdminMenuModal();
+                this.showSessionUnattendModal();
             });
         }
 
@@ -447,6 +490,140 @@ class SecretManager {
         } catch (error) {
             console.error('회원 삭제 중 오류:', error);
             alert('회원 삭제 중 오류가 발생했습니다.');
+        }
+    }
+
+    // 출석 해제 모달 표시
+    showSessionUnattendModal() {
+        const modalBg = document.getElementById('sessionUnattendModalBg');
+        const modal = document.getElementById('sessionUnattendModal');
+        const memberInput = document.getElementById('sessionUnattendMemberNameInput');
+        const dateInput = document.getElementById('sessionUnattendDateInput');
+        const timeInput = document.getElementById('sessionUnattendTimeInput');
+        const searchSection = document.getElementById('sessionUnattendSearchSection');
+        const infoSection = document.getElementById('sessionUnattendInfoSection');
+
+        if (modalBg && modal && memberInput && dateInput && timeInput && searchSection && infoSection) {
+            modalBg.style.display = 'block';
+            modal.style.display = 'block';
+            memberInput.value = '';
+            dateInput.value = '';
+            timeInput.value = '';
+            searchSection.style.display = 'block';
+            infoSection.style.display = 'none';
+            memberInput.focus();
+        }
+    }
+
+    // 출석 해제 모달 닫기
+    closeSessionUnattendModal() {
+        const modalBg = document.getElementById('sessionUnattendModalBg');
+        const modal = document.getElementById('sessionUnattendModal');
+        const memberInput = document.getElementById('sessionUnattendMemberNameInput');
+        const dateInput = document.getElementById('sessionUnattendDateInput');
+        const timeInput = document.getElementById('sessionUnattendTimeInput');
+        const searchSection = document.getElementById('sessionUnattendSearchSection');
+        const infoSection = document.getElementById('sessionUnattendInfoSection');
+
+        if (modalBg && modal && memberInput && dateInput && timeInput && searchSection && infoSection) {
+            modalBg.style.display = 'none';
+            modal.style.display = 'none';
+            memberInput.value = '';
+            dateInput.value = '';
+            timeInput.value = '';
+            searchSection.style.display = 'block';
+            infoSection.style.display = 'none';
+        }
+    }
+
+    // 출석 해제용 세션 검색
+    async searchSessionUnattend() {
+        const memberInput = document.getElementById('sessionUnattendMemberNameInput');
+        const dateInput = document.getElementById('sessionUnattendDateInput');
+        const timeInput = document.getElementById('sessionUnattendTimeInput');
+        const infoContent = document.getElementById('sessionUnattendInfoContent');
+        const searchSection = document.getElementById('sessionUnattendSearchSection');
+        const infoSection = document.getElementById('sessionUnattendInfoSection');
+
+        if (!memberInput || !dateInput || !timeInput || !infoContent || !searchSection || !infoSection) return;
+
+        const memberName = memberInput.value.trim();
+        const date = dateInput.value;
+        const time = timeInput.value;
+
+        if (!memberName || !date || !time) {
+            alert('회원 이름, 날짜, 시간을 모두 입력해주세요.');
+            return;
+        }
+
+        try {
+            const sessionsResponse = await fetch('/api/sessions');
+            const sessions = await sessionsResponse.json();
+
+            const foundSession = sessions.find(session =>
+                session.member === memberName &&
+                session.date === date &&
+                session.time === time
+            );
+
+            if (!foundSession) {
+                alert('해당 조건의 세션을 찾을 수 없습니다.\n\n회원 이름, 날짜, 시간을 다시 확인해주세요.');
+                return;
+            }
+
+            if (foundSession.status !== '완료') {
+                alert(`이 세션은 출석 완료 상태가 아닙니다.\n현재 상태: ${foundSession.status || '알 수 없음'}`);
+                return;
+            }
+
+            infoContent.innerHTML = `
+                <div><strong>회원:</strong> ${foundSession.member || 'N/A'}</div>
+                <div><strong>트레이너:</strong> ${foundSession.trainer || 'N/A'}</div>
+                <div><strong>날짜:</strong> ${foundSession.date || 'N/A'}</div>
+                <div><strong>시간:</strong> ${foundSession.time || 'N/A'}</div>
+                <div><strong>상태:</strong> ${foundSession.status || 'N/A'}</div>
+                <p style="margin:12px 0 0;font-size:0.85rem;color:#555;">확인 시 상태가 <strong>예정</strong>으로 바뀌고, 해당 회원의 <strong>잔여 세션이 1회 복구</strong>됩니다.</p>
+            `;
+
+            searchSection.style.display = 'none';
+            infoSection.style.display = 'block';
+
+            const confirmBtn = document.getElementById('confirmSessionUnattendBtn');
+            if (confirmBtn) {
+                confirmBtn.dataset.sessionId = foundSession.id;
+            }
+        } catch (error) {
+            console.error('세션 검색 중 오류:', error);
+            alert('세션 검색 중 오류가 발생했습니다.');
+        }
+    }
+
+    async confirmSessionUnattend() {
+        const confirmBtn = document.getElementById('confirmSessionUnattendBtn');
+        if (!confirmBtn) return;
+
+        const sessionId = confirmBtn.dataset.sessionId;
+        if (!sessionId) {
+            alert('세션 정보를 찾을 수 없습니다.');
+            return;
+        }
+
+        const confirmed = confirm('출석을 해제하시겠습니까?\n\n세션은 예정으로 바뀌고, 회원 잔여 세션이 1회 복구됩니다.');
+        if (!confirmed) return;
+
+        try {
+            const res = await fetch(`/api/sessions/${sessionId}/unattend`, { method: 'PATCH' });
+            if (res.ok) {
+                alert('출석이 해제되었습니다.');
+                this.closeSessionUnattendModal();
+                location.reload();
+            } else {
+                const err = await res.json().catch(() => ({}));
+                alert(err.message || '출석 해제에 실패했습니다.');
+            }
+        } catch (error) {
+            console.error('출석 해제 중 오류:', error);
+            alert('출석 해제 중 오류가 발생했습니다.');
         }
     }
 
