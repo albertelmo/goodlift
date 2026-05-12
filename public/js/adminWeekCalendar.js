@@ -207,6 +207,11 @@ async function renderTable(tableWrap) {
       displayStatus
     };
   });
+
+  const suspendedUsernames = new Set(
+    trainers.filter(t => (t.calendar_suspended || 'off') === 'on').map(t => t.username)
+  );
+  processedSessions = processedSessions.filter(s => !suspendedUsernames.has(s.trainer));
   
   // 센터 필터링 적용
   if (state.selectedCenter && state.selectedCenter !== '전체') {

@@ -59,7 +59,7 @@ async function renderTable(tableWrap) {
   ]);
   
   // PostgreSQL에서 반환되는 날짜 형식 처리 (ISO 날짜에서 날짜 부분만 추출)
-  const processedSessions = sessions.map(s => {
+  let processedSessions = sessions.map(s => {
     const member = members.find(m => m.name === s.member);
     const remainSessions = member ? member.remainSessions : 0;
     const hasNoRemainingSessions = remainSessions <= 0;
@@ -78,6 +78,13 @@ async function renderTable(tableWrap) {
       displayStatus
     };
   });
+
+  const suspendedUsernames = new Set(
+    trainers.filter(t => (t.calendar_suspended || 'off') === 'on').map(t => t.username)
+  );
+  processedSessions = processedSessions.filter(s => !suspendedUsernames.has(s.trainer));
+  const activeTrainers = trainers.filter(t => (t.calendar_suspended || 'off') !== 'on');
+
   // === 동적으로 시간대 계산 (30분 단위, 최소 09:00~17:00) ===
   let minTime = 9 * 60, maxTime = 17 * 60; // 분 단위
   if (processedSessions.length) {
@@ -98,8 +105,8 @@ async function renderTable(tableWrap) {
     const m = t % 60;
     hours.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
   }
-  // 트레이너를 가나다순으로 정렬
-  const sortedTrainers = trainers.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  // 트레이너를 가나다순으로 정렬 (캘린더 정지 계정 제외)
+  const sortedTrainers = activeTrainers.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   
   // CSS Grid 기반 캘린더 생성
   const trainerCount = sortedTrainers.length;

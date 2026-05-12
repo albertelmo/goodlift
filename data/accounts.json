@@ -19,7 +19,8 @@
     "vip_member": false,
     "30min_session": "on",
     "profile_image_url": "/uploads/trainer-profiles/2026/01/df56c616-a3e2-4853-9ec6-b1c6001bc953/profile.jpg",
-    "default_view_mode": "month"
+    "default_view_mode": "month",
+    "calendar_suspended": "off"
   },
   {
     "username": "ssc",
@@ -82,6 +83,7 @@
     "username": "ice",
     "password": "123",
     "name": "아이스",
-    "role": "trainer"
+    "role": "trainer",
+    "calendar_suspended": "off"
   }
 ]

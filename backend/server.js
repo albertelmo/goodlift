@@ -5626,6 +5626,7 @@ app.get('/api/trainers', (req, res) => {
                 default_view_mode: trainer.default_view_mode || 'week',
                 probation: trainer.probation || 'off',
                 ledger: trainer.ledger || 'off',
+                calendar_suspended: trainer.calendar_suspended === 'on' ? 'on' : 'off',
                 profile_image_url: trainer.profile_image_url || null
             }]);
         } else {
@@ -5634,7 +5635,7 @@ app.get('/api/trainers', (req, res) => {
     }
     
     const trainers = accounts.filter(acc => acc.role === 'trainer')
-        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, ledger, profile_image_url }) => ({ 
+        .map(({ username, name, role, vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, ledger, calendar_suspended, profile_image_url }) => ({ 
             username, 
             name, 
             role, 
@@ -5643,6 +5644,7 @@ app.get('/api/trainers', (req, res) => {
             default_view_mode: default_view_mode || 'week',  // 기본값: 주간보기
             probation: probation || 'off',  // 기본값: 수습 아님
             ledger: ledger || 'off',  // 기본값: 장부 기능 사용 안함
+            calendar_suspended: calendar_suspended === 'on' ? 'on' : 'off',
             profile_image_url: profile_image_url || null
         }));
     res.json(trainers);
@@ -5693,7 +5695,7 @@ app.delete('/api/trainers/:username', async (req, res) => {
 app.patch('/api/trainers/:username', async (req, res) => {
     try {
         const username = req.params.username;
-        const { vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, ledger, currentUser } = req.body;
+        const { vip_member, '30min_session': thirtyMinSession, default_view_mode, probation, ledger, calendar_suspended, currentUser } = req.body;
         
         // 권한 확인: 관리자이거나 본인인 경우만 허용
         let accounts = [];
@@ -5767,6 +5769,17 @@ app.patch('/api/trainers/:username', async (req, res) => {
             accounts[trainerIndex].ledger = ledger;
         }
         
+        // 오늘/주간 세션 캘린더에서 숨김 (SU만 가능)
+        if (calendar_suspended !== undefined) {
+            if (currentUserAccount && currentUserAccount.role !== 'su') {
+                return res.status(403).json({ message: '캘린더 정지 설정은 SU 권한이 필요합니다.' });
+            }
+            if (!['on', 'off'].includes(calendar_suspended)) {
+                return res.status(400).json({ message: '캘린더 정지는 "on" 또는 "off"만 가능합니다.' });
+            }
+            accounts[trainerIndex].calendar_suspended = calendar_suspended;
+        }
+        
         fs.writeFileSync(DATA_PATH, JSON.stringify(accounts, null, 2));
         
         res.json({ 
@@ -5778,7 +5791,8 @@ app.patch('/api/trainers/:username', async (req, res) => {
                 '30min_session': accounts[trainerIndex]['30min_session'],
                 default_view_mode: accounts[trainerIndex].default_view_mode || 'week',
                 probation: accounts[trainerIndex].probation || 'off',
-                ledger: accounts[trainerIndex].ledger || 'off'
+                ledger: accounts[trainerIndex].ledger || 'off',
+                calendar_suspended: accounts[trainerIndex].calendar_suspended === 'on' ? 'on' : 'off'
             }
         });
     } catch (error) {

@@ -40,6 +40,11 @@ async function loadList() {
                 const ledgerColor = tr.ledger === 'on' ? '#1976d2' : '#666';
                 const ledgerBgColor = tr.ledger === 'on' ? '#e3f2fd' : '#f5f5f5';
                 
+                const calSusp = (tr.calendar_suspended || 'off') === 'on' ? 'on' : 'off';
+                const calSuspStatus = calSusp === 'on' ? 'ON' : 'OFF';
+                const calSuspColor = calSusp === 'on' ? '#e65100' : '#666';
+                const calSuspBgColor = calSusp === 'on' ? '#fff3e0' : '#f5f5f5';
+                
                 const profileImageUrl = tr.profile_image_url || null;
                 const profileImageHtml = profileImageUrl 
                     ? `<img src="${profileImageUrl}" alt="프로필" style="width:80px;height:80px;object-fit:cover;border-radius:50%;cursor:pointer;border:2px solid #e0e0e0;" 
@@ -56,8 +61,10 @@ async function loadList() {
                 
                 html += `<div style="flex:0 0 calc(33.333% - 11px);min-width:280px;max-width:none;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,0.1);border-radius:8px;overflow:hidden;position:relative;">
                     ${isSu ? `
-                    <button class="delete-trainer-btn" data-username="${tr.username}" data-name="${tr.name}" 
-                            style="position:absolute;top:8px;right:8px;background:#d32f2f;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;z-index:10;">삭제</button>
+                    <button class="calendar-suspend-toggle-btn" data-username="${tr.username}" data-name="${tr.name}" data-calendar-suspended="${calSusp}" 
+                            style="position:absolute;top:8px;right:8px;background:${calSuspBgColor};color:${calSuspColor};border:1px solid ${calSuspColor};padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;z-index:10;font-weight:500;">
+                        정지 ${calSuspStatus}
+                    </button>
                     ` : ''}
                     <div style="display:flex;align-items:center;gap:16px;padding:16px;">
                         <div style="flex-shrink:0;">
@@ -112,9 +119,9 @@ async function loadList() {
             // 장부 토글 버튼 이벤트 리스너 추가
             setupLedgerToggleListeners();
             
-            // su 유저인 경우에만 삭제 버튼 이벤트 리스너 추가
+            // su 유저인 경우에만 캘린더 정지 버튼 이벤트
             if (isSu) {
-                setupDeleteTrainerListeners();
+                setupCalendarSuspendToggleListeners();
             }
         }
     } catch (e) {
@@ -338,38 +345,44 @@ function setupLedgerToggleListeners() {
     });
 }
 
-// 삭제 버튼 이벤트 리스너 설정
-function setupDeleteTrainerListeners() {
+// 캘린더 정지(오늘·주간 세션 캘린더에서 숨김) 토글 — SU 전용
+function setupCalendarSuspendToggleListeners() {
     const listDiv = document.getElementById('trainer-list');
     if (!listDiv) return;
     
-    listDiv.querySelectorAll('.delete-trainer-btn').forEach(btn => {
+    listDiv.querySelectorAll('.calendar-suspend-toggle-btn').forEach(btn => {
         btn.addEventListener('click', async function() {
             const username = this.getAttribute('data-username');
             const name = this.getAttribute('data-name');
+            const currentSuspended = (this.getAttribute('data-calendar-suspended') || 'off') === 'on';
+            const newSuspended = currentSuspended ? 'off' : 'on';
             
-            if (!confirm(`정말 트레이너 "${name}"을(를) 삭제하시겠습니까?`)) {
+            const action = newSuspended === 'on' ? '정지(오늘·주간 캘린더에서 숨김)' : '정지 해제(캘린더에 다시 표시)';
+            if (!confirm(`트레이너 "${name}"을(를) ${action}하시겠습니까?`)) {
                 return;
             }
             
             try {
                 const currentUser = localStorage.getItem('username');
                 const res = await fetch(`/api/trainers/${encodeURIComponent(username)}`, {
-                    method: 'DELETE',
+                    method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ currentUser })
+                    body: JSON.stringify({
+                        calendar_suspended: newSuspended,
+                        currentUser
+                    })
                 });
                 const result = await res.json();
                 
                 if (res.ok) {
-                    alert('트레이너가 삭제되었습니다.');
-                    loadList(); // 목록 새로고침
+                    alert(newSuspended === 'on' ? '캘린더에서 숨겼습니다.' : '캘린더에 다시 표시합니다.');
+                    loadList();
                 } else {
-                    alert(result.message || '트레이너 삭제에 실패했습니다.');
+                    alert(result.message || '설정 변경에 실패했습니다.');
                 }
             } catch (error) {
-                console.error('트레이너 삭제 오류:', error);
-                alert('트레이너 삭제에 실패했습니다.');
+                console.error('캘린더 정지 설정 오류:', error);
+                alert('설정 변경에 실패했습니다.');
             }
         });
     });
