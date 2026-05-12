@@ -1,6 +1,6 @@
 // 앱 유저 홈/대시보드 화면
 
-import { formatDate, getToday, escapeHtml, getTimeAgo } from './utils.js';
+import { formatDate, getToday, escapeHtml, getTimeAgo, formatWorkoutDuration, workoutDurationTotalSeconds } from './utils.js';
 import { getUserSettings, updateUserSettings } from './api.js';
 import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead, getAnnouncementsInbox, getAnnouncementDetail, markAnnouncementAsRead, requestMonthlyAiAnalysis } from './api.js';
 import { showWorkoutGuideDetailModal } from './guide-modal.js';
@@ -367,7 +367,7 @@ async function loadTodayWorkoutSummary() {
         // 요약 정보 계산
         const workoutTypes = new Set();
         let totalSets = 0;
-        let totalMinutes = 0;
+        let totalDurationSeconds = 0;
         
         records.forEach(record => {
             const workoutTypeName = record.workout_type_name;
@@ -379,15 +379,15 @@ async function loadTodayWorkoutSummary() {
             
             if (workoutTypeType === '세트' && record.sets) {
                 totalSets += record.sets.length;
-            } else if (workoutTypeType === '시간' && record.duration_minutes) {
-                totalMinutes += record.duration_minutes;
+            } else if (workoutTypeType === '시간') {
+                totalDurationSeconds += workoutDurationTotalSeconds(record.duration_minutes, record.duration_seconds);
             }
         });
         
         todayWorkoutSummary = {
             workoutCount: workoutTypes.size,
             totalSets: totalSets,
-            totalMinutes: totalMinutes
+            totalDurationSeconds: totalDurationSeconds
         };
     } catch (error) {
         console.error('오늘의 운동 요약 조회 오류:', error);
@@ -2263,18 +2263,21 @@ async function showWeeklyWorkoutModal() {
                 const workoutTypeType = record.workout_type_type || '세트';
                 const workoutTypeName = escapeHtml(record.workout_type_name || '');
                 
-                if (workoutTypeType === '시간' && record.duration_minutes) {
+                if (workoutTypeType === '시간') {
+                    const durLabel = formatWorkoutDuration(record.duration_minutes, record.duration_seconds);
+                    if (durLabel) {
                     historyHTML += `
                         <div class="workout-history-item">
                             <div class="workout-history-item-header">
                                 <div class="workout-history-item-content">
                                     <div class="workout-history-item-name">${workoutTypeName}</div>
-                                    <span class="workout-history-item-value">⏱ ${record.duration_minutes}분</span>
+                                    <span class="workout-history-item-value">⏱ ${durLabel}</span>
                                 </div>
                                 ${record.is_completed ? '<span class="workout-history-item-badge">완료</span>' : ''}
                             </div>
                         </div>
                     `;
+                    }
                 } else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
                     const setsHTML = record.sets.map(set => {
                         const weight = set.weight !== null && set.weight !== undefined ? `${Math.round(set.weight)}kg` : '-';

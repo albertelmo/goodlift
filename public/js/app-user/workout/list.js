@@ -1,6 +1,6 @@
 // 운동기록 목록 렌더링
 
-import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText } from '../utils.js';
+import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText, formatWorkoutDuration, workoutDurationTotalSeconds } from '../utils.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
 import { getCurrentUser } from '../index.js';
 import { showWorkoutGuideDetailModal } from '../guide-modal.js';
@@ -138,6 +138,7 @@ async function flushRecordSave(recordId) {
             workout_date: recordSnapshot.workout_date,
             workout_type_id: recordSnapshot.workout_type_id,
             duration_minutes: recordSnapshot.duration_minutes,
+            duration_seconds: recordSnapshot.duration_seconds,
             sets: (recordSnapshot.sets || []).map(set => ({
                 id: set.id,
                 set_number: set.set_number,
@@ -1250,7 +1251,7 @@ function renderWorkoutItem(record, options = {}) {
     // 일반 기록 (기존 로직)
     const workoutTypeName = record.workout_type_name || '미지정';
     const workoutTypeType = record.workout_type_type || null;
-    const duration = record.duration_minutes ? `${record.duration_minutes}분` : null;
+    const duration = formatWorkoutDuration(record.duration_minutes, record.duration_seconds);
     const notes = record.notes ? escapeHtml(record.notes) : '';
     const sets = record.sets || [];
     
@@ -1376,7 +1377,7 @@ function renderWorkoutItem(record, options = {}) {
 function showCompletedCheckModal(record) {
     const workoutTypeName = record.workout_type_name || '미지정';
     const workoutTypeType = record.workout_type_type || null;
-    const duration = record.duration_minutes ? `${record.duration_minutes}분` : null;
+    const duration = formatWorkoutDuration(record.duration_minutes, record.duration_seconds);
     const notes = record.notes ? escapeHtml(record.notes) : '';
     const sets = record.sets || [];
     const isCompleted = record.is_completed || false;
@@ -2888,6 +2889,7 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
                 text_content: record.text_content || '',
                 workout_type_id: null,
                 duration_minutes: null,
+                duration_seconds: null,
                 sets: [],
                 notes: null,
                 is_completed: false // 복사된 기록은 완료 상태 초기화
@@ -2903,13 +2905,18 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
         };
         
         // 시간 운동인 경우
-        if (record.workout_type_type === '시간' && record.duration_minutes) {
-            workoutData.duration_minutes = record.duration_minutes;
+        if (record.workout_type_type === '시간') {
+            const totalSec = workoutDurationTotalSeconds(record.duration_minutes, record.duration_seconds);
+            if (totalSec > 0) {
+                workoutData.duration_minutes = record.duration_minutes != null ? Number(record.duration_minutes) : 0;
+                workoutData.duration_seconds = record.duration_seconds != null ? Number(record.duration_seconds) : 0;
+            }
             workoutData.sets = [];
         } 
         // 세트 운동인 경우
         else if (record.workout_type_type === '세트' && record.sets && record.sets.length > 0) {
             workoutData.duration_minutes = null;
+            workoutData.duration_seconds = null;
             workoutData.sets = record.sets.map(set => ({
                 set_number: set.set_number,
                 weight: set.weight !== null && set.weight !== undefined ? set.weight : 0,
@@ -2918,6 +2925,7 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
         } else {
             // 세트 정보가 없는 경우 기본 세트 추가
             workoutData.duration_minutes = null;
+            workoutData.duration_seconds = null;
             workoutData.sets = [{ set_number: 1, weight: 0, reps: 0 }];
         }
         

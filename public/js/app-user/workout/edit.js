@@ -1,6 +1,6 @@
 // 운동기록 수정/삭제 모달
 
-import { formatDate, escapeHtml, formatWeight, parseWeight } from '../utils.js';
+import { formatDate, escapeHtml, formatWeight, parseWeight, parseWorkoutDurationInputs } from '../utils.js';
 import { updateWorkoutRecord, deleteWorkoutRecord, getWorkoutTypes } from '../api.js';
 
 /**
@@ -55,8 +55,13 @@ export async function showEditModal(record, appUserId, onSuccess) {
                 </select>
             </div>
             <div class="app-form-group" id="workout-edit-duration-group" style="display: ${workoutTypeType === '시간' ? 'block' : 'none'};">
-                <label for="workout-edit-duration">⏱ 시간 (분)</label>
-                <input type="number" id="workout-edit-duration" min="0" value="${record.duration_minutes || ''}" placeholder="30" inputmode="numeric">
+                <label>⏱ 시간 (분 · 초)</label>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <input type="number" id="workout-edit-duration-m" min="0" placeholder="0" value="${record.duration_minutes != null ? record.duration_minutes : ''}" inputmode="numeric" style="width: 72px;">
+                    <span style="color: #666;">분</span>
+                    <input type="number" id="workout-edit-duration-s" min="0" max="59" placeholder="0" value="${record.duration_seconds != null ? record.duration_seconds : ''}" inputmode="numeric" style="width: 72px;">
+                    <span style="color: #666;">초</span>
+                </div>
             </div>
             <div class="app-form-group" id="workout-edit-sets-group" style="display: ${workoutTypeType === '세트' ? 'block' : 'none'};">
                 <label>⚖️ 세트</label>
@@ -330,7 +335,8 @@ export async function showEditModal(record, appUserId, onSuccess) {
         
         const workoutDate = document.getElementById('workout-edit-date').value;
         const workoutTypeId = document.getElementById('workout-edit-type').value;
-        const durationMinutes = document.getElementById('workout-edit-duration').value;
+        const durationM = document.getElementById('workout-edit-duration-m')?.value ?? '';
+        const durationS = document.getElementById('workout-edit-duration-s')?.value ?? '';
         const notes = document.getElementById('workout-edit-notes').value;
         
         const selectedOption = typeSelect.options[typeSelect.selectedIndex];
@@ -347,11 +353,22 @@ export async function showEditModal(record, appUserId, onSuccess) {
             }))
             : [];
         
+        let durationPayload = { duration_minutes: null, duration_seconds: null };
+        if (workoutType === '시간') {
+            const parsed = parseWorkoutDurationInputs(String(durationM), String(durationS));
+            if (!parsed.ok) {
+                alert(parsed.message);
+                return;
+            }
+            durationPayload = { duration_minutes: parsed.minutes, duration_seconds: parsed.seconds };
+        }
+        
         const updates = {
             app_user_id: appUserId,
             workout_date: workoutDate,
             workout_type_id: workoutTypeId || null,
-            duration_minutes: workoutType === '시간' && durationMinutes ? parseInt(durationMinutes) : null,
+            duration_minutes: durationPayload.duration_minutes,
+            duration_seconds: durationPayload.duration_seconds,
             sets: updatedSets,
             notes: notes.trim() || null
         };
@@ -557,6 +574,7 @@ export async function showTextRecordEditModal(record, appUserId, onSuccess) {
             text_content: textContent,
             workout_type_id: null,
             duration_minutes: null,
+            duration_seconds: null,
             condition_level: selectedLevels.condition,
             intensity_level: selectedLevels.intensity,
             fatigue_level: selectedLevels.fatigue,

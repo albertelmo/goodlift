@@ -90,6 +90,7 @@ const createWorkoutRecordsTable = async () => {
           workout_date DATE NOT NULL,
           workout_type_id UUID,
           duration_minutes INTEGER,
+          duration_seconds INTEGER,
           notes TEXT,
           condition_level VARCHAR(10),
           intensity_level VARCHAR(10),
@@ -144,6 +145,11 @@ const createWorkoutRecordsTable = async () => {
         'add_workout_record_levels_20260202',
         '운동 기록 테이블에 컨디션/강도/피로도 컬럼 추가',
         migrateWorkoutRecordLevels
+      );
+      await runMigration(
+        'add_workout_record_duration_seconds_20260512',
+        '운동 기록에 duration_seconds 컬럼 추가',
+        migrateWorkoutRecordDurationSeconds
       );
     }
   } catch (error) {
@@ -518,6 +524,27 @@ const migrateWorkoutRecordLevels = async () => {
   }
 };
 
+const migrateWorkoutRecordDurationSeconds = async () => {
+  try {
+    const columnsResult = await pool.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'workout_records'
+    `);
+    const existingColumns = columnsResult.rows.map((row) => row.column_name);
+    if (!existingColumns.includes('duration_seconds')) {
+      await pool.query(`
+        ALTER TABLE workout_records
+        ADD COLUMN duration_seconds INTEGER
+      `);
+      console.log('[PostgreSQL] workout_records 테이블에 duration_seconds 컬럼이 추가되었습니다.');
+    }
+  } catch (error) {
+    console.error('[PostgreSQL] duration_seconds 마이그레이션 오류:', error);
+    throw error;
+  }
+};
+
 
 // 인덱스 생성
 const createWorkoutRecordsIndexes = async () => {
@@ -601,6 +628,7 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
         wt.name as workout_type_name,
         wt.type as workout_type_type,
         wr.duration_minutes,
+        wr.duration_seconds,
         wr.notes,
         wr.condition_level,
         wr.intensity_level,
@@ -713,6 +741,7 @@ const getWorkoutRecordById = async (id, appUserId) => {
         wt.name as workout_type_name,
         wt.type as workout_type_type,
         wr.duration_minutes,
+        wr.duration_seconds,
         wr.notes,
         wr.condition_level,
         wr.intensity_level,
@@ -846,12 +875,50 @@ const validateWorkoutRecord = (workoutData) => {
   }
 };
 
+const parseDurationIntForDb = (v, defaultVal = 0) => {
+  if (v === undefined || v === null || v === '') return defaultVal;
+  const n = typeof v === 'number' ? v : parseInt(String(v), 10);
+  if (Number.isNaN(n)) {
+    throw new Error('운동 시간(분/초)은 숫자로 입력해 주세요.');
+  }
+  return n;
+};
+
+const assertDurationForTimeType = (minutes, seconds) => {
+  if (minutes < 0 || seconds < 0 || seconds > 59) {
+    throw new Error('운동 시간이 올바르지 않습니다. 초는 0~59 사이로 입력해 주세요.');
+  }
+  if (minutes === 0 && seconds === 0) {
+    throw new Error('운동 시간을 입력해 주세요.');
+  }
+};
+
+const resolveStoredDurationsForInsert = async (client, workoutData) => {
+  if (workoutData.is_text_record) {
+    return { dm: null, ds: null };
+  }
+  if (!workoutData.workout_type_id) {
+    return { dm: null, ds: null };
+  }
+  const tr = await client.query('SELECT type FROM workout_types WHERE id = $1', [workoutData.workout_type_id]);
+  const wtype = tr.rows[0]?.type;
+  if (wtype !== '시간') {
+    return { dm: null, ds: null };
+  }
+  const m = parseDurationIntForDb(workoutData.duration_minutes, 0);
+  const s = parseDurationIntForDb(workoutData.duration_seconds, 0);
+  assertDurationForTimeType(m, s);
+  return { dm: m, ds: s };
+};
+
 // 운동기록 추가
 const addWorkoutRecord = async (workoutData) => {
   const client = await pool.connect();
   try {
     // 검증
     validateWorkoutRecord(workoutData);
+    
+    const { dm, ds } = await resolveStoredDurationsForInsert(client, workoutData);
     
     await client.query('BEGIN');
     
@@ -865,6 +932,7 @@ const addWorkoutRecord = async (workoutData) => {
         workout_date,
         workout_type_id,
         duration_minutes,
+        duration_seconds,
         notes,
         display_order,
         is_text_record,
@@ -872,14 +940,15 @@ const addWorkoutRecord = async (workoutData) => {
         condition_level,
         intensity_level,
         fatigue_level
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `;
     const insertValues = [
       workoutData.app_user_id,
       workoutData.workout_date,
       workoutData.is_text_record ? null : (workoutData.workout_type_id || null),
-      workoutData.duration_minutes || null,
+      dm,
+      ds,
       workoutData.notes || null,
       displayOrder,
       workoutData.is_text_record || false,
@@ -990,6 +1059,8 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
       // 검증
       validateWorkoutRecord(workoutData);
       
+      const { dm, ds } = await resolveStoredDurationsForInsert(client, workoutData);
+      
       // 운동기록 추가
       const insertQuery = `
         INSERT INTO workout_records (
@@ -997,6 +1068,7 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
           workout_date,
           workout_type_id,
           duration_minutes,
+          duration_seconds,
           notes,
           display_order,
           is_text_record,
@@ -1004,14 +1076,15 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
           condition_level,
           intensity_level,
           fatigue_level
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
         RETURNING *
       `;
       const insertValues = [
         workoutData.app_user_id,
         workoutData.workout_date,
         workoutData.is_text_record ? null : (workoutData.workout_type_id || null),
-        workoutData.duration_minutes || null,
+        dm,
+        ds,
         workoutData.notes || null,
         currentOrder,
         workoutData.is_text_record || false,
@@ -1116,7 +1189,8 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
     
     // 기존 레코드 조회 (날짜 변경 확인용)
     const existingRecord = await client.query(
-      `SELECT workout_date, display_order FROM workout_records WHERE id = $1 AND app_user_id = $2`,
+      `SELECT workout_date, display_order, duration_minutes, duration_seconds, workout_type_id, is_text_record
+       FROM workout_records WHERE id = $1 AND app_user_id = $2`,
       [id, appUserId]
     );
     
@@ -1124,8 +1198,9 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
       throw new Error('운동기록을 찾을 수 없습니다.');
     }
     
-    const oldDateRaw = existingRecord.rows[0].workout_date;
-    const existingDisplayOrder = existingRecord.rows[0].display_order;
+    const ex = existingRecord.rows[0];
+    const oldDateRaw = ex.workout_date;
+    const existingDisplayOrder = ex.display_order;
     const newDate = updates.workout_date;
     
     // 날짜를 YYYY-MM-DD 형식의 문자열로 정규화하여 비교
@@ -1166,6 +1241,37 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
       }
     }
     
+    if (updates.is_text_record === true) {
+      updates.duration_minutes = null;
+      updates.duration_seconds = null;
+    } else {
+      const durationTouched = updates.duration_minutes !== undefined
+        || updates.duration_seconds !== undefined
+        || updates.workout_type_id !== undefined;
+      if (durationTouched) {
+        const mergedIsText = updates.is_text_record !== undefined ? updates.is_text_record : ex.is_text_record;
+        if (!mergedIsText) {
+          const mergedTypeId = updates.workout_type_id !== undefined ? updates.workout_type_id : ex.workout_type_id;
+          const tr = await client.query('SELECT type FROM workout_types WHERE id = $1', [mergedTypeId]);
+          const wtype = tr.rows[0]?.type;
+          if (wtype === '시간') {
+            const m = updates.duration_minutes !== undefined
+              ? parseDurationIntForDb(updates.duration_minutes, 0)
+              : parseDurationIntForDb(ex.duration_minutes, 0);
+            const s = updates.duration_seconds !== undefined
+              ? parseDurationIntForDb(updates.duration_seconds, 0)
+              : parseDurationIntForDb(ex.duration_seconds, 0);
+            assertDurationForTimeType(m, s);
+            updates.duration_minutes = m;
+            updates.duration_seconds = s;
+          } else {
+            updates.duration_minutes = null;
+            updates.duration_seconds = null;
+          }
+        }
+      }
+    }
+    
     const fields = [];
     const values = [];
     let paramIndex = 1;
@@ -1184,7 +1290,11 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
     }
     if (updates.duration_minutes !== undefined) {
       fields.push(`duration_minutes = $${paramIndex++}`);
-      values.push(updates.duration_minutes || null);
+      values.push(updates.duration_minutes);
+    }
+    if (updates.duration_seconds !== undefined) {
+      fields.push(`duration_seconds = $${paramIndex++}`);
+      values.push(updates.duration_seconds);
     }
     if (updates.notes !== undefined) {
       fields.push(`notes = $${paramIndex++}`);
@@ -1383,14 +1493,15 @@ const getWorkoutStats = async (appUserId, startDate, endDate) => {
     const query = `
       SELECT 
         COUNT(*) as total_workouts,
-        COALESCE(SUM(duration_minutes), 0) as total_duration
+        COALESCE(SUM(COALESCE(duration_minutes, 0) * 60 + COALESCE(duration_seconds, 0)), 0)::bigint as total_duration_seconds,
+        (FLOOR(COALESCE(SUM(COALESCE(duration_minutes, 0) * 60 + COALESCE(duration_seconds, 0)), 0) / 60))::bigint as total_duration
       FROM workout_records
       WHERE app_user_id = $1
         AND workout_date >= $2
         AND workout_date <= $3
     `;
     const result = await pool.query(query, [appUserId, startDate, endDate]);
-    return result.rows[0] || { total_workouts: 0, total_duration: 0 };
+    return result.rows[0] || { total_workouts: 0, total_duration_seconds: 0, total_duration: 0 };
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 통계 조회 오류:', error);
     throw error;

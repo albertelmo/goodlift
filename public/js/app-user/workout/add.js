@@ -1,6 +1,6 @@
 // 운동기록 추가 모달
 
-import { formatDate, getToday, escapeHtml, formatWeight, parseWeight } from '../utils.js';
+import { formatDate, getToday, escapeHtml, formatWeight, parseWeight, parseWorkoutDurationInputs, formatWorkoutDuration } from '../utils.js';
 import { addWorkoutRecord, addWorkoutRecordsBatch, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
 import { getCurrentUser } from '../index.js';
 
@@ -627,6 +627,7 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             name: workoutType?.name || '',
             type: workoutInfo?.type || workoutType?.type || '세트',
             durationMinutes: null,
+            durationSeconds: null,
             sets: []
         };
     });
@@ -642,8 +643,13 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                     </div>
                     <div class="workout-input-body">
                         <div class="app-form-group" style="margin-bottom: 0;">
-                            <label for="workout-input-duration-${index}">시간 (분)</label>
-                            <input type="number" id="workout-input-duration-${index}" class="workout-input-duration" min="0" placeholder="30" value="${workout.durationMinutes || ''}" inputmode="numeric">
+                            <label>시간 (분 · 초)</label>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <input type="number" id="workout-input-duration-m-${index}" class="workout-input-duration-m" data-workout-index="${index}" min="0" placeholder="0" value="${workout.durationMinutes != null ? workout.durationMinutes : ''}" inputmode="numeric" style="width: 72px;">
+                                <span style="color: #666;">분</span>
+                                <input type="number" id="workout-input-duration-s-${index}" class="workout-input-duration-s" data-workout-index="${index}" min="0" max="59" placeholder="0" value="${workout.durationSeconds != null ? workout.durationSeconds : ''}" inputmode="numeric" style="width: 72px;">
+                                <span style="color: #666;">초</span>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -867,12 +873,19 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         
     }
     
-    // 시간 입력 이벤트
-    modal.querySelectorAll('.workout-input-duration').forEach(input => {
+    // 시간 입력 이벤트 (분 / 초)
+    modal.querySelectorAll('.workout-input-duration-m').forEach(input => {
         input.addEventListener('input', (e) => {
-            const workoutIndex = parseInt(e.target.closest('.workout-input-card').getAttribute('data-workout-index'));
+            const workoutIndex = parseInt(e.target.closest('.workout-input-card').getAttribute('data-workout-index'), 10);
             const value = e.target.value.trim();
-            selectedWorkouts[workoutIndex].durationMinutes = value === '' ? null : (isNaN(parseInt(value)) ? null : parseInt(value));
+            selectedWorkouts[workoutIndex].durationMinutes = value === '' ? null : (isNaN(parseInt(value, 10)) ? null : parseInt(value, 10));
+        });
+    });
+    modal.querySelectorAll('.workout-input-duration-s').forEach(input => {
+        input.addEventListener('input', (e) => {
+            const workoutIndex = parseInt(e.target.closest('.workout-input-card').getAttribute('data-workout-index'), 10);
+            const value = e.target.value.trim();
+            selectedWorkouts[workoutIndex].durationSeconds = value === '' ? null : (isNaN(parseInt(value, 10)) ? null : parseInt(value, 10));
         });
     });
     
@@ -915,11 +928,15 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                 if (record) {
                     const workout = selectedWorkouts[workoutIndex];
                     if (workout) {
-                        if (workout.type === '시간' && record.duration_minutes) {
-                            workout.durationMinutes = record.duration_minutes;
-                            const durationInput = modal.querySelector(`#workout-input-duration-${workoutIndex}`);
-                            if (durationInput) {
-                                durationInput.value = record.duration_minutes;
+                        if (workout.type === '시간') {
+                            const totalSec = (Number(record.duration_minutes) || 0) * 60 + (Number(record.duration_seconds) || 0);
+                            if (totalSec > 0) {
+                                workout.durationMinutes = record.duration_minutes != null ? Number(record.duration_minutes) : 0;
+                                workout.durationSeconds = record.duration_seconds != null ? Number(record.duration_seconds) : 0;
+                                const mInput = modal.querySelector(`#workout-input-duration-m-${workoutIndex}`);
+                                const sInput = modal.querySelector(`#workout-input-duration-s-${workoutIndex}`);
+                                if (mInput) mInput.value = workout.durationMinutes;
+                                if (sInput) sInput.value = workout.durationSeconds;
                             }
                         } else if (workout.type === '세트' && record.sets && record.sets.length > 0) {
                             // 세트 정보를 불러오기 (체크 상태는 제외)
@@ -955,13 +972,19 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             };
             
             if (workout.type === '시간') {
-                const duration = workout.durationMinutes !== null && workout.durationMinutes !== undefined 
-                    ? workout.durationMinutes 
-                    : 30;
-                workoutData.duration_minutes = duration;
+                const mStr = workout.durationMinutes != null ? String(workout.durationMinutes) : '';
+                const sStr = workout.durationSeconds != null ? String(workout.durationSeconds) : '';
+                const parsed = parseWorkoutDurationInputs(mStr, sStr);
+                if (!parsed.ok) {
+                    alert(parsed.message);
+                    return;
+                }
+                workoutData.duration_minutes = parsed.minutes;
+                workoutData.duration_seconds = parsed.seconds;
                 workoutData.sets = [];
             } else if (workout.type === '세트') {
                 workoutData.duration_minutes = null;
+                workoutData.duration_seconds = null;
                 if (workout.sets.length === 0) {
                     workoutData.sets = [{ set_number: 1, weight: 0, reps: 0 }];
                 } else {
@@ -1067,8 +1090,13 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             </div>
             `}
             <div class="app-form-group" id="workout-add-duration-group" style="display: none;">
-                <label for="workout-add-duration">⏱ 시간 (분)</label>
-                <input type="number" id="workout-add-duration" min="0" placeholder="30" inputmode="numeric">
+                <label>⏱ 시간 (분 · 초)</label>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <input type="number" id="workout-add-duration-m" min="0" placeholder="0" inputmode="numeric" style="width: 72px;">
+                    <span style="color: #666;">분</span>
+                    <input type="number" id="workout-add-duration-s" min="0" max="59" placeholder="0" inputmode="numeric" style="width: 72px;">
+                    <span style="color: #666;">초</span>
+                </div>
             </div>
             <div class="app-form-group" id="workout-add-sets-group" style="display: none;">
                 <label>⚖️ 세트</label>
@@ -1360,12 +1388,19 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
         const workoutDate = document.getElementById('workout-add-date').value;
         const workoutTypeId = document.getElementById('workout-add-type').value;
         const workoutType = document.getElementById('workout-add-type-type').value || preselectedWorkoutType;
-        const durationMinutes = document.getElementById('workout-add-duration').value;
+        const durationM = document.getElementById('workout-add-duration-m')?.value ?? '';
+        const durationS = document.getElementById('workout-add-duration-s')?.value ?? '';
         
-        // 시간 타입인 경우: 입력값이 없으면 30분으로 설정
         let finalDurationMinutes = null;
+        let finalDurationSeconds = null;
         if (workoutType === '시간') {
-            finalDurationMinutes = durationMinutes ? parseInt(durationMinutes) : 30;
+            const parsed = parseWorkoutDurationInputs(String(durationM), String(durationS));
+            if (!parsed.ok) {
+                alert(parsed.message);
+                return;
+            }
+            finalDurationMinutes = parsed.minutes;
+            finalDurationSeconds = parsed.seconds;
         }
         
         // 세트 타입인 경우: 입력값이 없으면 weight: 0, reps: 0인 세트 하나 추가
@@ -1391,6 +1426,7 @@ export async function showAddModal(appUserId, selectedDate = null, preselectedWo
             workout_date: workoutDate,
             workout_type_id: workoutTypeId || null,
             duration_minutes: finalDurationMinutes,
+            duration_seconds: finalDurationSeconds,
             sets: finalSets,
             notes: null
         };
@@ -1549,18 +1585,21 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, workou
             const workoutTypeType = record.workout_type_type || '세트';
             let recordHTML = '';
             
-            if (workoutTypeType === '시간' && record.duration_minutes) {
-                recordHTML = `
+            if (workoutTypeType === '시간') {
+                const durLabel = formatWorkoutDuration(record.duration_minutes, record.duration_seconds);
+                if (durLabel) {
+                    recordHTML = `
                     <div class="workout-history-item">
                         <div class="workout-history-item-header">
                             <div class="workout-history-item-icon">⏱</div>
                             <div class="workout-history-item-content">
-                                <span class="workout-history-item-value">${record.duration_minutes}분</span>
+                                <span class="workout-history-item-value">${durLabel}</span>
                             </div>
                             ${record.is_completed ? '<span class="workout-history-item-badge">완료</span>' : ''}
                         </div>
                     </div>
                 `;
+                }
             } else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
                 const setsHTML = record.sets.map(set => {
                     const weight = formatWeight(set.weight);
@@ -1876,6 +1915,7 @@ export async function showTextRecordModal(appUserId, selectedDate = null, onSucc
             text_content: textContent,
             workout_type_id: null,
             duration_minutes: null,
+            duration_seconds: null,
             condition_level: selectedLevels.condition,
             intensity_level: selectedLevels.intensity,
             fatigue_level: selectedLevels.fatigue,

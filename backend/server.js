@@ -3361,7 +3361,12 @@ app.post('/api/workout-records/batch', async (req, res) => {
             is_text_record: record.is_text_record || false,
             text_content: record.text_content || null,
             workout_type_id: record.workout_type_id || null,
-            duration_minutes: record.duration_minutes ? parseInt(record.duration_minutes) : null,
+            duration_minutes: record.duration_minutes === undefined || record.duration_minutes === null || record.duration_minutes === ''
+                ? null
+                : parseInt(record.duration_minutes, 10),
+            duration_seconds: record.duration_seconds === undefined || record.duration_seconds === null || record.duration_seconds === ''
+                ? null
+                : parseInt(record.duration_seconds, 10),
             condition_level: record.condition_level || null,
             intensity_level: record.intensity_level || null,
             fatigue_level: record.fatigue_level || null,
@@ -3467,7 +3472,7 @@ app.post('/api/workout-records/batch', async (req, res) => {
 // 운동기록 단일 추가 (하위 호환성 유지)
 app.post('/api/workout-records', async (req, res) => {
     try {
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, condition_level, intensity_level, fatigue_level, trainer_username, trainer_name, actor_app_user_id } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, duration_seconds, sets, notes, is_text_record, text_content, condition_level, intensity_level, fatigue_level, trainer_username, trainer_name, actor_app_user_id } = req.body;
         
         if (!app_user_id || !workout_date) {
             return res.status(400).json({ message: '앱 유저 ID와 운동 날짜는 필수입니다.' });
@@ -3484,7 +3489,12 @@ app.post('/api/workout-records', async (req, res) => {
             is_text_record: is_text_record || false,
             text_content: text_content || null,
             workout_type_id: workout_type_id || null,
-            duration_minutes: duration_minutes ? parseInt(duration_minutes) : null,
+            duration_minutes: duration_minutes === undefined || duration_minutes === null || duration_minutes === ''
+                ? null
+                : parseInt(duration_minutes, 10),
+            duration_seconds: duration_seconds === undefined || duration_seconds === null || duration_seconds === ''
+                ? null
+                : parseInt(duration_seconds, 10),
             condition_level: condition_level || null,
             intensity_level: intensity_level || null,
             fatigue_level: fatigue_level || null,
@@ -3590,7 +3600,7 @@ app.patch('/api/workout-records/reorder', async (req, res) => {
 app.patch('/api/workout-records/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { app_user_id, workout_date, workout_type_id, duration_minutes, sets, notes, is_text_record, text_content, condition_level, intensity_level, fatigue_level } = req.body;
+        const { app_user_id, workout_date, workout_type_id, duration_minutes, duration_seconds, sets, notes, is_text_record, text_content, condition_level, intensity_level, fatigue_level } = req.body;
         
         if (!app_user_id) {
             return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
@@ -3606,7 +3616,28 @@ app.patch('/api/workout-records/:id', async (req, res) => {
         if (is_text_record !== undefined) updates.is_text_record = is_text_record || false;
         if (text_content !== undefined) updates.text_content = text_content || null;
         if (workout_type_id !== undefined) updates.workout_type_id = workout_type_id || null;
-        if (duration_minutes !== undefined) updates.duration_minutes = duration_minutes ? parseInt(duration_minutes) : null;
+        if (duration_minutes !== undefined) {
+            if (duration_minutes === null || duration_minutes === '') {
+                updates.duration_minutes = null;
+            } else {
+                const n = parseInt(duration_minutes, 10);
+                if (Number.isNaN(n)) {
+                    return res.status(400).json({ message: '운동 시간(분)은 숫자여야 합니다.' });
+                }
+                updates.duration_minutes = n;
+            }
+        }
+        if (duration_seconds !== undefined) {
+            if (duration_seconds === null || duration_seconds === '') {
+                updates.duration_seconds = null;
+            } else {
+                const n = parseInt(duration_seconds, 10);
+                if (Number.isNaN(n)) {
+                    return res.status(400).json({ message: '운동 시간(초)은 숫자여야 합니다.' });
+                }
+                updates.duration_seconds = n;
+            }
+        }
         if (sets !== undefined) updates.sets = sets;
         if (notes !== undefined) updates.notes = notes;
         if (condition_level !== undefined) updates.condition_level = condition_level || null;

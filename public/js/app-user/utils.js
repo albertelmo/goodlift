@@ -202,3 +202,45 @@ export function autoResizeText(element, minFontSize = 10, maxFontSize = 15) {
         requestAnimationFrame(() => autoResizeText(element, minFontSize, newFontSize));
     }
 }
+
+/**
+ * 운동 시간(분+초) 표시 문자열. 총 시간이 0이면 null.
+ */
+export function formatWorkoutDuration(minutes, seconds) {
+    const m = minutes == null || minutes === '' ? 0 : Number(minutes);
+    const s = seconds == null || seconds === '' ? 0 : Number(seconds);
+    if (!Number.isFinite(m) || !Number.isFinite(s)) return null;
+    if (m === 0 && s === 0) return null;
+    if (m === 0) return `${s}초`;
+    if (s === 0) return `${m}분`;
+    return `${m}분 ${s}초`;
+}
+
+/**
+ * 분/초 입력 검증 (빈 칸은 0, 둘 다 0이면 실패, 초는 0~59).
+ * @returns {{ ok: true, minutes: number, seconds: number } | { ok: false, message: string }}
+ */
+export function parseWorkoutDurationInputs(minStr, secStr) {
+    const minV = String(minStr ?? '').trim();
+    const secV = String(secStr ?? '').trim();
+    const m = minV === '' ? 0 : parseInt(minV, 10);
+    const s = secV === '' ? 0 : parseInt(secV, 10);
+    if (Number.isNaN(m) || Number.isNaN(s)) {
+        return { ok: false, message: '분과 초는 숫자로 입력해 주세요.' };
+    }
+    if (m < 0 || s < 0 || s > 59) {
+        return { ok: false, message: '초는 0~59 사이로 입력해 주세요.' };
+    }
+    if (m === 0 && s === 0) {
+        return { ok: false, message: '운동 시간을 입력해 주세요.' };
+    }
+    return { ok: true, minutes: m, seconds: s };
+}
+
+/** DB 값 기준 총 초 */
+export function workoutDurationTotalSeconds(minutes, seconds) {
+    const m = minutes == null ? 0 : Number(minutes);
+    const s = seconds == null ? 0 : Number(seconds);
+    if (!Number.isFinite(m) || !Number.isFinite(s)) return 0;
+    return m * 60 + s;
+}

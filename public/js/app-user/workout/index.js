@@ -3,6 +3,7 @@
 import { showWorkoutSelectModal, showTextRecordModal, preloadWorkoutData } from './add.js';
 import { getCurrentUser } from '../index.js';
 import { init as initCalendar, getSelectedDate, getCurrentMonth } from './calendar.js';
+import { formatWorkoutDuration } from '../utils.js';
 
 let currentAppUserId = null;
 let isReadOnly = false;
@@ -1301,7 +1302,8 @@ async function showRecentListModal() {
             renderRecentList(records, content, {
                 formatDateShort,
                 escapeHtml,
-                formatWeight
+                formatWeight,
+                formatWorkoutDuration
             });
         }
     } catch (error) {
@@ -1316,7 +1318,7 @@ async function showRecentListModal() {
 }
 
 function renderRecentList(records, container, utils) {
-    const { formatDateShort, escapeHtml, formatWeight } = utils;
+    const { formatDateShort, escapeHtml, formatWeight, formatWorkoutDuration: formatDur } = utils;
     const safeRecords = Array.isArray(records) ? records : [];
     if (!container) return;
     if (safeRecords.length === 0) {
@@ -1358,7 +1360,7 @@ function renderRecentList(records, container, utils) {
                 <div class="app-workout-items">
         `;
         dateRecords.forEach(record => {
-            html += renderRecentListItem(record, { escapeHtml, formatWeight });
+            html += renderRecentListItem(record, { escapeHtml, formatWeight, formatWorkoutDuration: formatDur });
         });
         html += '</div></div>';
     });
@@ -1447,12 +1449,12 @@ function renderRecentListBadges(record) {
 }
 
 function renderRecentListItem(record, utils) {
-    const { escapeHtml, formatWeight } = utils;
+    const { escapeHtml, formatWeight, formatWorkoutDuration: formatDur } = utils;
     const workoutTypeName = escapeHtml(record.workout_type_name || record.text_content || '미지정');
     const workoutTypeType = record.workout_type_type || null;
     const notes = record.notes ? escapeHtml(record.notes) : '';
     const sets = record.sets || [];
-    const duration = record.duration_minutes ? `${record.duration_minutes}분` : null;
+    const duration = formatDur ? formatDur(record.duration_minutes, record.duration_seconds) : null;
     
     if (record.is_text_record) {
         const textContent = record.text_content ? escapeHtml(record.text_content) : '';
