@@ -1,6 +1,6 @@
 // 운동기록 추가 모달
 
-import { formatDate, getToday, escapeHtml, formatWeight, parseWeight, parseWorkoutDurationInputs, formatWorkoutDuration } from '../utils.js';
+import { formatDate, getToday, escapeHtml, formatWeight, parseWeight, parseWorkoutDurationInputs, formatWorkoutDuration, matchesWorkoutSearch } from '../utils.js';
 import { addWorkoutRecord, addWorkoutRecordsBatch, getWorkoutTypes, getWorkoutRecords, isFavoriteWorkout, addFavoriteWorkout, removeFavoriteWorkout, getFavoriteWorkouts, getUserSettings, updateUserSettings } from '../api.js';
 import { getCurrentUser } from '../index.js';
 
@@ -371,11 +371,10 @@ export async function showWorkoutSelectModal(appUserId, selectedDate = null, onS
             );
         }
         
-        // 검색어로 필터링
+        // 검색어로 필터링 (띄어쓰기·구분자 무시)
         if (searchQuery.trim()) {
-            const query = searchQuery.trim().toLowerCase();
-            filteredTypes = filteredTypes.filter(type => 
-                type.name.toLowerCase().includes(query)
+            filteredTypes = filteredTypes.filter(type =>
+                matchesWorkoutSearch(type.name, searchQuery)
             );
         }
         

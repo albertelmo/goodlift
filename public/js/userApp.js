@@ -1,5 +1,7 @@
 // 유저앱 관리 모듈 (운동종류 관리 등)
 
+import { matchesWorkoutSearch } from './app-user/utils.js';
+
 export const userApp = {
   render
 };
@@ -242,10 +244,10 @@ function setupEventListeners(container) {
       const searchTerm = workoutTypesSearchInput.value.trim().toLowerCase();
       // 전역 변수에 저장된 원본 데이터로 필터링 및 렌더링
       if (window.allWorkoutTypes) {
-        const filtered = searchTerm === '' 
-          ? window.allWorkoutTypes 
-          : window.allWorkoutTypes.filter(type => 
-              (type.name || '').toLowerCase().includes(searchTerm)
+        const filtered = searchTerm === ''
+          ? window.allWorkoutTypes
+          : window.allWorkoutTypes.filter(type =>
+              matchesWorkoutSearch(type.name, searchTerm)
             );
         renderWorkoutTypesList(filtered);
       }
@@ -1988,7 +1990,7 @@ function renderWorkoutGuideSelector(workoutTypes) {
 
   const availableItems = workoutTypes.filter(type => !selectedSet.has(type.id)).filter(type => {
     if (!workoutGuideSearchTerm) return true;
-    return (type.name || '').toLowerCase().includes(workoutGuideSearchTerm);
+    return matchesWorkoutSearch(type.name, workoutGuideSearchTerm);
   });
   const selectedItems = workoutGuideSettings.items.map(id => typesById.get(id)).filter(Boolean);
 

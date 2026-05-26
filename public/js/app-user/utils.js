@@ -102,6 +102,24 @@ export function debugLog(level, message, data = null) {
 }
 
 /**
+ * 검색용 문자열 정규화 (소문자, 공백·하이픈 등 구분자 제거)
+ */
+export function normalizeForSearch(text) {
+    return String(text ?? '')
+        .toLowerCase()
+        .replace(/[\s\-_/·]+/g, '');
+}
+
+/**
+ * 운동명이 검색어와 매칭되는지 (띄어쓰기·구분자 무시)
+ */
+export function matchesWorkoutSearch(name, query) {
+    const normalizedQuery = normalizeForSearch(query);
+    if (!normalizedQuery) return true;
+    return normalizeForSearch(name).includes(normalizedQuery);
+}
+
+/**
  * HTML 이스케이프
  */
 export function escapeHtml(text) {
