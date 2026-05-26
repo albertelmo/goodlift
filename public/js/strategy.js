@@ -1414,6 +1414,33 @@ function buildTrendChartSeries(trendData, sectionConfig, isPTSpecialty) {
     .filter(Boolean);
 }
 
+// 차트 데이터 포인트 위에 수치 표시
+const metricTrendPointLabelsPlugin = {
+  id: 'metricTrendPointLabels',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const meta = chart.getDatasetMeta(0);
+    if (!meta?.data?.length) return;
+
+    const values = chart.data.datasets[0]?.data || [];
+    const color = chart.data.datasets[0]?.borderColor || '#333';
+
+    ctx.save();
+    ctx.font = '600 11px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+
+    meta.data.forEach((point, index) => {
+      if (point.x == null || point.y == null) return;
+      const value = values[index];
+      const label = formatNumber(value);
+      ctx.fillStyle = color;
+      ctx.fillText(label, point.x, point.y - 8);
+    });
+    ctx.restore();
+  }
+};
+
 function renderMetricTrendCharts(container, chartSeries) {
   destroyMetricTrendCharts();
   if (!window.Chart) {
@@ -1424,7 +1451,7 @@ function renderMetricTrendCharts(container, chartSeries) {
   container.innerHTML = chartSeries.map((series, index) => `
     <div style="margin-bottom:${index < chartSeries.length - 1 ? '20px' : '0'};">
       <div style="font-size:0.9rem;font-weight:600;color:#333;margin-bottom:8px;">${escapeHtml(series.label)}${series.isManwon ? ' <span style="color:#999;font-weight:normal;font-size:0.75rem;">(만원)</span>' : ''}</div>
-      <div style="position:relative;height:220px;">
+      <div style="position:relative;height:240px;">
         <canvas id="metric-trend-chart-${index}"></canvas>
       </div>
     </div>
@@ -1453,6 +1480,9 @@ function renderMetricTrendCharts(container, chartSeries) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        layout: {
+          padding: { top: 18 }
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -1473,13 +1503,15 @@ function renderMetricTrendCharts(container, chartSeries) {
           },
           y: {
             beginAtZero: true,
+            grace: '10%',
             ticks: {
               font: { size: 11 },
-              callback: (v) => series.isManwon ? formatNumber(v) : formatNumber(v)
+              callback: (v) => formatNumber(v)
             }
           }
         }
-      }
+      },
+      plugins: [metricTrendPointLabelsPlugin]
     });
     metricTrendCharts.push(chart);
   });
