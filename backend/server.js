@@ -10386,6 +10386,32 @@ app.get('/api/metrics', async (req, res) => {
     }
 });
 
+// Metrics 월별 추이 조회 (최근 N개월)
+app.get('/api/metrics/trend', async (req, res) => {
+    try {
+        const { center, endMonth } = req.query;
+        const months = req.query.months ? parseInt(req.query.months, 10) : 12;
+
+        if (!center || !endMonth) {
+            return res.status(400).json({ message: '센터와 종료 연월(endMonth)을 입력해주세요.' });
+        }
+        if (!/^\d{4}-\d{2}$/.test(endMonth)) {
+            return res.status(400).json({ message: 'endMonth는 YYYY-MM 형식이어야 합니다.' });
+        }
+
+        const data = await metricsDB.getMetricsTrend(center, endMonth, months);
+        res.json({
+            center,
+            endMonth,
+            months: Math.min(Math.max(months, 1), 24),
+            data
+        });
+    } catch (error) {
+        console.error('[API] Metrics 추이 조회 오류:', error);
+        res.status(500).json({ message: '지표 추이 조회에 실패했습니다.' });
+    }
+});
+
 // Metric 추가
 app.post('/api/metrics', async (req, res) => {
     try {

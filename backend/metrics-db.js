@@ -467,6 +467,65 @@ const getMetricByCenterAndMonth = async (center, month) => {
   }
 };
 
+// YYYY-MM에서 N개월 전 월 계산
+const subtractMonths = (yearMonth, count) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const date = new Date(year, month - 1, 1);
+  date.setMonth(date.getMonth() - count);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}`;
+};
+
+const mapMetricRow = (row) => ({
+  id: row.id,
+  center: row.center,
+  month: row.month,
+  naver_clicks: row.naver_clicks || 0,
+  naver_leads: row.naver_leads || 0,
+  karrot_clicks: row.karrot_clicks || 0,
+  karrot_leads: row.karrot_leads || 0,
+  pt_new: row.pt_new || 0,
+  pt_consultation: row.pt_consultation || 0,
+  pt_renewal: row.pt_renewal || 0,
+  pt_expiring: row.pt_expiring || 0,
+  membership_new: row.membership_new || 0,
+  membership_renewal: row.membership_renewal || 0,
+  membership_expiring: row.membership_expiring || 0,
+  total_members: row.total_members || 0,
+  pt_total_members: row.pt_total_members || 0,
+  total_sales: row.total_sales || 0,
+  pt_sales: row.pt_sales || 0,
+  membership_sales: row.membership_sales || 0,
+  created_at: row.created_at,
+  updated_at: row.updated_at
+});
+
+// 센터별 월간 지표 추이 조회 (최근 N개월)
+const getMetricsTrend = async (center, endMonth, months = 12) => {
+  try {
+    const monthCount = Math.min(Math.max(parseInt(months, 10) || 12, 1), 24);
+    const startMonth = subtractMonths(endMonth, monthCount - 1);
+
+    const query = `
+      SELECT 
+        id, center, month, naver_clicks, naver_leads, karrot_clicks, karrot_leads,
+        pt_new, pt_consultation, pt_renewal, pt_expiring, membership_new, membership_renewal, membership_expiring,
+        total_members, pt_total_members, total_sales, pt_sales, membership_sales,
+        created_at AT TIME ZONE 'Asia/Seoul' as created_at,
+        updated_at AT TIME ZONE 'Asia/Seoul' as updated_at
+      FROM metrics
+      WHERE center = $1 AND month >= $2 AND month <= $3
+      ORDER BY month ASC
+    `;
+    const result = await pool.query(query, [center, startMonth, endMonth]);
+    return result.rows.map(mapMetricRow);
+  } catch (error) {
+    console.error('[PostgreSQL] Metrics 추이 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   await createMetricsTable();
@@ -475,6 +534,7 @@ const initializeDatabase = async () => {
 module.exports = {
   initializeDatabase,
   getMetrics,
+  getMetricsTrend,
   addMetric,
   updateMetric,
   deleteMetric,

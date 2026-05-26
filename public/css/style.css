@@ -3211,4 +3211,13 @@ li, td, th {
     max-width: 35px !important;
     min-width: 30px !important;
   }
-} 
+}
+
+/* 전략 탭 - 지표 섹션 클릭 영역 */
+.metric-section--clickable:hover {
+  background: #f5f9ff;
+}
+.metric-section--clickable:focus {
+  outline: 2px solid #1976d2;
+  outline-offset: 1px;
+}

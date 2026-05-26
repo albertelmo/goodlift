@@ -13,6 +13,77 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
+// 지표 섹션별 추이 차트 설정
+const METRIC_SECTIONS = {
+  marketing: {
+    title: '마케팅',
+    series: [
+      { key: 'naver_clicks', label: '네이버 클릭', color: '#03c75a' },
+      { key: 'karrot_clicks', label: '당근 클릭', color: '#ff6f0f' }
+    ]
+  },
+  pt: {
+    title: 'PT',
+    series: [
+      { key: 'pt_new', label: 'PT 신규', color: '#1976d2' },
+      { key: 'pt_consultation', label: 'PT 상담', color: '#64b5f6' },
+      { key: 'pt_renewal', label: 'PT 재등록', color: '#4caf50' },
+      { key: 'pt_expiring', label: 'PT 만료대상', color: '#ff9800' }
+    ]
+  },
+  membership: {
+    title: '회원권',
+    hideForPTSpecialty: true,
+    series: [
+      { key: 'membership_new', label: '회원권 신규', color: '#1976d2' },
+      { key: 'membership_renewal', label: '회원권 재등록', color: '#4caf50' },
+      { key: 'membership_expiring', label: '회원권 만료대상', color: '#ff9800' }
+    ]
+  },
+  members: {
+    title: '회원 수',
+    series: [
+      { key: 'pt_total_members', label: 'PT 회원', color: '#4caf50', hideForPTSpecialty: true },
+      { key: 'total_members', label: '전체 회원', color: '#1976d2' }
+    ]
+  },
+  sales: {
+    title: '매출',
+    unit: 'manwon',
+    series: [
+      { key: 'pt_sales', label: 'PT 매출', color: '#4caf50', hideForPTSpecialty: true },
+      { key: 'membership_sales', label: '회원권 매출', color: '#ff9800', hideForPTSpecialty: true },
+      { key: 'total_sales', label: '전체 매출', color: '#1976d2' }
+    ]
+  }
+};
+
+const METRIC_TREND_CHART_COLORS = ['#1976d2', '#4caf50', '#ff9800', '#9c27b0', '#03c75a', '#ff6f0f', '#64b5f6'];
+
+let metricTrendCharts = [];
+
+function wrapMetricSection(center, sectionId, titleHtml, innerHtml, { bordered = false, marginBottom = true } = {}) {
+  const borderStyle = bordered ? 'border-top:1px solid #e0e0e0;padding-top:6px;' : '';
+  const mbStyle = marginBottom ? 'margin-bottom:6px;' : '';
+  return `
+    <div class="metric-section metric-section--clickable"
+         data-center="${escapeHtml(center)}"
+         data-section="${sectionId}"
+         role="button"
+         tabindex="0"
+         title="최근 12개월 추이 보기"
+         style="border-radius:6px;padding:4px 6px;margin-left:-6px;margin-right:-6px;${borderStyle}${mbStyle}cursor:pointer;transition:background 0.15s;">
+      <h5 style="margin:0 0 4px 0;color:#666;font-size:0.75rem;font-weight:600;">${titleHtml}</h5>
+      ${innerHtml}
+    </div>
+  `;
+}
+
+function formatTrendMonthLabel(monthStr) {
+  const [year, month] = monthStr.split('-');
+  return `${year.slice(2)}.${parseInt(month, 10)}`;
+}
+
 // 현재 날짜 (한국시간 기준)
 let currentDate = new Date();
 currentDate.setHours(0, 0, 0, 0);
@@ -247,8 +318,7 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
           </div>
         </div>
         <div style="padding:8px 10px;">
-          <div style="margin-bottom:6px;">
-            <h5 style="margin:0 0 4px 0;color:#666;font-size:0.75rem;font-weight:600;">마케팅</h5>
+          ${wrapMetricSection(center, 'marketing', '마케팅', `
             <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;">
               <div style="color:#666;">네이버 클릭:</div>
               <div style="text-align:right;font-weight:600;color:#999;">${formatNumber(lastMetric.naver_clicks || 0)}</div>
@@ -259,10 +329,9 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
               <div style="text-align:right;font-weight:600;">${formatNumber(currentMetric.karrot_clicks || 0)}</div>
               <div style="text-align:right;font-weight:600;color:${karrotClicksChange.color};">${karrotClicksChange.text}</div>
             </div>
-          </div>
+          `)}
           
-          <div style="margin-bottom:6px;border-top:1px solid #e0e0e0;padding-top:6px;">
-            <h5 style="margin:0 0 4px 0;color:#666;font-size:0.75rem;font-weight:600;">PT</h5>
+          ${wrapMetricSection(center, 'pt', 'PT', `
             ${(() => {
               const lastNew = lastMetric.pt_new || 0;
               const lastConsultation = lastMetric.pt_consultation || 0;
@@ -293,11 +362,9 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
                 </div>
               `;
             })()}
-          </div>
+          `, { bordered: true })}
           
-          ${!isPTSpecialty ? `
-          <div style="margin-bottom:6px;border-top:1px solid #e0e0e0;padding-top:6px;">
-            <h5 style="margin:0 0 4px 0;color:#666;font-size:0.75rem;font-weight:600;">회원권</h5>
+          ${!isPTSpecialty ? wrapMetricSection(center, 'membership', '회원권', `
             <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;">
               <div style="color:#666;">신규:</div>
               <div style="text-align:right;font-weight:600;color:#999;">${formatNumber(lastMetric.membership_new || 0)}</div>
@@ -319,11 +386,9 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
                 </div>
               `;
             })()}
-          </div>
-          ` : ''}
+          `, { bordered: true }) : ''}
           
-          <div style="margin-bottom:6px;border-top:1px solid #e0e0e0;padding-top:6px;">
-            <h5 style="margin:0 0 4px 0;color:#666;font-size:0.75rem;font-weight:600;">회원 수</h5>
+          ${wrapMetricSection(center, 'members', '회원 수', `
             <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;">
               ${!isPTSpecialty ? `
               <div style="color:#666;">PT:</div>
@@ -336,10 +401,9 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
               <div style="text-align:right;font-weight:600;">${formatNumber(currentMetric.total_members || 0)}</div>
               <div style="text-align:right;font-weight:600;color:${totalMembersChange.color};">${totalMembersChange.text}</div>
             </div>
-          </div>
+          `, { bordered: true })}
           
-          <div style="border-top:1px solid #e0e0e0;padding-top:6px;">
-            <h5 style="margin:0 0 4px 0;color:#666;font-size:0.75rem;font-weight:600;">매출 <span style="color:#999;font-weight:normal;font-size:0.7rem;">(단위:만)</span></h5>
+          ${wrapMetricSection(center, 'sales', '매출 <span style="color:#999;font-weight:normal;font-size:0.7rem;">(단위:만)</span>', `
             <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;">
               ${!isPTSpecialty ? `
               <div style="color:#666;">PT:</div>
@@ -356,7 +420,7 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
               <div style="text-align:right;font-weight:600;color:#1976d2;">${formatSalesInManwon(currentMetric.total_sales || 0)}</div>
               <div style="text-align:right;font-weight:600;color:${totalSalesChange.color};">${totalSalesChange.text}</div>
             </div>
-          </div>
+          `, { bordered: true, marginBottom: false })}
         </div>
       </div>
     `;
@@ -376,6 +440,7 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
   
   // 수정 버튼 이벤트 리스너
   setupMetricEditListeners();
+  setupMetricTrendListeners();
   
   // 마케팅 데이터 로드 및 표시
   loadMarketingData(contentEl, centerOrder, yearMonth);
@@ -1282,11 +1347,214 @@ async function loadPTMetrics(center, yearMonth, mode) {
 
 function setupMetricEditListeners() {
   document.querySelectorAll('.metric-edit-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
       const metricData = JSON.parse(this.getAttribute('data-metric-data'));
       showMetricEditModal(metricData);
     });
   });
+}
+
+function setupMetricTrendListeners() {
+  const contentEl = document.getElementById('strategy-content');
+  if (!contentEl || contentEl._metricTrendListenerAttached) return;
+  contentEl._metricTrendListenerAttached = true;
+
+  contentEl.addEventListener('click', (e) => {
+    if (e.target.closest('.metric-edit-btn')) return;
+    const section = e.target.closest('.metric-section--clickable');
+    if (!section) return;
+    const { center, section: sectionId } = section.dataset;
+    if (center && sectionId) {
+      showMetricTrendModal(center, sectionId);
+    }
+  });
+
+  contentEl.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const section = e.target.closest('.metric-section--clickable');
+    if (!section) return;
+    e.preventDefault();
+    const { center, section: sectionId } = section.dataset;
+    if (center && sectionId) {
+      showMetricTrendModal(center, sectionId);
+    }
+  });
+}
+
+function destroyMetricTrendCharts() {
+  metricTrendCharts.forEach(chart => chart.destroy());
+  metricTrendCharts = [];
+}
+
+function buildTrendChartSeries(trendData, sectionConfig, isPTSpecialty) {
+  if (!trendData || trendData.length === 0) return [];
+
+  const labels = trendData.map(row => formatTrendMonthLabel(row.month));
+  const seriesList = sectionConfig.series.filter(s => !s.hideForPTSpecialty || !isPTSpecialty);
+  const isManwon = sectionConfig.unit === 'manwon';
+
+  return seriesList
+    .map((series, index) => {
+      const values = trendData.map(row => {
+        const raw = row[series.key] ?? 0;
+        return isManwon ? Math.round(raw / 10000) : raw;
+      });
+      const hasData = values.some(v => v !== 0);
+      if (!hasData) return null;
+
+      return {
+        label: series.label,
+        labels,
+        values,
+        color: series.color || METRIC_TREND_CHART_COLORS[index % METRIC_TREND_CHART_COLORS.length],
+        isManwon
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderMetricTrendCharts(container, chartSeries) {
+  destroyMetricTrendCharts();
+  if (!window.Chart) {
+    container.innerHTML = '<div style="text-align:center;padding:24px;color:#d32f2f;">차트 라이브러리를 불러오지 못했습니다. 페이지를 새로고침해주세요.</div>';
+    return;
+  }
+
+  container.innerHTML = chartSeries.map((series, index) => `
+    <div style="margin-bottom:${index < chartSeries.length - 1 ? '20px' : '0'};">
+      <div style="font-size:0.9rem;font-weight:600;color:#333;margin-bottom:8px;">${escapeHtml(series.label)}${series.isManwon ? ' <span style="color:#999;font-weight:normal;font-size:0.75rem;">(만원)</span>' : ''}</div>
+      <div style="position:relative;height:220px;">
+        <canvas id="metric-trend-chart-${index}"></canvas>
+      </div>
+    </div>
+  `).join('');
+
+  chartSeries.forEach((series, index) => {
+    const canvas = container.querySelector(`#metric-trend-chart-${index}`);
+    if (!canvas) return;
+
+    const chart = new window.Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: series.labels,
+        datasets: [{
+          label: series.label,
+          data: series.values,
+          borderColor: series.color,
+          backgroundColor: series.color + '22',
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.25,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const val = ctx.parsed.y;
+                return series.isManwon
+                  ? `${series.label}: ${formatNumber(val)}만원`
+                  : `${series.label}: ${formatNumber(val)}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 11 }, maxRotation: 45, minRotation: 0 }
+          },
+          y: {
+            beginAtZero: true,
+            ticks: {
+              font: { size: 11 },
+              callback: (v) => series.isManwon ? formatNumber(v) : formatNumber(v)
+            }
+          }
+        }
+      }
+    });
+    metricTrendCharts.push(chart);
+  });
+}
+
+async function showMetricTrendModal(center, sectionId) {
+  const sectionConfig = METRIC_SECTIONS[sectionId];
+  if (!sectionConfig) return;
+
+  const isPTSpecialty = center.includes('PT');
+  if (sectionConfig.hideForPTSpecialty && isPTSpecialty) return;
+
+  const endMonth = getSelectedYearMonth();
+
+  closeMetricTrendModal();
+
+  const modalHTML = `
+    <div class="metric-trend-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
+    <div class="metric-trend-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;min-width:320px;max-width:95vw;width:640px;max-height:90vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;gap:12px;">
+        <div>
+          <h3 style="margin:0 0 4px 0;color:#1976d2;font-size:1.1rem;">${escapeHtml(center)} · ${escapeHtml(sectionConfig.title)}</h3>
+          <p style="margin:0;color:#888;font-size:0.8rem;">최근 12개월 추이</p>
+        </div>
+        <button id="metric-trend-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;flex-shrink:0;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
+      </div>
+      <div id="metric-trend-charts-container" style="text-align:center;padding:24px;color:#888;">불러오는 중...</div>
+    </div>
+  `;
+
+  document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+  document.getElementById('metric-trend-modal-close').addEventListener('click', closeMetricTrendModal);
+  document.querySelector('.metric-trend-modal-overlay').addEventListener('click', closeMetricTrendModal);
+
+  const chartsContainer = document.getElementById('metric-trend-charts-container');
+
+  try {
+    const response = await fetch(`/api/metrics/trend?center=${encodeURIComponent(center)}&endMonth=${encodeURIComponent(endMonth)}&months=12`);
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || '데이터를 불러오지 못했습니다.');
+    }
+
+    const result = await response.json();
+    const trendData = result.data || [];
+
+    if (trendData.length === 0) {
+      chartsContainer.innerHTML = '<div style="text-align:center;padding:24px;color:#888;">최근 12개월간 데이터가 없습니다.</div>';
+      return;
+    }
+
+    const chartSeries = buildTrendChartSeries(trendData, sectionConfig, isPTSpecialty);
+
+    if (chartSeries.length === 0) {
+      chartsContainer.innerHTML = '<div style="text-align:center;padding:24px;color:#888;">표시할 지표 데이터가 없습니다.</div>';
+      return;
+    }
+
+    const rangeText = `${formatTrendMonthLabel(trendData[0].month)} ~ ${formatTrendMonthLabel(trendData[trendData.length - 1].month)}`;
+    chartsContainer.innerHTML = `<p style="margin:0 0 16px 0;color:#666;font-size:0.8rem;text-align:left;">기간: ${rangeText} (${trendData.length}개월)</p><div id="metric-trend-charts-inner"></div>`;
+
+    renderMetricTrendCharts(document.getElementById('metric-trend-charts-inner'), chartSeries);
+  } catch (error) {
+    console.error('지표 추이 조회 오류:', error);
+    chartsContainer.innerHTML = `<div style="text-align:center;padding:24px;color:#d32f2f;">${escapeHtml(error.message)}</div>`;
+  }
+}
+
+function closeMetricTrendModal() {
+  destroyMetricTrendCharts();
+  const overlay = document.querySelector('.metric-trend-modal-overlay');
+  const modal = document.querySelector('.metric-trend-modal');
+  if (overlay) overlay.remove();
+  if (modal) modal.remove();
 }
 
 async function showMetricEditModal(metric) {
