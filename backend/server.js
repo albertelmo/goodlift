@@ -10412,6 +10412,26 @@ app.get('/api/metrics/trend', async (req, res) => {
     }
 });
 
+// Metrics YTD 매출 합계 (센터별, 해당 연도 1월 ~ throughMonth)
+app.get('/api/metrics/annual-sales', async (req, res) => {
+    try {
+        const { throughMonth } = req.query;
+
+        if (!throughMonth) {
+            return res.status(400).json({ message: 'throughMonth(YYYY-MM)를 입력해주세요.' });
+        }
+        if (!/^\d{4}-\d{2}$/.test(throughMonth)) {
+            return res.status(400).json({ message: 'throughMonth는 YYYY-MM 형식이어야 합니다.' });
+        }
+
+        const result = await metricsDB.getAnnualSalesByCenter(throughMonth);
+        res.json(result);
+    } catch (error) {
+        console.error('[API] Metrics YTD 매출 조회 오류:', error);
+        res.status(500).json({ message: 'YTD 매출 조회에 실패했습니다.' });
+    }
+});
+
 // Metric 추가
 app.post('/api/metrics', async (req, res) => {
     try {

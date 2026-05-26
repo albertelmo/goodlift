@@ -84,6 +84,52 @@ function formatTrendMonthLabel(monthStr) {
   return `${year.slice(2)}.${parseInt(month, 10)}`;
 }
 
+function renderAnnualSalesYtdFooter(center, yearMonth, annualByCenter, isPTSpecialty) {
+  const [year, monthStr] = yearMonth.split('-');
+  const monthInt = parseInt(monthStr, 10);
+  const ytd = annualByCenter?.[center];
+  const rangeLabel = monthInt === 1 ? '1월' : `1~${monthInt}월`;
+
+  if (!ytd || ytd.month_count === 0) {
+    return `
+      <div class="metric-annual-sales" style="border-top:1px dashed #e0e0e0;margin-top:6px;padding-top:6px;font-size:0.7rem;color:#999;">
+        ${escapeHtml(year)}년 누적: 데이터 없음
+      </div>
+    `;
+  }
+
+  let rows = '';
+  if (!isPTSpecialty) {
+    rows += `
+      <div style="display:grid;grid-template-columns:1fr auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;">
+        <div style="color:#666;">PT:</div>
+        <div style="text-align:right;font-weight:600;color:#4caf50;">${formatSalesInManwon(ytd.pt_sales)}</div>
+        <div style="color:#666;">회원권:</div>
+        <div style="text-align:right;font-weight:600;color:#ff9800;">${formatSalesInManwon(ytd.membership_sales)}</div>
+      </div>
+    `;
+  }
+  const monthlyAvgTotal = ytd.month_count > 0
+    ? Math.round(ytd.total_sales / ytd.month_count)
+    : 0;
+
+  rows += `
+    <div style="display:grid;grid-template-columns:1fr auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;${!isPTSpecialty ? 'margin-top:3px;' : ''}">
+      <div style="color:#666;">전체:</div>
+      <div style="text-align:right;font-weight:700;color:#1976d2;">${formatSalesInManwon(ytd.total_sales)}</div>
+      <div style="color:#666;">월평균:</div>
+      <div style="text-align:right;font-weight:600;color:#666;">${formatSalesInManwon(monthlyAvgTotal)}</div>
+    </div>
+  `;
+
+  return `
+    <div class="metric-annual-sales" style="border-top:1px dashed #e0e0e0;margin-top:6px;padding-top:6px;">
+      <div style="font-size:0.7rem;color:#888;margin-bottom:4px;">${escapeHtml(year)}년 누적 (${rangeLabel})</div>
+      ${rows}
+    </div>
+  `;
+}
+
 // 현재 날짜 (한국시간 기준)
 let currentDate = new Date();
 currentDate.setHours(0, 0, 0, 0);
@@ -208,14 +254,17 @@ function loadMetrics(yearMonth, centerOrder) {
   const lastMonth = String(lastMonthDate.getMonth() + 1).padStart(2, '0');
   const lastYearMonth = `${lastYear}-${lastMonth}`;
   
-  // 이번달과 지난달 데이터를 동시에 가져오기
+  // 이번달, 지난달, YTD 매출 합계를 동시에 가져오기
   Promise.all([
     fetch(`/api/metrics?month=${yearMonth}`).then(r => r.json()),
-    fetch(`/api/metrics?month=${lastYearMonth}`).then(r => r.json())
+    fetch(`/api/metrics?month=${lastYearMonth}`).then(r => r.json()),
+    fetch(`/api/metrics/annual-sales?throughMonth=${encodeURIComponent(yearMonth)}`)
+      .then(r => (r.ok ? r.json() : { byCenter: {} }))
+      .catch(() => ({ byCenter: {} }))
   ])
-    .then(([currentMetrics, lastMetrics]) => {
+    .then(([currentMetrics, lastMetrics, annualSales]) => {
       loadingEl.style.display = 'none';
-      renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth);
+      renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth, annualSales.byCenter || {});
     })
     .catch(err => {
       loadingEl.style.display = 'none';
@@ -224,7 +273,7 @@ function loadMetrics(yearMonth, centerOrder) {
     });
 }
 
-function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
+function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth, annualSalesByCenter = {}) {
   const contentEl = document.getElementById('strategy-content');
   
   if (!currentMetrics || currentMetrics.length === 0) {
@@ -403,24 +452,27 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth) {
             </div>
           `, { bordered: true })}
           
-          ${wrapMetricSection(center, 'sales', '매출 <span style="color:#999;font-weight:normal;font-size:0.7rem;">(단위:만)</span>', `
-            <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;">
-              ${!isPTSpecialty ? `
-              <div style="color:#666;">PT:</div>
-              <div style="text-align:right;font-weight:600;color:#999;">${formatSalesInManwon(lastMetric.pt_sales || 0)}</div>
-              <div style="text-align:right;font-weight:600;color:#4caf50;">${formatSalesInManwon(currentMetric.pt_sales || 0)}</div>
-              <div style="text-align:right;font-weight:600;color:${ptSalesChange.color};">${ptSalesChange.text}</div>
-              <div style="color:#666;">회원권:</div>
-              <div style="text-align:right;font-weight:600;color:#999;">${formatSalesInManwon(lastMetric.membership_sales || 0)}</div>
-              <div style="text-align:right;font-weight:600;color:#ff9800;">${formatSalesInManwon(currentMetric.membership_sales || 0)}</div>
-              <div style="text-align:right;font-weight:600;color:${membershipSalesChange.color};">${membershipSalesChange.text}</div>
-              ` : ''}
-              <div style="color:#666;">전체:</div>
-              <div style="text-align:right;font-weight:600;color:#999;">${formatSalesInManwon(lastMetric.total_sales || 0)}</div>
-              <div style="text-align:right;font-weight:600;color:#1976d2;">${formatSalesInManwon(currentMetric.total_sales || 0)}</div>
-              <div style="text-align:right;font-weight:600;color:${totalSalesChange.color};">${totalSalesChange.text}</div>
-            </div>
-          `, { bordered: true, marginBottom: false })}
+          <div class="metric-sales-block" style="border-top:1px solid #e0e0e0;padding-top:6px;">
+            ${wrapMetricSection(center, 'sales', '매출 <span style="color:#999;font-weight:normal;font-size:0.7rem;">(단위:만)</span>', `
+              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:3px 4px;font-size:0.75rem;line-height:1.3;">
+                ${!isPTSpecialty ? `
+                <div style="color:#666;">PT:</div>
+                <div style="text-align:right;font-weight:600;color:#999;">${formatSalesInManwon(lastMetric.pt_sales || 0)}</div>
+                <div style="text-align:right;font-weight:600;color:#4caf50;">${formatSalesInManwon(currentMetric.pt_sales || 0)}</div>
+                <div style="text-align:right;font-weight:600;color:${ptSalesChange.color};">${ptSalesChange.text}</div>
+                <div style="color:#666;">회원권:</div>
+                <div style="text-align:right;font-weight:600;color:#999;">${formatSalesInManwon(lastMetric.membership_sales || 0)}</div>
+                <div style="text-align:right;font-weight:600;color:#ff9800;">${formatSalesInManwon(currentMetric.membership_sales || 0)}</div>
+                <div style="text-align:right;font-weight:600;color:${membershipSalesChange.color};">${membershipSalesChange.text}</div>
+                ` : ''}
+                <div style="color:#666;">전체:</div>
+                <div style="text-align:right;font-weight:600;color:#999;">${formatSalesInManwon(lastMetric.total_sales || 0)}</div>
+                <div style="text-align:right;font-weight:600;color:#1976d2;">${formatSalesInManwon(currentMetric.total_sales || 0)}</div>
+                <div style="text-align:right;font-weight:600;color:${totalSalesChange.color};">${totalSalesChange.text}</div>
+              </div>
+            `, { bordered: false, marginBottom: false })}
+            ${renderAnnualSalesYtdFooter(center, yearMonth, annualSalesByCenter, isPTSpecialty)}
+          </div>
         </div>
       </div>
     `;

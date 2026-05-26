@@ -501,6 +501,42 @@ const mapMetricRow = (row) => ({
   updated_at: row.updated_at
 });
 
+// 센터별 YTD 매출 합계 (해당 연도 1월 ~ throughMonth)
+const getAnnualSalesByCenter = async (throughMonth) => {
+  try {
+    const [year] = throughMonth.split('-');
+    const fromMonth = `${year}-01`;
+
+    const query = `
+      SELECT
+        center,
+        COALESCE(SUM(pt_sales), 0)::bigint AS pt_sales,
+        COALESCE(SUM(membership_sales), 0)::bigint AS membership_sales,
+        COALESCE(SUM(total_sales), 0)::bigint AS total_sales,
+        COUNT(*)::int AS month_count
+      FROM metrics
+      WHERE month >= $1 AND month <= $2
+      GROUP BY center
+    `;
+    const result = await pool.query(query, [fromMonth, throughMonth]);
+
+    const byCenter = {};
+    result.rows.forEach(row => {
+      byCenter[row.center] = {
+        month_count: row.month_count,
+        pt_sales: Number(row.pt_sales) || 0,
+        membership_sales: Number(row.membership_sales) || 0,
+        total_sales: Number(row.total_sales) || 0
+      };
+    });
+
+    return { year, fromMonth, throughMonth, byCenter };
+  } catch (error) {
+    console.error('[PostgreSQL] Metrics YTD 매출 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 센터별 월간 지표 추이 조회 (최근 N개월)
 const getMetricsTrend = async (center, endMonth, months = 12) => {
   try {
@@ -535,6 +571,7 @@ module.exports = {
   initializeDatabase,
   getMetrics,
   getMetricsTrend,
+  getAnnualSalesByCenter,
   addMetric,
   updateMetric,
   deleteMetric,
