@@ -130,6 +130,58 @@ function renderAnnualSalesYtdFooter(center, yearMonth, annualByCenter, isPTSpeci
   `;
 }
 
+function aggregateOverallSales(annualByCenter, centers) {
+  let total = 0;
+  for (const center of centers) {
+    const ytd = annualByCenter?.[center];
+    if (ytd) total += ytd.total_sales || 0;
+  }
+  return total;
+}
+
+function renderOverallSalesSummary(yearMonth, annualByCenter, centers) {
+  const [year, monthStr] = yearMonth.split('-');
+  const monthInt = parseInt(monthStr, 10);
+  const rangeLabel = monthInt === 1 ? '1월' : `1~${monthInt}월`;
+  const totalYtd = aggregateOverallSales(annualByCenter, centers);
+  const monthlyAvg = monthInt > 0 ? Math.round(totalYtd / monthInt) : 0;
+
+  const periodLabel = `${escapeHtml(year)}년 (${rangeLabel}) · 만`;
+  const summaryBaseStyle = 'margin-bottom:10px;background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:6px 10px;box-shadow:0 1px 2px rgba(0,0,0,0.06);';
+
+  if (totalYtd === 0) {
+    return `
+      <div id="overall-sales-summary" style="${summaryBaseStyle}">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:0.75rem;line-height:1.3;">
+          <span style="font-weight:600;color:#1976d2;">전체 매출</span>
+          <span style="color:#888;">${periodLabel}</span>
+          <span style="color:#999;">데이터 없음</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div id="overall-sales-summary" style="${summaryBaseStyle}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:0.75rem;line-height:1.3;">
+        <span style="font-weight:600;color:#1976d2;white-space:nowrap;">전체 매출</span>
+        <span style="color:#888;white-space:nowrap;">${periodLabel}</span>
+        <div style="display:flex;align-items:baseline;gap:12px;margin-left:auto;">
+          <span style="white-space:nowrap;">
+            <span style="color:#666;">연간</span>
+            <strong style="color:#1976d2;font-size:0.9rem;margin-left:4px;">${formatSalesInManwon(totalYtd)}</strong>
+          </span>
+          <span style="color:#ddd;">|</span>
+          <span style="white-space:nowrap;">
+            <span style="color:#666;">월평균</span>
+            <strong style="color:#424242;font-size:0.9rem;margin-left:4px;">${formatSalesInManwon(monthlyAvg)}</strong>
+          </span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 // 현재 날짜 (한국시간 기준)
 let currentDate = new Date();
 currentDate.setHours(0, 0, 0, 0);
@@ -332,8 +384,8 @@ function renderMetrics(currentMetrics, lastMetrics, centerOrder, yearMonth, annu
     return { text: formatNumber(diff), color: '#d32f2f', rawDiff: diff };
   };
   
-  // 한 줄에 3개씩 배치
-  let html = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
+  let html = renderOverallSalesSummary(yearMonth, annualSalesByCenter, sortedCenters);
+  html += '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
   
   sortedCenters.forEach(center => {
     const currentMetric = currentCenterGroups[center];
