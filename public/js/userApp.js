@@ -1,6 +1,6 @@
 // 유저앱 관리 모듈 (운동종류 관리 등)
 
-import { matchesWorkoutSearch } from './app-user/utils.js';
+import { matchesWorkoutSearch, normalizeForSearch } from './app-user/utils.js';
 
 export const userApp = {
   render
@@ -63,6 +63,9 @@ function render(container) {
               다음달
             </button>
           </div>
+        </div>
+        <div id="user-app-members-search-wrap" style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <input type="text" id="user-app-members-search" placeholder="이름 검색..." style="flex:1;min-width:120px;padding:4px 8px;border:1px solid #ddd;border-radius:3px;font-size:0.75rem;box-sizing:border-box;font-family:inherit;">
         </div>
         <div id="user-app-members-list" style="background:#fff;border-radius:4px;padding:8px;">
           <div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">불러오는 중...</div>
@@ -195,6 +198,15 @@ function setupEventListeners(container) {
     });
   }
 
+  const membersSearchInput = container.querySelector('#user-app-members-search');
+  if (membersSearchInput) {
+    membersSearchInput.addEventListener('input', () => {
+      membersSearchQuery = membersSearchInput.value.trim();
+      membersCurrentPage = 1;
+      renderMembersList(membersCached);
+    });
+  }
+
   const activityMonthInput = container.querySelector('#user-app-activity-month');
   const activityPrevMonthBtn = container.querySelector('#user-app-activity-prev-month');
   const activityNextMonthBtn = container.querySelector('#user-app-activity-next-month');
@@ -305,6 +317,7 @@ function setMembersTab(tab) {
   membersActiveTab = tab;
   const membersList = document.getElementById('user-app-members-list');
   const activityList = document.getElementById('user-app-activity-list');
+  const membersSearchWrap = document.getElementById('user-app-members-search-wrap');
   const membersTabBtn = document.getElementById('user-app-members-tab-btn');
   const activityTabBtn = document.getElementById('user-app-activity-tab-btn');
   const addMemberBtn = document.getElementById('user-app-member-add-btn');
@@ -312,6 +325,9 @@ function setMembersTab(tab) {
   if (membersList && activityList) {
     membersList.style.display = tab === 'members' ? 'block' : 'none';
     activityList.style.display = tab === 'activity' ? 'block' : 'none';
+  }
+  if (membersSearchWrap) {
+    membersSearchWrap.style.display = tab === 'members' ? 'flex' : 'none';
   }
   if (membersTabBtn && activityTabBtn) {
     if (tab === 'members') {
@@ -336,7 +352,7 @@ function setMembersTab(tab) {
   if (activityControls) {
     activityControls.style.display = tab === 'activity' ? 'block' : 'none';
   }
-  updateMembersSectionTitle((membersCached || []).length);
+  updateMembersSectionTitle(getFilteredMembers(membersCached).length);
   if (tab === 'activity') {
     ensureActivityMonthValue();
     updateActivityMonthUI();
@@ -400,7 +416,25 @@ function updateMembersSectionTitle(count) {
   const titleElement = document.getElementById('user-app-members-title');
   if (!titleElement) return;
   const label = membersActiveTab === 'activity' ? '회원 활동관리' : '회원 관리';
-  titleElement.textContent = `${label} (${count}명)`;
+  const total = (membersCached || []).length;
+  const hasSearch = membersActiveTab === 'members' && membersSearchQuery.trim();
+  if (hasSearch) {
+    titleElement.textContent = `${label} (검색 ${count}명 / 전체 ${total}명)`;
+  } else {
+    titleElement.textContent = `${label} (${count}명)`;
+  }
+}
+
+function filterMembersBySearch(members, query) {
+  const normalizedQuery = normalizeForSearch(query);
+  if (!normalizedQuery) return members;
+  return members.filter(member =>
+    normalizeForSearch(member.name).includes(normalizedQuery)
+  );
+}
+
+function getFilteredMembers(members) {
+  return filterMembersBySearch(members || [], membersSearchQuery);
 }
 
 function setActivityDateRange(days) {
@@ -682,6 +716,7 @@ let membersSortDirection = 'desc'; // 'asc' or 'desc'
 const membersPageSize = 10;
 let membersCurrentPage = 1;
 let membersCached = [];
+let membersSearchQuery = '';
 let membersActiveTab = 'members';
 let activityCurrentPage = 1;
 let activitySortColumn = 'name';
@@ -895,15 +930,23 @@ function renderMembersList(members) {
   const listContainer = document.getElementById('user-app-members-list');
   if (!listContainer) return;
 
+  const sourceMembers = members || membersCached || [];
+  const displayMembers = getFilteredMembers(sourceMembers);
+
   if (membersSortColumn === 'push_status') {
-    loadPushStatusesForMembers(members);
+    loadPushStatusesForMembers(displayMembers);
   }
   
   // 제목에 회원 수 표시
-  updateMembersSectionTitle(members.length);
+  updateMembersSectionTitle(displayMembers.length);
   
-  if (members.length === 0) {
+  if (sourceMembers.length === 0) {
     listContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">등록된 회원이 없습니다.</div>';
+    return;
+  }
+
+  if (displayMembers.length === 0) {
+    listContainer.innerHTML = '<div style="text-align:center;padding:12px;color:#888;font-size:0.75rem;">검색 결과가 없습니다.</div>';
     return;
   }
   
@@ -915,7 +958,7 @@ function renderMembersList(members) {
     return 0;
   };
 
-  const sortedMembers = [...members].sort((a, b) => {
+  const sortedMembers = [...displayMembers].sort((a, b) => {
     if (membersSortColumn === 'name') {
       const aValue = (a.name || '').trim();
       const bValue = (b.name || '').trim();
