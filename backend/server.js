@@ -7004,13 +7004,15 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// 회원통계 기간(최근 6개월) 계산
+const MEMBER_STATS_MONTH_COUNT = 3;
+
+// 회원통계 기간(최근 3개월) 계산
 function getMemberStatsPeriod() {
   const periodEnd = getKoreanYearMonth();
   const [endYear, endMonth] = periodEnd.split('-').map(Number);
 
   let startYear = endYear;
-  let startMonth = endMonth - 5;
+  let startMonth = endMonth - (MEMBER_STATS_MONTH_COUNT - 1);
   while (startMonth <= 0) {
     startMonth += 12;
     startYear -= 1;

@@ -1326,6 +1326,8 @@ function renderMemberSessionsModal(data, trainerName, center, yearMonth) {
 
 // --- 회원통계 ---
 
+const MEMBER_STATS_MONTH_COUNT = 3;
+
 let memberStatsCache = {
   centers: [],
   trainers: [],
@@ -1383,6 +1385,47 @@ function getMemberMonthlyAverage(member, months) {
     return member.monthlyAverage;
   }
   return calcMemberMonthlyAverage(member, months);
+}
+
+function normalizeMemberStatsData(data) {
+  if (!data) return data;
+
+  const months = (data.months || []).slice(-MEMBER_STATS_MONTH_COUNT);
+  const periodStart = months[0] || data.periodStart;
+  const periodEnd = months[months.length - 1] || data.periodEnd;
+  const currentMonth = data.summary?.currentMonth || data.periodEnd || periodEnd;
+
+  const members = (data.members || []).map(member => {
+    const regYM = (member.regdate || '').slice(0, 7);
+    const monthlyCompleted = {};
+    let totalCompleted = 0;
+
+    months.forEach(ym => {
+      if (regYM && ym < regYM) return;
+      const count = member.monthlyCompleted?.[ym] ?? 0;
+      monthlyCompleted[ym] = count;
+      totalCompleted += count;
+    });
+
+    return {
+      ...member,
+      monthlyCompleted,
+      totalCompleted,
+      monthlyAverage: calcMemberMonthlyAverage({ ...member, monthlyCompleted }, months)
+    };
+  });
+
+  const summary = calcMemberStatsSummary(members, currentMonth, months);
+  summary.currentMonth = currentMonth;
+
+  return {
+    ...data,
+    months,
+    periodStart,
+    periodEnd,
+    members,
+    summary
+  };
 }
 
 function calcMemberStatsSummary(members, currentMonth, months) {
@@ -1679,12 +1722,13 @@ async function loadMemberStatsTable(center, trainer) {
     const response = await fetch(
       `/api/member-monthly-stats?trainer=${encodeURIComponent(trainer)}&center=${encodeURIComponent(center)}`
     );
-    const data = await response.json();
+    const raw = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || '조회에 실패했습니다.');
+      throw new Error(raw.message || '조회에 실패했습니다.');
     }
 
+    const data = normalizeMemberStatsData(raw);
     resultsEl.innerHTML = renderMemberStatsTable(data);
     setupMemberStatsTableSort(data);
   } catch (error) {
