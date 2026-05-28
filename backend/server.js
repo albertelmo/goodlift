@@ -7047,11 +7047,10 @@ function isValidMemberForStats(member) {
 }
 
 // 월평균: 등록 이후 월 중 완료 세션이 1회 이상인 월만 대상 (0인 월 제외)
-function calcMemberMonthlyAverage(monthlyCompleted, regYM, months) {
+function calcMemberMonthlyAverage(monthlyCompleted, months) {
   let sum = 0;
   let activeMonths = 0;
   months.forEach(ym => {
-    if (regYM && ym < regYM) return;
     const count = monthlyCompleted[ym] || 0;
     if (count > 0) {
       sum += count;
@@ -7071,9 +7070,6 @@ function calcMemberStatsSummary(members, currentMonth) {
     if (typeof member.monthlyAverage === 'number') {
       memberAverages.push(member.monthlyAverage);
     }
-
-    const regYM = (member.regdate || '').slice(0, 7);
-    if (regYM && regYM > currentMonth) return;
 
     const thisMonthCompleted = member.monthlyCompleted?.[currentMonth] ?? 0;
     if (thisMonthCompleted === 0) zeroThisMonthCount += 1;
@@ -7127,18 +7123,16 @@ app.get('/api/member-monthly-stats', async (req, res) => {
     });
 
     const members = targetMembers.map(member => {
-      const regYM = (member.regdate || '').slice(0, 7);
       const monthlyCompleted = {};
       let totalCompleted = 0;
 
       months.forEach(ym => {
-        if (regYM && ym < regYM) return;
         const count = sessionMap[member.name]?.[ym] || 0;
         monthlyCompleted[ym] = count;
         totalCompleted += count;
       });
 
-      const monthlyAverage = calcMemberMonthlyAverage(monthlyCompleted, regYM, months);
+      const monthlyAverage = calcMemberMonthlyAverage(monthlyCompleted, months);
 
       return {
         memberName: member.name,

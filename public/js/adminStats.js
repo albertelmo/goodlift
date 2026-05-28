@@ -1355,11 +1355,9 @@ function formatPeriodLabel(periodStart, periodEnd) {
 }
 
 function calcMemberMonthlyAverage(member, months) {
-  const regYM = (member.regdate || '').slice(0, 7);
   let sum = 0;
   let activeMonths = 0;
   months.forEach(ym => {
-    if (regYM && ym < regYM) return;
     const count = member.monthlyCompleted?.[ym] ?? 0;
     if (count > 0) {
       sum += count;
@@ -1396,12 +1394,10 @@ function normalizeMemberStatsData(data) {
   const currentMonth = data.summary?.currentMonth || data.periodEnd || periodEnd;
 
   const members = (data.members || []).map(member => {
-    const regYM = (member.regdate || '').slice(0, 7);
     const monthlyCompleted = {};
     let totalCompleted = 0;
 
     months.forEach(ym => {
-      if (regYM && ym < regYM) return;
       const count = member.monthlyCompleted?.[ym] ?? 0;
       monthlyCompleted[ym] = count;
       totalCompleted += count;
@@ -1437,9 +1433,6 @@ function calcMemberStatsSummary(members, currentMonth, months) {
     const avg = getMemberMonthlyAverage(member, months);
     if (typeof avg === 'number') memberAverages.push(avg);
 
-    const regYM = (member.regdate || '').slice(0, 7);
-    if (regYM && regYM > currentMonth) return;
-
     const thisMonthCompleted = member.monthlyCompleted?.[currentMonth] ?? 0;
     if (thisMonthCompleted === 0) zeroThisMonthCount += 1;
     if (thisMonthCompleted <= 2) twoOrLessThisMonthCount += 1;
@@ -1472,16 +1465,11 @@ function renderMemberStatsSummaryMeta(data) {
 }
 
 function renderMemberStatsRow(member, months) {
-  const regYM = (member.regdate || '').slice(0, 7);
   const monthlyAverage = getMemberMonthlyAverage(member, months);
   const monthCells = (months || []).map(ym => {
-    let display = '-';
-    let color = '#bbb';
-    if (!regYM || ym >= regYM) {
-      const count = member.monthlyCompleted?.[ym] ?? 0;
-      display = String(count);
-      color = count > 0 ? '#2e7d32' : '#888';
-    }
+    const count = member.monthlyCompleted?.[ym] ?? 0;
+    const display = String(count);
+    const color = count > 0 ? '#2e7d32' : '#888';
     return `<td class="member-stats-month-cell">${display}</td>`;
   }).join('');
 
@@ -1491,7 +1479,7 @@ function renderMemberStatsRow(member, months) {
     <tr data-member-name="${escapeHtml(member.memberName)}" data-total="${member.totalCompleted || 0}" data-average="${monthlyAverage ?? ''}">
       <td class="member-stats-name-cell">
         <div class="member-stats-name">${escapeHtml(member.memberName)}</div>
-        <div class="member-stats-meta">등록 ${escapeHtml(member.regdate || '-')} · 잔여 ${member.remainSessions ?? 0}</div>
+        <div class="member-stats-meta">잔여 ${member.remainSessions ?? 0}</div>
       </td>
       ${monthCells}
       <td class="member-stats-total-cell">${member.totalCompleted || 0}</td>
