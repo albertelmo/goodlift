@@ -7004,6 +7004,168 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+// 회원통계 기간(최근 6개월) 계산
+function getMemberStatsPeriod() {
+  const periodEnd = getKoreanYearMonth();
+  const [endYear, endMonth] = periodEnd.split('-').map(Number);
+
+  let startYear = endYear;
+  let startMonth = endMonth - 5;
+  while (startMonth <= 0) {
+    startMonth += 12;
+    startYear -= 1;
+  }
+  const periodStart = `${startYear}-${String(startMonth).padStart(2, '0')}`;
+
+  const months = [];
+  let y = startYear;
+  let m = startMonth;
+  while (true) {
+    const ym = `${y}-${String(m).padStart(2, '0')}`;
+    months.push(ym);
+    if (ym === periodEnd) break;
+    m += 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+  }
+
+  const startDate = `${periodStart}-01`;
+  const endLastDay = new Date(endYear, endMonth, 0).getDate();
+  const endDate = `${periodEnd}-${String(endLastDay).padStart(2, '0')}`;
+
+  return { periodStart, periodEnd, months, startDate, endDate };
+}
+
+function isValidMemberForStats(member) {
+  return member.status === '유효' &&
+    !member.name.startsWith('무기명') &&
+    !member.name.startsWith('체험');
+}
+
+// 월평균: 등록 이후 월 중 완료 세션이 1회 이상인 월만 대상 (0인 월 제외)
+function calcMemberMonthlyAverage(monthlyCompleted, regYM, months) {
+  let sum = 0;
+  let activeMonths = 0;
+  months.forEach(ym => {
+    if (regYM && ym < regYM) return;
+    const count = monthlyCompleted[ym] || 0;
+    if (count > 0) {
+      sum += count;
+      activeMonths += 1;
+    }
+  });
+  if (activeMonths === 0) return null;
+  return Math.round((sum / activeMonths) * 10) / 10;
+}
+
+function calcMemberStatsSummary(members, currentMonth) {
+  const memberAverages = [];
+  let zeroThisMonthCount = 0;
+  let twoOrLessThisMonthCount = 0;
+
+  members.forEach(member => {
+    if (typeof member.monthlyAverage === 'number') {
+      memberAverages.push(member.monthlyAverage);
+    }
+
+    const regYM = (member.regdate || '').slice(0, 7);
+    if (regYM && regYM > currentMonth) return;
+
+    const thisMonthCompleted = member.monthlyCompleted?.[currentMonth] ?? 0;
+    if (thisMonthCompleted === 0) zeroThisMonthCount += 1;
+    if (thisMonthCompleted <= 2) twoOrLessThisMonthCount += 1;
+  });
+
+  const overallMonthlyAverage = memberAverages.length > 0
+    ? Math.round((memberAverages.reduce((a, b) => a + b, 0) / memberAverages.length) * 10) / 10
+    : null;
+
+  return {
+    overallMonthlyAverage,
+    zeroThisMonthCount,
+    twoOrLessThisMonthCount,
+    currentMonth
+  };
+}
+
+// 센터·트레이너별 회원 월별 완료 세션 통계 API
+app.get('/api/member-monthly-stats', async (req, res) => {
+  try {
+    const { trainer, center } = req.query;
+
+    if (!trainer || !center) {
+      return res.status(400).json({ message: '트레이너와 센터 정보가 필요합니다.' });
+    }
+
+    let accounts = [];
+    if (fs.existsSync(DATA_PATH)) {
+      const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+      if (raw) accounts = JSON.parse(raw);
+    }
+    const trainerAccount = accounts.find(acc => acc.role === 'trainer' && acc.username === trainer);
+    const trainerName = trainerAccount ? trainerAccount.name : trainer;
+
+    const allMembers = await membersDB.getMembers({ trainer, status: '유효' });
+    const targetMembers = allMembers
+      .filter(m => m.center === center && isValidMemberForStats(m))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+    const { periodStart, periodEnd, months, startDate, endDate } = getMemberStatsPeriod();
+
+    const sessionRows = await sessionsDB.getCompletedSessionsByMemberMonth(
+      trainer, center, startDate, endDate
+    );
+
+    const sessionMap = {};
+    sessionRows.forEach(row => {
+      if (!sessionMap[row.member]) sessionMap[row.member] = {};
+      sessionMap[row.member][row.year_month] = row.completed;
+    });
+
+    const members = targetMembers.map(member => {
+      const regYM = (member.regdate || '').slice(0, 7);
+      const monthlyCompleted = {};
+      let totalCompleted = 0;
+
+      months.forEach(ym => {
+        if (regYM && ym < regYM) return;
+        const count = sessionMap[member.name]?.[ym] || 0;
+        monthlyCompleted[ym] = count;
+        totalCompleted += count;
+      });
+
+      const monthlyAverage = calcMemberMonthlyAverage(monthlyCompleted, regYM, months);
+
+      return {
+        memberName: member.name,
+        regdate: member.regdate,
+        remainSessions: member.remainSessions || 0,
+        monthlyCompleted,
+        totalCompleted,
+        monthlyAverage
+      };
+    });
+
+    const summary = calcMemberStatsSummary(members, periodEnd);
+
+    res.json({
+      trainer,
+      trainerName,
+      center,
+      periodStart,
+      periodEnd,
+      months,
+      members,
+      summary
+    });
+  } catch (error) {
+    console.error('[API] 회원 월별 통계 조회 오류:', error);
+    res.status(500).json({ message: '회원 월별 통계를 불러오지 못했습니다.' });
+  }
+});
+
 // 트레이너별 센터별 회원 세션 현황 조회 API
 app.get('/api/member-sessions-by-center', async (req, res) => {
   try {

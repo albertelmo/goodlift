@@ -285,6 +285,40 @@ const revertSessionAttendance = async (sessionId) => {
   }
 };
 
+// 트레이너·센터별 회원 월별 완료 세션 집계
+async function getCompletedSessionsByMemberMonth(trainer, center, startDate, endDate) {
+  try {
+    const validatedStartDate = validateAndFixDate(startDate);
+    const validatedEndDate = validateAndFixDate(endDate);
+    if (!validatedStartDate || !validatedEndDate) {
+      throw new Error(`Invalid date range: startDate=${startDate}, endDate=${endDate}`);
+    }
+
+    const query = `
+      SELECT s.member,
+             to_char(s.date, 'YYYY-MM') AS year_month,
+             COUNT(*)::int AS completed
+      FROM sessions s
+      INNER JOIN members m ON m.name = s.member
+      WHERE m.trainer = $1
+        AND m.center = $2
+        AND m.status = '유효'
+        AND m.name NOT LIKE '무기명%'
+        AND m.name NOT LIKE '체험%'
+        AND s.status = '완료'
+        AND s.date >= $3
+        AND s.date <= $4
+      GROUP BY s.member, year_month
+      ORDER BY s.member, year_month
+    `;
+    const result = await pool.query(query, [trainer, center, validatedStartDate, validatedEndDate]);
+    return result.rows;
+  } catch (error) {
+    console.error('회원 월별 완료 세션 집계 오류:', error);
+    throw error;
+  }
+}
+
 // 날짜 범위로 세션 조회
 async function getSessionsByDateRange(startDate, endDate) {
   try {
@@ -453,6 +487,7 @@ module.exports = {
   deleteSession,
   getSessionById,
   getSessionsByDateRange,
+  getCompletedSessionsByMemberMonth,
   checkTimeConflict,
   addMultipleSessions,
   deleteSessionsByMember,

@@ -399,6 +399,7 @@ async function loadStats() {
       setupTrainerRowEventListeners();
       // 상세통계 버튼 이벤트 리스너 설정
       setupDetailStatsButton(stats.trainerStats || []);
+      setupMemberStatsButton();
       // 툴팁 이벤트 설정
       setupValidMembersTooltip();
       setupCenterTooltips();
@@ -539,11 +540,18 @@ function renderStatsResults(stats) {
     <div class="stats-details">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h4 style="margin:0;">트레이너별 통계</h4>
-        <button id="trainer-detail-stats-btn" 
-                class="header-text-btn"
-                style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:15px !important;white-space:nowrap;">
-          상세통계
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="trainer-detail-stats-btn" 
+                  class="header-text-btn"
+                  style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:15px !important;white-space:nowrap;">
+            상세통계
+          </button>
+          <button id="member-stats-btn" 
+                  class="header-text-btn"
+                  style="background:#e8f5e9 !important;color:#2e7d32 !important;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;font-size:15px !important;white-space:nowrap;">
+            회원통계
+          </button>
+        </div>
       </div>
       <div class="trainer-stats">
         ${renderTrainerStats(stats.trainerStats || [])}
@@ -1314,4 +1322,474 @@ function renderMemberSessionsModal(data, trainerName, center, yearMonth) {
       </table>
     </div>
   `;
-} 
+}
+
+// --- 회원통계 ---
+
+let memberStatsCache = {
+  centers: [],
+  trainers: [],
+  validMembers: []
+};
+
+function setupMemberStatsButton() {
+  const btn = document.getElementById('member-stats-btn');
+  if (!btn) return;
+  const newBtn = btn.cloneNode(true);
+  btn.parentNode.replaceChild(newBtn, btn);
+  newBtn.addEventListener('click', () => showMemberStatsModal());
+}
+
+function formatYearMonthLabel(yearMonth) {
+  const [, mm] = yearMonth.split('-');
+  return `${parseInt(mm, 10)}월`;
+}
+
+function formatPeriodLabel(periodStart, periodEnd) {
+  if (!periodStart || !periodEnd) return '';
+  const [sy, sm] = periodStart.split('-');
+  const [ey, em] = periodEnd.split('-');
+  return `${sy}년 ${parseInt(sm, 10)}월 ~ ${ey}년 ${parseInt(em, 10)}월`;
+}
+
+function calcMemberMonthlyAverage(member, months) {
+  const regYM = (member.regdate || '').slice(0, 7);
+  let sum = 0;
+  let activeMonths = 0;
+  months.forEach(ym => {
+    if (regYM && ym < regYM) return;
+    const count = member.monthlyCompleted?.[ym] ?? 0;
+    if (count > 0) {
+      sum += count;
+      activeMonths += 1;
+    }
+  });
+  if (activeMonths === 0) return null;
+  return Math.round((sum / activeMonths) * 10) / 10;
+}
+
+function formatMonthlyAverageDisplay(monthlyAverage) {
+  if (monthlyAverage == null) {
+    return { text: '-', color: '#bbb' };
+  }
+  const text = Number.isInteger(monthlyAverage)
+    ? String(monthlyAverage)
+    : monthlyAverage.toFixed(1);
+  return { text, color: '#7b1fa2' };
+}
+
+function getMemberMonthlyAverage(member, months) {
+  if (typeof member.monthlyAverage === 'number') {
+    return member.monthlyAverage;
+  }
+  return calcMemberMonthlyAverage(member, months);
+}
+
+function calcMemberStatsSummary(members, currentMonth, months) {
+  const memberAverages = [];
+  let zeroThisMonthCount = 0;
+  let twoOrLessThisMonthCount = 0;
+
+  (members || []).forEach(member => {
+    const avg = getMemberMonthlyAverage(member, months);
+    if (typeof avg === 'number') memberAverages.push(avg);
+
+    const regYM = (member.regdate || '').slice(0, 7);
+    if (regYM && regYM > currentMonth) return;
+
+    const thisMonthCompleted = member.monthlyCompleted?.[currentMonth] ?? 0;
+    if (thisMonthCompleted === 0) zeroThisMonthCount += 1;
+    if (thisMonthCompleted <= 2) twoOrLessThisMonthCount += 1;
+  });
+
+  const overallMonthlyAverage = memberAverages.length > 0
+    ? Math.round((memberAverages.reduce((a, b) => a + b, 0) / memberAverages.length) * 10) / 10
+    : null;
+
+  return { overallMonthlyAverage, zeroThisMonthCount, twoOrLessThisMonthCount, currentMonth };
+}
+
+function formatOverallAverage(value) {
+  if (value == null) return '-';
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function renderMemberStatsSummaryMeta(data) {
+  const { periodEnd, members, summary, months } = data;
+  const currentMonth = summary?.currentMonth || periodEnd;
+  const stats = summary || calcMemberStatsSummary(members, currentMonth, months);
+  const [, cm] = (stats.currentMonth || '').split('-');
+  const currentMonthLabel = cm ? `${parseInt(cm, 10)}월` : '이번달';
+
+  const avgText = stats.overallMonthlyAverage == null
+    ? '-'
+    : `${formatOverallAverage(stats.overallMonthlyAverage)}회`;
+
+  return `회원 평균 수업수 : ${avgText} / ${currentMonthLabel} 미출석 회원수 : ${stats.zeroThisMonthCount}명 / ${currentMonthLabel} 2회 이하 출석 회원수 : ${stats.twoOrLessThisMonthCount}명`;
+}
+
+function renderMemberStatsRow(member, months) {
+  const regYM = (member.regdate || '').slice(0, 7);
+  const monthlyAverage = getMemberMonthlyAverage(member, months);
+  const monthCells = (months || []).map(ym => {
+    let display = '-';
+    let color = '#bbb';
+    if (!regYM || ym >= regYM) {
+      const count = member.monthlyCompleted?.[ym] ?? 0;
+      display = String(count);
+      color = count > 0 ? '#2e7d32' : '#888';
+    }
+    return `<td class="member-stats-month-cell">${display}</td>`;
+  }).join('');
+
+  const avg = formatMonthlyAverageDisplay(monthlyAverage);
+
+  return `
+    <tr data-member-name="${escapeHtml(member.memberName)}" data-total="${member.totalCompleted || 0}" data-average="${monthlyAverage ?? ''}">
+      <td class="member-stats-name-cell">
+        <div class="member-stats-name">${escapeHtml(member.memberName)}</div>
+        <div class="member-stats-meta">등록 ${escapeHtml(member.regdate || '-')} · 잔여 ${member.remainSessions ?? 0}</div>
+      </td>
+      ${monthCells}
+      <td class="member-stats-total-cell">${member.totalCompleted || 0}</td>
+      <td class="member-stats-avg-cell" style="color:${avg.color};">${avg.text}</td>
+    </tr>
+  `;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function isValidStatsMember(member) {
+  return member.status === '유효' &&
+    !member.name.startsWith('무기명') &&
+    !member.name.startsWith('체험');
+}
+
+function getTrainersForCenter(center, trainers, validMembers) {
+  const usernames = new Set(
+    validMembers
+      .filter(m => m.center === center)
+      .map(m => m.trainer)
+  );
+  return trainers
+    .filter(t => usernames.has(t.username))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+}
+
+function showMemberStatsModalOverlay(content) {
+  const existing = document.querySelector('.member-stats-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay member-stats-modal-overlay';
+  overlay.style.zIndex = '10000';
+  overlay.innerHTML = content;
+  document.body.appendChild(overlay);
+
+  setTimeout(() => {
+    overlay.style.opacity = '1';
+  }, 10);
+
+  setTimeout(() => {
+    setupMemberStatsModalEventListeners();
+  }, 50);
+}
+
+function closeMemberStatsModal() {
+  const overlay = document.querySelector('.member-stats-modal-overlay');
+  if (!overlay) return;
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.remove(), 300);
+}
+
+function setupMemberStatsModalEventListeners() {
+  const overlay = document.querySelector('.member-stats-modal-overlay');
+  if (!overlay) return;
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeMemberStatsModal();
+  });
+
+  const closeBtn = overlay.querySelector('#member-stats-close-btn');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', closeMemberStatsModal);
+  }
+}
+
+function getMemberStatsOverlay() {
+  return document.querySelector('.member-stats-modal-overlay');
+}
+
+async function showMemberStatsModal() {
+  try {
+    showMemberStatsModalOverlay(`
+      <div class="member-stats-modal-box">
+        <div style="text-align:center;padding:40px;color:#888;">회원통계를 불러오는 중...</div>
+      </div>
+    `);
+
+    const [centersRes, trainersRes, membersRes] = await Promise.all([
+      fetch('/api/centers'),
+      fetch('/api/trainers'),
+      fetch('/api/members?status=유효')
+    ]);
+
+    memberStatsCache.centers = await centersRes.json();
+    memberStatsCache.trainers = await trainersRes.json();
+    memberStatsCache.validMembers = (await membersRes.json()).filter(isValidStatsMember);
+
+    const centerOrder = memberStatsCache.centers.map(c => c.name);
+    const savedCenter = sessionStorage.getItem('memberStatsCenter') || '';
+    const savedTrainer = sessionStorage.getItem('memberStatsTrainer') || '';
+
+    let selectedCenter = savedCenter && centerOrder.includes(savedCenter)
+      ? savedCenter
+      : (centerOrder[0] || '');
+
+    let trainersForCenter = getTrainersForCenter(
+      selectedCenter, memberStatsCache.trainers, memberStatsCache.validMembers
+    );
+    let selectedTrainer = savedTrainer && trainersForCenter.some(t => t.username === savedTrainer)
+      ? savedTrainer
+      : (trainersForCenter[0]?.username || '');
+
+    showMemberStatsModalOverlay(renderMemberStatsModalShell(selectedCenter, selectedTrainer, centerOrder, trainersForCenter));
+    setupMemberStatsModalListeners();
+
+    if (selectedCenter && selectedTrainer) {
+      await loadMemberStatsTable(selectedCenter, selectedTrainer);
+    }
+  } catch (error) {
+    console.error('회원통계 모달 오류:', error);
+    showMemberStatsModalOverlay(`
+      <div class="member-stats-modal-box">
+        <div style="text-align:center;padding:40px;color:#d32f2f;">
+          <div>회원통계를 불러오지 못했습니다.</div>
+          <div style="font-size:0.9em;margin-top:10px;">${escapeHtml(error.message)}</div>
+        </div>
+      </div>
+    `);
+  }
+}
+
+function renderMemberStatsModalShell(selectedCenter, selectedTrainer, centerOrder, trainersForCenter) {
+  const centerOptions = centerOrder.map(name => `
+    <option value="${escapeHtml(name)}" ${name === selectedCenter ? 'selected' : ''}>${escapeHtml(name)}</option>
+  `).join('');
+
+  const trainerOptions = trainersForCenter.length > 0
+    ? trainersForCenter.map(t => `
+        <option value="${escapeHtml(t.username)}" ${t.username === selectedTrainer ? 'selected' : ''}>${escapeHtml(t.name)}</option>
+      `).join('')
+    : '<option value="">트레이너 없음</option>';
+
+  return `
+    <div class="member-stats-modal-box">
+      <button type="button" id="member-stats-close-btn" class="member-stats-close-btn" aria-label="닫기">×</button>
+      <div class="member-stats-toolbar">
+        <span class="member-stats-title">회원통계</span>
+        <div class="member-stats-filters">
+          <label class="member-stats-filter-label">
+            <span>센터</span>
+            <select id="member-stats-center" class="member-stats-select">
+              ${centerOptions || '<option value="">없음</option>'}
+            </select>
+          </label>
+          <label class="member-stats-filter-label">
+            <span>트레이너</span>
+            <select id="member-stats-trainer" class="member-stats-select">
+              ${trainerOptions}
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="member-stats-results" class="member-stats-results">
+        <div class="member-stats-placeholder">센터와 트레이너를 선택하면 월별 완료 세션이 표시됩니다.</div>
+      </div>
+    </div>
+  `;
+}
+
+function setupMemberStatsModalListeners() {
+  const modalOverlay = getMemberStatsOverlay();
+  if (!modalOverlay) return;
+
+  const centerSelect = modalOverlay.querySelector('#member-stats-center');
+  const trainerSelect = modalOverlay.querySelector('#member-stats-trainer');
+
+  const refreshTrainerOptions = () => {
+    const center = centerSelect?.value;
+    if (!center || !trainerSelect) return;
+
+    const trainersForCenter = getTrainersForCenter(
+      center, memberStatsCache.trainers, memberStatsCache.validMembers
+    );
+
+    trainerSelect.innerHTML = trainersForCenter.length > 0
+      ? trainersForCenter.map(t => `<option value="${escapeHtml(t.username)}">${escapeHtml(t.name)}</option>`).join('')
+      : '<option value="">트레이너 없음</option>';
+
+    return trainersForCenter;
+  };
+
+  const onFilterChange = async () => {
+    const center = centerSelect?.value;
+    const trainer = trainerSelect?.value;
+
+    if (center) sessionStorage.setItem('memberStatsCenter', center);
+    if (trainer) sessionStorage.setItem('memberStatsTrainer', trainer);
+
+    if (!center || !trainer) {
+      const resultsEl = modalOverlay.querySelector('#member-stats-results');
+      if (resultsEl) {
+        resultsEl.innerHTML = '<div style="text-align:center;color:#888;padding:24px;">센터와 트레이너를 선택해주세요.</div>';
+      }
+      return;
+    }
+
+    await loadMemberStatsTable(center, trainer);
+  };
+
+  if (centerSelect) {
+    centerSelect.addEventListener('change', async () => {
+      refreshTrainerOptions();
+      await onFilterChange();
+    });
+  }
+
+  if (trainerSelect) {
+    trainerSelect.addEventListener('change', onFilterChange);
+  }
+}
+
+async function loadMemberStatsTable(center, trainer) {
+  const modalOverlay = getMemberStatsOverlay();
+  const resultsEl = modalOverlay?.querySelector('#member-stats-results');
+  if (!resultsEl) return;
+
+  resultsEl.innerHTML = '<div style="text-align:center;color:#888;padding:32px;">데이터를 불러오는 중...</div>';
+
+  try {
+    const response = await fetch(
+      `/api/member-monthly-stats?trainer=${encodeURIComponent(trainer)}&center=${encodeURIComponent(center)}`
+    );
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || '조회에 실패했습니다.');
+    }
+
+    resultsEl.innerHTML = renderMemberStatsTable(data);
+    setupMemberStatsTableSort(data);
+  } catch (error) {
+    console.error('회원통계 조회 오류:', error);
+    resultsEl.innerHTML = `
+      <div style="text-align:center;color:#d32f2f;padding:24px;">
+        <div>회원통계를 불러오지 못했습니다.</div>
+        <div style="font-size:0.85em;margin-top:8px;">${error.message}</div>
+      </div>
+    `;
+  }
+}
+
+function renderMemberStatsTable(data) {
+  const { trainerName, center, months, members } = data;
+  const summaryMeta = renderMemberStatsSummaryMeta(data);
+
+  if (!members || members.length === 0) {
+    const emptySummary = renderMemberStatsSummaryMeta({ ...data, members: [], summary: data.summary });
+    return `
+      <div style="text-align:center;color:#888;padding:24px;">
+        <div style="margin-bottom:4px;font-weight:600;color:#333;">${escapeHtml(center)} · ${escapeHtml(trainerName)}</div>
+        <div class="member-stats-summary-meta">${emptySummary}</div>
+        <div style="margin-top:12px;">해당 조건의 유효 회원이 없습니다.</div>
+      </div>
+    `;
+  }
+
+  const monthHeaders = (months || []).map(ym => `
+    <th class="member-stats-month-col">${formatYearMonthLabel(ym)}</th>
+  `).join('');
+
+  const rows = members.map(member => renderMemberStatsRow(member, months)).join('');
+
+  return `
+    <div class="member-stats-summary">
+      <div class="member-stats-summary-title">${escapeHtml(center)} · ${escapeHtml(trainerName)}</div>
+      <div class="member-stats-summary-meta">${summaryMeta}</div>
+    </div>
+    <div class="member-stats-table-wrap">
+      <table id="member-stats-table" class="member-stats-table">
+        <thead>
+          <tr>
+            <th class="member-stats-sortable member-stats-name-cell" data-sort="name">
+              회원명 <span class="sort-icon">↕</span>
+            </th>
+            ${monthHeaders}
+            <th class="member-stats-sortable member-stats-total-cell" data-sort="total">
+              합계 <span class="sort-icon">↕</span>
+            </th>
+            <th class="member-stats-sortable member-stats-avg-cell" data-sort="average">
+              월평균 <span class="sort-icon">↕</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody id="member-stats-tbody">
+          ${rows}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function setupMemberStatsTableSort(data) {
+  const modalOverlay = getMemberStatsOverlay();
+  if (!modalOverlay) return;
+
+  let sortKey = 'name';
+  let sortAsc = true;
+
+  const applySort = () => {
+    const tbody = modalOverlay.querySelector('#member-stats-tbody');
+    if (!tbody) return;
+
+    const avgVal = (m) => {
+      const avg = getMemberMonthlyAverage(m, data.months);
+      return avg == null ? -1 : avg;
+    };
+
+    const sorted = [...data.members].sort((a, b) => {
+      if (sortKey === 'total') {
+        return sortAsc
+          ? (a.totalCompleted || 0) - (b.totalCompleted || 0)
+          : (b.totalCompleted || 0) - (a.totalCompleted || 0);
+      }
+      if (sortKey === 'average') {
+        return sortAsc ? avgVal(a) - avgVal(b) : avgVal(b) - avgVal(a);
+      }
+      const cmp = a.memberName.localeCompare(b.memberName, 'ko');
+      return sortAsc ? cmp : -cmp;
+    });
+
+    tbody.innerHTML = sorted.map(member => renderMemberStatsRow(member, data.months)).join('');
+  };
+
+  modalOverlay.querySelectorAll('.member-stats-sortable').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.getAttribute('data-sort');
+      if (sortKey === key) {
+        sortAsc = !sortAsc;
+      } else {
+        sortKey = key;
+        sortAsc = key === 'name';
+      }
+      applySort();
+    });
+  });
+}
