@@ -12015,6 +12015,62 @@ app.post('/api/trainer/copy-previous-month', async (req, res) => {
     }
 });
 
+// ledger=on 트레이너별 지출 합계 (장부 상단 집계용, SU 전용)
+app.get('/api/ledger/trainer-expense-summary', async (req, res) => {
+    try {
+        const currentUser = req.query.currentUser || req.session?.username;
+        if (!currentUser) {
+            return res.status(401).json({ message: '로그인이 필요합니다.' });
+        }
+
+        let accounts = [];
+        if (fs.existsSync(DATA_PATH)) {
+            const raw = fs.readFileSync(DATA_PATH, 'utf-8');
+            if (raw) accounts = JSON.parse(raw);
+        }
+        const userAccount = accounts.find(acc => acc.username === currentUser);
+        if (!userAccount || userAccount.role !== 'su') {
+            return res.status(403).json({ message: '권한이 없습니다.' });
+        }
+
+        const ledgerOnTrainers = accounts
+            .filter(acc => acc.role === 'trainer' && (acc.ledger || 'off') === 'on')
+            .map(acc => ({ username: acc.username, name: acc.name || acc.username }))
+            .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username, 'ko'));
+
+        const month = req.query.month;
+        const year = req.query.year;
+        const toMonth = parseInt(req.query.toMonth, 10);
+
+        if (month) {
+            const result = await trainerLedgerDB.getTrainerExpenseTotalsForMonth(month, ledgerOnTrainers);
+            return res.json(result);
+        }
+
+        if (year && toMonth >= 1 && toMonth <= 12) {
+            const byMonth = {};
+            let ytdGrandTotal = 0;
+            for (let m = 1; m <= toMonth; m++) {
+                const yearMonth = `${year}-${String(m).padStart(2, '0')}`;
+                const monthResult = await trainerLedgerDB.getTrainerExpenseTotalsForMonth(yearMonth, ledgerOnTrainers);
+                byMonth[yearMonth] = monthResult;
+                ytdGrandTotal += monthResult.grandTotal;
+            }
+            return res.json({
+                year: String(year),
+                toMonth,
+                byMonth,
+                ytdGrandTotal
+            });
+        }
+
+        return res.status(400).json({ message: 'month 또는 year+toMonth가 필요합니다.' });
+    } catch (error) {
+        console.error('[API] 트레이너 지출 합계 조회 오류:', error);
+        res.status(500).json({ message: '트레이너 지출 합계 조회에 실패했습니다.' });
+    }
+});
+
 // 이전월 데이터 복사 API
 app.post('/api/ledger/copy-previous-month', async (req, res) => {
     try {

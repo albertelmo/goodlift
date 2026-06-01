@@ -68,6 +68,50 @@ function formatSalesInManwon(amount) {
   return formatNumber(manwon);
 }
 
+function trainerDisplayName(name) {
+  return (name || '').replace(/\s*\([^)]*\)\s*$/, '').trim() || name || '';
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function fetchTrainerExpenseSummaryForMonth(month) {
+  const currentUser = localStorage.getItem('username');
+  const params = new URLSearchParams({ month, currentUser: currentUser || '' });
+  const response = await fetch(`/api/ledger/trainer-expense-summary?${params}`);
+  if (!response.ok) {
+    return { month, trainers: [], grandTotal: 0 };
+  }
+  return response.json();
+}
+
+async function fetchTrainerExpenseSummaryForYear(year, toMonth) {
+  const currentUser = localStorage.getItem('username');
+  const params = new URLSearchParams({
+    year: String(year),
+    toMonth: String(toMonth),
+    currentUser: currentUser || ''
+  });
+  const response = await fetch(`/api/ledger/trainer-expense-summary?${params}`);
+  if (!response.ok) {
+    return { byMonth: {}, ytdGrandTotal: 0 };
+  }
+  return response.json();
+}
+
+async function refreshAfterTrainerLedgerChange() {
+  await loadLedgerData();
+  const trainerSelect = document.getElementById('ledger-trainer-select');
+  if (trainerSelect && trainerSelect.value) {
+    await loadTrainerLedger(trainerSelect.value);
+  }
+}
+
 // 이전월 데이터를 이번달로 복사
 async function copyPreviousMonthData() {
   const currentYearMonth = getSelectedYearMonth();
@@ -154,7 +198,7 @@ async function render(container) {
       <!-- 지출 종류별 합계 리스트 -->
       <div id="ledger-summary-list" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:8px;margin-bottom:16px;">
         <h4 id="ledger-summary-title" style="margin:0 0 8px 0;color:#1976d2;font-size:0.85rem;font-weight:600;">지출 종류별 합계</h4>
-        <div id="ledger-summary-content" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;font-size:0.75rem;">
+        <div id="ledger-summary-content" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:6px;font-size:0.75rem;">
           <div style="text-align:center;padding:6px;color:#999;">데이터를 불러오는 중...</div>
         </div>
       </div>
@@ -327,14 +371,15 @@ async function loadLedgerData() {
     const endDate = `${year}-${month}-${lastDay}T23:59:59`;
     
     // 고정지출, 변동지출, 급여, 식대, 구매, 개인지출, 지표(매출), 정산 데이터 가져오기
-    const [fixedResponse, variableResponse, salaryResponse, expensesResponse, metricsResponse, settlementResponse, allSettlementsResponse] = await Promise.all([
+    const [fixedResponse, variableResponse, salaryResponse, expensesResponse, metricsResponse, settlementResponse, allSettlementsResponse, trainerExpenseSummary] = await Promise.all([
       fetch(`/api/fixed-expenses?month=${yearMonth}`),
       fetch(`/api/variable-expenses?month=${yearMonth}`),
       fetch(`/api/salaries?month=${yearMonth}`),
       fetch(`/api/expenses?startDate=${startDate}&endDate=${endDate}`),
       fetch(`/api/metrics?month=${yearMonth}`),
       fetch(`/api/settlements?month=${yearMonth}`),
-      fetch(`/api/settlements`) // 모든 정산 데이터 (누적 계산용)
+      fetch(`/api/settlements`), // 모든 정산 데이터 (누적 계산용)
+      fetchTrainerExpenseSummaryForMonth(yearMonth)
     ]);
     
     const fixedExpenses = fixedResponse.ok ? await fixedResponse.json() : [];
@@ -375,7 +420,7 @@ async function loadLedgerData() {
     const salesTotal = renderCenterSales(metrics, centerOrder);
     
     // 지출 종류별 합계 계산 및 표시
-    const expenseTotal = renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expenses);
+    const expenseTotal = renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expenses, trainerExpenseSummary);
     
     // 월 순이익 계산 및 표시
     renderMonthlyProfit(salesTotal, expenseTotal);
@@ -449,7 +494,7 @@ function renderCenterSales(metrics, centerOrder) {
 }
 
 // 지출 종류별 합계 렌더링
-function renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expenses) {
+function renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expenses, trainerExpenseSummary = null) {
   const summaryEl = document.getElementById('ledger-summary-content');
   if (!summaryEl) return 0;
   
@@ -467,8 +512,13 @@ function renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expense
   const purchaseTotal = purchaseExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
   const personalTotal = personalExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
   
+  const trainerRows = trainerExpenseSummary?.trainers || [];
+  const trainerExpenseGrandTotal = trainerExpenseSummary?.grandTotal
+    ?? trainerRows.reduce((sum, t) => sum + (parseInt(t.total, 10) || 0), 0);
+  
   // 전체 합계 계산
-  const grandTotal = fixedTotal + variableTotal + salaryTotal + mealTotal + purchaseTotal + personalTotal;
+  const centerGrandTotal = fixedTotal + variableTotal + salaryTotal + mealTotal + purchaseTotal + personalTotal;
+  const grandTotal = centerGrandTotal + trainerExpenseGrandTotal;
   
   // 세금타입별 합계 계산 (변동지출에서만)
   const vatTotal = variableExpenses
@@ -498,12 +548,17 @@ function renderExpenseSummary(fixedExpenses, variableExpenses, salaries, expense
     { label: '급여', amount: salaryTotal, color: '#1976d2' },
     { label: '식대', amount: mealTotal, color: '#1976d2' },
     { label: '구매', amount: purchaseTotal, color: '#1976d2' },
-    { label: '개인지출', amount: personalTotal, color: '#1976d2' }
+    { label: '개인지출', amount: personalTotal, color: '#1976d2' },
+    ...trainerRows.map(t => ({
+      label: `${trainerDisplayName(t.name)} 지출`,
+      amount: parseInt(t.total, 10) || 0,
+      color: '#5c6bc0'
+    }))
   ];
   
   summaryEl.innerHTML = summaryItems.map(item => `
     <div style="display:flex;flex-direction:column;align-items:center;padding:6px 4px;background:#f5f5f5;border-radius:4px;border-left:3px solid ${item.color};">
-      <span style="font-weight:500;color:#333;font-size:0.7rem;margin-bottom:2px;">${item.label}</span>
+      <span style="font-weight:500;color:#333;font-size:0.7rem;margin-bottom:2px;">${escapeHtml(item.label)}</span>
       <span style="font-weight:600;color:${item.color};font-size:0.75rem;">${formatNumber(item.amount)}원</span>
     </div>
   `).join('');
@@ -554,10 +609,14 @@ async function renderYearlyProfit(currentYearMonth, centerOrder) {
       );
     }
     
-    const monthlyData = await Promise.all(monthlyPromises);
+    const [monthlyData, trainerYearSummary] = await Promise.all([
+      Promise.all(monthlyPromises),
+      fetchTrainerExpenseSummaryForYear(currentYear, currentMonth)
+    ]);
+    const trainerByMonth = trainerYearSummary.byMonth || {};
     
     // 각 월의 매출과 지출 합산
-    monthlyData.forEach(([fixedExpenses, variableExpenses, salaries, expenses, metrics]) => {
+    monthlyData.forEach(([fixedExpenses, variableExpenses, salaries, expenses, metrics], index) => {
       // 매출 합계
       const monthSales = metrics.reduce((sum, m) => sum + (parseInt(m.total_sales) || 0), 0);
       yearlySalesTotal += monthSales;
@@ -576,7 +635,9 @@ async function renderYearlyProfit(currentYearMonth, centerOrder) {
       const purchaseTotal = purchaseExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
       const personalTotal = personalExpenses.reduce((sum, e) => sum + (parseInt(e.amount) || 0), 0);
       
-      const monthExpenseTotal = fixedTotal + variableTotal + salaryTotal + mealTotal + purchaseTotal + personalTotal;
+      const yearMonth = `${currentYear}-${String(index + 1).padStart(2, '0')}`;
+      const trainerMonthTotal = trainerByMonth[yearMonth]?.grandTotal || 0;
+      const monthExpenseTotal = fixedTotal + variableTotal + salaryTotal + mealTotal + purchaseTotal + personalTotal + trainerMonthTotal;
       yearlyExpenseTotal += monthExpenseTotal;
     });
     
@@ -2533,10 +2594,7 @@ async function showTrainerRevenueEditModal(trainerUsername) {
           }
           
           closeModal();
-          const trainerSelect = document.getElementById('ledger-trainer-select');
-          if (trainerSelect && trainerSelect.value) {
-            await loadTrainerLedger(trainerSelect.value);
-          }
+          await refreshAfterTrainerLedgerChange();
         } catch (error) {
           resultMsg.textContent = error.message || '저장에 실패했습니다.';
           submitBtn.disabled = false;
@@ -2673,10 +2731,7 @@ async function showTrainerOtherRevenueAddModal(trainerUsername) {
         }
         
         closeModal();
-        const trainerSelect = document.getElementById('ledger-trainer-select');
-        if (trainerSelect && trainerSelect.value) {
-          await loadTrainerLedger(trainerSelect.value);
-        }
+        await refreshAfterTrainerLedgerChange();
       } catch (error) {
         resultMsg.textContent = error.message || '추가에 실패했습니다.';
         submitBtn.disabled = false;
@@ -2828,10 +2883,7 @@ async function showTrainerOtherRevenueEditModal(id, trainerUsername) {
           }
           
           closeModal();
-          const trainerSelect = document.getElementById('ledger-trainer-select');
-          if (trainerSelect && trainerSelect.value) {
-            await loadTrainerLedger(trainerSelect.value);
-          }
+          await refreshAfterTrainerLedgerChange();
         } catch (error) {
           resultMsg.textContent = error.message || '수정에 실패했습니다.';
           submitBtn.disabled = false;
@@ -2856,10 +2908,7 @@ async function deleteTrainerOtherRevenue(id, trainerUsername) {
       throw new Error('삭제에 실패했습니다.');
     }
     
-    const trainerSelect = document.getElementById('ledger-trainer-select');
-    if (trainerSelect && trainerSelect.value) {
-      await loadTrainerLedger(trainerSelect.value);
-    }
+    await refreshAfterTrainerLedgerChange();
   } catch (error) {
     console.error('기타수입 삭제 오류:', error);
     alert('삭제에 실패했습니다.');
@@ -2941,10 +2990,7 @@ async function showTrainerFixedExpenseAddModal(trainerUsername) {
         throw new Error(error.message || '추가에 실패했습니다.');
       }
       closeModal();
-      const trainerSelect = document.getElementById('ledger-trainer-select');
-      if (trainerSelect && trainerSelect.value) {
-        await loadTrainerLedger(trainerSelect.value);
-      }
+      await refreshAfterTrainerLedgerChange();
     } catch (error) {
       resultMsg.textContent = error.message || '추가에 실패했습니다.';
       submitBtn.disabled = false;
@@ -3033,10 +3079,7 @@ async function showTrainerFixedExpenseEditModal(id, trainerUsername) {
           throw new Error(error.message || '수정에 실패했습니다.');
         }
         closeModal();
-        const trainerSelect = document.getElementById('ledger-trainer-select');
-        if (trainerSelect && trainerSelect.value) {
-          await loadTrainerLedger(trainerSelect.value);
-        }
+        await refreshAfterTrainerLedgerChange();
       } catch (error) {
         resultMsg.textContent = error.message || '수정에 실패했습니다.';
         submitBtn.disabled = false;
@@ -3056,10 +3099,7 @@ async function deleteTrainerFixedExpense(id, trainerUsername) {
       method: 'DELETE'
     });
     if (!response.ok) throw new Error('삭제에 실패했습니다.');
-    const trainerSelect = document.getElementById('ledger-trainer-select');
-    if (trainerSelect && trainerSelect.value) {
-      await loadTrainerLedger(trainerSelect.value);
-    }
+    await refreshAfterTrainerLedgerChange();
   } catch (error) {
     console.error('고정지출 삭제 오류:', error);
     alert('삭제에 실패했습니다.');
@@ -3154,10 +3194,7 @@ async function showTrainerVariableExpenseAddModal(trainerUsername) {
         throw new Error(error.message || '추가에 실패했습니다.');
       }
       closeModal();
-      const trainerSelect = document.getElementById('ledger-trainer-select');
-      if (trainerSelect && trainerSelect.value) {
-        await loadTrainerLedger(trainerSelect.value);
-      }
+      await refreshAfterTrainerLedgerChange();
     } catch (error) {
       resultMsg.textContent = error.message || '추가에 실패했습니다.';
       const submitBtn = document.querySelector('button[form="ledger-trainer-variable-add-form"]');
@@ -3265,10 +3302,7 @@ async function showTrainerVariableExpenseEditModal(id, trainerUsername) {
           throw new Error(error.message || '수정에 실패했습니다.');
         }
         closeModal();
-        const trainerSelect = document.getElementById('ledger-trainer-select');
-        if (trainerSelect && trainerSelect.value) {
-          await loadTrainerLedger(trainerSelect.value);
-        }
+        await refreshAfterTrainerLedgerChange();
       } catch (error) {
         resultMsg.textContent = error.message || '수정에 실패했습니다.';
         const submitBtn = document.querySelector('button[form="ledger-trainer-variable-edit-form"]');
@@ -3291,10 +3325,7 @@ async function deleteTrainerVariableExpense(id, trainerUsername) {
       method: 'DELETE'
     });
     if (!response.ok) throw new Error('삭제에 실패했습니다.');
-    const trainerSelect = document.getElementById('ledger-trainer-select');
-    if (trainerSelect && trainerSelect.value) {
-      await loadTrainerLedger(trainerSelect.value);
-    }
+    await refreshAfterTrainerLedgerChange();
   } catch (error) {
     console.error('변동지출 삭제 오류:', error);
     alert('삭제에 실패했습니다.');
@@ -3372,10 +3403,7 @@ async function showTrainerSalaryAddModal(trainerUsername) {
         throw new Error(error.message || '추가에 실패했습니다.');
       }
       closeModal();
-      const trainerSelect = document.getElementById('ledger-trainer-select');
-      if (trainerSelect && trainerSelect.value) {
-        await loadTrainerLedger(trainerSelect.value);
-      }
+      await refreshAfterTrainerLedgerChange();
     } catch (error) {
       resultMsg.textContent = error.message || '추가에 실패했습니다.';
       submitBtn.disabled = false;
@@ -3464,10 +3492,7 @@ async function showTrainerSalaryEditModal(id, trainerUsername) {
           throw new Error(error.message || '수정에 실패했습니다.');
         }
         closeModal();
-        const trainerSelect = document.getElementById('ledger-trainer-select');
-        if (trainerSelect && trainerSelect.value) {
-          await loadTrainerLedger(trainerSelect.value);
-        }
+        await refreshAfterTrainerLedgerChange();
       } catch (error) {
         resultMsg.textContent = error.message || '수정에 실패했습니다.';
         submitBtn.disabled = false;
@@ -3487,10 +3512,7 @@ async function deleteTrainerSalary(id, trainerUsername) {
       method: 'DELETE'
     });
     if (!response.ok) throw new Error('삭제에 실패했습니다.');
-    const trainerSelect = document.getElementById('ledger-trainer-select');
-    if (trainerSelect && trainerSelect.value) {
-      await loadTrainerLedger(trainerSelect.value);
-    }
+    await refreshAfterTrainerLedgerChange();
   } catch (error) {
     console.error('급여 삭제 오류:', error);
     alert('삭제에 실패했습니다.');

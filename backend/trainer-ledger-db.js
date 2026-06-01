@@ -839,6 +839,61 @@ const deleteTrainerSalary = async (id) => {
   }
 };
 
+// ledger=on 트레이너별 월 지출 총액 (고정+변동+급여)
+const getTrainerExpenseTotalsForMonth = async (month, trainers = []) => {
+  try {
+    const trainerList = Array.isArray(trainers) ? trainers : [];
+    const usernames = trainerList.map(t => t.username).filter(Boolean);
+
+    const totalsByTrainer = {};
+    usernames.forEach(username => {
+      totalsByTrainer[username] = 0;
+    });
+
+    if (usernames.length > 0) {
+      const sumQuery = (table) => `
+        SELECT trainer, COALESCE(SUM(amount), 0)::int AS total
+        FROM ${table}
+        WHERE month = $1 AND trainer = ANY($2::varchar[])
+        GROUP BY trainer
+      `;
+
+      const [fixedResult, variableResult, salaryResult] = await Promise.all([
+        pool.query(sumQuery('trainer_fixed_expenses'), [month, usernames]),
+        pool.query(sumQuery('trainer_variable_expenses'), [month, usernames]),
+        pool.query(sumQuery('trainer_salaries'), [month, usernames])
+      ]);
+
+      const addRows = (rows) => {
+        rows.forEach(row => {
+          if (totalsByTrainer[row.trainer] !== undefined) {
+            totalsByTrainer[row.trainer] += parseInt(row.total, 10) || 0;
+          }
+        });
+      };
+
+      addRows(fixedResult.rows);
+      addRows(variableResult.rows);
+      addRows(salaryResult.rows);
+    }
+
+    const trainerRows = trainerList
+      .map(t => ({
+        username: t.username,
+        name: t.name || t.username,
+        total: totalsByTrainer[t.username] || 0
+      }))
+      .sort((a, b) => (a.name || a.username).localeCompare(b.name || b.username, 'ko'));
+
+    const grandTotal = trainerRows.reduce((sum, t) => sum + t.total, 0);
+
+    return { month, trainers: trainerRows, grandTotal };
+  } catch (error) {
+    console.error('[PostgreSQL] 트레이너 지출 합계 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 데이터베이스 초기화
 const initializeDatabase = async () => {
   try {
@@ -864,5 +919,6 @@ module.exports = {
   updateTrainerSalary,
   deleteTrainerFixedExpense,
   deleteTrainerVariableExpense,
-  deleteTrainerSalary
+  deleteTrainerSalary,
+  getTrainerExpenseTotalsForMonth
 };
