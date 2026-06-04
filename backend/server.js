@@ -51,6 +51,7 @@ const elmoCalendarRecordsDB = require('./elmo-calendar-records-db');
 const pushSubscriptionsDB = require('./push-subscriptions-db');
 const adminPushSubscriptionsDB = require('./admin-push-subscriptions-db');
 const adminPushSettingsDB = require('./admin-push-settings-db');
+const adminPushNotificationLogsDB = require('./admin-push-notification-logs-db');
 const webpush = require('web-push');
 const elmoApiRouter = require('./elmo-api-router');
 const webApiRouter = require('./web-api-router');
@@ -889,6 +890,7 @@ elmoCalendarRecordsDB.initializeDatabase(); // Elmo 캘린더 기록 테이블 �
 pushSubscriptionsDB.initializeDatabase(); // 푸시 구독 테이블 초기화
 adminPushSubscriptionsDB.initializeDatabase(); // 관리자 푸시 구독 테이블 초기화
 adminPushSettingsDB.initializeDatabase(); // 관리자 푸시 설정 테이블 초기화
+adminPushNotificationLogsDB.initializeDatabase(); // 관리자 푸시 알림 로그 테이블 초기화
 webPagesDB.initializeDatabase(); // Web 페이지 테이블 초기화
 webCentersDB.initializeDatabase(); // Web 센터 프로필 테이블 초기화
 
@@ -2257,25 +2259,37 @@ function buildSalesPushMessage(action, sale) {
     return `${memberName} 매출이 ${actionLabel}되었습니다${dateText}${amountPart}`;
 }
 
-function enqueuePushForSalesChange({ action, sale }) {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-        return;
-    }
+function enqueueAdminPushNotification({ category, action, title, body, url }) {
     setImmediate(async () => {
+        try {
+            await adminPushNotificationLogsDB.addLog({ category, action, title, body });
+        } catch (error) {
+            console.error('[Push] 관리자 알림 로그 저장 오류:', error);
+        }
+
+        if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+            return;
+        }
         try {
             const usernames = await getEnabledAdminUsernames();
             if (usernames.length === 0) return;
             const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
             if (!subscriptions || subscriptions.length === 0) return;
-            const payload = JSON.stringify({
-                title: '매출 알림',
-                body: buildSalesPushMessage(action, sale),
-                url: '/?tab=Sales'
-            });
+            const payload = JSON.stringify({ title, body, url });
             await sendPushToSubscriptions(subscriptions, payload);
         } catch (error) {
-            console.error('[Push] 매출 알림 전송 오류:', error);
+            console.error(`[Push] ${title} 전송 오류:`, error);
         }
+    });
+}
+
+function enqueuePushForSalesChange({ action, sale }) {
+    enqueueAdminPushNotification({
+        category: 'sales',
+        action,
+        title: '매출 알림',
+        body: buildSalesPushMessage(action, sale),
+        url: '/?tab=Sales'
     });
 }
 
@@ -2316,24 +2330,12 @@ function buildMemberPushMessage({ action, memberName, trainerName, sessionChange
 }
 
 function enqueuePushForMemberChange(payload) {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-        return;
-    }
-    setImmediate(async () => {
-        try {
-            const usernames = await getEnabledAdminUsernames();
-            if (usernames.length === 0) return;
-            const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
-            if (!subscriptions || subscriptions.length === 0) return;
-            const pushPayload = JSON.stringify({
-                title: '회원 알림',
-                body: buildMemberPushMessage(payload),
-                url: '/?tab=Member'
-            });
-            await sendPushToSubscriptions(subscriptions, pushPayload);
-        } catch (error) {
-            console.error('[Push] 회원 알림 전송 오류:', error);
-        }
+    enqueueAdminPushNotification({
+        category: 'member',
+        action: payload?.action,
+        title: '회원 알림',
+        body: buildMemberPushMessage(payload),
+        url: '/?tab=Member'
     });
 }
 
@@ -2396,46 +2398,22 @@ function buildExpensePushMessage(expense) {
 }
 
 function enqueuePushForExpenseChange(expense) {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-        return;
-    }
-    setImmediate(async () => {
-        try {
-            const usernames = await getEnabledAdminUsernames();
-            if (usernames.length === 0) return;
-            const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
-            if (!subscriptions || subscriptions.length === 0) return;
-            const payload = JSON.stringify({
-                title: '지출 알림',
-                body: buildExpensePushMessage(expense),
-                url: '/?tab=Expense'
-            });
-            await sendPushToSubscriptions(subscriptions, payload);
-        } catch (error) {
-            console.error('[Push] 지출 알림 전송 오류:', error);
-        }
+    enqueueAdminPushNotification({
+        category: 'expense',
+        action: 'create',
+        title: '지출 알림',
+        body: buildExpensePushMessage(expense),
+        url: '/?tab=Expense'
     });
 }
 
 function enqueuePushForConsultationChange({ action, record }) {
-    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
-        return;
-    }
-    setImmediate(async () => {
-        try {
-            const usernames = await getEnabledAdminUsernames();
-            if (usernames.length === 0) return;
-            const subscriptions = await adminPushSubscriptionsDB.getActiveSubscriptionsByUsernames(usernames);
-            if (!subscriptions || subscriptions.length === 0) return;
-            const payload = JSON.stringify({
-                title: '상담 알림',
-                body: buildConsultationPushMessage(action, record),
-                url: '/?tab=Trial'
-            });
-            await sendPushToSubscriptions(subscriptions, payload);
-        } catch (error) {
-            console.error('[Push] 상담 알림 전송 오류:', error);
-        }
+    enqueueAdminPushNotification({
+        category: 'consultation',
+        action,
+        title: '상담 알림',
+        body: buildConsultationPushMessage(action, record),
+        url: '/?tab=Trial'
     });
 }
 
@@ -2751,6 +2729,30 @@ app.post('/api/admin/push/unsubscribe', async (req, res) => {
     } catch (error) {
         console.error('[API] 관리자 푸시 구독 해제 오류:', error);
         res.status(500).json({ message: '관리자 푸시 구독 해제 중 오류가 발생했습니다.' });
+    }
+});
+
+// 관리자 푸시 알림 로그 (최근 7일)
+app.get('/api/admin/push/logs', async (req, res) => {
+    try {
+        const { username, category } = req.query;
+        if (!username) {
+            return res.status(400).json({ message: 'username이 필요합니다.' });
+        }
+
+        const accounts = getAdminAccounts();
+        const userAccount = accounts.find(acc => acc.username === username);
+        if (!isAdminOrSu(userAccount)) {
+            return res.status(403).json({ message: '관리자 권한이 필요합니다.' });
+        }
+
+        const logs = await adminPushNotificationLogsDB.getRecentLogs({
+            category: category || undefined
+        });
+        res.json({ logs });
+    } catch (error) {
+        console.error('[API] 관리자 푸시 알림 로그 조회 오류:', error);
+        res.status(500).json({ message: '관리자 푸시 알림 로그 조회 중 오류가 발생했습니다.' });
     }
 });
 

@@ -15,6 +15,7 @@ import { trainerLedger } from './trainer-ledger.js';
 import { userApp } from './userApp.js';
 import { web } from './web.js';
 import { showAppUserSection } from './app-user/index.js';
+import { initAdminNotifications, setAdminNotificationsVisible } from './admin-notifications.js';
 
 // 권한 체크 헬퍼 함수 (SU 역할 추가)
 function isAdminOrSu(role) {
@@ -139,6 +140,7 @@ window.switchBackToTrainerView = switchBackToTrainerView;
 
 // 회원가입 폼 표시 및 자동 로그인 처리
 window.addEventListener('DOMContentLoaded', function() {
+    initAdminNotifications();
     const savedUserType = localStorage.getItem('userType');
     
     if (savedUserType === 'operator') {
@@ -623,6 +625,7 @@ window.addEventListener('DOMContentLoaded', function() {
         document.getElementById('login-result').innerText = '';
         document.getElementById('logoutBtn').style.display = 'none';
         document.getElementById('settingsBtn').style.display = 'none';
+        setAdminNotificationsVisible(false);
     };
     document.getElementById('settingsBtn').onclick = function() {
         // 계정 정보 변경 모달 띄우기 (아래에서 구현)
@@ -700,6 +703,8 @@ function showMainSection(role, name) {
             consultationBtn.style.display = isAdminOrSu(role) ? 'flex' : 'none';
         }
     }
+
+    setAdminNotificationsVisible(isAdminOrSu(role));
     
     // 트레이너일 때만 유저앱 전환 버튼 표시
     const switchToAppUserBtn = document.getElementById('switchToAppUserBtn');

@@ -63,6 +63,14 @@
       <div class="header-btns">
         <button id="switchToAppUserBtn" class="header-text-btn" title="유저앱 화면으로 전환" style="display:none;" aria-label="유저앱 화면으로 전환">유저앱</button>
         <button id="consultationBtn" class="consultation-list-btn" title="상담목록" style="display:none;" aria-label="상담목록">상담목록</button>
+        <button id="adminNotificationsBtn" class="header-text-btn" title="알림 내역" style="display:none;" aria-label="알림 내역">알림</button>
+        <div id="adminNotificationsPanel" class="admin-notifications-panel" style="display:none;" role="dialog" aria-label="알림 내역">
+          <div class="admin-notifications-panel-header">
+            <span>알림 내역</span>
+            <span class="admin-notifications-panel-sub">최근 7일</span>
+          </div>
+          <div id="adminNotificationsList" class="admin-notifications-list"></div>
+        </div>
         <button id="settingsBtn" class="header-text-btn" title="설정" style="display:none;" aria-label="설정">설정</button>
         <button id="logoutBtn" class="header-text-btn" title="로그아웃" style="display:none;" aria-label="로그아웃">로그아웃</button>
       </div>

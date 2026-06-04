@@ -2332,6 +2332,7 @@ li, td, th {
     align-items: center;
     gap: 6px;
     margin-right: 8px;
+    position: relative;
 }
 .header-btns button {
     margin: 0;
@@ -2355,6 +2356,7 @@ li, td, th {
 /* 헤더 텍스트 버튼 스타일 - 검은색 글자, 흰색 배경, 타원형 (설정, 로그아웃) */
 .header-btns #settingsBtn,
 .header-btns #logoutBtn,
+.header-btns #adminNotificationsBtn,
 .header-text-btn {
     font-size: 11px !important;
     color: #000 !important;
@@ -2454,6 +2456,99 @@ li, td, th {
 
 #consultationBtn[style*="display: none"] {
     display: none !important;
+}
+
+.admin-notifications-panel {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: min(360px, calc(100vw - 24px));
+    max-height: min(420px, 60vh);
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.admin-notifications-panel-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e3f2fd;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1976d2;
+}
+
+.admin-notifications-panel-sub {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: #888;
+}
+
+.admin-notifications-list {
+    overflow-y: auto;
+    padding: 8px 0;
+}
+
+.admin-notifications-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.admin-notifications-item:last-child {
+    border-bottom: none;
+}
+
+.admin-notifications-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.admin-notifications-category {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #1976d2;
+    background: #e3f2fd;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.admin-notifications-time {
+    font-size: 0.72rem;
+    color: #999;
+    white-space: nowrap;
+}
+
+.admin-notifications-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 2px;
+}
+
+.admin-notifications-body {
+    font-size: 0.8rem;
+    color: #555;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.admin-notifications-empty,
+.admin-notifications-loading {
+    padding: 24px 14px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: #888;
 }
 .header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn):focus,
 .header-btns button:not(#consultationBtn):not(#settingsBtn):not(#logoutBtn):hover {
