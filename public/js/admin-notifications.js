@@ -111,7 +111,7 @@ async function toggleAdminNotificationsPanel() {
     return;
   }
 
-  panel.style.display = 'block';
+  panel.style.display = 'flex';
   panelOpen = true;
   await loadAdminNotificationLogs();
 }
