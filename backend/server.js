@@ -10969,7 +10969,7 @@ app.post('/api/settlements', async (req, res) => {
         const settlement = {
             month,
             profitAmount: profitAmount || 0,
-            settlementAmount: settlementAmount || null
+            settlementAmount: settlementAmount ?? null
         };
         
         const result = await ledgerDB.addSettlement(settlement);

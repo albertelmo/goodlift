@@ -1055,7 +1055,7 @@ const addSettlement = async (settlementData) => {
     const values = [
       settlementData.month,
       settlementData.profitAmount || 0,
-      settlementData.settlementAmount || null
+      settlementData.settlementAmount ?? null
     ];
     
     const result = await pool.query(query, values);
@@ -1089,7 +1089,7 @@ const updateSettlement = async (id, updates) => {
     
     if (updates.settlementAmount !== undefined) {
       updateFields.push(`settlement_amount = $${paramIndex++}`);
-      values.push(updates.settlementAmount || null);
+      values.push(updates.settlementAmount);
     }
     
     if (updateFields.length === 0) {

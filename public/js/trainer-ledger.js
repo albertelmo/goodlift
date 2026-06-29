@@ -53,7 +53,14 @@ function navigateDate(delta) {
 }
 
 function formatNumber(num) {
-  return num ? num.toLocaleString('ko-KR') : '0';
+  if (num === null || num === undefined) return '0';
+  return Number(num).toLocaleString('ko-KR');
+}
+
+function formatSignedAmount(num) {
+  const n = Number(num) || 0;
+  if (n < 0) return `-${formatNumber(Math.abs(n))}`;
+  return formatNumber(n);
 }
 
 function getTaxTypeLabel(taxType) {
@@ -2075,5 +2082,5 @@ function renderSettlement(allSettlements) {
   const differenceFormatted = difference < 0 ? `-${formatNumber(Math.abs(difference))}` : formatNumber(difference);
   const differenceColor = difference < 0 ? '#d32f2f' : '#1976d2';
   
-  titleEl.innerHTML = `통장잔고 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(누적 손익액 ${formatNumber(cumulativeProfit)}원 - 누적 정산액 ${formatNumber(cumulativeSettlement)}원 = <span style="color:${differenceColor};">${differenceFormatted}원</span>)</span>`;
+  titleEl.innerHTML = `통장잔고 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(누적 손익액 ${formatSignedAmount(cumulativeProfit)}원 - 누적 정산액 ${formatSignedAmount(cumulativeSettlement)}원 = <span style="color:${differenceColor};">${differenceFormatted}원</span>)</span>`;
 }
