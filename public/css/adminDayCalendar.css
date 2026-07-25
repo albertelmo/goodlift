@@ -180,7 +180,7 @@
 }
 
 .adc-status-reserved {
-  background: #e3f0ff;
+  background: #d8eaff;
 }
 
 .adc-status-reserved .adc-session-status {
@@ -188,7 +188,7 @@
 }
 
 .adc-status-attend {
-  background: #e8f5e9;
+  background: #dcf0df;
 }
 
 .adc-status-attend .adc-session-status {
@@ -196,7 +196,7 @@
 }
 
 .adc-status-pre {
-  background: #fff3e0;
+  background: #ffe8c7;
 }
 
 .adc-status-pre .adc-session-status {
@@ -204,7 +204,7 @@
 }
 
 .adc-status-absent {
-  background: #ffebee;
+  background: #ffdde2;
 }
 
 .adc-status-absent .adc-session-status {
@@ -212,7 +212,7 @@
 }
 
 .adc-status-cancel {
-  background: #f3e5f5;
+  background: #ead8ef;
 }
 
 .adc-status-cancel .adc-session-status {
@@ -220,7 +220,7 @@
 }
 
 .adc-status-allcancel {
-  background: #fafafa;
+  background: #f0f0f0;
 }
 
 .adc-status-allcancel .adc-session-status {
@@ -229,7 +229,7 @@
 
 .adc-status-no-remaining,
 .adc-no-remaining {
-  background: #fff3e0;
+  background: #ffe5bd;
 }
 
 .adc-status-no-remaining .adc-session-status,
