@@ -664,7 +664,6 @@ const trainerTabs = [
 // 센터관리자용 탭 (Center, Trainer 탭 제외)
 const centerTabs = [
     { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
-    { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: '👤 회원', id: 'Member', content: '<div class="member-container"><div class="member-mobile-tabs"><button class="member-tab-btn active" data-tab="list">📋 목록</button><button class="member-tab-btn" data-tab="search">🔍 검색</button><button class="member-tab-btn" data-tab="add">➕ 추가</button></div><div class="member-flex-wrap"><div id="member-search" class="member-tab-content"></div><div id="member-add" class="member-tab-content"></div><div id="member-list" class="member-tab-content active"></div></div></div>' },
     { label: '💹 매출', id: 'Sales', content: '<div id="sales-root"></div>' }
 ];

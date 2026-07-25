@@ -1,559 +1,74 @@
-/* 주간 세션 캘린더 스타일 (기본 9~17시 + 동적 확장) */
-
-
-
-.awc-header {
-  margin-bottom: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
+/* 관리자 전용 트레이너 선택형 주간 캘린더 */
+#admin-week-calendar-root {
+  margin-top: -36px;
 }
 
-.awc-center-filter {
-  display: flex !important;
-  align-items: flex-end !important; /* 하단 정렬로 변경 */
+.awc-trainer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   gap: 8px;
-  flex-shrink: 0;
+  margin: 0 8px 6px;
 }
 
-.awc-center-select {
-  padding: 6px 12px !important;
-  border: 1px solid #ddd !important;
-  border-radius: 4px !important;
-  font-size: 14px !important;
-  background: white !important;
-  cursor: pointer !important;
-  outline: none !important;
-  transition: border-color 0.2s !important;
-  height: 36px !important;
-  box-sizing: border-box !important;
-  min-width: 150px;
-  line-height: 1 !important; /* line-height 추가 */
-  margin-bottom: 0 !important; /* 전역 스타일의 margin-bottom 제거 */
-}
-
-.awc-center-select:focus {
-  border-color: #1976d2;
-}
-
-.awc-center-select:hover {
-  border-color: #1976d2;
-}
-
-.awc-date-nav {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  flex-shrink: 0;
-}
-
-.awc-search-area {
-  display: flex;
-  align-items: flex-end; /* 하단 정렬로 변경 */
-  gap: 8px;
-  width: 200px;
-  flex-shrink: 0;
-}
-
-.awc-search-input {
-  flex: 1;
-  min-width: 120px; /* 최소 너비 설정 */
-  padding: 6px 12px !important; /* 세로폭 줄이기 - !important 추가 */
-  border: 1px solid #ddd !important;
-  border-radius: 4px !important;
-  font-size: 14px !important;
-  line-height: 1 !important; /* 주간 이동 버튼과 동일한 line-height */
-  outline: none !important;
-  transition: border-color 0.2s !important;
-  height: 36px !important; /* 높이를 50px에서 36px로 감소 */
-  box-sizing: border-box !important;
-  margin-bottom: 0 !important; /* 전역 스타일의 margin-bottom 제거 */
-}
-
-.awc-search-input:focus {
-  border-color: #1976d2;
-}
-
-.awc-search-clear {
-  background: #e0e0e0; /* 더 진한 회색으로 변경 */
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 0;
-  cursor: pointer;
-  font-size: 16px;
-  line-height: 1;
-  transition: background-color 0.2s;
-  width: 36px; /* 주간 이동 버튼과 동일한 크기 */
-  height: 36px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  box-sizing: border-box;
-}
-
-.awc-search-clear:hover {
-  background: #d0d0d0; /* 호버 시 더 진한 색상 */
-}
-
-.awc-date-nav button {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  background: white;
-  cursor: pointer;
-  border-radius: 4px;
-  height: 36px;
-  box-sizing: border-box;
-}
-
-.awc-date-nav button:hover {
-  background: #f5f5f5;
-}
-
-/* 화살표 버튼 스타일 - 더 높은 우선순위 */
-.awc-date-nav .awc-nav-btn {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  padding: 0 !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.awc-prev-btn::before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border-left: 2px solid #666;
-  border-bottom: 2px solid #666;
-  transform: rotate(45deg);
-  margin-left: 6px;
-}
-
-.awc-next-btn::before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border-right: 2px solid #666;
-  border-top: 2px solid #666;
-  transform: rotate(45deg);
-  margin-right: 6px;
-}
-
-.awc-nav-btn:hover::before {
-  border-color: #333;
-}
-
-.awc-date {
-  font-weight: bold;
-  font-size: 16px;
-}
-
-/* 주간 캘린더 그리드 (기본 9~17시 + 동적 확장) */
-.awc-calendar-grid {
-  display: grid;
-  grid-template-columns: 60px repeat(7, 1fr); /* 시간 라벨 + 7일 */
-  grid-template-rows: 50px repeat(17, 30px); /* 헤더 + 기본 17개 슬롯 (9~17시) */
-  gap: 1px;
-  background: #f0f0f0;
-  border: 1px solid #ddd;
+.awc-trainer-toolbar label {
+  color: #555;
   font-size: 12px;
-  position: relative; /* 세션 카드의 절대 위치 기준 */
+  font-weight: 700;
 }
 
-/* 헤더 스타일 */
-.awc-time-header,
-.awc-date-header {
-  background: #f8f9fa;
-  padding: 8px 4px;
-  text-align: center;
-  font-weight: bold;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 1px solid #ddd;
-  z-index: 10;
-}
-
-.awc-date-header {
-  border-right: 1px solid #ddd;
-}
-
-.awc-today {
-  background: #e3f2fd !important;
-  color: #1976d2;
-}
-
-.awc-weekend {
-  background: #fff3e0 !important;
-  color: #f57c00;
-}
-
-/* 시간 라벨 */
-.awc-time-label {
-  background: #f8f9fa;
-  padding: 4px 8px;
-  text-align: right;
-  font-size: 11px;
-  color: #666;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  border-right: 1px solid #ddd;
-  font-weight: 500;
-  z-index: 10;
-}
-
-/* 세션 컨테이너 */
-.awc-session-container {
-  background: white;
-  border-right: 1px solid #ddd;
-  border-bottom: 1px solid #ddd;
-  position: relative; /* 세션 카드의 절대 위치 기준 */
-  min-height: 60px;
-}
-
-
-
-/* 시간 단위 세션 컨테이너 구분선 (1시간마다) */
-.awc-session-container.hour-divider {
-  border-bottom: 1px solid #f0f0f0 !important;
-  position: relative;
-}
-
-.awc-session-container.hour-divider::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #f0f0f0;
-  z-index: 1;
-}
-
-/* 11:30-12:00 사이 구분선 (파란색) */
-.awc-session-container[data-time="12:00"]::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #1976d2;
-  z-index: 2;
-}
-
-/* 16:30-17:00 사이 구분선 (파란색) */
-.awc-session-container[data-time="17:00"]::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #1976d2;
-  z-index: 2;
-}
-
-/* 세션 카드 (1시간 고정, 가로 배치) */
-.awc-session-card {
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 3px;
-  padding: 2px 4px;
-  font-size: 9px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  flex-direction: column; /* 항상 세로 배치 */
-  justify-content: center;
-  align-items: center;
-  min-width: 0; /* 텍스트 오버플로우 허용 */
-  overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-  position: absolute; /* 절대 위치로 가로 배치 */
-  z-index: 5;
-  height: 100%; /* 1시간 세션의 높이 (2개 30분 슬롯) */
-  margin: 1px;
-  box-sizing: border-box;
-}
-
-/* 30분 세션용 작은 카드 스타일 */
-.awc-session-card-30min {
-  height: 50% !important; /* 30분 세션의 높이 (1개 30분 슬롯) */
-  padding: 1px 3px !important;
-  font-size: 8px !important;
-}
-
-/* 좁은 카드일 때 글자 자체를 세로로 배열 */
-.awc-session-card.narrow {
-  font-size: 8px;
-  padding: 1px 2px;
-}
-
-.awc-session-card.narrow .awc-session-member,
-.awc-session-card.narrow .awc-session-trainer {
-  writing-mode: vertical-rl;
-  text-orientation: mixed;
-  line-height: 1.2;
-}
-
-.awc-session-card:hover {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-  transform: translateY(-1px);
-  z-index: 15; /* 호버 시 최상단으로 */
-}
-
-/* 세션 카드 내부 요소들 */
-.awc-session-time {
-  font-size: 8px;
-  color: #666;
-  font-weight: bold;
-  margin-bottom: 1px;
-}
-
-.awc-session-member {
-  font-size: 10px;
-  font-weight: bold;
+.awc-trainer-select {
+  width: auto;
+  min-width: 130px;
+  height: 32px;
+  margin: 0;
+  padding: 4px 28px 4px 10px;
+  border: 1px solid #dfe3e8;
+  border-radius: 16px;
+  background-color: #fff;
   color: #333;
-  margin-bottom: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
-.awc-session-trainer {
-  font-size: 8px;
-  color: #666;
-  margin-bottom: 1px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.awc-trainer-select:focus {
+  border-color: #1976d2;
+  outline: none;
 }
 
-.awc-session-status {
-  font-size: 7px;
-  font-weight: bold;
+.awc-loading,
+.awc-empty {
+  padding: 48px 20px;
+  color: #777;
   text-align: center;
-  padding: 1px 2px;
-  border-radius: 2px;
-  background: rgba(0,0,0,0.05);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-/* 세션 상태별 색상 */
-.awc-status-reserved {
-  background: #e3f0ff !important;
-  border-left: 3px solid #1976d2 !important;
+.awc-empty p {
+  margin: 0 0 14px;
 }
 
-.awc-status-attend {
-  background: #e8f5e9 !important;
-  border-left: 3px solid #388e3c !important;
+.awc-retry-btn {
+  padding: 8px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
 }
 
-.awc-status-pre {
-  background: #fff3e0 !important;
-  border-left: 3px solid #f57c00 !important;
-}
+@media (max-width: 600px) {
+  #admin-week-calendar-root {
+    margin-top: -16px;
+  }
 
-.awc-status-absent {
-  background: #ffebee !important;
-  border-left: 3px solid #d32f2f !important;
-}
+  .awc-trainer-toolbar {
+    margin-bottom: 4px;
+  }
 
-.awc-status-cancel {
-  background: #f3e5f5 !important;
-  border-left: 3px solid #7b1fa2 !important;
-}
-
-.awc-status-allcancel {
-  background: #fafafa !important;
-  border-left: 3px solid #757575 !important;
-}
-
-.awc-status-reserved .awc-session-status {
-  color: #1976d2 !important;
-}
-
-.awc-status-attend .awc-session-status {
-  color: #388e3c !important;
-}
-
-.awc-status-pre .awc-session-status {
-  color: #f57c00 !important;
-}
-
-.awc-status-absent .awc-session-status {
-  color: #d32f2f !important;
-}
-
-.awc-status-cancel .awc-session-status {
-  color: #7b1fa2 !important;
-}
-
-.awc-status-allcancel .awc-session-status {
-  color: #757575 !important;
-}
-
-/* 잔여세션 부족 상태 스타일 */
-.awc-status-no-remaining {
-  background: #fff3e0 !important;
-  border-left: 3px solid #ff9800 !important;
-}
-
-.awc-status-no-remaining .awc-session-status {
-  color: #e65100 !important;
-}
-
-.awc-no-remaining {
-  background: #fff3e0 !important;
-  border-left: 3px solid #ff9800 !important;
-  position: relative;
-}
-
-.awc-no-remaining::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 6px;
-  height: 6px;
-  background: #d32f2f;
-  border-radius: 50%;
-}
-
-
-
-/* 반응형 디자인 */
-@media (max-width: 1200px) {
-  .awc-calendar-grid {
-    grid-template-columns: 60px repeat(7, 1fr);
-  }
-  
-  .awc-time-label {
-    font-size: 10px;
-    padding: 2px 4px;
-  }
-  
-  .awc-session-card {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-  
-  .awc-session-member {
-    font-size: 9px;
-  }
-  
-  .awc-session-trainer {
-    font-size: 7px;
-  }
-  
-  .awc-session-status {
-    font-size: 6px;
-  }
-}
-
-@media (max-width: 768px) {
-  .awc-header {
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .awc-center-filter {
-    width: 100%;
-    justify-content: center;
-    align-items: flex-end !important; /* 모바일에서도 하단 정렬 유지 */
-  }
-  
-  .awc-center-select {
-    min-width: 200px;
-    max-width: 300px;
-  }
-  
-  .awc-search-area {
-    width: 100%;
-    max-width: 300px;
-  }
-  
-  .awc-calendar-grid {
-    grid-template-columns: 50px repeat(7, 1fr);
-    grid-template-rows: 30px repeat(17, 35px);
-  }
-  
-  .awc-time-header,
-  .awc-date-header {
-    font-size: 10px;
-    padding: 4px 2px;
-  }
-  
-  .awc-time-label {
-    font-size: 9px;
-    padding: 1px 2px;
-  }
-  
-  .awc-session-container {
-    min-height: 35px;
-  }
-  
-  .awc-session-card {
-    font-size: 7px;
-    padding: 1px 2px;
-  }
-  
-  .awc-session-member {
-    font-size: 8px;
-  }
-  
-  .awc-session-trainer {
-    font-size: 6px;
-  }
-  
-  .awc-session-status {
-    font-size: 5px;
-  }
-}
-
-@media (max-width: 480px) {
-  .awc-calendar-grid {
-    grid-template-columns: 45px repeat(7, 1fr);
-    grid-template-rows: 25px repeat(17, 25px);
-  }
-  
-  .awc-time-header,
-  .awc-date-header {
-    font-size: 9px;
-    padding: 2px 1px;
-  }
-  
-  .awc-time-label {
-    font-size: 8px;
-    padding: 1px;
-  }
-  
-  .awc-session-container {
-    min-height: 25px;
-  }
-  
-  .awc-session-card {
-    font-size: 6px;
-    padding: 1px;
-  }
-  
-  .awc-session-member {
-    font-size: 7px;
-  }
-  
-  .awc-session-trainer {
-    font-size: 5px;
-  }
-  
-  .awc-session-status {
-    font-size: 4px;
+  .awc-trainer-select {
+    min-width: 120px;
+    height: 30px;
+    font-size: 12px;
   }
 }

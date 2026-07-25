@@ -12,6 +12,8 @@ const UNKNOWN_CENTER_COLOR = '#9aa0a6';
 const state = {
   root: null,
   weekStart: null,
+  trainerUsername: null,
+  readOnly: false,
   sessions: [],
   members: [],
   centers: [],
@@ -87,10 +89,12 @@ function getTimeRange() {
   return { startMinutes, endMinutes };
 }
 
-async function render(root, dateString) {
+async function render(root, dateString, options = {}) {
   if (!root) return;
 
   state.root = root;
+  state.trainerUsername = options.trainerUsername || localStorage.getItem('username');
+  state.readOnly = options.readOnly === true;
   const baseDate = dateString ? parseDate(dateString) : new Date();
   state.weekStart = toDateString(getMonday(baseDate));
   root.innerHTML = '<div class="twc-loading">주간 수업을 불러오는 중...</div>';
@@ -100,7 +104,7 @@ async function render(root, dateString) {
 async function loadAndRender() {
   if (!state.root) return;
 
-  const username = localStorage.getItem('username');
+  const username = state.trainerUsername;
   if (!username) {
     state.root.innerHTML = '<div class="twc-empty">로그인 정보를 확인할 수 없습니다.</div>';
     return;
@@ -148,6 +152,12 @@ async function loadAndRender() {
 function renderLayout() {
   const weekDates = getWeekDates();
   const sunday = weekDates[weekDates.length - 1];
+  const addControls = state.readOnly ? '' : `
+      <button type="button" class="tmc-fab twc-add-btn" id="twc-add-btn" aria-label="수업 추가">+</button>
+      <button type="button" class="tmc-fab twc-add-30min-btn" id="twc-add-30min-btn"
+              aria-label="30분 수업 추가"
+              style="display:${state.trainerInfo?.['30min_session'] === 'on' ? 'flex' : 'none'};">30min</button>
+      ${renderAddModals()}`;
 
   state.root.innerHTML = `
     <section class="twc">
@@ -161,11 +171,7 @@ function renderLayout() {
       <div class="twc-calendar-wrap">
         ${renderCalendar(weekDates)}
       </div>
-      <button type="button" class="tmc-fab twc-add-btn" id="twc-add-btn" aria-label="수업 추가">+</button>
-      <button type="button" class="tmc-fab twc-add-30min-btn" id="twc-add-30min-btn"
-              aria-label="30분 수업 추가"
-              style="display:${state.trainerInfo?.['30min_session'] === 'on' ? 'flex' : 'none'};">30min</button>
-      ${renderAddModals()}
+      ${addControls}
     </section>`;
 
   state.root.querySelector('#twc-prev').onclick = () => moveWeek(-1);
@@ -174,7 +180,7 @@ function renderLayout() {
     state.weekStart = toDateString(getMonday(new Date()));
     loadAndRender();
   };
-  setupAddModal();
+  if (!state.readOnly) setupAddModal();
 }
 
 function renderCalendar(weekDates) {
@@ -243,7 +249,7 @@ function getCenterColor(centerName) {
 }
 
 function getTrainerOptions() {
-  const username = localStorage.getItem('username');
+  const username = state.trainerUsername;
   return state.trainers.map(item =>
     `<option value="${escapeHtml(item.username)}"${item.username === username ? ' selected' : ''}>${escapeHtml(item.name)}</option>`
   ).join('');
@@ -261,7 +267,7 @@ function getMemberOptions(trainerUsername) {
 }
 
 function renderSessionModal({ prefix, title }) {
-  const username = localStorage.getItem('username');
+  const username = state.trainerUsername;
   return `
     <div class="tmc-modal" id="${prefix}-modal" style="display:none;">
       <div class="tmc-modal-content">
