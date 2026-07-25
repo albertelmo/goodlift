@@ -5,6 +5,7 @@ import { trial } from './trial.js';
 import { renew } from './renew.js';
 import { adminDayCalendar } from './adminDayCalendar.js';
 import { adminWeekCalendar } from './adminWeekCalendar.js';
+import { trainerWeekCalendar } from './trainerWeekCalendar.js';
 import { adminStats } from './adminStats.js';
 import { expense } from './expense.js';
 import { database } from './database.js';
@@ -654,6 +655,7 @@ const adminHamburgerItems = [
 ];
 const trainerTabs = [
     { label: '나의 수업', id: '📅', content: '<div id="session-calendar"></div>' },
+    { label: '주간 수업', id: 'TrainerWeek', content: '<div id="trainer-week-calendar-root"></div>' },
     { label: '전체 수업', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: '나의 회원', id: '👤', content: '<div id="my-member-list"></div>' },
     { label: '장부', id: '📖', content: '<div id="trainer-ledger-root"></div>' }
@@ -955,6 +957,8 @@ function renderTabContent(tabId, tabContent) {
         trainer.renderMyMembers(tabContent.querySelector('#my-member-list') || tabContent, username);
     } else if (tabId === '📅') {
         trainer.renderSessionCalendar(tabContent.querySelector('#session-calendar') || tabContent);
+    } else if (tabId === 'TrainerWeek') {
+        trainerWeekCalendar.render(tabContent.querySelector('#trainer-week-calendar-root') || tabContent);
     } else if (tabId === '📖') {
         trainerLedger.render(tabContent.querySelector('#trainer-ledger-root') || tabContent);
     } else if (tabId === 'Today') {

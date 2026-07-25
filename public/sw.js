@@ -34,7 +34,7 @@ self.addEventListener('notificationclick', event => {
   );
 });
 // Service Worker 캐시 버전 (캐시 무효화 필요 시에만 변경)
-const VERSION = '2026-02-20-orientation-unlock';
+const VERSION = '2026-07-25-trainer-week-calendar';
 const CACHE_NAME = `goodlift-${VERSION}`;
 const RUNTIME_CACHE = `goodlift-runtime-${VERSION}`;
 
@@ -45,8 +45,10 @@ const STATIC_CACHE_URLS = [
   '/css/style.css',
   '/css/adminDayCalendar.css',
   '/css/adminWeekCalendar.css',
+  '/css/trainerWeekCalendar.css',
   '/img/logo.png',
   '/js/main.js',
+  '/js/trainerWeekCalendar.js',
   '/manifest.json'
 ];
 

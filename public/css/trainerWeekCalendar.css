@@ -1,0 +1,250 @@
+#trainer-week-calendar-root {
+  margin-top: -36px;
+}
+
+.twc {
+  position: relative;
+  min-height: calc(100vh - 150px);
+  padding: 0 0 88px;
+}
+
+.twc-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 12px 8px;
+}
+
+.twc-nav-btn,
+.twc-range,
+.twc-retry-btn {
+  border: 1px solid #e0e0e0;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.twc-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 28px;
+  line-height: 1;
+  text-align: center;
+}
+
+.twc-range {
+  min-width: 218px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.twc-nav-btn:hover,
+.twc-range:hover,
+.twc-retry-btn:hover {
+  background: #f5f5f5;
+}
+
+.twc-calendar-wrap {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.twc-grid {
+  --twc-slot-height: 20px;
+  display: grid;
+  grid-template-columns: 24px repeat(7, minmax(60px, 1fr));
+  grid-template-rows: 32px repeat(var(--twc-slot-count), var(--twc-slot-height));
+  min-width: 444px;
+  margin: 0 1px;
+  position: relative;
+  background: #fff;
+}
+
+.twc-corner,
+.twc-day-header,
+.twc-time,
+.twc-cell {
+  box-sizing: border-box;
+  border-right: 1px solid #e6e9ed;
+  border-bottom: 1px solid #e6e9ed;
+}
+
+.twc-corner,
+.twc-day-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #fff;
+}
+
+.twc-corner {
+  grid-column: 1;
+  grid-row: 1;
+  border-right: 1px solid #e6e9ed;
+  border-bottom: none;
+}
+
+.twc-day-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #888;
+  font-size: 10px;
+  border-top: 1px solid #e6e9ed;
+}
+
+.twc-day-header strong {
+  color: #333;
+  font-size: 12px;
+}
+
+.twc-day-header.is-today {
+  background: #edf6ff;
+  color: #1976d2;
+}
+
+.twc-day-header.is-today strong {
+  color: #1976d2;
+}
+
+.twc-time {
+  padding: 2px 2px 0 0;
+  color: #9aa0a6;
+  background: transparent;
+  border-right: 1px solid #e6e9ed;
+  border-bottom: none;
+  text-align: right;
+  font-size: 10px;
+  line-height: 12px;
+}
+
+.twc-cell {
+  background: #fff;
+  border-bottom-color: transparent;
+}
+
+.twc-cell.is-hour {
+  border-bottom-color: #e0e3e7;
+}
+
+.twc-session {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  margin: 1px 2px;
+  padding: 1px 2px;
+  border-radius: 2px;
+  background: var(--twc-center-color, #9aa0a6);
+  color: #fff;
+  box-sizing: border-box;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.twc-session.is-complete {
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+.twc-session-name {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  line-height: 1;
+  text-align: center;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.twc-add-btn {
+  z-index: 1002;
+}
+
+.twc-add-30min-btn {
+  bottom: 112px;
+  z-index: 1002;
+  font-size: 1rem;
+}
+
+.twc-repeat-count {
+  display: none;
+}
+
+.twc-repeat-count.is-visible {
+  display: block;
+}
+
+.twc-loading,
+.twc-empty {
+  padding: 48px 20px;
+  color: #777;
+  text-align: center;
+}
+
+.twc-empty p {
+  margin: 0 0 14px;
+}
+
+.twc-retry-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+}
+
+@media (max-width: 600px) {
+  #trainer-week-calendar-root {
+    margin-top: -16px;
+  }
+
+  .twc {
+    min-height: calc(100vh - 132px);
+    padding-top: 0;
+  }
+
+  .twc-header {
+    margin: 0 8px 6px;
+  }
+
+  .twc-nav-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 24px;
+  }
+
+  .twc-range {
+    min-width: 205px;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+
+  .twc-grid {
+    grid-template-columns: 22px repeat(7, minmax(45px, 1fr));
+    min-width: 337px;
+  }
+
+  .twc-session-name {
+    font-size: 9px;
+  }
+
+  .twc-add-30min-btn {
+    bottom: 96px;
+    font-size: 0.9rem;
+  }
+}
