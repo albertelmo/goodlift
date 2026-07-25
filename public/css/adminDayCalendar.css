@@ -1,570 +1,320 @@
-/* 날짜별 세션 캘린더 (관리자용) - CSS Grid 기반 현대적인 디자인 */
-
-/* 캘린더 그리드 컨테이너 */
-.adc-calendar-grid {
-  display: grid;
-  grid-template-columns: auto repeat(auto-fit, 1fr); /* 시간 라벨 자동 조정 + 트레이너 칼럼 동적 배분 */
-  grid-template-rows: 50px repeat(17, 24px); /* 헤더 + 기본 17개 슬롯 (30px → 24px) */
-  gap: 1px;
-  background: #e0e0e0;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  max-width: 100%;
-  overflow-x: auto;
+/* 관리자 오늘 / 트레이너 전체 수업 공용 일간 캘린더 */
+#admin-day-calendar-root {
+  margin-top: -36px;
 }
 
-/* 헤더 스타일 */
+.adc {
+  min-height: calc(100vh - 150px);
+}
+
 .adc-header {
-  margin-bottom: 20px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 12px 8px;
 }
 
-/* 시간 헤더 */
-.adc-time-header {
-  background: #f8f9fa;
-  font-weight: bold;
+.adc-nav-btn,
+.adc-date,
+.adc-retry-btn {
+  border: 1px solid #e0e0e0;
+  background: #fff;
   color: #333;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 2px solid #e0e0e0;
-  padding: 8px;
-}
-
-/* 트레이너 헤더 */
-.adc-trainer-header {
-  background: #f8f9fa;
-  font-weight: bold;
-  color: #333;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-bottom: 2px solid #e0e0e0;
-  padding: 8px;
-  text-align: center;
-}
-
-/* 시간 라벨 */
-.adc-time-label {
-  background: #f8f9fa;
-  padding: 4px 8px;
-  font-size: 11px;
-  color: #666;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  border-right: 1px solid #ddd;
-  font-weight: 500;
-  z-index: 10;
-}
-
-.adc-date-nav {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  justify-content: center;
-}
-
-.adc-date-nav button {
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  background: white;
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s;
 }
 
-.adc-date-nav button:hover {
-  background: #f5f5f5;
-}
-
-/* 화살표 버튼 스타일 - 더 높은 우선순위 */
-.adc-date-nav .adc-nav-btn {
-  position: relative;
+.adc-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 36px;
   height: 36px;
-  padding: 0 !important;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.adc-prev-btn::before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border-left: 2px solid #666;
-  border-bottom: 2px solid #666;
-  transform: rotate(45deg);
-  margin-left: 6px;
-}
-
-.adc-next-btn::before {
-  content: '';
-  width: 12px;
-  height: 12px;
-  border-right: 2px solid #666;
-  border-top: 2px solid #666;
-  transform: rotate(45deg);
-  margin-right: 6px;
-}
-
-.adc-nav-btn:hover::before {
-  border-color: #333;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 28px;
+  line-height: 1;
 }
 
 .adc-date {
-  font-weight: bold;
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.adc-table-scroll {
-  overflow-x: auto;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  padding: 0;
-  max-width: 100%;
+.adc-nav-btn:hover,
+.adc-date:hover,
+.adc-retry-btn:hover {
+  background: #f5f5f5;
 }
 
-.adc-table {
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 900px;
+.adc-calendar-wrap {
   width: 100%;
-  table-layout: fixed;
-  border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
-/* 기존 스타일은 더 구체적인 선택자로 대체됨 */
-
-/* 시간 열 헤더 특별 스타일 */
-.adc-table th:first-child {
-  width: 60px !important;
-  min-width: 60px !important;
-  max-width: 60px !important;
-}
-
-/* 시간 열 셀 특별 스타일 */
-.adc-table td:first-child,
-.adc-time {
-  background: #f8f9fa !important;
-  padding: 4px 8px;
-  font-size: 11px;
-  color: #666;
-  border-right: 1px solid #ddd;
-  font-weight: 500;
-  width: 60px !important;
-  min-width: 60px !important;
-  max-width: 60px !important;
-  text-align: right !important;
-  vertical-align: middle !important;
+.adc-grid {
+  --adc-slot-height: 20px;
+  display: grid;
+  grid-template-columns: 24px repeat(var(--adc-trainer-count), minmax(70px, 1fr));
+  grid-template-rows: 32px repeat(var(--adc-slot-count), var(--adc-slot-height));
   position: relative;
+  margin: 0 1px;
+  background: #fff;
+}
+
+.adc-corner,
+.adc-trainer-header,
+.adc-time,
+.adc-cell {
   box-sizing: border-box;
+  border-right: 1px solid #e6e9ed;
+  border-bottom: 1px solid #e6e9ed;
 }
 
-/* 세션 컨테이너 */
-.adc-session-container {
-  background: white;
-  border-right: 1px solid #ddd;
-  border-bottom: 1px solid #ddd;
-  position: relative;
-  min-height: 24px; /* 30px → 24px로 축소 */
+.adc-corner,
+.adc-trainer-header {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #fff;
+}
+
+.adc-corner {
+  grid-column: 1;
+  grid-row: 1;
+  border-right: 1px solid #e6e9ed;
+  border-bottom: none;
+}
+
+.adc-trainer-header {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-/* 시간 단위 세션 컨테이너 구분선 (1시간마다) */
-.adc-session-container.hour-divider {
-  border-bottom: 1px solid #f0f0f0 !important;
-  position: relative;
-}
-
-.adc-session-container.hour-divider::after {
-  content: '';
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #f0f0f0;
-  z-index: 1;
-}
-
-/* 세션 카드 */
-.adc-session-card {
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 3px;
-  padding: 2px 4px;
+  padding: 2px;
+  overflow: hidden;
+  border-top: 1px solid #e6e9ed;
+  color: #555;
   font-size: 10px;
-  cursor: pointer;
-  transition: all 0.2s;
+  font-weight: 700;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adc-time {
+  padding: 2px 2px 0 0;
+  border-right: 1px solid #e6e9ed;
+  border-bottom: none;
+  background: transparent;
+  color: #9aa0a6;
+  font-size: 10px;
+  line-height: 12px;
+  text-align: right;
+}
+
+.adc-cell {
+  background: #fff;
+  border-bottom-color: transparent;
+}
+
+.adc-cell.is-hour {
+  border-bottom-color: #e0e3e7;
+}
+
+.adc-session-card {
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
   min-width: 0;
+  margin: 1px 2px;
+  padding: 1px 2px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-  position: absolute;
-  z-index: 5;
-  height: 100%;
-  margin: 1px;
+  border: none;
+  border-radius: 2px;
   box-sizing: border-box;
-  width: 100%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* 30분 세션용 작은 카드 스타일 (데스크탑) */
-.adc-session-card-30min {
-  height: 50% !important;
-  padding: 2px 4px !important;
-  font-size: 8px !important;
-  position: absolute !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  width: 100% !important;
-  margin: 1px !important;
-}
-
-/* 30분 세션에서 회원 이름 우선 표시 */
-.adc-session-card-30min .adc-session-member {
-  font-size: 9px !important;
-  margin-bottom: 0 !important;
-  line-height: 1.1 !important;
-  overflow: visible !important;
-  text-overflow: clip !important;
-}
-
-/* 30분 세션에서 상태 표시는 작게 */
-.adc-session-card-30min .adc-session-status {
-  font-size: 6px !important;
-  padding: 0 1px !important;
-  margin-top: 1px !important;
-  line-height: 1 !important;
-  overflow: hidden !important;
-}
-
-/* 세션 카드 내부 요소들 */
 .adc-session-member {
-  font-size: 11px;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 1px;
-  white-space: nowrap;
+  max-width: 100%;
   overflow: hidden;
+  color: #333;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-
 
 .adc-session-status {
-  font-size: 8px;
-  font-weight: bold;
-  text-align: center;
-  padding: 1px 2px;
-  border-radius: 2px;
-  background: rgba(0,0,0,0.05);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.adc-session-card:hover {
-  box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-  transform: translateY(-1px);
-  z-index: 15;
-}
-
-.adc-session strong {
-  font-size: 10px;
-  font-weight: bold;
-  margin-bottom: 2px;
-  color: #333;
-}
-
-.adc-status-label {
+  margin-top: 1px;
   font-size: 7px;
-  font-weight: bold;
-  text-align: center;
-  padding: 1px 3px;
-  border-radius: 2px;
-  background: rgba(0,0,0,0.05);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-/* 세션 상태별 색상 */
+.adc-session-card-30min {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.adc-session-card-30min .adc-session-member {
+  font-size: 7px;
+}
+
+.adc-session-card-30min .adc-session-status {
+  margin-top: 0;
+  font-size: 6px;
+}
+
 .adc-status-reserved {
-  background: #e3f0ff !important;
-  border-left: 3px solid #1976d2 !important;
+  background: #e3f0ff;
+}
+
+.adc-status-reserved .adc-session-status {
+  color: #1976d2;
 }
 
 .adc-status-attend {
-  background: #e8f5e9 !important;
-  border-left: 3px solid #388e3c !important;
+  background: #e8f5e9;
+}
+
+.adc-status-attend .adc-session-status {
+  color: #388e3c;
 }
 
 .adc-status-pre {
-  background: #fff3e0 !important;
-  border-left: 3px solid #f57c00 !important;
+  background: #fff3e0;
+}
+
+.adc-status-pre .adc-session-status {
+  color: #f57c00;
 }
 
 .adc-status-absent {
-  background: #ffebee !important;
-  border-left: 3px solid #d32f2f !important;
+  background: #ffebee;
+}
+
+.adc-status-absent .adc-session-status {
+  color: #d32f2f;
 }
 
 .adc-status-cancel {
-  background: #f3e5f5 !important;
-  border-left: 3px solid #7b1fa2 !important;
+  background: #f3e5f5;
+}
+
+.adc-status-cancel .adc-session-status {
+  color: #7b1fa2;
 }
 
 .adc-status-allcancel {
-  background: #fafafa !important;
-  border-left: 3px solid #757575 !important;
+  background: #fafafa;
 }
 
-.adc-status-reserved .adc-status-label {
-  color: #1976d2 !important;
+.adc-status-allcancel .adc-session-status {
+  color: #757575;
 }
 
-.adc-status-attend .adc-status-label {
-  color: #388e3c !important;
-}
-
-.adc-status-pre .adc-status-label {
-  color: #f57c00 !important;
-}
-
-.adc-status-absent .adc-status-label {
-  color: #d32f2f !important;
-}
-
-.adc-status-cancel .adc-status-label {
-  color: #7b1fa2 !important;
-}
-
-.adc-status-allcancel .adc-status-label {
-  color: #757575 !important;
-}
-
-/* 잔여세션 부족 상태 스타일 */
-.adc-status-no-remaining {
-  background: #fff3e0 !important;
-  border-left: 3px solid #ff9800 !important;
-}
-
-.adc-status-no-remaining .adc-status-label {
-  color: #e65100 !important;
-}
-
+.adc-status-no-remaining,
 .adc-no-remaining {
-  background: #fff3e0 !important;
-  border-left: 3px solid #ff9800 !important;
-  position: relative;
+  background: #fff3e0;
 }
 
-.adc-no-remaining::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 8px;
-  height: 8px;
-  background: #d32f2f;
-  border-radius: 50%;
+.adc-status-no-remaining .adc-session-status,
+.adc-no-remaining .adc-session-status {
+  color: #e65100;
 }
 
-/* 정시 라인의 하단 선 제거 (30분 라인의 하단선이 정시 구분선 역할) */
-#admin-day-calendar-root .adc-table tr[data-time$=":00"] td {
-  border-bottom: none;
+.adc-loading,
+.adc-empty {
+  padding: 48px 20px;
+  color: #777;
+  text-align: center;
 }
 
-/* 30분 라인의 상단 선 제거 */
-#admin-day-calendar-root .adc-table tr[data-time$=":30"] td {
-  border-top: none;
+.adc-empty p {
+  margin: 0 0 14px;
 }
 
-/* 세션 카드가 있는 셀의 하단 선 제거 (rowspan=2로 인한 라인 방지) */
-#admin-day-calendar-root .adc-table td[rowspan="2"] {
-  border-bottom: none;
+.adc-retry-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
 }
 
-/* 11:30-12:00 사이 구분선 (파란색) - 시간 칼럼 제외 */
-#admin-day-calendar-root .adc-table tr[data-time="12:00"] td:not(:first-child) {
-  border-top: 1px solid #1976d2;
-}
-
-/* 16:30-17:00 사이 구분선 (파란색) - 시간 칼럼 제외 */
-#admin-day-calendar-root .adc-table tr[data-time="17:00"] td:not(:first-child) {
-  border-top: 1px solid #1976d2;
-}
-
-/* CSS Grid 기반 12:00 파란색 구분선 */
-.adc-session-container[data-time="12:00"]::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #1976d2;
-  z-index: 2;
-}
-
-/* CSS Grid 기반 17:00 파란색 구분선 */
-.adc-session-container[data-time="17:00"]::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: #1976d2;
-  z-index: 2;
-}
-
-/* 반응형 디자인 */
-@media (max-width: 1200px) {
-  .adc-calendar-grid {
-    grid-template-columns: 70px repeat(auto-fit, minmax(120px, 1fr));
+@media (max-width: 600px) {
+  #admin-day-calendar-root {
+    margin-top: -16px;
   }
-  
-  .adc-session-card {
-    font-size: 8px;
-    padding: 1px 3px;
+
+  .adc {
+    min-height: calc(100vh - 132px);
   }
-  
-  .adc-session-member {
+
+  .adc-header {
+    margin: 0 8px 6px;
+  }
+
+  .adc-nav-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 24px;
+  }
+
+  .adc-date {
+    min-width: 0;
+    padding: 7px 9px;
+    font-size: 13px;
+  }
+
+  .adc-grid {
+    grid-template-columns: 16px repeat(var(--adc-trainer-count), minmax(0, 1fr));
+    margin-right: 0;
+    margin-left: 0;
+  }
+
+  .adc-time {
+    padding-right: 2px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  .adc-trainer-header {
+    padding: 1px;
     font-size: 9px;
   }
-  
-  .adc-session-status {
-    font-size: 6px;
-  }
-}
 
-@media (max-width: 768px) {
-  .adc-calendar-grid {
-    grid-template-columns: 50px repeat(auto-fit, minmax(80px, 1fr));
-    grid-template-rows: 35px repeat(17, 16px); /* 행 높이 더 축소 */
-  }
-  
-  .adc-session-container {
-    min-height: 16px; /* 행 높이 더 축소 */
-  }
-  
   .adc-session-card {
-    font-size: 7px;
-    padding: 1px 2px;
+    margin-right: 1px;
+    margin-left: 1px;
+    padding-right: 1px;
+    padding-left: 1px;
   }
-  
+
   .adc-session-member {
     font-size: 7px;
-    font-weight: bold;
   }
-  
+
   .adc-session-status {
     font-size: 5px;
-    font-weight: normal;
   }
-  
-  /* 모바일에서 30분 세션 글씨 크기만 1시간 세션과 동일하게 */
-  .adc-session-card-30min {
-    height: 50% !important;
-    padding: 1px 2px !important;
-    font-size: 7px !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    margin: 1px !important;
-  }
-  
+
   .adc-session-card-30min .adc-session-member {
-    font-size: 7px !important;
-    font-weight: bold !important;
+    font-size: 6px;
   }
-  
+
   .adc-session-card-30min .adc-session-status {
-    font-size: 5px !important;
-    font-weight: normal !important;
-  }
-  
-  .adc-time-label {
-    font-size: 9px;
-    padding: 2px 4px;
-  }
-  
-  .adc-time-header,
-  .adc-trainer-header {
-    font-size: 10px;
-    padding: 6px;
+    font-size: 5px;
   }
 }
-
-@media (max-width: 480px) {
-  .adc-calendar-grid {
-    grid-template-columns: 45px repeat(auto-fit, minmax(70px, 1fr));
-    grid-template-rows: 30px repeat(17, 14px); /* 더 작은 행 높이 */
-  }
-  
-  .adc-session-container {
-    min-height: 14px;
-  }
-  
-  .adc-session-card {
-    font-size: 6px;
-    padding: 1px;
-  }
-  
-  .adc-session-member {
-    font-size: 6px;
-    font-weight: bold;
-  }
-  
-  .adc-session-status {
-    font-size: 4px;
-    font-weight: normal;
-  }
-  
-  /* 작은 모바일에서 30분 세션 글씨 크기만 1시간 세션과 동일하게 */
-  .adc-session-card-30min {
-    height: 50% !important;
-    padding: 1px 2px !important;
-    font-size: 6px !important;
-    position: absolute !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    width: 100% !important;
-    margin: 1px !important;
-  }
-  
-  .adc-session-card-30min .adc-session-member {
-    font-size: 6px !important;
-    font-weight: bold !important;
-  }
-  
-  .adc-session-card-30min .adc-session-status {
-    font-size: 4px !important;
-    font-weight: normal !important;
-  }
-  
-  .adc-time-label {
-    font-size: 8px;
-    padding: 1px 3px;
-  }
-  
-  .adc-time-header,
-  .adc-trainer-header {
-    font-size: 9px;
-    padding: 4px;
-  }
-} 
