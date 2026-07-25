@@ -83,7 +83,7 @@ function getTimeRange() {
     : DEFAULT_END_HOUR * 60;
 
   const startMinutes = Math.max(6 * 60, Math.min(DEFAULT_START_HOUR * 60, Math.floor(earliest / 60) * 60));
-  const endMinutes = Math.min(22 * 60 + 30, Math.max(DEFAULT_END_HOUR * 60, Math.ceil(latestEnd / 60) * 60));
+  const endMinutes = Math.min(23 * 60, Math.max(DEFAULT_END_HOUR * 60, Math.ceil(latestEnd / 60) * 60));
   return { startMinutes, endMinutes };
 }
 
@@ -220,9 +220,8 @@ function renderCalendar(weekDates) {
     const durationSlots = session['30min'] === true ? 1 : 2;
     const centerName = getSessionCenter(session);
     const centerColor = getCenterColor(centerName);
-    const statusClass = session.status === '완료' ? ' is-complete' : '';
     html += `
-      <div class="twc-session${statusClass}"
+      <div class="twc-session"
            style="grid-column:${dayIndex + 2};grid-row:${rowOffset + 2} / span ${durationSlots};--twc-center-color:${centerColor};"
            title="${escapeHtml(session.time)} ${escapeHtml(session.member)} · ${escapeHtml(centerName || '센터 미지정')}">
         <span class="twc-session-name">${escapeHtml(session.member)}</span>
