@@ -62,9 +62,8 @@
 .twc-grid {
   --twc-slot-height: 20px;
   display: grid;
-  grid-template-columns: 24px repeat(7, minmax(60px, 1fr));
+  grid-template-columns: 24px repeat(var(--twc-day-count), minmax(60px, 1fr));
   grid-template-rows: 32px repeat(var(--twc-slot-count), var(--twc-slot-height));
-  min-width: 444px;
   margin: 0 1px;
   position: relative;
   background: #fff;
@@ -231,8 +230,7 @@
   }
 
   .twc-grid {
-    grid-template-columns: 22px repeat(7, minmax(45px, 1fr));
-    min-width: 337px;
+    grid-template-columns: 22px repeat(var(--twc-day-count), minmax(45px, 1fr));
   }
 
   .twc-session-name {

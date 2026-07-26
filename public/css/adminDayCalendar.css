@@ -142,19 +142,23 @@
   border: none;
   border-radius: 2px;
   box-sizing: border-box;
+  position: relative;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 .adc-session-member {
+  display: -webkit-box;
   max-width: 100%;
   overflow: hidden;
   color: #333;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1;
   text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .adc-session-status {
@@ -171,12 +175,50 @@
 }
 
 .adc-session-card-30min .adc-session-member {
-  font-size: 7px;
+  font-size: 8px;
 }
 
 .adc-session-card-30min .adc-session-status {
   margin-top: 0;
   font-size: 6px;
+}
+
+.adc-session-card.adc-has-status {
+  cursor: pointer;
+  outline: none;
+}
+
+.adc-session-card.adc-has-status::after {
+  content: attr(data-status);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px;
+  color: #fff;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.adc-session-card.adc-alert-absent::after {
+  background: rgba(211, 47, 47, 0.94);
+}
+
+.adc-session-card.adc-alert-no-remaining::after {
+  background: rgba(230, 126, 34, 0.95);
+}
+
+.adc-session-card.adc-has-status:hover::after,
+.adc-session-card.adc-has-status:focus::after,
+.adc-session-card.adc-has-status:active::after {
+  opacity: 1;
 }
 
 .adc-status-reserved {
@@ -303,7 +345,7 @@
   }
 
   .adc-session-member {
-    font-size: 7px;
+    font-size: 8px;
   }
 
   .adc-session-status {
@@ -311,10 +353,14 @@
   }
 
   .adc-session-card-30min .adc-session-member {
-    font-size: 6px;
+    font-size: 7px;
   }
 
   .adc-session-card-30min .adc-session-status {
     font-size: 5px;
+  }
+
+  .adc-session-card.adc-has-status::after {
+    font-size: 6px;
   }
 }

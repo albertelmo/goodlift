@@ -188,11 +188,17 @@ function renderCalendar(weekDates) {
   const slotCount = Math.ceil((endMinutes - startMinutes) / SLOT_MINUTES);
   const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
   const today = toDateString(new Date());
+  const sunday = weekDates[6];
+  const displayDates = state.sessions.some(session => session.date === sunday)
+    ? weekDates
+    : weekDates.slice(0, 6);
+  const isMobile = window.innerWidth <= 600;
+  const minWidth = (isMobile ? 22 : 24) + displayDates.length * (isMobile ? 45 : 60);
 
-  let html = `<div class="twc-grid" style="--twc-slot-count:${slotCount};">`;
+  let html = `<div class="twc-grid" style="--twc-slot-count:${slotCount};--twc-day-count:${displayDates.length};min-width:${minWidth}px;">`;
   html += '<div class="twc-corner"></div>';
 
-  weekDates.forEach((dateString, index) => {
+  displayDates.forEach((dateString, index) => {
     const date = parseDate(dateString);
     const todayClass = dateString === today ? ' is-today' : '';
     html += `
@@ -211,13 +217,13 @@ function renderCalendar(weekDates) {
     const hourClass = minute === 30 ? ' is-hour' : '';
 
     html += `<div class="twc-time${hourClass}" style="grid-column:1;grid-row:${row};">${minute === 0 ? (hour % 12 || 12) : ''}</div>`;
-    weekDates.forEach((_, dayIndex) => {
+    displayDates.forEach((_, dayIndex) => {
       html += `<div class="twc-cell${hourClass}" style="grid-column:${dayIndex + 2};grid-row:${row};"></div>`;
     });
   }
 
   state.sessions.forEach(session => {
-    const dayIndex = weekDates.indexOf(session.date);
+    const dayIndex = displayDates.indexOf(session.date);
     const [hour, minute] = String(session.time).split(':').map(Number);
     const sessionMinutes = hour * 60 + minute;
     const rowOffset = Math.floor((sessionMinutes - startMinutes) / SLOT_MINUTES);

@@ -102,6 +102,9 @@ async function renderCalendar() {
       .map(session => processSession(session, members));
 
     calendarWrap.innerHTML = renderGrid(activeTrainers, processedSessions);
+    calendarWrap.querySelectorAll('.adc-session-card.adc-has-status').forEach(card => {
+      card.onclick = () => card.focus();
+    });
   } catch (error) {
     console.error('[Admin Day Calendar] load failed:', error);
     calendarWrap.innerHTML = `
@@ -117,13 +120,17 @@ function processSession(session, members) {
   const member = members.find(item => item.name === session.member);
   const remainSessions = member ? Number(member.remainSessions) : 0;
   const hasNoRemainingSessions = remainSessions <= 0;
-  const displayStatus = session.status !== '완료' && hasNoRemainingSessions
-    ? '잔여세션 부족'
-    : session.status;
+  const sessionDate = String(session.date || '').split('T')[0];
+  let displayStatus = session.status;
+  if (session.status !== '완료' && sessionDate < toDateString(new Date())) {
+    displayStatus = '결석';
+  } else if (session.status !== '완료' && hasNoRemainingSessions) {
+    displayStatus = '잔여세션 부족';
+  }
 
   return {
     ...session,
-    date: String(session.date || '').split('T')[0],
+    date: sessionDate,
     remainSessions,
     hasNoRemainingSessions,
     displayStatus
@@ -222,16 +229,27 @@ function getStatusClass(displayStatus) {
 
 function renderSessionCard(session, gridColumn, gridRow, durationSlots) {
   const is30min = session['30min'] === true;
-  const noRemainingClass = session.hasNoRemainingSessions && session.status !== '완료'
+  const noRemainingClass = session.displayStatus === '잔여세션 부족'
     ? ' adc-no-remaining'
     : '';
-  const cardClass = `adc-session-card adc-status-${getStatusClass(session.displayStatus)}${is30min ? ' adc-session-card-30min' : ''}${noRemainingClass}`;
+  const alertStatus = ['결석', '잔여세션 부족'].includes(session.displayStatus)
+    ? session.displayStatus
+    : '';
+  const alertClass = alertStatus === '결석'
+    ? ' adc-has-status adc-alert-absent'
+    : alertStatus === '잔여세션 부족'
+      ? ' adc-has-status adc-alert-no-remaining'
+      : '';
+  const cardClass = `adc-session-card adc-status-${getStatusClass(session.displayStatus)}${is30min ? ' adc-session-card-30min' : ''}${noRemainingClass}${alertClass}`;
+  const interactionAttributes = alertStatus
+    ? `tabindex="0" data-status="${escapeHtml(alertStatus)}"`
+    : '';
 
   return `
     <div class="${cardClass}"
          style="grid-column:${gridColumn};grid-row:${gridRow} / span ${durationSlots};"
-         title="${escapeHtml(session.member)} (${session.remainSessions}) · ${escapeHtml(session.displayStatus)}">
+         aria-label="${escapeHtml(session.member)} 잔여 ${session.remainSessions}회${alertStatus ? `, ${escapeHtml(alertStatus)}` : ''}"
+         ${interactionAttributes}>
       <div class="adc-session-member">${escapeHtml(session.member)} (${session.remainSessions})</div>
-      <div class="adc-session-status">${escapeHtml(session.displayStatus)}</div>
     </div>`;
 }
