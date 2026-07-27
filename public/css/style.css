@@ -469,7 +469,7 @@ button:hover, button:focus {
 #mainSection {
     display: none;
     max-width: 980px;
-    margin: 48px auto;
+    margin: 20px auto 48px;
     background: var(--card-bg);
     border-radius: var(--radius);
     box-shadow: var(--shadow);
@@ -1354,7 +1354,7 @@ li, td, th {
         box-sizing: border-box;
         margin: 0;
         border-radius: 0;
-        padding: 18px 4px 12px 4px;
+        padding: 10px 4px 12px 4px;
     }
     .tab-bar {
         overflow-x: auto;
