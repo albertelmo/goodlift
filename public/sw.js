@@ -34,7 +34,7 @@ self.addEventListener('notificationclick', event => {
   );
 });
 // Service Worker 캐시 버전 (캐시 무효화 필요 시에만 변경)
-const VERSION = '2026-07-25-trainer-week-calendar';
+const VERSION = '2026-07-27-favicon';
 const CACHE_NAME = `goodlift-${VERSION}`;
 const RUNTIME_CACHE = `goodlift-runtime-${VERSION}`;
 
@@ -46,6 +46,10 @@ const STATIC_CACHE_URLS = [
   '/css/adminDayCalendar.css',
   '/css/adminWeekCalendar.css',
   '/css/trainerWeekCalendar.css',
+  '/favicon.ico',
+  '/img/favicon-32x32.png',
+  '/img/favicon-192x192.png',
+  '/img/favicon-512x512.png',
   '/img/logo.png',
   '/js/main.js',
   '/js/trainerWeekCalendar.js',
