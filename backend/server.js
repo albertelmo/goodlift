@@ -2259,10 +2259,10 @@ function buildSalesPushMessage(action, sale) {
     return `${memberName} 매출이 ${actionLabel}되었습니다${dateText}${amountPart}`;
 }
 
-function enqueueAdminPushNotification({ category, action, title, body, url }) {
+function enqueueAdminPushNotification({ category, action, title, body, url, metadata }) {
     setImmediate(async () => {
         try {
-            await adminPushNotificationLogsDB.addLog({ category, action, title, body });
+      await adminPushNotificationLogsDB.addLog({ category, action, title, body, metadata });
         } catch (error) {
             console.error('[Push] 관리자 알림 로그 저장 오류:', error);
         }
@@ -2335,7 +2335,17 @@ function enqueuePushForMemberChange(payload) {
         action: payload?.action,
         title: '회원 알림',
         body: buildMemberPushMessage(payload),
-        url: '/?tab=Member'
+        url: '/?tab=Member',
+        metadata: {
+            memberName: payload?.memberName || null,
+            center: payload?.center || null,
+            trainer: payload?.trainer || null,
+            trainerName: payload?.trainerName || null,
+            sessionChange: Number.isFinite(payload?.sessionChange) ? payload.sessionChange : null,
+            newSessions: Number.isFinite(payload?.newSessions) ? payload.newSessions : null,
+            statusFrom: payload?.statusChange?.from || null,
+            statusTo: payload?.statusChange?.to || null
+        }
     });
 }
 
@@ -6200,6 +6210,8 @@ app.post('/api/members', async (req, res) => {
         enqueuePushForMemberChange({
             action: 'create',
             memberName: member?.name || name,
+            center: member?.center || center,
+            trainer: member?.trainer || trainer,
             trainerName: getTrainerDisplayName(member?.trainer || trainer),
             newSessions: Number.isFinite(numSessions) ? numSessions : null
         });
@@ -6329,6 +6341,8 @@ app.patch('/api/members/:name', async (req, res) => {
             enqueuePushForMemberChange({
                 action: 'update',
                 memberName: member?.name || name,
+                center: member?.center || beforeMember?.center || null,
+                trainer: member?.trainer || beforeMember?.trainer || null,
                 trainerName: getTrainerDisplayName(member?.trainer || beforeMember?.trainer),
                 sessionChange,
                 statusChange: statusChanged ? { from: beforeMember.status, to: member.status } : null
@@ -7519,6 +7533,192 @@ app.delete('/api/trials/:id', async (req, res) => {
 });
 
 // Renewals (재등록 현황) API
+function parseMemberStatusNotification(log, membersByName) {
+  const metadata = log.metadata && typeof log.metadata === 'object' ? log.metadata : {};
+  const body = String(log.body || '');
+  const statusMatch = body.match(/상태\s+([^·\s]+)→([^·\s]+)/);
+  const memberMatch = body.match(/^(.*?)\s+회원 정보가 변경되었습니다/);
+  const statusFrom = metadata.statusFrom || statusMatch?.[1] || null;
+  const statusTo = metadata.statusTo || statusMatch?.[2] || null;
+  const memberName = metadata.memberName || memberMatch?.[1]?.trim() || null;
+
+  if (!memberName || !statusTo) return null;
+
+  const currentMember = membersByName.get(memberName);
+  return {
+    type: statusTo,
+    memberName,
+    sessions: null,
+    date: String(log.created_at || '').slice(0, 10) || null,
+    center: metadata.center || currentMember?.center || '센터 미지정',
+    trainer: metadata.trainer || currentMember?.trainer || null,
+    source: metadata.statusTo ? 'notification_metadata' : 'notification_text',
+    statusFrom,
+    statusTo
+  };
+}
+
+function getRenewalFallbackDate(renewal) {
+  if (!renewal?.updated_at) return null;
+  const value = renewal.updated_at;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.slice(0, 10);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+}
+
+// 월별 회원 신규/재등록/정지/만료 변동 조회
+app.get('/api/renewals/member-changes', async (req, res) => {
+  try {
+    const month = req.query.month || getKoreanYearMonth();
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ message: 'month는 YYYY-MM 형식이어야 합니다.' });
+    }
+
+    const [registrationLogs, notificationLogs, members, renewals] = await Promise.all([
+      registrationLogsDB.getLogsByMonth(month),
+      adminPushNotificationLogsDB.getLogsByMonth(month, { category: 'member' }),
+      membersDB.getMembers(),
+      renewalsDB.getRenewals({ month })
+    ]);
+    const membersByName = new Map(members.map(member => [member.name, member]));
+    const entries = [];
+
+    registrationLogs
+      .filter(log => log.registration_type === '신규등록')
+      .forEach(log => {
+        entries.push({
+          type: '신규',
+          memberName: log.member_name,
+          sessions: Number(log.session_count) || 0,
+          date: log.registration_date,
+          center: log.center || membersByName.get(log.member_name)?.center || '센터 미지정',
+          trainer: log.trainer || membersByName.get(log.member_name)?.trainer || null,
+          source: 'registration_log'
+        });
+      });
+
+    const renewalTotals = new Map();
+    registrationLogs
+      .filter(log => log.registration_type === '재등록')
+      .forEach(log => {
+        const center = log.center || membersByName.get(log.member_name)?.center || '센터 미지정';
+        const key = `${center}\u0000${log.member_name}`;
+        const current = renewalTotals.get(key) || {
+          type: '재등록',
+          memberName: log.member_name,
+          sessions: 0,
+          date: null,
+          center,
+          trainer: log.trainer || membersByName.get(log.member_name)?.trainer || null,
+          source: 'registration_log'
+        };
+        current.sessions += Number(log.session_count) || 0;
+        if (!current.date || String(log.registration_date) > current.date) {
+          current.date = String(log.registration_date);
+          current.trainer = log.trainer || current.trainer;
+        }
+        renewalTotals.set(key, current);
+      });
+    [...renewalTotals.values()].forEach(entry => entries.push(entry));
+
+    const allStatusEntries = notificationLogs
+      .map(log => parseMemberStatusNotification(log, membersByName))
+      .filter(Boolean);
+    const statusEntriesByMember = new Map();
+    allStatusEntries.forEach(entry => {
+      if (!statusEntriesByMember.has(entry.memberName)) {
+        statusEntriesByMember.set(entry.memberName, []);
+      }
+      statusEntriesByMember.get(entry.memberName).push(entry);
+    });
+
+    // 같은 달의 중간 상태는 제외하고 마지막 상태만 집계한다.
+    // 현재 월은 회원 DB의 현재 상태를 우선해 로그 저장 지연이나 기존 로그 누락도 보완한다.
+    const isCurrentMonth = month === getKoreanYearMonth();
+    const finalStatusByMember = new Map();
+    const statusEntries = [];
+    statusEntriesByMember.forEach((memberEntries, memberName) => {
+      const currentMember = membersByName.get(memberName);
+      const finalStatus = isCurrentMonth && currentMember?.status
+        ? currentMember.status
+        : memberEntries[0].statusTo;
+      finalStatusByMember.set(memberName, finalStatus);
+      if (!['정지', '만료'].includes(finalStatus)) return;
+
+      const finalEntry = memberEntries.find(entry => entry.statusTo === finalStatus);
+      if (finalEntry) statusEntries.push(finalEntry);
+    });
+    statusEntries.forEach(entry => entries.push(entry));
+
+    // 구조화 로그 도입 전 재등록 탭에서 직접 만료된 회원 보완
+    const loggedExpiredMembers = new Set(
+      statusEntries.filter(entry => entry.type === '만료').map(entry => entry.memberName)
+    );
+    const fallbackExpiredMembers = new Set();
+    renewals.forEach(renewal => {
+      const statuses = renewal.status || {};
+      Object.entries(statuses).forEach(([memberName, status]) => {
+        if (status !== '만료' || loggedExpiredMembers.has(memberName)
+          || fallbackExpiredMembers.has(memberName)) return;
+        const knownFinalStatus = finalStatusByMember.get(memberName);
+        if (knownFinalStatus && knownFinalStatus !== '만료') return;
+        if (isCurrentMonth && membersByName.get(memberName)?.status !== '만료') return;
+        fallbackExpiredMembers.add(memberName);
+        entries.push({
+          type: '만료',
+          memberName,
+          sessions: null,
+          date: getRenewalFallbackDate(renewal),
+          center: renewal.center || membersByName.get(memberName)?.center || '센터 미지정',
+          trainer: renewal.trainer || membersByName.get(memberName)?.trainer || null,
+          source: 'renewal_fallback',
+          approximateDate: true
+        });
+      });
+    });
+
+    let centerOrder = [];
+    if (fs.existsSync(CENTERS_PATH)) {
+      const raw = fs.readFileSync(CENTERS_PATH, 'utf-8');
+      if (raw) centerOrder = JSON.parse(raw).map(center => center.name);
+    }
+    const grouped = new Map();
+    entries.forEach(entry => {
+      if (!grouped.has(entry.center)) grouped.set(entry.center, []);
+      grouped.get(entry.center).push(entry);
+    });
+    const sortedCenters = [...grouped.keys()].sort((a, b) => {
+      const indexA = centerOrder.indexOf(a);
+      const indexB = centerOrder.indexOf(b);
+      if (indexA === -1 && indexB === -1) return a.localeCompare(b, 'ko');
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+    const typeOrder = { '신규': 1, '재등록': 2, '정지': 3, '만료': 4 };
+    const centers = sortedCenters.map(name => ({
+      name,
+      entries: grouped.get(name).sort((a, b) => {
+        const dateCompare = String(b.date || '').localeCompare(String(a.date || ''));
+        return dateCompare || (typeOrder[a.type] || 9) - (typeOrder[b.type] || 9)
+          || a.memberName.localeCompare(b.memberName, 'ko');
+      })
+    }));
+    const summary = entries.reduce((counts, entry) => {
+      counts[entry.type] = (counts[entry.type] || 0) + 1;
+      return counts;
+    }, { '신규': 0, '재등록': 0, '정지': 0, '만료': 0 });
+
+    res.json({ month, summary, centers });
+  } catch (error) {
+    console.error('[API] 월별 회원 변동 조회 오류:', error);
+    res.status(500).json({ message: '월별 회원 변동을 불러오지 못했습니다.' });
+  }
+});
+
 // Renewals 목록 조회 (센터별, 월별)
 app.get('/api/renewals', async (req, res) => {
   try {
@@ -7713,7 +7913,18 @@ app.patch('/api/renewals/:id', async (req, res) => {
     if (expiredMembers.length > 0) {
       for (const memberName of expiredMembers) {
         try {
-          await membersDB.updateMember(memberName, { status: '만료' });
+          const beforeMember = await membersDB.getMemberByName(memberName);
+          const updatedMember = await membersDB.updateMember(memberName, { status: '만료' });
+          if (beforeMember?.status && beforeMember.status !== updatedMember.status) {
+            enqueuePushForMemberChange({
+              action: 'update',
+              memberName,
+              center: updatedMember.center || renewal.center,
+              trainer: updatedMember.trainer || renewal.trainer,
+              trainerName: getTrainerDisplayName(updatedMember.trainer || renewal.trainer),
+              statusChange: { from: beforeMember.status, to: updatedMember.status }
+            });
+          }
         } catch (error) {
           console.error(`[Renewal] 회원 "${memberName}" 상태 업데이트 실패:`, error);
           // 회원 정보 업데이트 실패해도 재등록 업데이트는 성공으로 처리
@@ -7725,7 +7936,18 @@ app.patch('/api/renewals/:id', async (req, res) => {
     if (validMembers.length > 0) {
       for (const memberName of validMembers) {
         try {
-          await membersDB.updateMember(memberName, { status: '유효' });
+          const beforeMember = await membersDB.getMemberByName(memberName);
+          const updatedMember = await membersDB.updateMember(memberName, { status: '유효' });
+          if (beforeMember?.status && beforeMember.status !== updatedMember.status) {
+            enqueuePushForMemberChange({
+              action: 'update',
+              memberName,
+              center: updatedMember.center || renewal.center,
+              trainer: updatedMember.trainer || renewal.trainer,
+              trainerName: getTrainerDisplayName(updatedMember.trainer || renewal.trainer),
+              statusChange: { from: beforeMember.status, to: updatedMember.status }
+            });
+          }
         } catch (error) {
           console.error(`[Renewal] 회원 "${memberName}" 상태 업데이트 실패:`, error);
           // 회원 정보 업데이트 실패해도 재등록 업데이트는 성공으로 처리

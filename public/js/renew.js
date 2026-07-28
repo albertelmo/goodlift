@@ -1,6 +1,16 @@
 // Renew (재등록 현황) 탭 기능
 
 let currentRenewalsData = {}; // 현재 재등록 현황 데이터를 저장
+let renewMemberChangesEscHandler = null;
+
+function escapeRenewHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
 
 // 현재 날짜 (한국시간 기준)
 let currentDate = new Date();
@@ -38,7 +48,10 @@ function render(container) {
   container.innerHTML = `
     <div style="max-width:1200px;margin:0 auto;padding:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
-        <h3 id="renew-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">재등록 현황</h3>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <h3 id="renew-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">재등록 현황</h3>
+          <button id="renew-member-changes-btn" class="renew-member-changes-btn" type="button">회원 변경</button>
+        </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button id="renew-add-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">추가</button>
           <div class="date-navigation">
@@ -67,6 +80,10 @@ function render(container) {
   
   container.querySelector('#renew-add-btn').addEventListener('click', () => {
     showRenewAddModal();
+  });
+
+  container.querySelector('#renew-member-changes-btn').addEventListener('click', () => {
+    showRenewMemberChangesModal(getSelectedYearMonth());
   });
   
   container.querySelector('#renew-title').addEventListener('click', () => {
@@ -1125,6 +1142,103 @@ function closeRenewAddModal() {
   const modal = document.querySelector('.renew-edit-modal');
   if (overlay) overlay.remove();
   if (modal) modal.remove();
+}
+
+function formatRenewChangeDate(date, approximate = false) {
+  if (!date) return '날짜 미확인';
+  const parts = String(date).split('-');
+  const label = parts.length >= 3 ? `${Number(parts[1])}월 ${Number(parts[2])}일` : String(date);
+  return approximate ? `${label}경` : label;
+}
+
+function closeRenewMemberChangesModal() {
+  document.querySelector('.renew-member-changes-overlay')?.remove();
+  document.body.style.overflow = '';
+  if (renewMemberChangesEscHandler) {
+    document.removeEventListener('keydown', renewMemberChangesEscHandler);
+    renewMemberChangesEscHandler = null;
+  }
+}
+
+function renderRenewMemberChanges(data) {
+  const content = document.querySelector('.renew-member-changes-content');
+  if (!content) return;
+
+  const summary = data.summary || {};
+  const summaryTypes = ['신규', '재등록', '정지', '만료'];
+  const summaryHtml = summaryTypes.map(type => `
+    <span class="renew-change-summary renew-change-${type}">${type} ${summary[type] || 0}</span>
+  `).join('');
+
+  const centers = data.centers || [];
+  const centersHtml = centers.length ? centers.map(center => `
+    <section class="renew-change-center">
+      <h4>${escapeRenewHtml(center.name)}</h4>
+      <div class="renew-change-list">
+        ${(center.entries || []).map(entry => {
+          const sessionText = ['신규', '재등록'].includes(entry.type)
+            ? ` ${Number(entry.sessions) || 0}회`
+            : '';
+          const dateText = formatRenewChangeDate(entry.date, entry.approximateDate);
+          const approximateTitle = entry.approximateDate
+            ? '기존 재등록 데이터의 마지막 수정일을 사용한 근사 날짜입니다.'
+            : '';
+          return `
+            <div class="renew-change-row">
+              <span class="renew-change-member">${escapeRenewHtml(entry.memberName)}</span>
+              <span class="renew-change-type renew-change-${escapeRenewHtml(entry.type)}">${escapeRenewHtml(entry.type)}${sessionText}</span>
+              <span class="renew-change-date" title="${escapeRenewHtml(approximateTitle)}">${escapeRenewHtml(dateText)}</span>
+            </div>`;
+        }).join('')}
+      </div>
+    </section>
+  `).join('') : '<div class="renew-change-empty">해당 월의 회원 변경 내역이 없습니다.</div>';
+
+  content.innerHTML = `
+    <div class="renew-change-summary-row">${summaryHtml}</div>
+    ${centersHtml}
+  `;
+}
+
+async function showRenewMemberChangesModal(yearMonth) {
+  closeRenewMemberChangesModal();
+  const [year, month] = yearMonth.split('-');
+  const overlay = document.createElement('div');
+  overlay.className = 'renew-member-changes-overlay';
+  overlay.innerHTML = `
+    <div class="renew-member-changes-modal" role="dialog" aria-modal="true" aria-labelledby="renew-member-changes-title">
+      <div class="renew-member-changes-header">
+        <h3 id="renew-member-changes-title">${escapeRenewHtml(year)}년 ${Number(month)}월 회원 변경</h3>
+        <button type="button" class="renew-member-changes-close" aria-label="닫기">×</button>
+      </div>
+      <div class="renew-member-changes-content">
+        <div class="renew-change-loading">불러오는 중...</div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = 'hidden';
+  overlay.querySelector('.renew-member-changes-close').onclick = closeRenewMemberChangesModal;
+  overlay.onclick = event => {
+    if (event.target === overlay) closeRenewMemberChangesModal();
+  };
+  renewMemberChangesEscHandler = event => {
+    if (event.key === 'Escape') closeRenewMemberChangesModal();
+  };
+  document.addEventListener('keydown', renewMemberChangesEscHandler);
+
+  try {
+    const response = await fetch(`/api/renewals/member-changes?month=${encodeURIComponent(yearMonth)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || '회원 변경 내역을 불러오지 못했습니다.');
+    renderRenewMemberChanges(data);
+  } catch (error) {
+    console.error('월별 회원 변경 조회 오류:', error);
+    const content = overlay.querySelector('.renew-member-changes-content');
+    if (content) {
+      content.innerHTML = `<div class="renew-change-error">${escapeRenewHtml(error.message || '조회 중 오류가 발생했습니다.')}</div>`;
+    }
+  }
 }
 
 export const renew = {
