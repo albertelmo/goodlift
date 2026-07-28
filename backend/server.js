@@ -61,11 +61,12 @@ const webCentersDB = require('./web-centers-db');
 const { initializeMigrationSystem, runMigration } = require('./migrations-manager');
 const { createPerformanceIndexes } = require('./index-migration');
 
-// 무기명/체험 세션 판별 함수
+// 무기명/체험/블로그체험단 세션 판별 함수
 function isTrialSession(memberName) {
   return memberName && (
     memberName.startsWith('무기명') || 
-    memberName.startsWith('체험')
+    memberName.startsWith('체험') ||
+    memberName.startsWith('블로그체험단')
   );
 }
 
@@ -6217,7 +6218,7 @@ app.post('/api/members', async (req, res) => {
         });
         
         // 신규 세션 통계 추가
-        if (numSessions > 0) {
+        if (numSessions > 0 && !isTrialSession(name)) {
           await monthlyStatsDB.addNewSessions(numSessions);
           
                   // 신규등록 로그 저장
@@ -6350,12 +6351,14 @@ app.patch('/api/members/:name', async (req, res) => {
         }
         
         // 재등록 세션 통계 추가
-        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) !== 0) {
+        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) !== 0
+            && !isTrialSession(name)) {
           await monthlyStatsDB.addReRegistrationSessions(Number(addSessions));
         }
         
         // 재등록 로그 저장 (세션 변경이 있는 경우)
-        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) !== 0) {
+        if (addSessions && !isNaN(Number(addSessions)) && Number(addSessions) !== 0
+            && !isTrialSession(name)) {
           await registrationLogsDB.addLog({
             member_name: name,
             registration_type: '재등록',
@@ -6746,9 +6749,7 @@ app.get('/api/trainer-sessions', async (req, res) => {
         
         // 요약 정보 계산
         const completedSessions = sessionsWithMemberInfo.filter(s => s.displayStatus === '완료');
-        const trialOrAnonymousSessions = completedSessions.filter(s => 
-            s.member.startsWith('체험') || s.member.startsWith('무기명')
-        );
+        const trialOrAnonymousSessions = completedSessions.filter(s => isTrialSession(s.member));
         
         const summary = {
             totalSessions: sessionsWithMemberInfo.length,
@@ -6803,9 +6804,7 @@ app.get('/api/stats', async (req, res) => {
     // 트레이너별 담당 회원 수 계산
     const trainerMemberCount = {};
     members.forEach(member => {
-      if (member.status === '유효' && 
-          !member.name.startsWith('무기명') && 
-          !member.name.startsWith('체험')) { // 유효한 회원만 카운트 (무기명, 체험 제외)
+      if (member.status === '유효' && !isTrialSession(member.name)) {
         const trainerName = trainerNameMap[member.trainer] || member.trainer;
         trainerMemberCount[trainerName] = (trainerMemberCount[trainerName] || 0) + 1;
       }
@@ -6817,15 +6816,11 @@ app.get('/api/stats', async (req, res) => {
     
     // 완료된 세션 중 체험/무기명 회원 필터링
     const completedSessions = sessions.filter(s => s.status === '완료');
-    const trialOrAnonymousSessions = completedSessions.filter(s => 
-        s.member.startsWith('체험') || s.member.startsWith('무기명')
-    );
+    const trialOrAnonymousSessions = completedSessions.filter(s => isTrialSession(s.member));
     
     // 전체 유효회원수 계산
-    const totalValidMembers = members.filter(member => 
-        member.status === '유효' && 
-        !member.name.startsWith('무기명') && 
-        !member.name.startsWith('체험')
+    const totalValidMembers = members.filter(member =>
+        member.status === '유효' && !isTrialSession(member.name)
     ).length;
     
     // 센터별 유효회원수 계산
@@ -6836,9 +6831,7 @@ app.get('/api/stats', async (req, res) => {
     const centerRemainingSessions = {};
     
     members.forEach(member => {
-        if (member.status === '유효' && 
-            !member.name.startsWith('무기명') && 
-            !member.name.startsWith('체험')) {
+        if (member.status === '유효' && !isTrialSession(member.name)) {
             const center = member.center;
             centerValidMembers[center] = (centerValidMembers[center] || 0) + 1;
             
@@ -6961,8 +6954,8 @@ app.get('/api/stats', async (req, res) => {
         
         if (session.status === '완료') {
           centerStat.completed++;
-          // 체험/무기명 회원 체크
-          if (session.member.startsWith('체험') || session.member.startsWith('무기명')) {
+          // 체험/무기명/블로그체험단 회원 체크
+          if (isTrialSession(session.member)) {
             centerStat.completedTrialOrAnonymous++;
           }
         } else if (session.status === '예정' && session.date >= todayStr) {
@@ -6975,8 +6968,8 @@ app.get('/api/stats', async (req, res) => {
       // 전체 통계 계산
       if (session.status === '완료') {
         trainer.completed++;
-        // 체험/무기명 회원 체크
-        if (session.member.startsWith('체험') || session.member.startsWith('무기명')) {
+        // 체험/무기명/블로그체험단 회원 체크
+        if (isTrialSession(session.member)) {
           trainer.completedTrialOrAnonymous++;
         }
       } else if (session.status === '예정' && session.date >= todayStr) {
@@ -6988,9 +6981,7 @@ app.get('/api/stats', async (req, res) => {
     
     // 트레이너별 센터별 회원수 계산
     members.forEach(member => {
-      if (member.status === '유효' && 
-          !member.name.startsWith('무기명') && 
-          !member.name.startsWith('체험')) {
+      if (member.status === '유효' && !isTrialSession(member.name)) {
         const trainerName = trainerNameMap[member.trainer] || member.trainer;
         const trainer = trainerMap.get(trainerName);
         
@@ -7057,9 +7048,7 @@ function getMemberStatsPeriod() {
 }
 
 function isValidMemberForStats(member) {
-  return member.status === '유효' &&
-    !member.name.startsWith('무기명') &&
-    !member.name.startsWith('체험');
+  return member.status === '유효' && !isTrialSession(member.name);
 }
 
 // 월평균: 등록 이후 월 중 완료 세션이 1회 이상인 월만 대상 (0인 월 제외)
@@ -7215,9 +7204,8 @@ app.get('/api/member-sessions-by-center', async (req, res) => {
     // 해당 트레이너의 해당 센터 회원 필터링
     const trainerName = trainerNameMap[trainer] || trainer;
     const targetMembers = members.filter(member => 
-      member.status === '유효' && 
-      !member.name.startsWith('무기명') && 
-      !member.name.startsWith('체험') &&
+      member.status === '유효' &&
+      !isTrialSession(member.name) &&
       member.trainer === trainer &&
       member.center === center
     );
@@ -7280,10 +7268,8 @@ app.get('/api/trial-sessions', async (req, res) => {
     // 세션 데이터 조회
     const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
     
-    // 체험/무기명 세션 필터링
-    const trialSessions = sessions.filter(s => 
-      s.member.startsWith('체험') || s.member.startsWith('무기명')
-    );
+    // 체험/무기명/블로그체험단 세션 필터링
+    const trialSessions = sessions.filter(s => isTrialSession(s.member));
     
     // 회원 데이터 조회 (센터 정보를 위해)
     const members = await membersDB.getMembers();
@@ -7587,7 +7573,7 @@ app.get('/api/renewals/member-changes', async (req, res) => {
     const entries = [];
 
     registrationLogs
-      .filter(log => log.registration_type === '신규등록')
+      .filter(log => log.registration_type === '신규등록' && !isTrialSession(log.member_name))
       .forEach(log => {
         entries.push({
           type: '신규',
@@ -7602,7 +7588,7 @@ app.get('/api/renewals/member-changes', async (req, res) => {
 
     const renewalTotals = new Map();
     registrationLogs
-      .filter(log => log.registration_type === '재등록')
+      .filter(log => log.registration_type === '재등록' && !isTrialSession(log.member_name))
       .forEach(log => {
         const center = log.center || membersByName.get(log.member_name)?.center || '센터 미지정';
         const key = `${center}\u0000${log.member_name}`;
@@ -7626,7 +7612,7 @@ app.get('/api/renewals/member-changes', async (req, res) => {
 
     const allStatusEntries = notificationLogs
       .map(log => parseMemberStatusNotification(log, membersByName))
-      .filter(Boolean);
+      .filter(entry => entry && !isTrialSession(entry.memberName));
     const statusEntriesByMember = new Map();
     allStatusEntries.forEach(entry => {
       if (!statusEntriesByMember.has(entry.memberName)) {
@@ -7661,7 +7647,7 @@ app.get('/api/renewals/member-changes', async (req, res) => {
     renewals.forEach(renewal => {
       const statuses = renewal.status || {};
       Object.entries(statuses).forEach(([memberName, status]) => {
-        if (status !== '만료' || loggedExpiredMembers.has(memberName)
+        if (isTrialSession(memberName) || status !== '만료' || loggedExpiredMembers.has(memberName)
           || fallbackExpiredMembers.has(memberName)) return;
         const knownFinalStatus = finalStatusByMember.get(memberName);
         if (knownFinalStatus && knownFinalStatus !== '만료') return;
@@ -7787,11 +7773,9 @@ app.get('/api/members-by-trainer-center', async (req, res) => {
     
     const members = await membersDB.getMembers({ trainer, status: '유효' });
     
-    // 해당 센터의 회원만 필터링 (무기명/체험 제외)
-    const filteredMembers = members.filter(member => 
-      member.center === center &&
-      !member.name.startsWith('무기명') &&
-      !member.name.startsWith('체험')
+    // 해당 센터의 일반 회원만 필터링
+    const filteredMembers = members.filter(member =>
+      member.center === center && !isTrialSession(member.name)
     );
     
     res.json(filteredMembers.map(m => ({

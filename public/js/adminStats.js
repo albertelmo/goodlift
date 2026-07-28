@@ -1499,7 +1499,8 @@ function escapeHtml(str) {
 function isValidStatsMember(member) {
   return member.status === '유효' &&
     !member.name.startsWith('무기명') &&
-    !member.name.startsWith('체험');
+    !member.name.startsWith('체험') &&
+    !member.name.startsWith('블로그체험단');
 }
 
 function getTrainersForCenter(center, trainers, validMembers) {
