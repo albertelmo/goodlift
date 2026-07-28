@@ -3618,6 +3618,18 @@ li, td, th {
   border-bottom: 1px solid #e8ebef;
 }
 
+.renew-member-changes-header-spacer {
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.renew-member-changes-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
 .renew-member-changes-header h3 {
   margin: 0;
   color: #1976d2;
@@ -3625,7 +3637,35 @@ li, td, th {
   letter-spacing: 0;
 }
 
+.renew-member-changes-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  margin: 0;
+  padding: 0 0 2px;
+  border: 1px solid #d8dde3;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: none;
+  color: #555;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.renew-member-changes-nav:hover,
+.renew-member-changes-nav:focus {
+  background: #f2f7fc;
+  box-shadow: none;
+  transform: none;
+}
+
 .renew-member-changes-close {
+  display: inline-flex;
+  align-items: center;
   width: 28px;
   height: 28px;
   min-width: 28px;

@@ -50,7 +50,7 @@ function render(container) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <h3 id="renew-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">재등록 현황</h3>
-          <button id="renew-member-changes-btn" class="renew-member-changes-btn" type="button">회원 상태 변경 목록</button>
+          <button id="renew-member-changes-btn" class="renew-member-changes-btn" type="button">전체 현황 보기</button>
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button id="renew-add-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">추가</button>
@@ -1189,8 +1189,7 @@ function renderRenewChangeSummary(summary, compact = false) {
   `;
 }
 
-function renderRenewMemberChanges(data) {
-  const content = document.querySelector('.renew-member-changes-content');
+function renderRenewMemberChanges(data, content = document.querySelector('.renew-member-changes-content')) {
   if (!content) return;
 
   const centers = data.centers || [];
@@ -1232,6 +1231,12 @@ function renderRenewMemberChanges(data) {
   `;
 }
 
+function navigateRenewChangeMonth(yearMonth, delta) {
+  const [year, month] = yearMonth.split('-').map(Number);
+  const target = new Date(year, month - 1 + delta, 1);
+  return `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}`;
+}
+
 async function showRenewMemberChangesModal(yearMonth) {
   closeRenewMemberChangesModal();
   const [year, month] = yearMonth.split('-');
@@ -1240,7 +1245,12 @@ async function showRenewMemberChangesModal(yearMonth) {
   overlay.innerHTML = `
     <div class="renew-member-changes-modal" role="dialog" aria-modal="true" aria-labelledby="renew-member-changes-title">
       <div class="renew-member-changes-header">
-        <h3 id="renew-member-changes-title">${escapeRenewHtml(year)}년 ${Number(month)}월 회원 변경</h3>
+        <span class="renew-member-changes-header-spacer" aria-hidden="true"></span>
+        <div class="renew-member-changes-navigation">
+          <button type="button" class="renew-member-changes-nav renew-member-changes-prev" aria-label="이전 달">‹</button>
+          <h3 id="renew-member-changes-title">${escapeRenewHtml(year)}년 ${Number(month)}월 회원 변경</h3>
+          <button type="button" class="renew-member-changes-nav renew-member-changes-next" aria-label="다음 달">›</button>
+        </div>
         <button type="button" class="renew-member-changes-close" aria-label="닫기">×</button>
       </div>
       <div class="renew-member-changes-content">
@@ -1250,6 +1260,12 @@ async function showRenewMemberChangesModal(yearMonth) {
 
   document.body.appendChild(overlay);
   document.body.style.overflow = 'hidden';
+  overlay.querySelector('.renew-member-changes-prev').onclick = () => {
+    showRenewMemberChangesModal(navigateRenewChangeMonth(yearMonth, -1));
+  };
+  overlay.querySelector('.renew-member-changes-next').onclick = () => {
+    showRenewMemberChangesModal(navigateRenewChangeMonth(yearMonth, 1));
+  };
   overlay.querySelector('.renew-member-changes-close').onclick = closeRenewMemberChangesModal;
   overlay.onclick = event => {
     if (event.target === overlay) closeRenewMemberChangesModal();
@@ -1263,7 +1279,7 @@ async function showRenewMemberChangesModal(yearMonth) {
     const response = await fetch(`/api/renewals/member-changes?month=${encodeURIComponent(yearMonth)}`);
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || '회원 변경 내역을 불러오지 못했습니다.');
-    renderRenewMemberChanges(data);
+    renderRenewMemberChanges(data, overlay.querySelector('.renew-member-changes-content'));
   } catch (error) {
     console.error('월별 회원 변경 조회 오류:', error);
     const content = overlay.querySelector('.renew-member-changes-content');
