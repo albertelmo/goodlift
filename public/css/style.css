@@ -3707,10 +3707,35 @@ li, td, th {
 }
 
 .renew-change-center h4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 8px;
   margin: 0 0 6px;
   color: #333;
   font-size: 13px;
   font-weight: 800;
+}
+
+.renew-change-center-name {
+  flex-shrink: 0;
+}
+
+.renew-change-center-summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.renew-change-center-summary-item {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 5px;
+  border-radius: 9px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .renew-change-list {

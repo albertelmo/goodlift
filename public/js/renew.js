@@ -50,7 +50,7 @@ function render(container) {
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <h3 id="renew-title" style="margin:0;color:#1976d2;font-size:1.2rem;cursor:pointer;user-select:none;transition:opacity 0.2s;" title="클릭하여 새로고침" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">재등록 현황</h3>
-          <button id="renew-member-changes-btn" class="renew-member-changes-btn" type="button">회원 변경</button>
+          <button id="renew-member-changes-btn" class="renew-member-changes-btn" type="button">회원 상태 변경 목록</button>
         </div>
         <div style="display:flex;gap:12px;align-items:center;">
           <button id="renew-add-btn" class="header-text-btn" style="white-space:nowrap;font-size:15px !important;background:#e3f2fd !important;color:#1976d2 !important;">추가</button>
@@ -1160,22 +1160,53 @@ function closeRenewMemberChangesModal() {
   }
 }
 
+function summarizeRenewChanges(entries) {
+  return (entries || []).reduce((summary, entry) => {
+    if (summary.counts[entry.type] !== undefined) {
+      summary.counts[entry.type] += 1;
+    }
+    if (entry.type === '신규') {
+      summary.newSessions += Number(entry.sessions) || 0;
+    }
+    if (entry.type === '재등록') {
+      summary.renewalSessions += Number(entry.sessions) || 0;
+    }
+    return summary;
+  }, {
+    counts: { '신규': 0, '재등록': 0, '정지': 0, '만료': 0 },
+    newSessions: 0,
+    renewalSessions: 0
+  });
+}
+
+function renderRenewChangeSummary(summary, compact = false) {
+  const className = compact ? 'renew-change-center-summary-item' : 'renew-change-summary';
+  return `
+    <span class="${className} renew-change-신규">신규 ${summary.counts['신규']}명(${summary.newSessions}회)</span>
+    <span class="${className} renew-change-재등록">재등록 ${summary.counts['재등록']}명(${summary.renewalSessions}회)</span>
+    <span class="${className} renew-change-정지">정지 ${summary.counts['정지']}명</span>
+    <span class="${className} renew-change-만료">만료 ${summary.counts['만료']}명</span>
+  `;
+}
+
 function renderRenewMemberChanges(data) {
   const content = document.querySelector('.renew-member-changes-content');
   if (!content) return;
 
-  const summary = data.summary || {};
-  const summaryTypes = ['신규', '재등록', '정지', '만료'];
-  const summaryHtml = summaryTypes.map(type => `
-    <span class="renew-change-summary renew-change-${type}">${type} ${summary[type] || 0}</span>
-  `).join('');
-
   const centers = data.centers || [];
-  const centersHtml = centers.length ? centers.map(center => `
-    <section class="renew-change-center">
-      <h4>${escapeRenewHtml(center.name)}</h4>
-      <div class="renew-change-list">
-        ${(center.entries || []).map(entry => {
+  const allEntries = centers.flatMap(center => center.entries || []);
+  const summaryHtml = renderRenewChangeSummary(summarizeRenewChanges(allEntries));
+  const centersHtml = centers.length ? centers.map(center => {
+    const centerEntries = center.entries || [];
+    const centerSummaryHtml = renderRenewChangeSummary(summarizeRenewChanges(centerEntries), true);
+    return `
+      <section class="renew-change-center">
+        <h4>
+          <span class="renew-change-center-name">${escapeRenewHtml(center.name)}</span>
+          <span class="renew-change-center-summary">${centerSummaryHtml}</span>
+        </h4>
+        <div class="renew-change-list">
+          ${centerEntries.map(entry => {
           const sessionText = ['신규', '재등록'].includes(entry.type)
             ? ` ${Number(entry.sessions) || 0}회`
             : '';
@@ -1189,10 +1220,11 @@ function renderRenewMemberChanges(data) {
               <span class="renew-change-type renew-change-${escapeRenewHtml(entry.type)}">${escapeRenewHtml(entry.type)}${sessionText}</span>
               <span class="renew-change-date" title="${escapeRenewHtml(approximateTitle)}">${escapeRenewHtml(dateText)}</span>
             </div>`;
-        }).join('')}
-      </div>
-    </section>
-  `).join('') : '<div class="renew-change-empty">해당 월의 회원 변경 내역이 없습니다.</div>';
+          }).join('')}
+        </div>
+      </section>
+    `;
+  }).join('') : '<div class="renew-change-empty">해당 월의 회원 변경 내역이 없습니다.</div>';
 
   content.innerHTML = `
     <div class="renew-change-summary-row">${summaryHtml}</div>
