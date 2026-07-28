@@ -305,7 +305,7 @@ async function getCompletedSessionsByMemberMonth(trainer, center, startDate, end
         AND m.status = '유효'
         AND m.name NOT LIKE '무기명%'
         AND m.name NOT LIKE '체험%'
-        AND m.name NOT LIKE '블로그체험단%'
+        AND m.name NOT LIKE '블로그 체험단%'
         AND s.status = '완료'
         AND s.date >= $3
         AND s.date <= $4

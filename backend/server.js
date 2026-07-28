@@ -61,12 +61,12 @@ const webCentersDB = require('./web-centers-db');
 const { initializeMigrationSystem, runMigration } = require('./migrations-manager');
 const { createPerformanceIndexes } = require('./index-migration');
 
-// 무기명/체험/블로그체험단 세션 판별 함수
+// 무기명/체험/블로그 체험단 세션 판별 함수
 function isTrialSession(memberName) {
   return memberName && (
     memberName.startsWith('무기명') || 
     memberName.startsWith('체험') ||
-    memberName.startsWith('블로그체험단')
+    memberName.startsWith('블로그 체험단')
   );
 }
 
@@ -6954,7 +6954,7 @@ app.get('/api/stats', async (req, res) => {
         
         if (session.status === '완료') {
           centerStat.completed++;
-          // 체험/무기명/블로그체험단 회원 체크
+          // 체험/무기명/블로그 체험단 회원 체크
           if (isTrialSession(session.member)) {
             centerStat.completedTrialOrAnonymous++;
           }
@@ -6968,7 +6968,7 @@ app.get('/api/stats', async (req, res) => {
       // 전체 통계 계산
       if (session.status === '완료') {
         trainer.completed++;
-        // 체험/무기명/블로그체험단 회원 체크
+        // 체험/무기명/블로그 체험단 회원 체크
         if (isTrialSession(session.member)) {
           trainer.completedTrialOrAnonymous++;
         }
@@ -7268,7 +7268,7 @@ app.get('/api/trial-sessions', async (req, res) => {
     // 세션 데이터 조회
     const sessions = await sessionsDB.getSessionsByDateRange(startDate, endDate);
     
-    // 체험/무기명/블로그체험단 세션 필터링
+    // 체험/무기명/블로그 체험단 세션 필터링
     const trialSessions = sessions.filter(s => isTrialSession(s.member));
     
     // 회원 데이터 조회 (센터 정보를 위해)
