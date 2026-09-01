@@ -937,7 +937,7 @@ function showFixedExpenseAddModal() {
         
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-fixed-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <input type="month" id="ledger-fixed-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div>
@@ -1055,7 +1055,7 @@ function showFixedExpenseEditModal(expense) {
         
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-fixed-edit-month" value="${expense.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <input type="month" id="ledger-fixed-edit-month" value="${expense.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div>
@@ -1200,7 +1200,7 @@ function showVariableExpenseAddModal() {
         
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-variable-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <input type="month" id="ledger-variable-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div style="display:none;">
@@ -1347,7 +1347,7 @@ function showVariableExpenseEditModal(expense) {
         
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-variable-edit-month" value="${expense.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <input type="month" id="ledger-variable-edit-month" value="${expense.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div style="display:none;">
@@ -1647,7 +1647,7 @@ function showSalaryAddModal() {
         
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-salary-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <input type="month" id="ledger-salary-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div>
@@ -1765,7 +1765,7 @@ function showSalaryEditModal(salary) {
         
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-salary-edit-month" value="${salary.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <input type="month" id="ledger-salary-edit-month" value="${salary.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div>
@@ -1917,7 +1917,7 @@ function showSettlementAddModal() {
       <form id="ledger-settlement-add-form" style="display:flex;flex-direction:column;gap:16px;">
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-settlement-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;">
+          <input type="month" id="ledger-settlement-add-month" value="${yearMonth}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div>
@@ -2017,7 +2017,7 @@ function showSettlementEditModal(settlement) {
       <form id="ledger-settlement-edit-form" style="display:flex;flex-direction:column;gap:16px;">
         <div>
           <label style="display:block;font-size:0.9rem;font-weight:600;color:#333;margin-bottom:6px;">연월 *</label>
-          <input type="month" id="ledger-settlement-edit-month" value="${settlement.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;" disabled>
+          <input type="month" id="ledger-settlement-edit-month" value="${settlement.month || ''}" required style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;font-size:0.95rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;" disabled>
         </div>
         
         <div>
@@ -2459,7 +2459,7 @@ async function showTrainerRevenueEditModal(trainerUsername) {
         <form id="ledger-trainer-revenue-edit-form" style="display:flex;flex-direction:column;gap:12px;">
           <div>
             <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label>
-            <input type="month" id="ledger-trainer-revenue-edit-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;">
+            <input type="month" id="ledger-trainer-revenue-edit-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
           </div>
           
           <div>
@@ -2584,7 +2584,7 @@ async function showTrainerOtherRevenueAddModal(trainerUsername) {
       <form id="ledger-trainer-other-revenue-add-form" style="display:flex;flex-direction:column;gap:12px;">
         <div>
           <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label>
-          <input type="month" id="ledger-trainer-other-revenue-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;">
+          <input type="month" id="ledger-trainer-other-revenue-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
         </div>
         
         <div>
@@ -2729,7 +2729,7 @@ async function showTrainerOtherRevenueEditModal(id, trainerUsername) {
         <form id="ledger-trainer-other-revenue-edit-form" style="display:flex;flex-direction:column;gap:12px;">
           <div>
             <label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label>
-            <input type="month" id="ledger-trainer-other-revenue-edit-month" value="${revenue.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;">
+            <input type="month" id="ledger-trainer-other-revenue-edit-month" value="${revenue.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;">
           </div>
           
           <div>
@@ -2892,7 +2892,7 @@ async function showTrainerFixedExpenseAddModal(trainerUsername) {
         <button id="ledger-trainer-fixed-add-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
       <form id="ledger-trainer-fixed-add-form" style="display:flex;flex-direction:column;gap:12px;">
-        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-fixed-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-fixed-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;"></div>
         <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-fixed-add-item" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-fixed-add-amount" value="0" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
         <div id="ledger-trainer-fixed-add-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
@@ -2978,7 +2978,7 @@ async function showTrainerFixedExpenseEditModal(id, trainerUsername) {
           <button id="ledger-trainer-fixed-edit-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
         </div>
         <form id="ledger-trainer-fixed-edit-form" style="display:flex;flex-direction:column;gap:12px;">
-          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-fixed-edit-month" value="${expense.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-fixed-edit-month" value="${expense.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;"></div>
           <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-fixed-edit-item" value="${(expense.item || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
           <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-fixed-edit-amount" value="${formatNumber(expense.amount || 0)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
           <div id="ledger-trainer-fixed-edit-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
@@ -3084,7 +3084,7 @@ async function showTrainerVariableExpenseAddModal(trainerUsername) {
       </div>
       <div style="overflow-y:auto;flex:1;padding:12px 16px;">
         <form id="ledger-trainer-variable-add-form" style="display:flex;flex-direction:column;gap:10px;">
-          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-variable-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-variable-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;"></div>
           <div style="display:none;"><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">날짜</label><input type="date" id="ledger-trainer-variable-add-date" value="${today}" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
           <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-variable-add-item" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
           <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-variable-add-amount" value="0" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
@@ -3186,7 +3186,7 @@ async function showTrainerVariableExpenseEditModal(id, trainerUsername) {
         </div>
         <div style="overflow-y:auto;flex:1;padding:12px 16px;">
           <form id="ledger-trainer-variable-edit-form" style="display:flex;flex-direction:column;gap:10px;">
-            <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-variable-edit-month" value="${expense.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+            <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-variable-edit-month" value="${expense.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;"></div>
             <div style="display:none;"><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">날짜</label><input type="date" id="ledger-trainer-variable-edit-date" value="${expense.date || ''}" style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
             <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-variable-edit-item" value="${(expense.item || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
             <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-variable-edit-amount" value="${formatNumber(expense.amount || 0)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
@@ -3305,7 +3305,7 @@ async function showTrainerSalaryAddModal(trainerUsername) {
         <button id="ledger-trainer-salary-add-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
       <form id="ledger-trainer-salary-add-form" style="display:flex;flex-direction:column;gap:12px;">
-        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-salary-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+        <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-salary-add-month" value="${yearMonth}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;"></div>
         <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-salary-add-item" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
         <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-salary-add-amount" value="0" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
         <div id="ledger-trainer-salary-add-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>
@@ -3391,7 +3391,7 @@ async function showTrainerSalaryEditModal(id, trainerUsername) {
           <button id="ledger-trainer-salary-edit-modal-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
         </div>
         <form id="ledger-trainer-salary-edit-form" style="display:flex;flex-direction:column;gap:12px;">
-          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-salary-edit-month" value="${salary.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;"></div>
+          <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">연월 *</label><input type="month" id="ledger-trainer-salary-edit-month" value="${salary.month || ''}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;appearance:none;-webkit-appearance:none;-moz-appearance:textfield;min-width:0;max-width:100%;"></div>
           <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">항목 *</label><input type="text" id="ledger-trainer-salary-edit-item" value="${(salary.item || '').replace(/"/g, '&quot;')}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;"></div>
           <div><label style="display:block;font-size:0.85rem;font-weight:600;color:#333;margin-bottom:4px;">금액 *</label><input type="text" id="ledger-trainer-salary-edit-amount" value="${formatNumber(salary.amount || 0)}" required style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;box-sizing:border-box;" inputmode="numeric"></div>
           <div id="ledger-trainer-salary-edit-result-message" style="min-height:20px;color:#d32f2f;font-size:0.8rem;"></div>

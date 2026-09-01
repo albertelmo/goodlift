@@ -3850,6 +3850,18 @@ li, td, th {
   }
 }
 
+/* 장부 모달 - 연월/날짜 입력 너비 통일 */
+[class*="ledger-"][class$="-modal"] input[type="month"],
+[class*="ledger-"][class$="-modal"] input[type="date"],
+[class*="trainer-ledger-"][class$="-modal"] input[type="month"],
+[class*="trainer-ledger-"][class$="-modal"] input[type="date"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: textfield;
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* 장부 탭 추가/수정 모달 - 모바일 */
 @media (max-width: 600px) {
   .ledger-fixed-add-modal,
