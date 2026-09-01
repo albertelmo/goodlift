@@ -3849,3 +3849,22 @@ li, td, th {
     font-size: 10px;
   }
 }
+
+/* 장부 탭 추가/수정 모달 - 모바일 */
+@media (max-width: 600px) {
+  .ledger-fixed-add-modal,
+  .ledger-fixed-edit-modal,
+  .ledger-salary-add-modal,
+  .ledger-salary-edit-modal,
+  .ledger-settlement-add-modal,
+  .ledger-settlement-edit-modal {
+    padding: 16px !important;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .ledger-variable-add-modal,
+  .ledger-variable-edit-modal {
+    max-height: 92vh;
+  }
+}
