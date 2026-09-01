@@ -711,14 +711,25 @@ async function patchFormData(endpoint, formData) {
 }
 
 /**
+ * 운동종류 이름 가나다순 정렬 (DB en_US collation 보정)
+ */
+export function sortWorkoutTypesByName(workoutTypes) {
+    if (!Array.isArray(workoutTypes)) return [];
+    return workoutTypes.slice().sort((a, b) =>
+        String(a?.name || '').localeCompare(String(b?.name || ''), 'ko', { sensitivity: 'base' })
+    );
+}
+
+/**
  * 운동종류 목록 조회 (캐싱 적용 - 변경 빈도 낮음)
  */
 export async function getWorkoutTypes() {
     // 캐시 사용 (5분 TTL - 운동종류는 자주 변경되지 않음)
-    return get('/workout-types', { 
-        useCache: true, 
+    const workoutTypes = await get('/workout-types', {
+        useCache: true,
         ttl: 5 * 60 * 1000 // 5분
     });
+    return sortWorkoutTypesByName(workoutTypes);
 }
 
 // ========== 즐겨찾기 운동 API ==========
