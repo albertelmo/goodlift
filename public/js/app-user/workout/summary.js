@@ -3,6 +3,7 @@
 import { getWorkoutYearSummary } from '../api.js';
 import { escapeHtml, showLoading, showError } from '../utils.js';
 import { getCurrentMonth } from './calendar.js';
+import { showWorkoutTypeYearHistoryModal } from './list.js';
 
 /**
  * 연간 운동 요약 모달 표시
@@ -66,14 +67,14 @@ export async function showWorkoutYearSummaryModal(appUserId, year = null) {
 
     try {
         const summary = await getWorkoutYearSummary(appUserId, summaryYear);
-        if (content) renderWorkoutYearSummary(content, summary);
+        if (content) renderWorkoutYearSummary(content, summary, appUserId);
     } catch (error) {
         console.error('연간 운동 요약 조회 오류:', error);
         if (content) showError(content, '운동 요약을 불러오는 중 오류가 발생했습니다.');
     }
 }
 
-function renderWorkoutYearSummary(container, summary) {
+function renderWorkoutYearSummary(container, summary, appUserId) {
     if (!container) return;
 
     const year = summary?.year || '';
@@ -85,11 +86,11 @@ function renderWorkoutYearSummary(container, summary) {
     if (items.length === 0) {
         listHtml = '<div class="workout-summary-empty">등록된 운동기록이 없습니다.</div>';
     } else {
-        listHtml = items.map(item => `
-            <div class="workout-summary-row">
+        listHtml = items.map((item, index) => `
+            <button type="button" class="workout-summary-row" data-summary-index="${index}" aria-label="${escapeHtml(item.name || '기타')} 기록 보기">
                 <span class="workout-summary-name">${escapeHtml(item.name || '기타')}</span>
                 <span class="workout-summary-count">${item.count || 0}회</span>
-            </div>
+            </button>
         `).join('');
     }
 
@@ -103,4 +104,17 @@ function renderWorkoutYearSummary(container, summary) {
             <div class="workout-summary-list">${listHtml}</div>
         </div>
     `;
+
+    container.querySelectorAll('.workout-summary-row[data-summary-index]').forEach(button => {
+        button.addEventListener('click', async () => {
+            const index = Number.parseInt(button.getAttribute('data-summary-index'), 10);
+            const item = items[index];
+            if (!item) return;
+            try {
+                await showWorkoutTypeYearHistoryModal(appUserId, year, item);
+            } catch (error) {
+                console.error('운동종류별 기록 모달 오류:', error);
+            }
+        });
+    });
 }

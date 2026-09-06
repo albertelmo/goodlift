@@ -1540,6 +1540,7 @@ const getWorkoutYearSummary = async (appUserId, year) => {
           ELSE '기타'
         END AS name,
         wt.type AS workout_type_type,
+        (MAX(CASE WHEN wr.is_text_record THEN 1 ELSE 0 END) > 0) AS is_text_record,
         COUNT(*)::int AS count
       FROM workout_records wr
       LEFT JOIN workout_types wt ON wr.workout_type_id = wt.id
@@ -1561,6 +1562,7 @@ const getWorkoutYearSummary = async (appUserId, year) => {
       workout_type_id: row.workout_type_id || null,
       name: row.name,
       type: row.workout_type_type || null,
+      is_text_record: row.is_text_record === true,
       count: parseInt(row.count || 0, 10)
     }));
     const totalRecords = byWorkoutType.reduce((sum, row) => sum + row.count, 0);

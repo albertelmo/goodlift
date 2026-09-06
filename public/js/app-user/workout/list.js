@@ -378,6 +378,159 @@ async function getMonthlyWorkoutHistory(appUserId, workoutTypeId, targetMonth) {
     return payload;
 }
 
+async function getWorkoutHistoryGrouped(appUserId, startDate, endDate, workoutTypeId, isTextRecord = false) {
+    const allRecords = await getWorkoutRecords(appUserId, { startDate, endDate });
+    const filtered = allRecords.filter(record => {
+        if (isTextRecord) return record.is_text_record === true;
+        if (record.is_text_record === true) return false;
+        return String(record.workout_type_id || '') === String(workoutTypeId || '');
+    });
+    const recordsByDate = {};
+    filtered.forEach(record => {
+        const dateKey = parseRecordDate(record.workout_date);
+        if (!dateKey) return;
+        if (!recordsByDate[dateKey]) {
+            recordsByDate[dateKey] = [];
+        }
+        recordsByDate[dateKey].push(record);
+    });
+    Object.values(recordsByDate).forEach(dateRecords => {
+        dateRecords.sort((a, b) => {
+            const orderA = a.display_order ?? 999999;
+            const orderB = b.display_order ?? 999999;
+            if (orderA !== orderB) return orderA - orderB;
+            return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        });
+    });
+    const sortedDates = Object.keys(recordsByDate).sort((a, b) => new Date(b) - new Date(a));
+    return { sortedDates, recordsByDate };
+}
+
+function renderGroupedWorkoutHistoryHtml(sortedDates, recordsByDate) {
+    if (!sortedDates.length) {
+        return `
+            <div class="workout-history-empty">
+                <p>기록이 없습니다</p>
+            </div>
+        `;
+    }
+    const groupedHtml = sortedDates.map(dateKey => {
+        const dateObj = new Date(dateKey);
+        const records = recordsByDate[dateKey] || [];
+        const volumeInfo = calculateVolumeForRecords(records);
+        const dateSummaryText = volumeInfo.hasVolume
+            ? `볼륨 : ${formatVolumeKg(volumeInfo.total)}`
+            : `${records.length}건`;
+        const recordsHtml = records.map(record => renderWorkoutItem(record, {
+            suppressControls: true,
+            disableGuideButton: true
+        })).join('');
+        return `
+            <div class="app-workout-date-section">
+                <div class="app-workout-date-header">
+                    <div class="app-workout-date-left">
+                        <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
+                        <span class="app-workout-date-count">${dateSummaryText}</span>
+                    </div>
+                </div>
+                ${recordsHtml ? `<div class="app-workout-items">${recordsHtml}</div>` : '<div class="workout-history-empty"><p>기록 없음</p></div>'}
+            </div>
+        `;
+    }).join('');
+    return `<div class="app-workout-list">${groupedHtml}</div>`;
+}
+
+export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
+    const {
+        title = '운동 기록',
+        startDate,
+        endDate,
+        workoutTypeId = null,
+        isTextRecord = false
+    } = options;
+
+    if (!appUserId || !startDate || !endDate) return;
+
+    const existingModal = document.getElementById('workout-type-history-modal-bg');
+    if (existingModal) existingModal.remove();
+
+    const modalHtml = `
+        <div class="app-modal-bg" id="workout-type-history-modal-bg">
+            <div class="app-modal workout-history-modal workout-type-history-modal" id="workout-type-history-modal">
+                <div class="app-modal-header">
+                    <h3>${escapeHtml(title)}</h3>
+                    <button class="app-modal-close-btn" id="workout-type-history-modal-close" type="button" aria-label="닫기">×</button>
+                </div>
+                <div class="app-modal-form workout-history-form workout-type-history-form">
+                    <div class="workout-history-content workout-history-content-compact" id="workout-type-history-content">
+                        <div class="workout-history-loading">로딩 중...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modalBg = document.getElementById('workout-type-history-modal-bg');
+    const modal = document.getElementById('workout-type-history-modal');
+    const contentEl = document.getElementById('workout-type-history-content');
+    const closeBtn = document.getElementById('workout-type-history-modal-close');
+
+    const closeModal = () => {
+        modalBg.classList.remove('app-modal-show');
+        modal.classList.remove('app-modal-show');
+        document.removeEventListener('keydown', escHandler);
+        setTimeout(() => modalBg.remove(), 200);
+    };
+
+    const escHandler = (e) => {
+        if (e.key === 'Escape') closeModal();
+    };
+
+    closeBtn.addEventListener('click', closeModal);
+    modalBg.addEventListener('click', (e) => {
+        if (e.target === modalBg) closeModal();
+    });
+    document.addEventListener('keydown', escHandler);
+
+    setTimeout(() => {
+        modalBg.classList.add('app-modal-show');
+        modal.classList.add('app-modal-show');
+    }, 10);
+
+    try {
+        const { sortedDates, recordsByDate } = await getWorkoutHistoryGrouped(
+            appUserId,
+            startDate,
+            endDate,
+            workoutTypeId,
+            isTextRecord
+        );
+        contentEl.innerHTML = renderGroupedWorkoutHistoryHtml(sortedDates, recordsByDate);
+    } catch (error) {
+        console.error('운동종류별 기록 조회 오류:', error);
+        contentEl.innerHTML = `
+            <div class="workout-history-empty error">
+                <p>기록을 불러오는 중 오류가 발생했습니다</p>
+            </div>
+        `;
+    }
+}
+
+export async function showWorkoutTypeYearHistoryModal(appUserId, year, item = {}) {
+    const yearNum = parseInt(year, 10);
+    if (!Number.isFinite(yearNum)) return;
+
+    const workoutName = item.name || '운동';
+    await showWorkoutTypeHistoryModal(appUserId, {
+        title: `${yearNum}년 ${workoutName}`,
+        startDate: `${yearNum}-01-01`,
+        endDate: `${yearNum}-12-31`,
+        workoutTypeId: item.workout_type_id,
+        isTextRecord: item.is_text_record === true || workoutName === '간편 기록'
+    });
+}
+
 async function showWorkoutMonthlyHistoryModal(appUserId, workoutTypeId, workoutName) {
     const existingModal = document.getElementById('workout-monthly-history-modal-bg');
     if (existingModal) {
@@ -433,38 +586,7 @@ async function showWorkoutMonthlyHistoryModal(appUserId, workoutTypeId, workoutN
         contentEl.innerHTML = `<div class="workout-history-loading">로딩 중...</div>`;
         try {
             const { sortedDates, recordsByDate } = await getMonthlyWorkoutHistory(appUserId, workoutTypeId, selectedMonth);
-            if (!sortedDates.length) {
-                contentEl.innerHTML = `
-                    <div class="workout-history-empty">
-                        <p>이 달에는 기록이 없습니다</p>
-                    </div>
-                `;
-                return;
-            }
-            const groupedHtml = sortedDates.map(dateKey => {
-                const dateObj = new Date(dateKey);
-                const records = recordsByDate[dateKey] || [];
-                const volumeInfo = calculateVolumeForRecords(records);
-                const dateSummaryText = volumeInfo.hasVolume
-                    ? `볼륨 : ${formatVolumeKg(volumeInfo.total)}`
-                    : `${records.length}건`;
-                const recordsHtml = records.map(record => renderWorkoutItem(record, {
-                    suppressControls: true,
-                    disableGuideButton: true
-                })).join('');
-                return `
-                    <div class="app-workout-date-section">
-                        <div class="app-workout-date-header">
-                            <div class="app-workout-date-left">
-                                <h3 class="app-workout-date-title">${formatDateShort(dateObj)}</h3>
-                                <span class="app-workout-date-count">${dateSummaryText}</span>
-                            </div>
-                        </div>
-                        ${recordsHtml ? `<div class="app-workout-items">${recordsHtml}</div>` : '<div class="workout-history-empty"><p>기록 없음</p></div>'}
-                    </div>
-                `;
-            }).join('');
-            contentEl.innerHTML = `<div class="app-workout-list">${groupedHtml}</div>`;
+            contentEl.innerHTML = renderGroupedWorkoutHistoryHtml(sortedDates, recordsByDate);
         } catch (error) {
             console.error('월별 운동 히스토리 조회 오류:', error);
             contentEl.innerHTML = `

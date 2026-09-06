@@ -1606,8 +1606,22 @@ body.app-user-active {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
+    width: 100%;
     padding: 12px 14px;
+    border: none;
     border-bottom: 1px solid var(--app-border);
+    background: var(--app-surface);
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--app-transition);
+}
+
+.workout-summary-row:hover {
+    background: var(--app-bg-hover);
+}
+
+.workout-summary-row:active {
+    background: var(--app-border);
 }
 
 .workout-summary-row:last-child {
@@ -1634,6 +1648,15 @@ body.app-user-active {
     text-align: center;
     color: var(--app-text-muted);
     font-size: 0.9rem;
+}
+
+.workout-type-history-form {
+    padding: 0 16px 16px;
+}
+
+.workout-type-history-modal .workout-history-content-compact {
+    max-height: 65vh;
+    overflow-y: auto;
 }
 
 /* 식단 화면 스타일 - 운동기록과 동일한 구조 */
