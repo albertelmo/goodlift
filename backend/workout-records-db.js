@@ -32,13 +32,40 @@ const logQuery = (query, params, duration) => {
   }
 };
 
+const pendingStatsRefreshTimers = new Map();
+
+const normalizeWorkoutDateKey = (workoutDate) => {
+  if (!workoutDate) return null;
+  if (workoutDate instanceof Date) {
+    const year = workoutDate.getFullYear();
+    const month = String(workoutDate.getMonth() + 1).padStart(2, '0');
+    const day = String(workoutDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  if (typeof workoutDate === 'string') {
+    return workoutDate.split('T')[0];
+  }
+  return workoutDate;
+};
+
 const scheduleDailyStatsRefresh = (appUserId, workoutDate) => {
-  if (!workoutDate) return;
-  setImmediate(() => {
-    Promise.resolve(achievementsDB.refreshDailyStats(appUserId, workoutDate)).catch(error => {
+  const normalizedDate = normalizeWorkoutDateKey(workoutDate);
+  if (!appUserId || !normalizedDate) return;
+
+  const timerKey = `${appUserId}::${normalizedDate}`;
+  const existingTimer = pendingStatsRefreshTimers.get(timerKey);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const timer = setTimeout(() => {
+    pendingStatsRefreshTimers.delete(timerKey);
+    Promise.resolve(achievementsDB.refreshDailyStats(appUserId, normalizedDate)).catch(error => {
       console.error('[PostgreSQL] 운동 업적 갱신 오류:', error);
     });
-  });
+  }, 200);
+
+  pendingStatsRefreshTimers.set(timerKey, timer);
 };
 
 // Pool의 query 메서드를 래핑하여 로깅 추가
@@ -1498,15 +1525,11 @@ const getWorkoutYearSummary = async (appUserId, year) => {
     const startDate = `${yearNum}-01-01`;
     const endDate = `${yearNum}-12-31`;
 
-    const daysQuery = `
-      SELECT COUNT(*) FILTER (WHERE workout_all_completed)::int AS workout_completed_days
-      FROM app_user_daily_stats
-      WHERE app_user_id = $1
-        AND record_date >= $2
-        AND record_date <= $3
-    `;
-    const daysResult = await pool.query(daysQuery, [appUserId, startDate, endDate]);
-    const workoutCompletedDays = parseInt(daysResult.rows[0]?.workout_completed_days || 0, 10);
+    const workoutCompletedDays = await achievementsDB.countWorkoutCompletedDaysInRange(
+      appUserId,
+      startDate,
+      endDate
+    );
 
     const typeQuery = `
       SELECT

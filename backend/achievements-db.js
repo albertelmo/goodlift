@@ -209,27 +209,45 @@ const normalizeDate = (dateValue) => {
   return dateValue;
 };
 
-const getWorkoutDayStatus = async (appUserId, recordDate) => {
-  const query = `
-    WITH record_completion AS (
-      SELECT
-        wr.id,
-        CASE
-          WHEN wr.is_text_record = true THEN wr.is_completed
-          WHEN wt.type = '시간' THEN wr.is_completed
-          WHEN wt.type = '세트' THEN (COUNT(wrs.*) > 0 AND BOOL_AND(wrs.is_completed))
-          ELSE false
-        END AS record_completed
-      FROM workout_records wr
-      LEFT JOIN workout_types wt ON wr.workout_type_id = wt.id
-      LEFT JOIN workout_record_sets wrs ON wrs.workout_record_id = wr.id
-      WHERE wr.app_user_id = $1 AND wr.workout_date = $2
-      GROUP BY wr.id, wr.is_text_record, wr.is_completed, wt.type
-    )
+const WORKOUT_RECORD_COMPLETED_EXPR = `
+  CASE
+    WHEN wr.is_text_record = true THEN wr.is_completed
+    WHEN wt.type = '시간' THEN wr.is_completed
+    WHEN wt.type = '세트' THEN (COUNT(wrs.*) > 0 AND BOOL_AND(wrs.is_completed))
+    ELSE false
+  END
+`;
+
+const buildWorkoutDailyCompletionQuery = (extraWhere = '') => `
+  WITH record_completion AS (
     SELECT
-      COUNT(*) AS total,
+      wr.workout_date,
+      wr.id,
+      ${WORKOUT_RECORD_COMPLETED_EXPR} AS record_completed
+    FROM workout_records wr
+    LEFT JOIN workout_types wt ON wr.workout_type_id = wt.id
+    LEFT JOIN workout_record_sets wrs ON wrs.workout_record_id = wr.id
+    WHERE wr.app_user_id = $1
+      ${extraWhere}
+    GROUP BY wr.workout_date, wr.id, wr.is_text_record, wr.is_completed, wt.type
+  ),
+  daily AS (
+    SELECT
+      workout_date,
+      COUNT(*) > 0 AS has_workout,
       BOOL_AND(record_completed) AS all_completed
     FROM record_completion
+    GROUP BY workout_date
+  )
+`;
+
+const getWorkoutDayStatus = async (appUserId, recordDate) => {
+  const query = `
+    ${buildWorkoutDailyCompletionQuery('AND wr.workout_date = $2::date')}
+    SELECT
+      COUNT(*) AS total,
+      BOOL_AND(all_completed) AS all_completed
+    FROM daily
   `;
   const result = await pool.query(query, [appUserId, recordDate]);
   const row = result.rows[0] || { total: 0, all_completed: false };
@@ -238,6 +256,35 @@ const getWorkoutDayStatus = async (appUserId, recordDate) => {
     hasWorkout: total > 0,
     allCompleted: total > 0 && row.all_completed === true
   };
+};
+
+const countWorkoutCompletedDaysInRange = async (appUserId, startDate, endDate) => {
+  const query = `
+    ${buildWorkoutDailyCompletionQuery('AND wr.workout_date >= $2::date AND wr.workout_date <= $3::date')}
+    SELECT COUNT(*) FILTER (WHERE all_completed)::int AS workout_completed_days
+    FROM daily
+  `;
+  const result = await pool.query(query, [appUserId, startDate, endDate]);
+  return parseInt(result.rows[0]?.workout_completed_days || 0, 10);
+};
+
+const getWorkoutCompletionSummaryByDateRange = async (appUserId, startDate, endDate) => {
+  const query = `
+    ${buildWorkoutDailyCompletionQuery('AND wr.workout_date >= $2::date AND wr.workout_date <= $3::date')}
+    SELECT workout_date, has_workout, all_completed
+    FROM daily
+    ORDER BY workout_date ASC
+  `;
+  const result = await pool.query(query, [appUserId, startDate, endDate]);
+  const summary = {};
+  result.rows.forEach(row => {
+    const dateStr = normalizeDate(row.workout_date);
+    summary[dateStr] = {
+      hasWorkout: row.has_workout === true,
+      allCompleted: row.all_completed === true
+    };
+  });
+  return summary;
 };
 
 const getDietDayStatus = async (appUserId, recordDate) => {
@@ -356,23 +403,10 @@ const refreshDailyStats = async (appUserId, recordDateRaw) => {
 };
 
 const getWorkoutCalendarSummary = async (appUserId, startDate, endDate) => {
-  const query = `
-    SELECT record_date, workout_has_record, workout_all_completed
-    FROM app_user_daily_stats
-    WHERE app_user_id = $1
-      AND record_date >= $2
-      AND record_date <= $3
-  `;
-  const result = await pool.query(query, [appUserId, startDate, endDate]);
-  const summary = {};
-  result.rows.forEach(row => {
-    const dateStr = normalizeDate(row.record_date);
-    summary[dateStr] = {
-      hasWorkout: row.workout_has_record === true,
-      allCompleted: row.workout_all_completed === true
-    };
-  });
-  return summary;
+  if (!startDate || !endDate) {
+    return {};
+  }
+  return getWorkoutCompletionSummaryByDateRange(appUserId, startDate, endDate);
 };
 
 const getDietCalendarSummary = async (appUserId, startDate, endDate) => {
@@ -443,23 +477,27 @@ const getMedalStatus = async (appUserIds, startDate, endDate) => {
 };
 
 const getAchievementSummary = async (appUserId, startDate, endDate) => {
-  const query = `
-    SELECT
-      COUNT(*) FILTER (WHERE workout_all_completed) AS workout_days,
-      COUNT(*) FILTER (WHERE diet_has_record) AS diet_days,
-      COALESCE(SUM(workout_member_comment_count), 0) AS workout_member_comment_count,
-      COALESCE(SUM(workout_trainer_comment_count), 0) AS workout_trainer_comment_count,
-      COALESCE(SUM(diet_member_comment_count), 0) AS diet_member_comment_count,
-      COALESCE(SUM(diet_trainer_comment_count), 0) AS diet_trainer_comment_count
-    FROM app_user_daily_stats
-    WHERE app_user_id = $1
-      AND record_date >= $2
-      AND record_date <= $3
-  `;
-  const result = await pool.query(query, [appUserId, startDate, endDate]);
-  const row = result.rows[0] || {};
+  const [workoutDays, statsResult] = await Promise.all([
+    countWorkoutCompletedDaysInRange(appUserId, startDate, endDate),
+    pool.query(
+      `
+        SELECT
+          COUNT(*) FILTER (WHERE diet_has_record) AS diet_days,
+          COALESCE(SUM(workout_member_comment_count), 0) AS workout_member_comment_count,
+          COALESCE(SUM(workout_trainer_comment_count), 0) AS workout_trainer_comment_count,
+          COALESCE(SUM(diet_member_comment_count), 0) AS diet_member_comment_count,
+          COALESCE(SUM(diet_trainer_comment_count), 0) AS diet_trainer_comment_count
+        FROM app_user_daily_stats
+        WHERE app_user_id = $1
+          AND record_date >= $2
+          AND record_date <= $3
+      `,
+      [appUserId, startDate, endDate]
+    )
+  ]);
+  const row = statsResult.rows[0] || {};
   return {
-    workoutDays: parseInt(row.workout_days || 0, 10),
+    workoutDays,
     dietDays: parseInt(row.diet_days || 0, 10),
     workoutMemberCommentCount: parseInt(row.workout_member_comment_count || 0, 10),
     workoutTrainerCommentCount: parseInt(row.workout_trainer_comment_count || 0, 10),
@@ -637,5 +675,7 @@ module.exports = {
   getDietCalendarSummary,
   getAchievementSummary,
   getAchievementSummaries,
-  getAchievementMedalTotals
+  getAchievementMedalTotals,
+  countWorkoutCompletedDaysInRange,
+  getWorkoutCompletionSummaryByDateRange
 };
