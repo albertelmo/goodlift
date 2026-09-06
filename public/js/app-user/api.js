@@ -400,6 +400,36 @@ export async function deleteWorkoutRecord(id, appUserId) {
 }
 
 /**
+ * 연간 운동 요약 조회 (오운완 일수 + 운동종류별 횟수)
+ */
+export async function getWorkoutYearSummary(appUserId, year) {
+    if (appUserId && appUserId.startsWith('trainer-')) {
+        return {
+            year: parseInt(year, 10),
+            workout_completed_days: 0,
+            total_records: 0,
+            by_workout_type: []
+        };
+    }
+
+    const params = new URLSearchParams({
+        app_user_id: appUserId,
+        year: String(year)
+    });
+    const endpoint = `/workout-records/year-summary?${params.toString()}`;
+    const cacheKey = cache.getKey('/workout-records/year-summary', {
+        app_user_id: appUserId,
+        year: String(year)
+    });
+
+    return get(endpoint, {
+        useCache: true,
+        ttl: 60 * 1000,
+        cacheKey
+    });
+}
+
+/**
  * 운동기록 통계 조회
  */
 export async function getWorkoutStats(appUserId, startDate, endDate) {

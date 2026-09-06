@@ -6,6 +6,7 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 const multer = require('multer');
 const sharp = require('sharp');
+const { generateIcon, VALID_SIZES, VALID_PURPOSES } = require('./pwa-icons');
 const ExcelJS = require('exceljs');
 const { getKoreanDate, getKoreanToday, parseKoreanDate, getKoreanYearMonth } = require('./utils');
 
@@ -1337,6 +1338,26 @@ function getConsultationDateTimeLabel(record) {
 app.get('/manifest.json', (req, res) => {
     res.setHeader('Content-Type', 'application/manifest+json');
     res.sendFile(path.join(__dirname, '../public/manifest.json'));
+});
+
+// PWA 아이콘 (기존 favicon + safe zone padding, Android maskable 대응)
+app.get('/pwa/icon/:size/:purpose.png', async (req, res) => {
+    const size = Number.parseInt(req.params.size, 10);
+    const purpose = req.params.purpose;
+    if (!VALID_SIZES.includes(size) || !VALID_PURPOSES.includes(purpose)) {
+        res.status(404).end();
+        return;
+    }
+
+    try {
+        const buffer = await generateIcon(size, purpose);
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.send(buffer);
+    } catch (error) {
+        console.error('[PWA Icon] 생성 실패:', error);
+        res.status(500).end();
+    }
 });
 
 // 공개 상담기록 조회 페이지 라우트 (정적 파일 서빙 전에 추가)
@@ -3155,6 +3176,33 @@ app.get('/api/workout-records', async (req, res) => {
     } catch (error) {
         console.error('[API] 운동기록 조회 오류:', error);
         res.status(500).json({ message: '운동기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+// 연간 운동 요약 (오운완 일수 + 운동종류별 횟수)
+app.get('/api/workout-records/year-summary', async (req, res) => {
+    try {
+        const { app_user_id, year } = req.query;
+
+        if (!app_user_id || !year) {
+            return res.status(400).json({ message: '앱 유저 ID와 연도가 필요합니다.' });
+        }
+
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json({
+                year: parseInt(year, 10),
+                period: { start_date: `${year}-01-01`, end_date: `${year}-12-31` },
+                workout_completed_days: 0,
+                total_records: 0,
+                by_workout_type: []
+            });
+        }
+
+        const summary = await workoutRecordsDB.getWorkoutYearSummary(app_user_id, year);
+        res.json(summary);
+    } catch (error) {
+        console.error('[API] 연간 운동 요약 조회 오류:', error);
+        res.status(500).json({ message: error.message || '연간 운동 요약 조회 중 오류가 발생했습니다.' });
     }
 });
 

@@ -193,6 +193,33 @@ function setupButtonEventListeners() {
             e.stopPropagation();
         }
         
+        // 전체(연간 요약) 버튼 클릭
+        if (btnId === 'workout-summary-btn') {
+            if (eventType === 'touchstart') {
+                return;
+            }
+
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+
+            try {
+                const connectedMemberAppUserId = localStorage.getItem('connectedMemberAppUserId');
+                const targetAppUserId = connectedMemberAppUserId || currentAppUserId;
+                if (!targetAppUserId) {
+                    alert('사용자 정보를 찾을 수 없습니다.');
+                    return;
+                }
+                const { showWorkoutYearSummaryModal } = await import('./summary.js');
+                const year = getCurrentMonth().getFullYear();
+                await showWorkoutYearSummaryModal(targetAppUserId, year);
+            } catch (error) {
+                console.error('[Workout] 전체 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+
         // 목록보기 버튼 클릭
         if (btnId === 'workout-list-btn') {
             if (eventType === 'touchstart') {
@@ -399,6 +426,34 @@ function setupButtonEventListeners() {
             return;
         }
         
+        // 운동카드 이미지 저장 버튼
+        if (btnId === 'workout-save-image-btn') {
+            if (eventType === 'touchstart') {
+                return;
+            }
+
+            const now = Date.now();
+            if (now - lastButtonClickTime < BUTTON_CLICK_THROTTLE) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            lastButtonClickTime = now;
+
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+
+            try {
+                const { handleSaveWorkoutImageClick } = await import('./list.js');
+                await handleSaveWorkoutImageClick();
+            } catch (error) {
+                console.error('[Workout] 저장 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+
         // 운동 코멘트 버튼 클릭
         if (btnId === 'workout-comment-btn' && !isReadOnly) {
             if (eventType === 'touchstart') {
@@ -509,6 +564,7 @@ async function render() {
                 <div class="app-workout-month-display">${year}년 ${month}월${memberDisplay}</div>
                 <div class="app-workout-top-buttons">
                     ${showMemberNoteButton ? `<button class="app-workout-today-btn" id="workout-note-btn" title="회원 노트">노트</button>` : ''}
+                    <button class="app-workout-today-btn" id="workout-summary-btn" title="연간 운동 요약">전체</button>
                     <button class="app-workout-today-btn" id="workout-list-btn" title="최근 30일 목록">목록</button>
                     <button class="app-workout-today-btn" id="workout-memo-btn" title="메모 보기">메모</button>
                 </div>

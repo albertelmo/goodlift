@@ -1487,6 +1487,74 @@ const updateWorkoutSetCompleted = async (setId, workoutRecordId, appUserId, isCo
   }
 };
 
+// 연간 운동 요약 (오운완 일수 + 운동종류별 기록 횟수)
+const getWorkoutYearSummary = async (appUserId, year) => {
+  try {
+    const yearNum = parseInt(year, 10);
+    if (!Number.isFinite(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      throw new Error('유효하지 않은 연도입니다.');
+    }
+
+    const startDate = `${yearNum}-01-01`;
+    const endDate = `${yearNum}-12-31`;
+
+    const daysQuery = `
+      SELECT COUNT(*) FILTER (WHERE workout_all_completed)::int AS workout_completed_days
+      FROM app_user_daily_stats
+      WHERE app_user_id = $1
+        AND record_date >= $2
+        AND record_date <= $3
+    `;
+    const daysResult = await pool.query(daysQuery, [appUserId, startDate, endDate]);
+    const workoutCompletedDays = parseInt(daysResult.rows[0]?.workout_completed_days || 0, 10);
+
+    const typeQuery = `
+      SELECT
+        wr.workout_type_id,
+        CASE
+          WHEN wr.is_text_record = true THEN '간편 기록'
+          WHEN wt.name IS NOT NULL THEN wt.name
+          ELSE '기타'
+        END AS name,
+        wt.type AS workout_type_type,
+        COUNT(*)::int AS count
+      FROM workout_records wr
+      LEFT JOIN workout_types wt ON wr.workout_type_id = wt.id
+      WHERE wr.app_user_id = $1
+        AND wr.workout_date >= $2
+        AND wr.workout_date <= $3
+      GROUP BY
+        wr.workout_type_id,
+        CASE
+          WHEN wr.is_text_record = true THEN '간편 기록'
+          WHEN wt.name IS NOT NULL THEN wt.name
+          ELSE '기타'
+        END,
+        wt.type
+      ORDER BY count DESC, name ASC
+    `;
+    const typeResult = await pool.query(typeQuery, [appUserId, startDate, endDate]);
+    const byWorkoutType = typeResult.rows.map(row => ({
+      workout_type_id: row.workout_type_id || null,
+      name: row.name,
+      type: row.workout_type_type || null,
+      count: parseInt(row.count || 0, 10)
+    }));
+    const totalRecords = byWorkoutType.reduce((sum, row) => sum + row.count, 0);
+
+    return {
+      year: yearNum,
+      period: { start_date: startDate, end_date: endDate },
+      workout_completed_days: workoutCompletedDays,
+      total_records: totalRecords,
+      by_workout_type: byWorkoutType
+    };
+  } catch (error) {
+    console.error('[PostgreSQL] 연간 운동 요약 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 통계 조회 (기간별 합계)
 const getWorkoutStats = async (appUserId, startDate, endDate) => {
   try {
@@ -1777,6 +1845,7 @@ module.exports = {
   updateWorkoutRecord,
   deleteWorkoutRecord,
   getWorkoutStats,
+  getWorkoutYearSummary,
   updateWorkoutRecordCompleted,
   updateWorkoutSetCompleted,
   getWorkoutRecordsForCalendar,

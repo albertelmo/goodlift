@@ -34,7 +34,7 @@ self.addEventListener('notificationclick', event => {
   );
 });
 // Service Worker 캐시 버전 (캐시 무효화 필요 시에만 변경)
-const VERSION = '2026-07-28-member-changes';
+const VERSION = '2026-09-06-pwa-icons';
 const CACHE_NAME = `goodlift-${VERSION}`;
 const RUNTIME_CACHE = `goodlift-runtime-${VERSION}`;
 
@@ -50,6 +50,10 @@ const STATIC_CACHE_URLS = [
   '/img/favicon-32x32.png',
   '/img/favicon-192x192.png',
   '/img/favicon-512x512.png',
+  '/pwa/icon/192/any.png',
+  '/pwa/icon/512/any.png',
+  '/pwa/icon/192/maskable.png',
+  '/pwa/icon/512/maskable.png',
   '/img/logo.png',
   '/js/main.js',
   '/js/trainerWeekCalendar.js',

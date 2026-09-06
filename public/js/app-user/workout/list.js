@@ -1,6 +1,7 @@
 // 운동기록 목록 렌더링
 
 import { formatDate, formatDateShort, formatNumber, showLoading, showError, showEmpty, escapeHtml, formatWeight, autoResizeText, formatWorkoutDuration, workoutDurationTotalSeconds } from '../utils.js';
+import { saveWorkoutRecordsAsImage } from './export-image.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
 import { getCurrentUser } from '../index.js';
 import { showWorkoutGuideDetailModal } from '../guide-modal.js';
@@ -520,6 +521,16 @@ function formatVolumeKg(total) {
     return `${formatted}kg`;
 }
 
+function normalizeDateStr(value) {
+    if (value instanceof Date) {
+        return formatDate(value);
+    }
+    if (typeof value === 'string') {
+        return value.split('T')[0];
+    }
+    return '';
+}
+
 function calculateVolumeForRecords(records = []) {
     let total = 0;
     let hasVolume = false;
@@ -983,19 +994,18 @@ async function render(records, options = {}) {
         });
     }
     
-    const hasAnyComments = allDates.some(date => (commentsByDate[date] || []).length > 0);
     const overallVolumeInfo = calculateVolumeForRecords(records);
     const overallSummaryText = overallVolumeInfo.hasVolume
         ? `전체 볼륨 : ${formatVolumeKg(overallVolumeInfo.total)}`
         : `전체 ${records.length}건`;
-    let html = `
-        ${hasAnyComments ? '' : `
-        <div style="display:flex;justify-content:flex-end;align-items:center;margin:4px 0 8px;color:var(--app-text-muted);font-size:12px;">
-            ${overallSummaryText}
+    const summaryBarHtml = records.length > 0 ? `
+        <div class="app-workout-day-summary-bar">
+            <span class="app-workout-day-summary-volume">${overallSummaryText}</span>
+            <button type="button" class="app-workout-save-image-btn" id="workout-save-image-btn">저장</button>
         </div>
-        `}
-        <div class="app-workout-list">
-    `;
+    ` : '';
+    let summaryBarInserted = false;
+    let html = `<div class="app-workout-list">`;
     
     // 렌더링 로직
     // 운동기록이 있는 날짜만 렌더링
@@ -1078,6 +1088,11 @@ async function render(records, options = {}) {
                 `;
             });
             html += `</div>`;
+        }
+
+        if (dateRecords.length > 0 && !summaryBarInserted) {
+            html += summaryBarHtml;
+            summaryBarInserted = true;
         }
         
         // 2. 날짜 섹션 생성 (운동기록이 있는 경우만 표시)
@@ -2106,9 +2121,53 @@ async function loadTimerSettings(forceRefresh = false) {
 }
 
 /**
+ * 운동카드 PNG 저장 (index.js 터치 위임·click 공용)
+ */
+export async function handleSaveWorkoutImageClick() {
+    const saveImageBtn = document.getElementById('workout-save-image-btn');
+    if (!saveImageBtn || saveImageBtn.disabled) return;
+
+    const exportRecords = currentRecords.filter(record => {
+        if (!record?.workout_date) return false;
+        if (currentFilterDate) {
+            return normalizeDateStr(record.workout_date) === currentFilterDate;
+        }
+        return true;
+    });
+
+    if (exportRecords.length === 0) {
+        alert('저장할 운동기록이 없습니다.');
+        return;
+    }
+
+    saveImageBtn.disabled = true;
+    const originalText = saveImageBtn.textContent;
+    saveImageBtn.textContent = '저장 중...';
+
+    try {
+        await saveWorkoutRecordsAsImage(exportRecords);
+    } catch (error) {
+        if (error?.name === 'AbortError') return;
+        console.error('운동카드 이미지 저장 오류:', error);
+        alert(error.message || '이미지 저장에 실패했습니다.');
+    } finally {
+        saveImageBtn.disabled = false;
+        saveImageBtn.textContent = originalText;
+    }
+}
+
+/**
  * 클릭 이벤트 리스너 설정
  */
 function setupClickListeners() {
+    const saveImageBtn = document.getElementById('workout-save-image-btn');
+    if (saveImageBtn) {
+        saveImageBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await handleSaveWorkoutImageClick();
+        });
+    }
+
     // 복사 버튼 클릭 이벤트 (읽기 전용 모드가 아닌 경우만)
     if (!isReadOnly) {
         const copyButtons = document.querySelectorAll('.app-workout-timer-btn[aria-label="복사"]');
