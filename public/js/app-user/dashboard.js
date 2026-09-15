@@ -2,7 +2,7 @@
 
 import { formatDate, getToday, escapeHtml, getTimeAgo, formatWorkoutDuration, workoutDurationTotalSeconds } from './utils.js';
 import { getUserSettings, updateUserSettings } from './api.js';
-import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead, getAnnouncementsInbox, getAnnouncementDetail, markAnnouncementAsRead, requestMonthlyAiAnalysis } from './api.js';
+import { getWorkoutRecords, getWorkoutRecordsForCalendar, getDietRecordsForCalendar, getAppUsers, getTrainerActivityLogs, getTrainerActivityLogsSummary, markActivityLogAsRead, markAllActivityLogsAsRead, getMemberActivityLogs, getMemberActivityLogsSummary, markMemberActivityLogAsRead, markAllMemberActivityLogsAsRead, getAnnouncementsInbox, getAnnouncementsInboxSummary, getAnnouncementDetail, markAnnouncementAsRead, requestMonthlyAiAnalysis } from './api.js';
 import { showWorkoutGuideDetailModal } from './guide-modal.js';
 
 let currentUser = null;
@@ -24,11 +24,17 @@ let memberActivityLogs = null; // 회원 활동 로그
 let memberActivityLogsUnreadCount = 0; // 회원 활동 로그 읽지 않은 개수
 let announcementsInbox = [];
 let announcementsUnreadCount = 0;
+let announcementsLatestDeliveredAt = null;
 const DEFAULT_AI_QUESTION = '이번달 운동/식단 기록을 분석해줘.';
 
-// 활동 로그 자동 업데이트를 위한 인터벌 ID
+// 활동 로그 자동 업데이트 (120초 summary 폴링, 변경 시에만 목록 조회)
 let activityLogsUpdateInterval = null;
-const ACTIVITY_LOGS_UPDATE_INTERVAL = 30000; // 30초마다 업데이트
+let activityLogsSummaryPollHandler = null;
+let activityLogsVisibilityHandler = null;
+let activityLogsFocusHandler = null;
+let activityLogsLatestCreatedAt = null;
+let memberActivityLogsLatestCreatedAt = null;
+const ACTIVITY_LOGS_UPDATE_INTERVAL = 120000; // 120초마다 요약만 조회
 
 /**
  * 대시보드 초기화
@@ -49,7 +55,7 @@ export async function init(userData) {
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs(),
-        loadAnnouncementsInbox()
+        loadAnnouncementsSummary()
     ]);
     await loadTrainerMemberMedalStatus();
     render();
@@ -85,47 +91,160 @@ async function loadWorkoutGuideItems() {
     }
 }
 
+function syncActivityLogsLatestCreatedAtFromList() {
+    if (activityLogs && activityLogs.length > 0) {
+        activityLogsLatestCreatedAt = activityLogs[0].created_at || null;
+    } else {
+        activityLogsLatestCreatedAt = null;
+    }
+}
+
+function syncMemberActivityLogsLatestCreatedAtFromList() {
+    if (memberActivityLogs && memberActivityLogs.length > 0) {
+        memberActivityLogsLatestCreatedAt = memberActivityLogs[0].created_at || null;
+    } else {
+        memberActivityLogsLatestCreatedAt = null;
+    }
+}
+
 /**
- * 활동 로그 자동 업데이트 시작
+ * 활동 로그 요약 폴링 (목록은 최신 시각 변경 시에만 재조회)
+ */
+async function pollActivityLogsSummary() {
+    if (document.visibilityState !== 'visible' || document.hidden) {
+        return;
+    }
+
+    const isTrainer = currentUser?.isTrainer === true;
+
+    try {
+        if (isTrainer) {
+            const trainerUsername = currentUser?.username;
+            if (!trainerUsername) return;
+
+            const summary = await getTrainerActivityLogsSummary(trainerUsername);
+            const prevLatest = activityLogsLatestCreatedAt;
+            const prevUnread = activityLogsUnreadCount;
+            const latest = summary.latestCreatedAt || null;
+
+            activityLogsUnreadCount = summary.unreadCount ?? 0;
+
+            if (latest !== prevLatest) {
+                await loadActivityLogs();
+                updateActivityLogsUI();
+            } else if (prevUnread !== activityLogsUnreadCount) {
+                updateActivityLogsUI();
+            }
+        } else {
+            const appUserId = currentUser?.id;
+            if (!appUserId) return;
+
+            const summary = await getMemberActivityLogsSummary(appUserId);
+            const prevLatest = memberActivityLogsLatestCreatedAt;
+            const prevUnread = memberActivityLogsUnreadCount;
+            const latest = summary.latestCreatedAt || null;
+
+            memberActivityLogsUnreadCount = summary.unreadCount ?? 0;
+
+            if (latest !== prevLatest) {
+                await loadMemberActivityLogs();
+                updateActivityLogsUI();
+            } else if (prevUnread !== memberActivityLogsUnreadCount) {
+                updateActivityLogsUI();
+            }
+        }
+
+        await pollAnnouncementsSummary();
+    } catch (error) {
+        console.error('활동 로그 요약 폴링 오류:', error);
+    }
+}
+
+async function pollAnnouncementsSummary() {
+    const appUserId = currentUser?.id;
+    if (!appUserId) {
+        return;
+    }
+
+    try {
+        const summary = await getAnnouncementsInboxSummary(appUserId);
+        const prevLatest = announcementsLatestDeliveredAt;
+        const prevUnread = announcementsUnreadCount;
+        const latest = summary.latestDeliveredAt || null;
+
+        announcementsUnreadCount = summary.unreadCount ?? 0;
+        announcementsLatestDeliveredAt = latest;
+
+        if (latest !== prevLatest || prevUnread !== announcementsUnreadCount) {
+            updateAnnouncementsUI();
+        }
+    } catch (error) {
+        console.error('공지사항 요약 폴링 오류:', error);
+    }
+}
+
+function clearActivityLogsUpdateInterval() {
+    if (activityLogsUpdateInterval) {
+        clearInterval(activityLogsUpdateInterval);
+        activityLogsUpdateInterval = null;
+    }
+}
+
+function startActivityLogsUpdateInterval() {
+    if (activityLogsUpdateInterval || !activityLogsSummaryPollHandler) {
+        return;
+    }
+    if (document.visibilityState !== 'visible' || document.hidden) {
+        return;
+    }
+    activityLogsUpdateInterval = setInterval(activityLogsSummaryPollHandler, ACTIVITY_LOGS_UPDATE_INTERVAL);
+}
+
+/**
+ * 활동 로그 자동 업데이트 시작 (홈 화면에서만 호출)
  */
 function startActivityLogsAutoUpdate() {
-    // 기존 인터벌이 있으면 정리
     stopActivityLogsAutoUpdate();
-    
-    // 페이지가 포커스되어 있을 때만 업데이트
-    const updateActivityLogs = () => {
-        if (document.visibilityState === 'visible' && !document.hidden) {
-            const isTrainer = currentUser?.isTrainer === true;
-            const logsPromise = isTrainer
-                ? loadActivityLogs().then(() => updateActivityLogsUI())
-                : loadMemberActivityLogs().then(() => updateActivityLogsUI());
-            Promise.all([logsPromise, loadAnnouncementsInbox().then(() => updateAnnouncementsUI())]).catch(() => {
-                // noop
-            });
+
+    activityLogsSummaryPollHandler = () => {
+        pollActivityLogsSummary();
+    };
+
+    startActivityLogsUpdateInterval();
+
+    activityLogsVisibilityHandler = () => {
+        if (document.visibilityState === 'visible') {
+            startActivityLogsUpdateInterval();
+            pollActivityLogsSummary();
+        } else {
+            clearActivityLogsUpdateInterval();
         }
     };
-    
-    // 주기적으로 업데이트
-    activityLogsUpdateInterval = setInterval(updateActivityLogs, ACTIVITY_LOGS_UPDATE_INTERVAL);
-    
-    // 페이지 포커스 시 즉시 업데이트
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-            updateActivityLogs();
+
+    activityLogsFocusHandler = () => {
+        if (document.visibilityState === 'visible' && !document.hidden) {
+            pollActivityLogsSummary();
         }
-    });
-    
-    // 윈도우 포커스 시 즉시 업데이트
-    window.addEventListener('focus', updateActivityLogs);
+    };
+
+    document.addEventListener('visibilitychange', activityLogsVisibilityHandler);
+    window.addEventListener('focus', activityLogsFocusHandler);
 }
 
 /**
  * 활동 로그 자동 업데이트 중지
  */
 function stopActivityLogsAutoUpdate() {
-    if (activityLogsUpdateInterval) {
-        clearInterval(activityLogsUpdateInterval);
-        activityLogsUpdateInterval = null;
+    clearActivityLogsUpdateInterval();
+    activityLogsSummaryPollHandler = null;
+
+    if (activityLogsVisibilityHandler) {
+        document.removeEventListener('visibilitychange', activityLogsVisibilityHandler);
+        activityLogsVisibilityHandler = null;
+    }
+    if (activityLogsFocusHandler) {
+        window.removeEventListener('focus', activityLogsFocusHandler);
+        activityLogsFocusHandler = null;
     }
 }
 
@@ -696,10 +815,12 @@ async function loadActivityLogs() {
         
         activityLogs = result.logs || [];
         activityLogsUnreadCount = result.unreadCount || 0;
+        syncActivityLogsLatestCreatedAtFromList();
     } catch (error) {
         console.error('활동 로그 조회 오류:', error);
         activityLogs = null;
         activityLogsUnreadCount = 0;
+        activityLogsLatestCreatedAt = null;
     }
 }
 
@@ -729,21 +850,46 @@ async function loadMemberActivityLogs() {
         
         memberActivityLogs = result.logs || [];
         memberActivityLogsUnreadCount = result.unreadCount || 0;
+        syncMemberActivityLogsLatestCreatedAtFromList();
     } catch (error) {
         console.error('회원 활동 로그 조회 오류:', error);
         memberActivityLogs = null;
         memberActivityLogsUnreadCount = 0;
+        memberActivityLogsLatestCreatedAt = null;
     }
 }
 
 /**
- * 공지사항 수신함 조회
+ * 공지사항 수신함 요약 (뱃지용)
+ */
+async function loadAnnouncementsSummary() {
+    const appUserId = currentUser?.id;
+    if (!appUserId) {
+        announcementsUnreadCount = 0;
+        announcementsLatestDeliveredAt = null;
+        return;
+    }
+
+    try {
+        const summary = await getAnnouncementsInboxSummary(appUserId);
+        announcementsUnreadCount = summary.unreadCount ?? 0;
+        announcementsLatestDeliveredAt = summary.latestDeliveredAt || null;
+    } catch (error) {
+        console.error('공지사항 요약 조회 오류:', error);
+        announcementsUnreadCount = 0;
+        announcementsLatestDeliveredAt = null;
+    }
+}
+
+/**
+ * 공지사항 수신함 전체 목록 (모달·상세용)
  */
 async function loadAnnouncementsInbox() {
     const appUserId = currentUser?.id;
     if (!appUserId) {
         announcementsInbox = [];
         announcementsUnreadCount = 0;
+        announcementsLatestDeliveredAt = null;
         return;
     }
     
@@ -751,6 +897,11 @@ async function loadAnnouncementsInbox() {
         const result = await getAnnouncementsInbox(appUserId, { limit: 50 });
         announcementsInbox = result.items || [];
         announcementsUnreadCount = result.unreadCount || 0;
+        if (announcementsInbox.length > 0) {
+            announcementsLatestDeliveredAt = announcementsInbox[0].delivered_at
+                || announcementsInbox[0].created_at
+                || announcementsLatestDeliveredAt;
+        }
     } catch (error) {
         console.error('공지사항 조회 오류:', error);
         announcementsInbox = [];
@@ -933,7 +1084,7 @@ function getActivityLogTarget(item) {
 async function navigateFromActivityLog(item) {
     const activityType = item?.getAttribute('data-activity-type') || '';
     if (activityType === 'announcement') {
-        showAnnouncementsModal();
+        await showAnnouncementsModal();
         return;
     }
     const target = getActivityLogTarget(item);
@@ -2044,12 +2195,12 @@ function setupAnnouncementButtons() {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            showAnnouncementsModal();
+            showAnnouncementsModal().catch(err => console.error('공지사항 모달 오류:', err));
         });
         btn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            showAnnouncementsModal();
+            showAnnouncementsModal().catch(err => console.error('공지사항 모달 오류:', err));
         }, { passive: false });
         btn._announcementBtnSetup = true;
     });
@@ -2388,7 +2539,9 @@ function renderAnnouncementsListHtml() {
     }).join('');
 }
 
-function showAnnouncementsModal() {
+async function showAnnouncementsModal() {
+    await loadAnnouncementsInbox();
+
     const modalBg = createModal();
     const modal = modalBg.querySelector('.app-modal');
     modal.classList.add('app-announcement-modal');
@@ -3077,7 +3230,7 @@ export async function refresh() {
         loadConnectedAppUserInfo(),
         loadActivityLogs(),
         loadMemberActivityLogs(),
-        loadAnnouncementsInbox()
+        loadAnnouncementsSummary()
     ]);
     await loadTrainerMemberMedalStatus();
     render();
@@ -3539,7 +3692,7 @@ function setupActivityLogEvents() {
                         }
                         
                         if (activityType === 'announcement') {
-                            showAnnouncementsModal();
+                            await showAnnouncementsModal();
                             return;
                         }
                         
@@ -3636,7 +3789,7 @@ function setupActivityLogEvents() {
                 }
                 
                         if (activityType === 'announcement') {
-                            showAnnouncementsModal();
+                            await showAnnouncementsModal();
                             return;
                 }
                 

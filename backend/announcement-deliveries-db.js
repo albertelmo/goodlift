@@ -85,6 +85,10 @@ const createAnnouncementDeliveriesIndexes = async () => {
     CREATE INDEX IF NOT EXISTS idx_announcement_deliveries_unread
     ON announcement_deliveries(app_user_id, read_at)
   `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_announcement_deliveries_user_delivered
+    ON announcement_deliveries(app_user_id, delivered_at DESC)
+  `);
 };
 
 const initializeDatabase = async () => {
@@ -154,6 +158,36 @@ const getUnreadCount = async (appUserId) => {
   `;
   const result = await pool.query(query, [appUserId]);
   return parseInt(result.rows[0]?.count || 0, 10);
+};
+
+/** 수신함 요약 (폴링용 — 미읽음 개수 + 최신 배달 시각) */
+const getInboxSummary = async (appUserId) => {
+  const query = `
+    SELECT
+      (
+        SELECT COUNT(*)::int
+        FROM announcement_deliveries d
+        INNER JOIN announcements a ON a.id = d.announcement_id
+        WHERE d.app_user_id = $1
+          AND d.read_at IS NULL
+          AND a.is_active = true
+      ) AS unread_count,
+      (
+        SELECT to_char(${DELIVERED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"')
+        FROM announcement_deliveries d
+        INNER JOIN announcements a ON a.id = d.announcement_id
+        WHERE d.app_user_id = $1
+          AND a.is_active = true
+        ORDER BY d.delivered_at DESC
+        LIMIT 1
+      ) AS latest_delivered_at
+  `;
+  const result = await pool.query(query, [appUserId]);
+  const row = result.rows[0] || {};
+  return {
+    unreadCount: row.unread_count ?? 0,
+    latestDeliveredAt: row.latest_delivered_at || null
+  };
 };
 
 const getDeliveryDetail = async (deliveryId, appUserId) => {
@@ -238,6 +272,7 @@ module.exports = {
   initializeDatabase,
   addDeliveries,
   getInbox,
+  getInboxSummary,
   getUnreadCount,
   getDeliveryDetail,
   getReadStats,

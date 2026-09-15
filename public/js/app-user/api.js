@@ -949,6 +949,15 @@ export async function getMemberActivityLogs(appUserId, filters = {}) {
 }
 
 /**
+ * 회원 활동 로그 요약 (폴링용)
+ */
+export async function getMemberActivityLogsSummary(appUserId) {
+    const params = new URLSearchParams();
+    params.append('app_user_id', appUserId);
+    return get(`/member-activity-logs/summary?${params.toString()}`);
+}
+
+/**
  * 회원 로그 읽음 처리
  */
 export async function markMemberActivityLogAsRead(logId, appUserId) {
@@ -983,6 +992,15 @@ export async function getTrainerActivityLogs(trainerUsername, filters = {}) {
 }
 
 /**
+ * 트레이너 활동 로그 요약 (폴링용)
+ */
+export async function getTrainerActivityLogsSummary(trainerUsername) {
+    const params = new URLSearchParams();
+    params.append('trainer_username', trainerUsername);
+    return get(`/trainer-activity-logs/summary?${params.toString()}`);
+}
+
+/**
  * 로그 읽음 처리
  */
 export async function markActivityLogAsRead(logId, trainerUsername) {
@@ -1006,6 +1024,15 @@ export async function getAnnouncementsInbox(appUserId, filters = {}) {
     if (filters.limit) params.append('limit', filters.limit);
     const endpoint = `/announcements/inbox?${params.toString()}`;
     return get(endpoint);
+}
+
+/**
+ * 공지사항 수신함 요약 (폴링용)
+ */
+export async function getAnnouncementsInboxSummary(appUserId) {
+    const params = new URLSearchParams();
+    params.append('app_user_id', appUserId);
+    return get(`/announcements/inbox/summary?${params.toString()}`);
 }
 
 export async function getAnnouncementDetail(deliveryId, appUserId) {

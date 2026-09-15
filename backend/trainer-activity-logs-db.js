@@ -64,6 +64,7 @@ const createTrainerActivityLogsTable = async () => {
         '트레이너 활동 로그 activity_type에 announcement 추가',
         migrateTrainerActivityLogsAnnouncementType
       );
+      await createTrainerActivityLogsIndexes();
     }
   } catch (error) {
     console.error('[PostgreSQL] 트레이너 활동 로그 테이블 생성 오류:', error);
@@ -518,6 +519,32 @@ const getActivityLogs = async (trainerUsername, filters = {}) => {
   }
 };
 
+// 활동 로그 요약 (폴링용 — 미읽음 개수 + 최신 로그 시각)
+const getActivityLogsSummary = async (trainerUsername) => {
+  try {
+    const query = `
+      SELECT
+        (SELECT COUNT(*)::int FROM trainer_activity_logs WHERE trainer_username = $1 AND is_read = false) AS unread_count,
+        (
+          SELECT to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"')
+          FROM trainer_activity_logs
+          WHERE trainer_username = $1
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) AS latest_created_at
+    `;
+    const result = await pool.query(query, [trainerUsername]);
+    const row = result.rows[0] || {};
+    return {
+      unreadCount: row.unread_count ?? 0,
+      latestCreatedAt: row.latest_created_at || null
+    };
+  } catch (error) {
+    console.error('[PostgreSQL] 활동 로그 요약 조회 오류:', error);
+    throw error;
+  }
+};
+
 // 읽지 않은 로그 개수 조회
 const getUnreadCount = async (trainerUsername) => {
   try {
@@ -597,6 +624,7 @@ module.exports = {
   initializeDatabase,
   addActivityLog,
   getActivityLogs,
+  getActivityLogsSummary,
   getUnreadCount,
   markAsRead,
   markAllAsRead,

@@ -104,7 +104,14 @@ export function navigateToScreen(screen) {
         }
     });
 
+    const previousScreen = currentScreen;
     currentScreen = screen;
+
+    if (previousScreen === 'home' && screen !== 'home') {
+        import('./dashboard.js').then(module => {
+            module.cleanup();
+        }).catch(() => {});
+    }
     const achievementBtn = document.getElementById('app-achievement-btn');
     if (achievementBtn) {
         const isTrainer = currentUser?.isTrainer === true || currentUser?.is_trainer === true;

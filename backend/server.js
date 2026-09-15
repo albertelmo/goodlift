@@ -3099,6 +3099,20 @@ app.delete('/api/announcements/:id/images/:imageId', async (req, res) => {
     }
 });
 
+app.get('/api/announcements/inbox/summary', async (req, res) => {
+    try {
+        const { app_user_id } = req.query;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        const summary = await announcementDeliveriesDB.getInboxSummary(app_user_id);
+        res.json(summary);
+    } catch (error) {
+        console.error('[API] 공지사항 수신함 요약 조회 오류:', error);
+        res.status(500).json({ message: '공지사항 요약 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 app.get('/api/announcements/inbox', async (req, res) => {
     try {
         const { app_user_id, limit } = req.query;
@@ -4246,6 +4260,27 @@ app.delete('/api/diet-records/:id', async (req, res) => {
 
 // ========== 회원 활동 로그 API ==========
 
+// 회원 활동 로그 요약 (폴링용)
+app.get('/api/member-activity-logs/summary', async (req, res) => {
+    try {
+        const { app_user_id } = req.query;
+
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json({ unreadCount: 0, latestCreatedAt: null });
+        }
+
+        const summary = await memberActivityLogsDB.getActivityLogsSummary(app_user_id);
+        res.json(summary);
+    } catch (error) {
+        console.error('[API] 회원 활동 로그 요약 조회 오류:', error);
+        res.status(500).json({ message: '활동 로그 요약 조회 중 오류가 발생했습니다.' });
+    }
+});
+
 // 회원 활동 로그 조회
 app.get('/api/member-activity-logs', async (req, res) => {
     try {
@@ -4337,6 +4372,23 @@ app.patch('/api/member-activity-logs/read-all', async (req, res) => {
 });
 
 // ========== 트레이너 활동 로그 API ==========
+
+// 트레이너 활동 로그 요약 (폴링용)
+app.get('/api/trainer-activity-logs/summary', async (req, res) => {
+    try {
+        const { trainer_username } = req.query;
+
+        if (!trainer_username) {
+            return res.status(400).json({ message: '트레이너 username이 필요합니다.' });
+        }
+
+        const summary = await activityLogsDB.getActivityLogsSummary(trainer_username);
+        res.json(summary);
+    } catch (error) {
+        console.error('[API] 트레이너 활동 로그 요약 조회 오류:', error);
+        res.status(500).json({ message: '활동 로그 요약 조회 중 오류가 발생했습니다.' });
+    }
+});
 
 // 트레이너 활동 로그 조회
 app.get('/api/trainer-activity-logs', async (req, res) => {
