@@ -37,6 +37,7 @@ const trainerMemberNotesDB = require('./trainer-member-notes-db');
 const appSettingsDB = require('./app-settings-db');
 const workoutGuidesDB = require('./workout-guides-db');
 const dietRecordsDB = require('./diet-records-db');
+const bodyWeightRecordsDB = require('./body-weight-records-db');
 const activityLogsDB = require('./trainer-activity-logs-db');
 const memberActivityLogsDB = require('./member-activity-logs-db');
 const appUserActivityEventsDB = require('./app-user-activity-events-db');
@@ -868,6 +869,7 @@ workoutGuidesDB.initializeDatabase(); // workout_guides는 workout_types를 참�
 workoutRecordsDB.initializeDatabase(); // workout_records는 workout_types를 참조하므로 나중에 생성
 favoriteWorkoutsDB.initializeDatabase(); // app_user_favorite_workouts는 app_users와 workout_types를 참조하므로 마지막에 생성
 dietRecordsDB.initializeDatabase(); // 식단기록 테이블 초기화
+bodyWeightRecordsDB.initializeDatabase(); // 체중 기록 테이블 초기화
 achievementsDB.initializeDatabase(); // 업적 집계 테이블 초기화/백필
 userSettingsDB.initializeDatabase(); // app_user_settings는 app_users를 참조하므로 나중에 생성
 trainerMemberNotesDB.initializeDatabase(); // trainer_member_notes는 app_users를 참조
@@ -3811,6 +3813,66 @@ app.delete('/api/workout-records/:id', async (req, res) => {
     } catch (error) {
         console.error('[API] 운동기록 삭제 오류:', error);
         res.status(500).json({ message: '운동기록 삭제 중 오류가 발생했습니다.' });
+    }
+});
+
+// ============================================
+// 체중 기록 API
+// ============================================
+
+app.get('/api/body-weight-records/recent', async (req, res) => {
+    try {
+        const { app_user_id, limit } = req.query;
+        if (!app_user_id) {
+            return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+        }
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json([]);
+        }
+        const records = await bodyWeightRecordsDB.getRecentRecords(
+            app_user_id,
+            limit ? parseInt(limit, 10) : 20
+        );
+        res.json(records);
+    } catch (error) {
+        console.error('[API] 체중 최근 기록 조회 오류:', error);
+        res.status(500).json({ message: '체중 기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.get('/api/body-weight-records/by-date', async (req, res) => {
+    try {
+        const { app_user_id, date } = req.query;
+        if (!app_user_id || !date) {
+            return res.status(400).json({ message: '앱 유저 ID와 날짜가 필요합니다.' });
+        }
+        if (app_user_id.startsWith('trainer-')) {
+            return res.json(null);
+        }
+        const record = await bodyWeightRecordsDB.getByDate(app_user_id, date);
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 체중 날짜별 조회 오류:', error);
+        res.status(500).json({ message: '체중 기록 조회 중 오류가 발생했습니다.' });
+    }
+});
+
+app.put('/api/body-weight-records', async (req, res) => {
+    try {
+        const { app_user_id, record_date, weight_kg } = req.body;
+        if (!app_user_id || !record_date || weight_kg === undefined || weight_kg === null) {
+            return res.status(400).json({ message: '앱 유저 ID, 날짜, 체중이 필요합니다.' });
+        }
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(400).json({ message: '체중을 기록할 수 없습니다.' });
+        }
+        const record = await bodyWeightRecordsDB.upsertRecord(app_user_id, record_date, weight_kg);
+        res.json(record);
+    } catch (error) {
+        console.error('[API] 체중 저장 오류:', error);
+        const message = error.message || '체중 저장 중 오류가 발생했습니다.';
+        const status = message.includes('체중은') ? 400 : 500;
+        res.status(status).json({ message });
     }
 });
 

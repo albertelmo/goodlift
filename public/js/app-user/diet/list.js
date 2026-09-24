@@ -1,7 +1,7 @@
 // 식단기록 목록 렌더링
 
 import { formatDate, formatDateShort, showLoading, showError, showEmpty, escapeHtml } from '../utils.js';
-import { getDietRecords } from '../api.js';
+import { getDietRecords, getBodyWeightByDate } from '../api.js';
 import { getCurrentUser } from '../index.js';
 
 let currentAppUserId = null;
@@ -9,6 +9,8 @@ let currentRecords = [];
 let isReadOnly = false;
 let currentFilters = {}; // 현재 필터 상태 저장
 let commentsByDate = {}; // 날짜별 하루 코멘트 데이터
+/** @type {Record<string, number|null|undefined>} */
+let weightByDate = {};
 
 const evaluationConfig = {
     verygood: { label: 'Very Good!', image: '/img/foodbadge/verygood.png' },
@@ -110,6 +112,36 @@ async function loadRemainingData() {
 }
 
 let currentFilterDate = null;
+
+function formatWeightDisplay(kg) {
+    if (!Number.isFinite(kg)) return '';
+    const hasDecimal = !Number.isInteger(kg);
+    return kg.toLocaleString('en-US', {
+        minimumFractionDigits: hasDecimal ? 1 : 0,
+        maximumFractionDigits: hasDecimal ? 1 : 0
+    });
+}
+
+async function ensureWeightsLoaded(dates) {
+    const unique = [...new Set(dates.filter(Boolean))];
+    const missing = unique.filter(d => !Object.prototype.hasOwnProperty.call(weightByDate, d));
+    if (missing.length === 0) return;
+
+    await Promise.all(missing.map(async (dateStr) => {
+        try {
+            const record = await getBodyWeightByDate(currentAppUserId, dateStr);
+            weightByDate[dateStr] = record?.weight_kg != null ? record.weight_kg : null;
+        } catch {
+            weightByDate[dateStr] = null;
+        }
+    }));
+}
+
+export function invalidateWeightForDate(dateStr) {
+    if (dateStr) {
+        delete weightByDate[dateStr];
+    }
+}
 
 /**
  * 날짜별 하루 코멘트 로드
@@ -257,14 +289,30 @@ async function render(records) {
     
     const allDatesSet = new Set();
     dietDates.forEach(date => allDatesSet.add(date));
+
+    const weightCandidateDates = new Set(dietDates);
+    if (currentFilterDate) {
+        weightCandidateDates.add(currentFilterDate);
+    }
+    Object.keys(commentsByDate).forEach(date => weightCandidateDates.add(date));
+
+    await ensureWeightsLoaded(Array.from(weightCandidateDates));
     
     if (currentFilterDate) {
         if (commentsByDate[currentFilterDate] && commentsByDate[currentFilterDate].length > 0) {
             allDatesSet.add(currentFilterDate);
         }
+        if (weightByDate[currentFilterDate] != null) {
+            allDatesSet.add(currentFilterDate);
+        }
     } else {
         Object.keys(commentsByDate).forEach(date => {
             if (commentsByDate[date] && commentsByDate[date].length > 0) {
+                allDatesSet.add(date);
+            }
+        });
+        weightCandidateDates.forEach(date => {
+            if (weightByDate[date] != null) {
                 allDatesSet.add(date);
             }
         });
@@ -343,14 +391,23 @@ async function render(records) {
             html += `</div>`;
         }
         
-        if (dateRecords.length > 0) {
+        const weightKg = weightByDate[dateStr];
+        const hasWeight = weightKg != null && Number.isFinite(weightKg);
+
+        if (dateRecords.length > 0 || hasWeight) {
             html += `
                 <div class="app-diet-date-section" data-date="${dateStr}">
                     <div class="app-diet-date-header">
                         <div class="app-diet-date-title">${dateDisplay}</div>
-                        <div class="app-diet-date-count">${dateRecords.length}건</div>
+                        ${dateRecords.length > 0 ? `<div class="app-diet-date-count">${dateRecords.length}건</div>` : ''}
                     </div>
-                    <div class="app-diet-items">
+                    ${hasWeight ? `
+                    <div class="app-diet-weight-banner" aria-label="체중">
+                        <span class="app-diet-weight-banner-label">체중</span>
+                        <span class="app-diet-weight-banner-value">${formatWeightDisplay(weightKg)} kg</span>
+                    </div>
+                    ` : ''}
+                    ${dateRecords.length > 0 ? `<div class="app-diet-items">` : ''}
             `;
             
             for (const record of dateRecords) {
@@ -483,8 +540,10 @@ async function render(records) {
             `;
             }
             
-            html += `
+            html += dateRecords.length > 0 ? `
                     </div>
+                </div>
+            ` : `
                 </div>
             `;
         }

@@ -193,7 +193,7 @@ function setupButtonEventListeners() {
             e.stopPropagation();
         }
         
-        // 전체(연간 요약) 버튼 클릭
+        // 분석(연간 요약) 버튼 클릭
         if (btnId === 'workout-summary-btn') {
             if (eventType === 'touchstart') {
                 return;
@@ -215,7 +215,7 @@ function setupButtonEventListeners() {
                 const year = getCurrentMonth().getFullYear();
                 await showWorkoutYearSummaryModal(targetAppUserId, year);
             } catch (error) {
-                console.error('[Workout] 전체 버튼 클릭 오류:', error);
+                console.error('[Workout] 분석 버튼 클릭 오류:', error);
             }
             return;
         }
@@ -564,7 +564,7 @@ async function render() {
                 <div class="app-workout-month-display">${year}년 ${month}월${memberDisplay}</div>
                 <div class="app-workout-top-buttons">
                     ${showMemberNoteButton ? `<button class="app-workout-today-btn" id="workout-note-btn" title="회원 노트">노트</button>` : ''}
-                    <button class="app-workout-today-btn" id="workout-summary-btn" title="연간 운동 요약">전체</button>
+                    <button class="app-workout-today-btn" id="workout-summary-btn" title="연간 운동 분석">분석</button>
                     <button class="app-workout-today-btn" id="workout-list-btn" title="최근 30일 목록">목록</button>
                     <button class="app-workout-today-btn" id="workout-memo-btn" title="메모 보기">메모</button>
                 </div>

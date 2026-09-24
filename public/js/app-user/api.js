@@ -643,6 +643,59 @@ export async function deleteDietRecord(id, appUserId) {
 }
 
 /**
+ * ========== 체중 기록 API ==========
+ */
+
+function invalidateBodyWeightCache(appUserId) {
+    if (!appUserId) return;
+    cache.invalidate(key =>
+        key.includes('/body-weight-records') && key.includes(`app_user_id=${appUserId}`)
+    );
+}
+
+export async function getRecentBodyWeightRecords(appUserId, limit = 20) {
+    if (!appUserId) {
+        throw new Error('앱 유저 ID가 필요합니다.');
+    }
+    if (appUserId.startsWith('trainer-')) {
+        return [];
+    }
+    const params = new URLSearchParams({
+        app_user_id: appUserId,
+        limit: String(limit)
+    });
+    const endpoint = `/body-weight-records/recent?${params.toString()}`;
+    const cacheKey = cache.getKey('/body-weight-records/recent', {
+        app_user_id: appUserId,
+        limit: String(limit)
+    });
+    return get(endpoint, { useCache: true, ttl: 30 * 1000, cacheKey });
+}
+
+export async function getBodyWeightByDate(appUserId, date) {
+    if (!appUserId || !date) {
+        throw new Error('앱 유저 ID와 날짜가 필요합니다.');
+    }
+    if (appUserId.startsWith('trainer-')) {
+        return null;
+    }
+    const params = new URLSearchParams({ app_user_id: appUserId, date });
+    return get(`/body-weight-records/by-date?${params.toString()}`);
+}
+
+export async function upsertBodyWeightRecord(appUserId, recordDate, weightKg) {
+    if (!appUserId || !recordDate) {
+        throw new Error('앱 유저 ID와 날짜가 필요합니다.');
+    }
+    const result = await request('/body-weight-records', {
+        method: 'PUT',
+        body: { app_user_id: appUserId, record_date: recordDate, weight_kg: weightKg }
+    });
+    invalidateBodyWeightCache(appUserId);
+    return result;
+}
+
+/**
  * 캘린더용 식단기록 조회 (경량 - 날짜별 존재 여부만)
  */
 export async function getDietRecordsForCalendar(appUserId, startDate = null, endDate = null) {

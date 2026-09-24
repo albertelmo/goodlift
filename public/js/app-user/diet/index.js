@@ -126,33 +126,49 @@ function setupButtonEventListeners() {
             e.stopPropagation();
         }
         
-        // 오늘 버튼 클릭
-        if (btnId === 'diet-today-btn') {
+        if (btnId === 'diet-weight-trend-btn') {
             if (eventType === 'touchstart') {
                 return;
             }
-            
             if (eventType !== 'touchend') {
                 e.preventDefault();
             }
             e.stopPropagation();
-            
             try {
-                const { setSelectedDate, setCurrentMonth } = await import('./calendar.js');
-                const { formatDate } = await import('../utils.js');
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                
-                setSelectedDate(today);
-                setCurrentMonth(today);
-                await loadDietRecordsForCalendar({ reset: true });
-                await updateMonthDisplay();
-                
-                const todayStr = formatDate(today);
-                const listModule = await import('./list.js');
-                await listModule.filterByDate(todayStr);
+                const { showBodyWeightTrendModal } = await import('./weight-trend.js');
+                await showBodyWeightTrendModal(currentAppUserId);
             } catch (error) {
-                console.error('[Diet] 오늘 버튼 클릭 오류:', error);
+                console.error('[Diet] 체중 그래프 버튼 클릭 오류:', error);
+            }
+            return;
+        }
+
+        if (btnId === 'diet-weight-input-btn' && !isReadOnly) {
+            if (eventType === 'touchstart') {
+                return;
+            }
+            const now = Date.now();
+            if (now - lastButtonClickTime < BUTTON_CLICK_THROTTLE) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            lastButtonClickTime = now;
+            if (eventType !== 'touchend') {
+                e.preventDefault();
+            }
+            e.stopPropagation();
+            try {
+                const { showBodyWeightInputModal } = await import('./weight-input.js');
+                const selectedDateStr = getSelectedDate();
+                await showBodyWeightInputModal(currentAppUserId, selectedDateStr, () => {
+                    import('./list.js').then(module => {
+                        module.invalidateWeightForDate(selectedDateStr);
+                        module.refresh();
+                    });
+                });
+            } catch (error) {
+                console.error('[Diet] 체중 입력 버튼 클릭 오류:', error);
             }
             return;
         }
@@ -312,7 +328,7 @@ async function render() {
             <div class="app-diet-top-bar">
                 <div class="app-diet-month-display">${year}년 ${month}월${memberDisplay}</div>
                 <div class="app-diet-top-buttons">
-                    <button class="app-diet-today-btn" id="diet-today-btn" title="오늘로 이동">오늘</button>
+                    <button class="app-diet-today-btn" id="diet-weight-trend-btn" title="체중 그래프">체중 그래프</button>
                 </div>
             </div>
         <div id="diet-calendar-container"></div>
@@ -320,13 +336,16 @@ async function render() {
             ${backButton}
             ${!isReadOnly ? `
             <div class="app-diet-add-section">
-                <button class="app-btn-primary app-btn-full" id="diet-add-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    식단 추가하기
-                </button>
+                <div class="app-diet-action-row">
+                    <button class="app-btn-primary app-btn-full" id="diet-add-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        식단 추가하기
+                    </button>
+                    <button class="app-btn-secondary app-btn-full" id="diet-weight-input-btn" type="button">체중 입력</button>
+                </div>
             </div>
             ` : ''}
             ${canLeaveComment ? `
