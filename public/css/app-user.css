@@ -2104,7 +2104,7 @@ body.app-user-active {
 
 .app-diet-weight-banner {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 12px;
@@ -2112,6 +2112,39 @@ body.app-user-active {
     border-radius: var(--app-radius-sm);
     background: rgba(46, 125, 50, 0.08);
     border: 1px solid rgba(46, 125, 50, 0.2);
+}
+
+.app-diet-weight-banner-main {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex: 1;
+    gap: 12px;
+    min-width: 0;
+}
+
+.app-diet-weight-delete-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: var(--app-radius-sm);
+    background: transparent;
+    color: var(--app-text-muted);
+    cursor: pointer;
+}
+
+.app-diet-weight-delete-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #c62828;
+}
+
+.app-diet-weight-delete-btn:active {
+    transform: scale(0.95);
 }
 
 .app-diet-weight-banner-label {

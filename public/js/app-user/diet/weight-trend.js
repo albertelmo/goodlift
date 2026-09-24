@@ -109,7 +109,7 @@ export async function showBodyWeightTrendModal(appUserId) {
                     </button>
                 </div>
                 <div class="app-modal-content workout-type-history-form workout-summary-modal-content">
-                    <p class="app-text-muted" style="margin:0 0 12px;font-size:14px;">최근 ${GRAPH_ENTRY_LIMIT}회 입력 기준</p>
+                    <p class="app-text-muted" style="margin:0 0 12px;font-size:14px;">최근 ${GRAPH_ENTRY_LIMIT}회</p>
                     <div id="diet-weight-trend-loading" style="padding:24px;text-align:center;">불러오는 중…</div>
                     <div id="diet-weight-trend-body" style="display:none;">
                         <div class="workout-analysis-chart-wrap">

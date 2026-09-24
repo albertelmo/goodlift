@@ -3876,6 +3876,26 @@ app.put('/api/body-weight-records', async (req, res) => {
     }
 });
 
+app.delete('/api/body-weight-records/by-date', async (req, res) => {
+    try {
+        const { app_user_id, date } = req.query;
+        if (!app_user_id || !date) {
+            return res.status(400).json({ message: '앱 유저 ID와 날짜가 필요합니다.' });
+        }
+        if (app_user_id.startsWith('trainer-')) {
+            return res.status(400).json({ message: '체중을 삭제할 수 없습니다.' });
+        }
+        const deleted = await bodyWeightRecordsDB.deleteByDate(app_user_id, date);
+        if (!deleted) {
+            return res.status(404).json({ message: '체중 기록을 찾을 수 없습니다.' });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('[API] 체중 삭제 오류:', error);
+        res.status(500).json({ message: '체중 삭제 중 오류가 발생했습니다.' });
+    }
+});
+
 // ============================================
 // 식단기록 API
 // ============================================

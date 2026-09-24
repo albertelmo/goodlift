@@ -695,6 +695,16 @@ export async function upsertBodyWeightRecord(appUserId, recordDate, weightKg) {
     return result;
 }
 
+export async function deleteBodyWeightRecord(appUserId, recordDate) {
+    if (!appUserId || !recordDate) {
+        throw new Error('앱 유저 ID와 날짜가 필요합니다.');
+    }
+    const params = new URLSearchParams({ app_user_id: appUserId, date: recordDate });
+    const result = await del(`/body-weight-records/by-date?${params.toString()}`);
+    invalidateBodyWeightCache(appUserId);
+    return result;
+}
+
 /**
  * 캘린더용 식단기록 조회 (경량 - 날짜별 존재 여부만)
  */

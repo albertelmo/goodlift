@@ -112,9 +112,20 @@ const getRecentRecords = async (appUserId, limit = 20) => {
   return records;
 };
 
+const deleteByDate = async (appUserId, recordDate) => {
+  const result = await pool.query(
+    `DELETE FROM body_weight_records
+     WHERE app_user_id = $1 AND record_date = $2
+     RETURNING id`,
+    [appUserId, recordDate]
+  );
+  return result.rowCount > 0;
+};
+
 module.exports = {
   initializeDatabase,
   upsertRecord,
   getByDate,
-  getRecentRecords
+  getRecentRecords,
+  deleteByDate
 };

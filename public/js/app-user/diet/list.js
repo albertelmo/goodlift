@@ -403,8 +403,18 @@ async function render(records) {
                     </div>
                     ${hasWeight ? `
                     <div class="app-diet-weight-banner" aria-label="체중">
-                        <span class="app-diet-weight-banner-label">체중</span>
-                        <span class="app-diet-weight-banner-value">${formatWeightDisplay(weightKg)} kg</span>
+                        <div class="app-diet-weight-banner-main">
+                            <span class="app-diet-weight-banner-label">체중</span>
+                            <span class="app-diet-weight-banner-value">${formatWeightDisplay(weightKg)} kg</span>
+                        </div>
+                        ${!isReadOnly ? `
+                        <button type="button" class="app-diet-weight-delete-btn" data-date="${dateStr}" title="체중 삭제" aria-label="체중 삭제">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                        ` : ''}
                     </div>
                     ` : ''}
                     ${dateRecords.length > 0 ? `<div class="app-diet-items">` : ''}
@@ -636,6 +646,27 @@ function setupEventListeners() {
             container._dietLongPressTriggered = false;
             return;
         }
+        const weightDeleteBtn = e.target.closest('.app-diet-weight-delete-btn');
+        if (weightDeleteBtn && !isReadOnly) {
+            e.stopPropagation();
+            e.preventDefault();
+            const dateStr = weightDeleteBtn.getAttribute('data-date');
+            if (!dateStr) return;
+            if (!confirm('이 날짜의 체중 기록을 삭제할까요?')) {
+                return;
+            }
+            try {
+                const { deleteBodyWeightRecord } = await import('../api.js');
+                await deleteBodyWeightRecord(currentAppUserId, dateStr);
+                invalidateWeightForDate(dateStr);
+                await render(currentRecords);
+            } catch (error) {
+                console.error('체중 삭제 오류:', error);
+                alert(error.message || '체중 삭제 중 오류가 발생했습니다.');
+            }
+            return;
+        }
+
         const editBtn = e.target.closest('.app-diet-card-edit-btn');
         if (editBtn) {
             e.stopPropagation(); // 카드 클릭 이벤트 방지
