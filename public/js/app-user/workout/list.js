@@ -5,6 +5,7 @@ import { saveWorkoutRecordsAsImage } from './export-image.js';
 import { getWorkoutRecords, updateWorkoutRecordCompleted, updateWorkoutSetCompleted, getUserSettings, updateUserSettings, getAppUsers, reorderWorkoutRecords } from '../api.js';
 import { getCurrentUser } from '../index.js';
 import { showWorkoutGuideDetailModal } from '../guide-modal.js';
+import { mountWorkoutAnalysisPanel, isAnalysisEligible } from './analysis.js';
 
 let currentAppUserId = null;
 let currentRecords = [];
@@ -446,13 +447,24 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
         startDate,
         endDate,
         workoutTypeId = null,
-        isTextRecord = false
+        isTextRecord = false,
+        enableAnalysisTab = false,
+        workoutTypeType = null
     } = options;
 
     if (!appUserId || !startDate || !endDate) return;
 
+    const showAnalysisTab = enableAnalysisTab && isAnalysisEligible(isTextRecord, workoutTypeType);
+
     const existingModal = document.getElementById('workout-type-history-modal-bg');
     if (existingModal) existingModal.remove();
+
+    const tabsHtml = showAnalysisTab ? `
+                <div class="workout-type-history-tabs" role="tablist" aria-label="운동 기록 보기">
+                    <button type="button" class="workout-type-history-tab is-active" data-tab="records" role="tab" aria-selected="true">기록</button>
+                    <button type="button" class="workout-type-history-tab" data-tab="analysis" role="tab" aria-selected="false">분석</button>
+                </div>
+    ` : '';
 
     const modalHtml = `
         <div class="app-modal-bg" id="workout-type-history-modal-bg">
@@ -462,6 +474,7 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
                     <button class="app-modal-close-btn" id="workout-type-history-modal-close" type="button" aria-label="닫기">×</button>
                 </div>
                 <div class="app-modal-form workout-history-form workout-type-history-form">
+                    ${tabsHtml}
                     <div class="workout-history-content workout-history-content-compact" id="workout-type-history-content">
                         <div class="workout-history-loading">로딩 중...</div>
                     </div>
@@ -475,8 +488,69 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
     const modal = document.getElementById('workout-type-history-modal');
     const contentEl = document.getElementById('workout-type-history-content');
     const closeBtn = document.getElementById('workout-type-history-modal-close');
+    const tabButtons = showAnalysisTab
+        ? Array.from(modal.querySelectorAll('.workout-type-history-tab'))
+        : [];
+
+    let activeTab = 'records';
+    let groupedCache = null;
+    let analysisController = null;
+
+    const updateTabUi = () => {
+        tabButtons.forEach(btn => {
+            const tab = btn.getAttribute('data-tab');
+            const isActive = tab === activeTab;
+            btn.classList.toggle('is-active', isActive);
+            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+        });
+    };
+
+    const renderRecordsTab = () => {
+        if (analysisController) {
+            analysisController.destroy();
+            analysisController = null;
+        }
+        if (!groupedCache) return;
+        contentEl.innerHTML = renderGroupedWorkoutHistoryHtml(
+            groupedCache.sortedDates,
+            groupedCache.recordsByDate
+        );
+        updateTabUi();
+    };
+
+    const renderAnalysisTab = () => {
+        if (!groupedCache) return;
+        if (analysisController) {
+            analysisController.destroy();
+        }
+        contentEl.innerHTML = '';
+        analysisController = mountWorkoutAnalysisPanel(contentEl, {
+            recordsByDate: groupedCache.recordsByDate
+        });
+        updateTabUi();
+    };
+
+    const switchTab = (tab) => {
+        if (!showAnalysisTab || (tab !== 'records' && tab !== 'analysis')) return;
+        activeTab = tab;
+        if (tab === 'records') {
+            renderRecordsTab();
+        } else {
+            renderAnalysisTab();
+        }
+    };
+
+    tabButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            switchTab(btn.getAttribute('data-tab'));
+        });
+    });
 
     const closeModal = () => {
+        if (analysisController) {
+            analysisController.destroy();
+            analysisController = null;
+        }
         modalBg.classList.remove('app-modal-show');
         modal.classList.remove('app-modal-show');
         document.removeEventListener('keydown', escHandler);
@@ -506,7 +580,8 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
             workoutTypeId,
             isTextRecord
         );
-        contentEl.innerHTML = renderGroupedWorkoutHistoryHtml(sortedDates, recordsByDate);
+        groupedCache = { sortedDates, recordsByDate };
+        renderRecordsTab();
     } catch (error) {
         console.error('운동종류별 기록 조회 오류:', error);
         contentEl.innerHTML = `
@@ -527,7 +602,9 @@ export async function showWorkoutTypeYearHistoryModal(appUserId, year, item = {}
         startDate: `${yearNum}-01-01`,
         endDate: `${yearNum}-12-31`,
         workoutTypeId: item.workout_type_id,
-        isTextRecord: item.is_text_record === true || workoutName === '간편 기록'
+        isTextRecord: item.is_text_record === true || workoutName === '간편 기록',
+        enableAnalysisTab: true,
+        workoutTypeType: item.type || null
     });
 }
 
