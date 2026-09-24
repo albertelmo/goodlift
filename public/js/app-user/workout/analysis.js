@@ -286,7 +286,6 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
                         <div class="workout-analysis-pr-card">
                             <span class="workout-analysis-pr-label">예상 1RM</span>
                             <span class="workout-analysis-pr-value">${escapeHtml(formatKg(best.estimated_1rm_kg))}</span>
-                            <span class="workout-analysis-pr-hint">Epley</span>
                         </div>
                         <div class="workout-analysis-pr-card">
                             <span class="workout-analysis-pr-label">최고 무게</span>
@@ -300,26 +299,32 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
                 </section>
                 <section class="workout-analysis-overload">
                     <div class="workout-analysis-overload-header">
-                        <h4 class="workout-analysis-section-title">과부하 분석</h4>
-                        <div class="workout-analysis-view-toggle" role="tablist">
+                        <div class="workout-analysis-view-toggle" role="tablist" aria-label="보기 방식">
                             <button type="button" class="workout-analysis-toggle-btn ${viewMode === 'graph' ? 'is-active' : ''}" data-view="graph">그래프</button>
                             <button type="button" class="workout-analysis-toggle-btn ${viewMode === 'list' ? 'is-active' : ''}" data-view="list">리스트</button>
                         </div>
                     </div>
                     <div class="workout-analysis-date-nav">
-                        <button type="button" class="workout-analysis-date-btn" id="workout-analysis-prev" aria-label="이전 운동일">‹</button>
+                        <button type="button" class="workout-analysis-date-btn" id="workout-analysis-prev" aria-label="이전 운동일">
+                            <span class="workout-analysis-date-chevron" aria-hidden="true">‹</span>
+                        </button>
                         <span class="workout-analysis-date-label" id="workout-analysis-date-label">${escapeHtml(formatNavDate(selected.workout_date))}</span>
-                        <button type="button" class="workout-analysis-date-btn" id="workout-analysis-next" aria-label="다음 운동일">›</button>
+                        <button type="button" class="workout-analysis-date-btn" id="workout-analysis-next" aria-label="다음 운동일">
+                            <span class="workout-analysis-date-chevron" aria-hidden="true">›</span>
+                        </button>
                     </div>
                     <div class="workout-analysis-session-stats">
-                        <div class="workout-analysis-session-stat">
-                            <span class="workout-analysis-session-stat-label">최대 부하</span>
-                            <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.max_weight_kg))}</span>
-                        </div>
-                        <div class="workout-analysis-session-stat">
-                            <span class="workout-analysis-session-stat-label">볼륨</span>
-                            <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.session_volume_kg))}</span>
-                        </div>
+                        <span class="workout-analysis-session-inline">
+                            <span class="workout-analysis-session-item">
+                                <span class="workout-analysis-session-stat-label">최대 부하</span>
+                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.max_weight_kg))}</span>
+                            </span>
+                            <span class="workout-analysis-session-sep" aria-hidden="true">·</span>
+                            <span class="workout-analysis-session-item">
+                                <span class="workout-analysis-session-stat-label">볼륨</span>
+                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.session_volume_kg))}</span>
+                            </span>
+                        </span>
                     </div>
                     <div class="workout-analysis-chart-wrap ${viewMode === 'graph' ? '' : 'is-hidden'}">
                         <canvas id="workout-analysis-chart"></canvas>

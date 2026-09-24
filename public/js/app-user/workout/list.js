@@ -459,22 +459,21 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
     const existingModal = document.getElementById('workout-type-history-modal-bg');
     if (existingModal) existingModal.remove();
 
-    const tabsHtml = showAnalysisTab ? `
-                <div class="workout-type-history-tabs" role="tablist" aria-label="운동 기록 보기">
-                    <button type="button" class="workout-type-history-tab is-active" data-tab="records" role="tab" aria-selected="true">기록</button>
-                    <button type="button" class="workout-type-history-tab" data-tab="analysis" role="tab" aria-selected="false">분석</button>
+    const analysisHeadingHtml = showAnalysisTab ? `
+                <div class="workout-type-history-analysis-heading">
+                    <h4 class="workout-type-history-analysis-title">과부하 분석</h4>
                 </div>
     ` : '';
 
     const modalHtml = `
         <div class="app-modal-bg" id="workout-type-history-modal-bg">
-            <div class="app-modal workout-history-modal workout-type-history-modal" id="workout-type-history-modal">
+            <div class="app-modal workout-type-history-modal" id="workout-type-history-modal">
                 <div class="app-modal-header">
                     <h3>${escapeHtml(title)}</h3>
                     <button class="app-modal-close-btn" id="workout-type-history-modal-close" type="button" aria-label="닫기">×</button>
                 </div>
                 <div class="app-modal-form workout-history-form workout-type-history-form">
-                    ${tabsHtml}
+                    ${analysisHeadingHtml}
                     <div class="workout-history-content workout-history-content-compact" id="workout-type-history-content">
                         <div class="workout-history-loading">로딩 중...</div>
                     </div>
@@ -488,24 +487,10 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
     const modal = document.getElementById('workout-type-history-modal');
     const contentEl = document.getElementById('workout-type-history-content');
     const closeBtn = document.getElementById('workout-type-history-modal-close');
-    const tabButtons = showAnalysisTab
-        ? Array.from(modal.querySelectorAll('.workout-type-history-tab'))
-        : [];
-
-    let activeTab = 'records';
     let groupedCache = null;
     let analysisController = null;
 
-    const updateTabUi = () => {
-        tabButtons.forEach(btn => {
-            const tab = btn.getAttribute('data-tab');
-            const isActive = tab === activeTab;
-            btn.classList.toggle('is-active', isActive);
-            btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
-        });
-    };
-
-    const renderRecordsTab = () => {
+    const renderRecordsView = () => {
         if (analysisController) {
             analysisController.destroy();
             analysisController = null;
@@ -515,10 +500,9 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
             groupedCache.sortedDates,
             groupedCache.recordsByDate
         );
-        updateTabUi();
     };
 
-    const renderAnalysisTab = () => {
+    const renderAnalysisView = () => {
         if (!groupedCache) return;
         if (analysisController) {
             analysisController.destroy();
@@ -527,24 +511,7 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
         analysisController = mountWorkoutAnalysisPanel(contentEl, {
             recordsByDate: groupedCache.recordsByDate
         });
-        updateTabUi();
     };
-
-    const switchTab = (tab) => {
-        if (!showAnalysisTab || (tab !== 'records' && tab !== 'analysis')) return;
-        activeTab = tab;
-        if (tab === 'records') {
-            renderRecordsTab();
-        } else {
-            renderAnalysisTab();
-        }
-    };
-
-    tabButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            switchTab(btn.getAttribute('data-tab'));
-        });
-    });
 
     const closeModal = () => {
         if (analysisController) {
@@ -581,7 +548,11 @@ export async function showWorkoutTypeHistoryModal(appUserId, options = {}) {
             isTextRecord
         );
         groupedCache = { sortedDates, recordsByDate };
-        renderRecordsTab();
+        if (showAnalysisTab) {
+            renderAnalysisView();
+        } else {
+            renderRecordsView();
+        }
     } catch (error) {
         console.error('운동종류별 기록 조회 오류:', error);
         contentEl.innerHTML = `
