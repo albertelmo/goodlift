@@ -138,7 +138,7 @@ function setupButtonEventListeners() {
                 const { showBodyWeightTrendModal } = await import('./weight-trend.js');
                 await showBodyWeightTrendModal(currentAppUserId);
             } catch (error) {
-                console.error('[Diet] 체중 그래프 버튼 클릭 오류:', error);
+                console.error('[Diet] 몸무게 그래프 버튼 클릭 오류:', error);
             }
             return;
         }
@@ -168,7 +168,7 @@ function setupButtonEventListeners() {
                     });
                 });
             } catch (error) {
-                console.error('[Diet] 체중 입력 버튼 클릭 오류:', error);
+                console.error('[Diet] 몸무게 입력 버튼 클릭 오류:', error);
             }
             return;
         }
@@ -328,7 +328,7 @@ async function render() {
             <div class="app-diet-top-bar">
                 <div class="app-diet-month-display">${year}년 ${month}월${memberDisplay}</div>
                 <div class="app-diet-top-buttons">
-                    <button class="app-diet-today-btn" id="diet-weight-trend-btn" title="체중 그래프">체중 그래프</button>
+                    <button class="app-diet-today-btn" id="diet-weight-trend-btn" title="몸무게 그래프">몸무게 그래프</button>
                 </div>
             </div>
         <div id="diet-calendar-container"></div>
@@ -344,7 +344,7 @@ async function render() {
                         </svg>
                         식단 추가하기
                     </button>
-                    <button class="app-btn-secondary app-btn-full" id="diet-weight-input-btn" type="button">체중 입력</button>
+                    <button class="app-btn-secondary app-btn-full" id="diet-weight-input-btn" type="button">몸무게 입력</button>
                 </div>
             </div>
             ` : ''}

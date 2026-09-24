@@ -643,7 +643,7 @@ export async function deleteDietRecord(id, appUserId) {
 }
 
 /**
- * ========== 체중 기록 API ==========
+ * ========== 몸무게 기록 API ==========
  */
 
 function invalidateBodyWeightCache(appUserId) {

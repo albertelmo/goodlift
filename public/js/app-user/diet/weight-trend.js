@@ -1,4 +1,4 @@
-// 체중 그래프 (최근 20회 입력)
+// 몸무게 그래프 (최근 20회)
 
 import { getRecentBodyWeightRecords } from '../api.js';
 
@@ -46,7 +46,7 @@ function renderChart(canvas, records) {
         data: {
             labels,
             datasets: [{
-                label: '체중',
+                label: '몸무게',
                 data: weights,
                 borderColor: '#2e7d32',
                 backgroundColor: 'rgba(46, 125, 50, 0.12)',
@@ -100,7 +100,7 @@ export async function showBodyWeightTrendModal(appUserId) {
         <div class="app-modal-bg" id="diet-weight-trend-modal-bg">
             <div class="app-modal app-modal-large workout-type-history-modal" id="diet-weight-trend-modal">
                 <div class="app-modal-header">
-                    <h2>체중 그래프</h2>
+                    <h2>몸무게 그래프</h2>
                     <button type="button" class="app-modal-close-btn" id="diet-weight-trend-modal-close" aria-label="닫기">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -118,7 +118,7 @@ export async function showBodyWeightTrendModal(appUserId) {
                         <ul id="diet-weight-trend-list" class="workout-analysis-session-list"></ul>
                     </div>
                     <div id="diet-weight-trend-empty" style="display:none;padding:32px;text-align:center;color:var(--app-text-muted);">
-                        아직 체중 기록이 없습니다.
+                        아직 몸무게 기록이 없습니다.
                     </div>
                 </div>
             </div>
@@ -173,7 +173,7 @@ export async function showBodyWeightTrendModal(appUserId) {
     } catch (err) {
         loading.style.display = 'none';
         empty.style.display = 'block';
-        empty.textContent = err.message || '체중 기록을 불러오지 못했습니다.';
+        empty.textContent = err.message || '몸무게 기록을 불러오지 못했습니다.';
     }
 }
 

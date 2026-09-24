@@ -1,4 +1,4 @@
-// 체중 입력 모달 (하루 1회 upsert)
+// 몸무게 입력 모달 (하루 1회 upsert)
 
 import { getToday } from '../utils.js';
 import { getBodyWeightByDate, upsertBodyWeightRecord } from '../api.js';
@@ -22,7 +22,7 @@ export async function showBodyWeightInputModal(appUserId, selectedDate = null, o
         <div class="app-modal-bg" id="diet-weight-input-modal-bg">
             <div class="app-modal app-modal-medium" id="diet-weight-input-modal">
                 <div class="app-modal-header">
-                    <h2>체중 입력</h2>
+                    <h2>몸무게 입력</h2>
                     <button type="button" class="app-modal-close-btn" id="diet-weight-input-modal-close" aria-label="닫기">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -37,7 +37,7 @@ export async function showBodyWeightInputModal(appUserId, selectedDate = null, o
                             <input type="date" id="diet-weight-record-date" name="record_date" value="${defaultDate}" required>
                         </div>
                         <div class="app-form-group">
-                            <label for="diet-weight-kg">체중 (kg)</label>
+                            <label for="diet-weight-kg">몸무게 (kg)</label>
                             <input type="number" id="diet-weight-kg" name="weight_kg" inputmode="decimal" step="0.1" min="20" max="300"
                                 placeholder="예: 70.5" required>
                         </div>
@@ -104,7 +104,7 @@ export async function showBodyWeightInputModal(appUserId, selectedDate = null, o
         const recordDate = dateInput.value;
         const weightKg = parseFloat(weightInput.value);
         if (!recordDate || !Number.isFinite(weightKg)) {
-            alert('날짜와 체중을 입력해주세요.');
+            alert('날짜와 몸무게를 입력해주세요.');
             return;
         }
         submitBtn.disabled = true;
@@ -115,7 +115,7 @@ export async function showBodyWeightInputModal(appUserId, selectedDate = null, o
                 onSuccess();
             }
         } catch (err) {
-            alert(err.message || '체중 저장에 실패했습니다.');
+            alert(err.message || '몸무게 저장에 실패했습니다.');
         } finally {
             submitBtn.disabled = false;
         }

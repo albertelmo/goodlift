@@ -50,7 +50,7 @@ const initializeDatabase = async () => {
 const normalizeWeight = (weightKg) => {
   const value = parseFloat(weightKg);
   if (!Number.isFinite(value) || value < 20 || value > 300) {
-    throw new Error('체중은 20kg 이상 300kg 이하로 입력해주세요.');
+    throw new Error('몸무게는 20kg 이상 300kg 이하로 입력해주세요.');
   }
   return Math.round(value * 10) / 10;
 };
