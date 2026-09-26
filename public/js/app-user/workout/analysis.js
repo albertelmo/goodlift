@@ -429,7 +429,7 @@ function renderRepsChart(canvas, recentSessions, selectedDate) {
                 },
                 {
                     type: 'line',
-                    label: '최대 1세트',
+                    label: '최대횟수',
                     data: maxSets,
                     borderColor: '#2e7d32',
                     backgroundColor: '#2e7d32',
@@ -457,7 +457,7 @@ function renderRepsChart(canvas, recentSessions, selectedDate) {
                         font: { size: 11 },
                         usePointStyle: true,
                         generateLabels(chart) {
-                            return buildLegendLabels(chart, '총 횟수', '최대 1세트');
+                            return buildLegendLabels(chart, '총 횟수', '최대횟수');
                         }
                     }
                 },
@@ -488,7 +488,7 @@ function renderRepsChart(canvas, recentSessions, selectedDate) {
                     beginAtZero: true,
                     grace: '8%',
                     grid: { drawOnChartArea: false },
-                    title: { display: true, text: '1세트', font: { size: 11 } },
+                    title: { display: true, text: '최대횟수', font: { size: 11 } },
                     ticks: { font: { size: 10 }, precision: 0 }
                 }
             },
@@ -533,7 +533,7 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
                     data-date="${escapeHtml(session.workout_date)}">
                     <span class="workout-analysis-list-date">${escapeHtml(formatNavDate(session.workout_date))}</span>
                     <span class="workout-analysis-list-stat">총 ${escapeHtml(formatReps(session.session_total_reps))}</span>
-                    <span class="workout-analysis-list-stat">최대 ${escapeHtml(formatReps(session.max_set_reps))}</span>
+                    <span class="workout-analysis-list-stat">최대횟수 ${escapeHtml(formatReps(session.max_set_reps))}</span>
                 </button>
             `;
             }
@@ -550,7 +550,7 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
         const prSectionHtml = isRepsMode ? `
                     <div class="workout-analysis-pr-grid workout-analysis-pr-grid--two">
                         <div class="workout-analysis-pr-card">
-                            <span class="workout-analysis-pr-label">최고 1세트</span>
+                            <span class="workout-analysis-pr-label">최대횟수</span>
                             <span class="workout-analysis-pr-value">${escapeHtml(formatReps(best.max_set_reps))}</span>
                         </div>
                         <div class="workout-analysis-pr-card">
@@ -583,7 +583,7 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
                             </span>
                             <span class="workout-analysis-session-sep" aria-hidden="true">·</span>
                             <span class="workout-analysis-session-item">
-                                <span class="workout-analysis-session-stat-label">최대 1세트</span>
+                                <span class="workout-analysis-session-stat-label">최대횟수</span>
                                 <span class="workout-analysis-session-stat-value">${escapeHtml(formatReps(selected.max_set_reps))}</span>
                             </span>
                         </span>
