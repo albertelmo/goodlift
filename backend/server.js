@@ -876,6 +876,18 @@ trainerMemberNotesDB.initializeDatabase(); // trainer_member_notes는 app_users�
 appSettingsDB.initializeDatabase(); // 전역 앱 설정 테이블 초기화
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
+
+const ACTIVITY_LOG_RETENTION_DAYS = 30;
+const runActivityLogsCleanup = async () => {
+    try {
+        await activityLogsDB.cleanOldLogs(ACTIVITY_LOG_RETENTION_DAYS);
+        await memberActivityLogsDB.cleanOldLogs(ACTIVITY_LOG_RETENTION_DAYS);
+    } catch (error) {
+        console.error('[ActivityLogs] 오래된 로그 정리 오류:', error);
+    }
+};
+setTimeout(() => { runActivityLogsCleanup(); }, 2 * 60 * 1000);
+setInterval(runActivityLogsCleanup, 24 * 60 * 60 * 1000);
 // 공지사항 테이블을 먼저 만든 뒤 발송 테이블 초기화
 (async () => {
     try {
@@ -4389,7 +4401,7 @@ app.get('/api/member-activity-logs', async (req, res) => {
         }
         
         const logs = await memberActivityLogsDB.getActivityLogs(app_user_id, filters);
-        const unreadCount = await memberActivityLogsDB.getUnreadCount(app_user_id);
+        const { unreadCount } = await memberActivityLogsDB.getActivityLogsSummary(app_user_id);
         
         res.json({
             logs,
@@ -4493,7 +4505,7 @@ app.get('/api/trainer-activity-logs', async (req, res) => {
         }
         
         const logs = await activityLogsDB.getActivityLogs(trainer_username, filters);
-        const unreadCount = await activityLogsDB.getUnreadCount(trainer_username);
+        const { unreadCount } = await activityLogsDB.getActivityLogsSummary(trainer_username);
         
         res.json({
             logs,

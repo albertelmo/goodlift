@@ -409,9 +409,8 @@ const getActivityLogs = async (appUserId, filters = {}) => {
       query += ` LIMIT $${paramIndex++}`;
       params.push(filters.limit);
     } else {
-      // 기본값: 최신 50개
       query += ` LIMIT $${paramIndex++}`;
-      params.push(50);
+      params.push(15);
     }
     
     // 오프셋 (페이지네이션)
@@ -434,17 +433,18 @@ const getActivityLogsSummary = async (appUserId) => {
   try {
     const query = `
       SELECT
-        (SELECT COUNT(*)::int FROM member_activity_logs WHERE app_user_id = $1 AND is_read = false) AS unread_count,
-        (
-          SELECT to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"')
-          FROM member_activity_logs
-          WHERE app_user_id = $1
-          ORDER BY created_at DESC
-          LIMIT 1
-        ) AS latest_created_at
+        (COUNT(*) FILTER (WHERE is_read = false))::int AS unread_count,
+        FIRST_VALUE(to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"'))
+          OVER (ORDER BY created_at DESC) AS latest_created_at
+      FROM member_activity_logs
+      WHERE app_user_id = $1
+      LIMIT 1
     `;
     const result = await pool.query(query, [appUserId]);
-    const row = result.rows[0] || {};
+    const row = result.rows[0];
+    if (!row) {
+      return { unreadCount: 0, latestCreatedAt: null };
+    }
     return {
       unreadCount: row.unread_count ?? 0,
       latestCreatedAt: row.latest_created_at || null
@@ -511,10 +511,9 @@ const cleanOldLogs = async (daysOld = 30) => {
       DELETE FROM member_activity_logs
       WHERE is_read = true 
         AND created_at < NOW() AT TIME ZONE 'Asia/Seoul' - INTERVAL '${daysOld} days'
-      RETURNING COUNT(*) as count
     `;
     const result = await pool.query(query);
-    const deletedCount = parseInt(result.rows[0]?.count || 0);
+    const deletedCount = result.rowCount || 0;
     if (deletedCount > 0) {
       console.log(`[PostgreSQL] ${deletedCount}개의 오래된 회원 활동 로그가 삭제되었습니다.`);
     }
