@@ -4506,7 +4506,7 @@ app.get('/api/trainer-activity-logs', async (req, res) => {
         
         const logs = await activityLogsDB.getActivityLogs(trainer_username, filters);
         const { unreadCount } = await activityLogsDB.getActivityLogsSummary(trainer_username);
-        
+
         res.json({
             logs,
             unreadCount

@@ -523,12 +523,14 @@ const getActivityLogsSummary = async (trainerUsername) => {
   try {
     const query = `
       SELECT
-        (COUNT(*) FILTER (WHERE is_read = false))::int AS unread_count,
-        FIRST_VALUE(to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"'))
-          OVER (ORDER BY created_at DESC) AS latest_created_at
-      FROM trainer_activity_logs
-      WHERE trainer_username = $1
-      LIMIT 1
+        (SELECT COUNT(*)::int
+         FROM trainer_activity_logs
+         WHERE trainer_username = $1 AND is_read = false) AS unread_count,
+        (SELECT to_char(${CREATED_AT_EXPR}, 'YYYY-MM-DD"T"HH24:MI:SS.MS"+09:00"')
+         FROM trainer_activity_logs
+         WHERE trainer_username = $1
+         ORDER BY created_at DESC
+         LIMIT 1) AS latest_created_at
     `;
     const result = await pool.query(query, [trainerUsername]);
     const row = result.rows[0];
