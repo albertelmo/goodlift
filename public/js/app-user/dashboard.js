@@ -33,8 +33,6 @@ let activityLogsSummaryPollHandler = null;
 let activityLogsVisibilityHandler = null;
 let activityLogsLatestCreatedAt = null;
 let memberActivityLogsLatestCreatedAt = null;
-let trainerActivityLogsLoaded = false;
-let memberActivityLogsLoaded = false;
 const ACTIVITY_LOGS_UPDATE_INTERVAL = 300000; // 5분마다 요약만 조회
 const ACTIVITY_LOGS_LIST_LIMIT = 10;
 
@@ -55,7 +53,8 @@ export async function init(userData) {
         loadWorkoutGuideSettings(),
         loadWorkoutGuideItems(),
         loadConnectedAppUserInfo(),
-        bootstrapActivityLogsSummary(),
+        loadActivityLogs(),
+        loadMemberActivityLogs(),
         loadAnnouncementsSummary()
     ]);
     await loadTrainerMemberMedalStatus();
@@ -129,74 +128,11 @@ function buildActivityLogItemHtml(log) {
 }
 
 function renderActivityLogsListSection(isTrainer) {
-    const loaded = isTrainer ? trainerActivityLogsLoaded : memberActivityLogsLoaded;
     const logs = isTrainer ? activityLogs : memberActivityLogs;
-    const unread = isTrainer ? activityLogsUnreadCount : memberActivityLogsUnreadCount;
-    const loadTarget = isTrainer ? 'trainer' : 'member';
-
-    if (!loaded) {
-        const unreadHint = unread > 0 ? ` (미읽음 ${unread})` : '';
-        return `<button type="button" class="app-btn-secondary app-activity-logs-load-btn" data-load-logs="${loadTarget}" style="width:100%;padding:12px;font-size:0.875rem;">
-            최근 알림 보기${unreadHint}
-        </button>`;
-    }
     if (logs && logs.length > 0) {
         return logs.map(buildActivityLogItemHtml).join('');
     }
     return '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">활동 로그가 없습니다</div>';
-}
-
-async function bootstrapActivityLogsSummary() {
-    const isTrainer = currentUser?.isTrainer === true;
-    try {
-        if (isTrainer) {
-            const trainerUsername = currentUser?.username;
-            if (!trainerUsername) {
-                activityLogs = null;
-                activityLogsUnreadCount = 0;
-                activityLogsLatestCreatedAt = null;
-                return;
-            }
-            const summary = await getTrainerActivityLogsSummary(trainerUsername);
-            activityLogsUnreadCount = summary.unreadCount ?? 0;
-            activityLogsLatestCreatedAt = summary.latestCreatedAt || null;
-            return;
-        }
-
-        const appUserId = currentUser?.id;
-        if (!appUserId) {
-            memberActivityLogs = null;
-            memberActivityLogsUnreadCount = 0;
-            memberActivityLogsLatestCreatedAt = null;
-            return;
-        }
-        const summary = await getMemberActivityLogsSummary(appUserId);
-        memberActivityLogsUnreadCount = summary.unreadCount ?? 0;
-        memberActivityLogsLatestCreatedAt = summary.latestCreatedAt || null;
-    } catch (error) {
-        console.error('활동 로그 요약 조회 오류:', error);
-    }
-}
-
-async function loadActivityLogsListOnDemand(isTrainer) {
-    if (isTrainer) {
-        await loadActivityLogs();
-        trainerActivityLogsLoaded = true;
-    } else {
-        await loadMemberActivityLogs();
-        memberActivityLogsLoaded = true;
-    }
-    const container = document.getElementById('app-user-content');
-    if (!container) return;
-    const logsList = container.querySelector(isTrainer ? '.app-activity-logs-list:not(.app-activity-logs-list-member)' : '.app-activity-logs-list-member');
-    if (logsList) {
-        logsList.innerHTML = renderActivityLogsListSection(isTrainer);
-        if (isTrainer) {
-            setupActivityLogEvents();
-        } else {
-            setupMemberActivityLogEvents();
-        }
-    }
 }
 
 /**
@@ -223,9 +159,7 @@ async function pollActivityLogsSummary() {
             activityLogsLatestCreatedAt = latest;
 
             if (latest !== prevLatest) {
-                if (trainerActivityLogsLoaded) {
-                    await loadActivityLogs();
-                }
+                await loadActivityLogs();
                 updateActivityLogsUI();
             } else if (prevUnread !== activityLogsUnreadCount) {
                 updateActivityLogsUI();
@@ -243,9 +177,7 @@ async function pollActivityLogsSummary() {
             memberActivityLogsLatestCreatedAt = latest;
 
             if (latest !== prevLatest) {
-                if (memberActivityLogsLoaded) {
-                    await loadMemberActivityLogs();
-                }
+                await loadMemberActivityLogs();
                 updateActivityLogsUI();
             } else if (prevUnread !== memberActivityLogsUnreadCount) {
                 updateActivityLogsUI();
@@ -351,10 +283,6 @@ function updateActivityLogsUI() {
         
         if (sectionTitle && logsList) {
             updateLogUnreadBadge(activityLogsUnreadCount, true);
-            if (!trainerActivityLogsLoaded) {
-                logsList.innerHTML = renderActivityLogsListSection(true);
-                return;
-            }
             if (activityLogs && activityLogs.length > 0) {
                 logsList.innerHTML = activityLogs.map(buildActivityLogItemHtml).join('');
                 setupActivityLogEvents();
@@ -368,10 +296,6 @@ function updateActivityLogsUI() {
         
         if (sectionTitle && logsList) {
             updateLogUnreadBadge(memberActivityLogsUnreadCount, false);
-            if (!memberActivityLogsLoaded) {
-                logsList.innerHTML = renderActivityLogsListSection(false);
-                return;
-            }
             if (memberActivityLogs && memberActivityLogs.length > 0) {
                 logsList.innerHTML = memberActivityLogs.map(buildActivityLogItemHtml).join('');
                 setupMemberActivityLogEvents();
@@ -2035,7 +1959,6 @@ function render() {
         setupTrainerProfileImageClick();
     }
     
-    setupActivityLogsLoadButton();
     if (isTrainer) {
         setupActivityLogEvents();
     } else {
@@ -3239,7 +3162,8 @@ export async function refresh() {
         loadMonthlyWorkoutCompletionSummary(),
         loadMonthlyDietSummary(),
         loadConnectedAppUserInfo(),
-        bootstrapActivityLogsSummary(),
+        loadActivityLogs(),
+        loadMemberActivityLogs(),
         loadAnnouncementsSummary()
     ]);
     await loadTrainerMemberMedalStatus();
@@ -3254,10 +3178,6 @@ export async function refresh() {
  */
 export function cleanup() {
     stopActivityLogsAutoUpdate();
-    trainerActivityLogsLoaded = false;
-    memberActivityLogsLoaded = false;
-    activityLogs = null;
-    memberActivityLogs = null;
     
     // 회원 검색 버튼 observer 정리
     const container = document.getElementById('app-user-content');
@@ -3592,32 +3512,6 @@ function setupMemberActivityLogEvents() {
 /**
  * 트레이너 활동 로그 이벤트 설정
  */
-function setupActivityLogsLoadButton() {
-    const container = document.getElementById('app-user-content');
-    if (!container || container._activityLogsLoadSetup) {
-        return;
-    }
-    container.addEventListener('click', async (e) => {
-        const btn = e.target.closest('.app-activity-logs-load-btn');
-        if (!btn || btn.disabled) {
-            return;
-        }
-        e.preventDefault();
-        const isTrainer = btn.getAttribute('data-load-logs') === 'trainer';
-        btn.disabled = true;
-        const prevText = btn.textContent;
-        btn.textContent = '불러오는 중…';
-        try {
-            await loadActivityLogsListOnDemand(isTrainer);
-        } catch (error) {
-            console.error('활동 로그 목록 로드 오류:', error);
-            btn.textContent = prevText;
-            btn.disabled = false;
-        }
-    });
-    container._activityLogsLoadSetup = true;
-}
-
 function setupActivityLogEvents() {
     const container = document.getElementById('app-user-content');
     if (!container) return;

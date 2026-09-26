@@ -877,7 +877,7 @@ appSettingsDB.initializeDatabase(); // 전역 앱 설정 테이블 초기화
 activityLogsDB.initializeDatabase(); // 트레이너 활동 로그 테이블 초기화
 memberActivityLogsDB.initializeDatabase(); // 회원 활동 로그 테이블 초기화
 
-const ACTIVITY_LOG_RETENTION_DAYS = 30;
+const ACTIVITY_LOG_RETENTION_DAYS = 10;
 const runActivityLogsCleanup = async () => {
     try {
         await activityLogsDB.cleanOldLogs(ACTIVITY_LOG_RETENTION_DAYS);

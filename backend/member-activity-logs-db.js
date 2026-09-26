@@ -504,13 +504,12 @@ const markAllAsRead = async (appUserId) => {
   }
 };
 
-// 오래된 로그 삭제 (30일 이상 된 읽은 로그)
-const cleanOldLogs = async (daysOld = 30) => {
+// 오래된 로그 삭제 (기본 10일 이상 된 로그, 읽음/미읽음 모두)
+const cleanOldLogs = async (daysOld = 10) => {
   try {
     const query = `
       DELETE FROM member_activity_logs
-      WHERE is_read = true 
-        AND created_at < NOW() AT TIME ZONE 'Asia/Seoul' - INTERVAL '${daysOld} days'
+      WHERE created_at < NOW() AT TIME ZONE 'Asia/Seoul' - INTERVAL '${daysOld} days'
     `;
     const result = await pool.query(query);
     const deletedCount = result.rowCount || 0;
