@@ -18,9 +18,9 @@ let workoutGuideEnabled = false;
 let workoutGuideItems = [];
 let connectedAppUserInfo = null; // 현재 연결된 유저앱 회원 정보
 let trainerMemberMedalStatus = {}; // 트레이너 회원 메달 현황 (app_user_id -> status)
-let activityLogs = null; // 트레이너 활동 로그
+let activityLogs = []; // 트레이너 활동 로그
 let activityLogsUnreadCount = 0; // 읽지 않은 로그 개수
-let memberActivityLogs = null; // 회원 활동 로그
+let memberActivityLogs = []; // 회원 활동 로그
 let memberActivityLogsUnreadCount = 0; // 회원 활동 로그 읽지 않은 개수
 let announcementsInbox = [];
 let announcementsUnreadCount = 0;
@@ -35,6 +35,10 @@ let activityLogsLatestCreatedAt = null;
 let memberActivityLogsLatestCreatedAt = null;
 const ACTIVITY_LOGS_UPDATE_INTERVAL = 300000; // 5분마다 요약만 조회
 const ACTIVITY_LOGS_LIST_LIMIT = 10;
+
+function isTrainerUser(user = currentUser) {
+    return user?.isTrainer === true || user?.is_trainer === true;
+}
 
 /**
  * 대시보드 초기화
@@ -127,9 +131,12 @@ function buildActivityLogItemHtml(log) {
     `;
 }
 
-function renderActivityLogsListSection(isTrainer) {
-    const logs = isTrainer ? activityLogs : memberActivityLogs;
-    if (logs && logs.length > 0) {
+function renderActivityLogsListSection(isTrainerView) {
+    const logs = isTrainerView ? activityLogs : memberActivityLogs;
+    if (!Array.isArray(logs)) {
+        return '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">활동 로그를 불러오는 중…</div>';
+    }
+    if (logs.length > 0) {
         return logs.map(buildActivityLogItemHtml).join('');
     }
     return '<div style="padding: 20px; text-align: center; color: var(--app-text-muted);">활동 로그가 없습니다</div>';
@@ -143,7 +150,7 @@ async function pollActivityLogsSummary() {
         return;
     }
 
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
 
     try {
         if (isTrainer) {
@@ -274,16 +281,19 @@ function updateActivityLogsUI() {
     const container = document.getElementById('app-user-content');
     if (!container) return;
     
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     
     if (isTrainer) {
         // 트레이너 활동 로그 섹션 찾기
         const sectionTitle = container.querySelector('.app-section-title');
-        const logsList = container.querySelector('.app-activity-logs-list');
+        const logsList = container.querySelector('.app-activity-logs-list:not(.app-activity-logs-list-member)');
         
         if (sectionTitle && logsList) {
             updateLogUnreadBadge(activityLogsUnreadCount, true);
-            if (activityLogs && activityLogs.length > 0) {
+            if (!Array.isArray(activityLogs)) {
+                return;
+            }
+            if (activityLogs.length > 0) {
                 logsList.innerHTML = activityLogs.map(buildActivityLogItemHtml).join('');
                 setupActivityLogEvents();
             } else {
@@ -296,7 +306,10 @@ function updateActivityLogsUI() {
         
         if (sectionTitle && logsList) {
             updateLogUnreadBadge(memberActivityLogsUnreadCount, false);
-            if (memberActivityLogs && memberActivityLogs.length > 0) {
+            if (!Array.isArray(memberActivityLogs)) {
+                return;
+            }
+            if (memberActivityLogs.length > 0) {
                 logsList.innerHTML = memberActivityLogs.map(buildActivityLogItemHtml).join('');
                 setupMemberActivityLogEvents();
             } else {
@@ -643,7 +656,7 @@ async function loadAchievementMedalTotals() {
  */
 async function loadTrainerMembers() {
     // 트레이너 여부 확인 (currentUser의 isTrainer 필드로 확인)
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     
     if (!isTrainer) {
         trainerMembers = null;
@@ -681,7 +694,7 @@ async function loadTrainerMembers() {
  * 현재 연결된 유저앱 회원 정보 조회
  */
 async function loadConnectedAppUserInfo() {
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     if (!isTrainer) {
         connectedAppUserInfo = null;
         return;
@@ -711,7 +724,7 @@ async function loadConnectedAppUserInfo() {
  * 트레이너 회원 메달 현황 조회
  */
 async function loadTrainerMemberMedalStatus() {
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     if (!isTrainer) {
         trainerMemberMedalStatus = {};
         return;
@@ -767,10 +780,10 @@ async function loadTrainerMemberMedalStatus() {
  * 트레이너 활동 로그 조회
  */
 async function loadActivityLogs() {
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     
     if (!isTrainer) {
-        activityLogs = null;
+        activityLogs = [];
         activityLogsUnreadCount = 0;
         return;
     }
@@ -778,7 +791,7 @@ async function loadActivityLogs() {
     try {
         const trainerUsername = currentUser?.username;
         if (!trainerUsername) {
-            activityLogs = null;
+            activityLogs = [];
             activityLogsUnreadCount = 0;
             return;
         }
@@ -792,9 +805,9 @@ async function loadActivityLogs() {
         syncActivityLogsLatestCreatedAtFromList();
     } catch (error) {
         console.error('활동 로그 조회 오류:', error);
-        activityLogs = null;
-        activityLogsUnreadCount = 0;
-        activityLogsLatestCreatedAt = null;
+        if (!Array.isArray(activityLogs)) {
+            activityLogs = [];
+        }
     }
 }
 
@@ -802,10 +815,10 @@ async function loadActivityLogs() {
  * 회원 활동 로그 조회
  */
 async function loadMemberActivityLogs() {
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     
     if (isTrainer) {
-        memberActivityLogs = null;
+        memberActivityLogs = [];
         memberActivityLogsUnreadCount = 0;
         return;
     }
@@ -813,7 +826,7 @@ async function loadMemberActivityLogs() {
     try {
         const appUserId = currentUser?.id;
         if (!appUserId) {
-            memberActivityLogs = null;
+            memberActivityLogs = [];
             memberActivityLogsUnreadCount = 0;
             return;
         }
@@ -827,9 +840,9 @@ async function loadMemberActivityLogs() {
         syncMemberActivityLogsLatestCreatedAtFromList();
     } catch (error) {
         console.error('회원 활동 로그 조회 오류:', error);
-        memberActivityLogs = null;
-        memberActivityLogsUnreadCount = 0;
-        memberActivityLogsLatestCreatedAt = null;
+        if (!Array.isArray(memberActivityLogs)) {
+            memberActivityLogs = [];
+        }
     }
 }
 
@@ -888,7 +901,7 @@ async function loadAnnouncementsInbox() {
  */
 async function loadMemberTrainers() {
     // 트레이너가 아닌 경우만 (회원인 경우)
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     
     if (isTrainer) {
         memberTrainers = null;
@@ -1138,7 +1151,7 @@ function render() {
     const today = getToday();
     
     // 트레이너 여부 확인 (currentUser의 isTrainer 필드로 확인)
-    const isTrainer = currentUser?.isTrainer === true;
+    const isTrainer = isTrainerUser();
     
     // member_name 확인 (null, undefined, 빈 문자열 체크)
     const memberName = currentUser?.member_name;
