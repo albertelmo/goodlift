@@ -1,4 +1,4 @@
-// 운동종목별 분석 (Epley 1RM, 볼륨·무게 추이)
+// 운동종목별 분석 (무게: Epley·볼륨 / 맨몸: 횟수 추이)
 
 import { escapeHtml } from '../utils.js';
 
@@ -39,9 +39,54 @@ function parseSets(record) {
     return [];
 }
 
+function forEachEligibleSet(recordsByDate, onSet) {
+    Object.keys(recordsByDate).forEach(dateKey => {
+        const records = recordsByDate[dateKey] || [];
+        records.forEach(record => {
+            if (record.is_text_record) return;
+            const type = record.workout_type_type;
+            if (type && type !== '세트') return;
+            parseSets(record).forEach(set => onSet(set, dateKey));
+        });
+    });
+}
+
+function parseSetMetrics(set) {
+    const weight = parseFloat(set.weight);
+    const reps = parseFloat(set.reps);
+    const weightVal = Number.isFinite(weight) ? weight : 0;
+    const repsVal = Number.isFinite(reps) ? reps : 0;
+    return { weight: weightVal, reps: repsVal };
+}
+
+/** 무게가 한 번이라도 입력된 세트가 있으면 kg 분석, 아니면 횟수 분석 */
+export function resolveWorkoutAnalysisMode(recordsByDate = {}) {
+    let hasWeighted = false;
+    let hasRepsOnly = false;
+
+    forEachEligibleSet(recordsByDate, (set) => {
+        const { weight, reps } = parseSetMetrics(set);
+        if (reps <= 0) return;
+        if (weight > 0) {
+            hasWeighted = true;
+        } else {
+            hasRepsOnly = true;
+        }
+    });
+
+    if (hasWeighted) return 'weight';
+    if (hasRepsOnly) return 'reps';
+    return null;
+}
+
 function roundKg(value) {
     if (!Number.isFinite(value) || value <= 0) return null;
     return Math.round(value * 10) / 10;
+}
+
+function roundReps(value) {
+    if (!Number.isFinite(value) || value <= 0) return null;
+    return Math.round(value);
 }
 
 function formatKg(value) {
@@ -53,6 +98,12 @@ function formatKg(value) {
         maximumFractionDigits: hasDecimal ? 1 : 0
     });
     return `${formatted}kg`;
+}
+
+function formatReps(value) {
+    const n = roundReps(value);
+    if (n === null) return '-';
+    return `${n.toLocaleString('en-US')}회`;
 }
 
 function formatChartDateLabel(dateKey) {
@@ -69,7 +120,7 @@ function formatNavDate(dateKey) {
     return dateKey.replace(/-/g, '.') + '.';
 }
 
-export function buildWorkoutTypeAnalysis(recordsByDate = {}) {
+function buildWeightWorkoutTypeAnalysis(recordsByDate = {}) {
     const sessions = [];
     let best1rm = 0;
     let bestWeight = 0;
@@ -87,11 +138,8 @@ export function buildWorkoutTypeAnalysis(recordsByDate = {}) {
             if (type && type !== '세트') return;
 
             parseSets(record).forEach(set => {
-                const weight = parseFloat(set.weight);
-                const reps = parseFloat(set.reps);
-                if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(reps) || reps <= 0) {
-                    return;
-                }
+                const { weight, reps } = parseSetMetrics(set);
+                if (weight <= 0 || reps <= 0) return;
                 hasValid = true;
                 dayVolume += weight * reps;
                 dayMaxWeight = Math.max(dayMaxWeight, weight);
@@ -118,6 +166,7 @@ export function buildWorkoutTypeAnalysis(recordsByDate = {}) {
     sessions.sort((a, b) => a.workout_date.localeCompare(b.workout_date));
 
     return {
+        mode: 'weight',
         best: {
             estimated_1rm_kg: roundKg(best1rm),
             max_weight_kg: roundKg(bestWeight),
@@ -125,6 +174,71 @@ export function buildWorkoutTypeAnalysis(recordsByDate = {}) {
         },
         sessions,
         recentSessions: sessions.slice(-GRAPH_SESSION_LIMIT)
+    };
+}
+
+function buildRepsWorkoutTypeAnalysis(recordsByDate = {}) {
+    const sessions = [];
+    let bestMaxSetReps = 0;
+    let bestSessionTotalReps = 0;
+
+    Object.keys(recordsByDate).forEach(dateKey => {
+        const records = recordsByDate[dateKey] || [];
+        let dayTotalReps = 0;
+        let dayMaxSetReps = 0;
+        let hasValid = false;
+
+        records.forEach(record => {
+            if (record.is_text_record) return;
+            const type = record.workout_type_type;
+            if (type && type !== '세트') return;
+
+            parseSets(record).forEach(set => {
+                const { weight, reps } = parseSetMetrics(set);
+                if (reps <= 0 || weight > 0) return;
+                hasValid = true;
+                dayTotalReps += reps;
+                dayMaxSetReps = Math.max(dayMaxSetReps, reps);
+            });
+        });
+
+        if (hasValid) {
+            bestMaxSetReps = Math.max(bestMaxSetReps, dayMaxSetReps);
+            bestSessionTotalReps = Math.max(bestSessionTotalReps, dayTotalReps);
+            sessions.push({
+                workout_date: dateKey,
+                session_total_reps: roundReps(dayTotalReps),
+                max_set_reps: roundReps(dayMaxSetReps)
+            });
+        }
+    });
+
+    sessions.sort((a, b) => a.workout_date.localeCompare(b.workout_date));
+
+    return {
+        mode: 'reps',
+        best: {
+            max_set_reps: roundReps(bestMaxSetReps),
+            max_session_total_reps: roundReps(bestSessionTotalReps)
+        },
+        sessions,
+        recentSessions: sessions.slice(-GRAPH_SESSION_LIMIT)
+    };
+}
+
+export function buildWorkoutTypeAnalysis(recordsByDate = {}) {
+    const mode = resolveWorkoutAnalysisMode(recordsByDate);
+    if (mode === 'weight') {
+        return buildWeightWorkoutTypeAnalysis(recordsByDate);
+    }
+    if (mode === 'reps') {
+        return buildRepsWorkoutTypeAnalysis(recordsByDate);
+    }
+    return {
+        mode: null,
+        best: {},
+        sessions: [],
+        recentSessions: []
     };
 }
 
@@ -139,7 +253,56 @@ function destroyChart() {
     destroyWorkoutAnalysisChart();
 }
 
-function renderChart(canvas, recentSessions, selectedDate) {
+function buildLegendLabels(chart, barLabel, lineLabel) {
+    const datasets = chart.data.datasets;
+    const barIndex = datasets.findIndex(d => d.label === barLabel);
+    const lineIndex = datasets.findIndex(d => d.label === lineLabel);
+    const ordered = [barIndex, lineIndex].filter(i => i >= 0);
+
+    return ordered.map((datasetIndex) => {
+        const ds = datasets[datasetIndex];
+        const hidden = !chart.isDatasetVisible(datasetIndex);
+
+        if (ds.type === 'line') {
+            return {
+                text: ds.label,
+                fillStyle: 'transparent',
+                strokeStyle: ds.borderColor,
+                lineWidth: ds.borderWidth || 2,
+                hidden,
+                datasetIndex,
+                pointStyle: 'line',
+                rotation: 0
+            };
+        }
+
+        return {
+            text: ds.label,
+            fillStyle: ds.backgroundColor,
+            strokeStyle: ds.borderColor,
+            lineWidth: ds.borderWidth || 1,
+            hidden,
+            datasetIndex,
+            pointStyle: 'rect',
+            rotation: 0
+        };
+    });
+}
+
+function attachChartClick(canvas, recentSessions) {
+    return {
+        onClick: (_event, elements) => {
+            if (!elements.length) return;
+            const idx = elements[0].index;
+            const session = recentSessions[idx];
+            if (session && canvas._onSessionSelect) {
+                canvas._onSessionSelect(session.workout_date);
+            }
+        }
+    };
+}
+
+function renderWeightChart(canvas, recentSessions, selectedDate) {
     destroyChart();
     if (!canvas || !window.Chart || recentSessions.length === 0) {
         return;
@@ -151,9 +314,6 @@ function renderChart(canvas, recentSessions, selectedDate) {
     const selectedIndex = recentSessions.findIndex(s => s.workout_date === selectedDate);
 
     const pointRadius = recentSessions.map((_, i) => (i === selectedIndex ? 6 : 3));
-    const pointBackgroundColor = recentSessions.map((_, i) =>
-        (i === selectedIndex ? '#1976d2' : '#1976d2')
-    );
 
     activeChart = new window.Chart(canvas, {
         type: 'bar',
@@ -181,7 +341,7 @@ function renderChart(canvas, recentSessions, selectedDate) {
                     yAxisID: 'y1',
                     order: 1,
                     pointRadius,
-                    pointBackgroundColor,
+                    pointBackgroundColor: '#1976d2',
                     pointBorderColor: '#fff',
                     pointBorderWidth: 2
                 }
@@ -195,7 +355,14 @@ function renderChart(canvas, recentSessions, selectedDate) {
                 legend: {
                     display: true,
                     position: 'bottom',
-                    labels: { boxWidth: 12, font: { size: 11 } }
+                    labels: {
+                        boxWidth: 12,
+                        font: { size: 11 },
+                        usePointStyle: true,
+                        generateLabels(chart) {
+                            return buildLegendLabels(chart, '볼륨', '최대 무게');
+                        }
+                    }
                 },
                 tooltip: {
                     callbacks: {
@@ -228,14 +395,104 @@ function renderChart(canvas, recentSessions, selectedDate) {
                     ticks: { font: { size: 10 } }
                 }
             },
-            onClick: (_event, elements) => {
-                if (!elements.length) return;
-                const idx = elements[0].index;
-                const session = recentSessions[idx];
-                if (session && canvas._onSessionSelect) {
-                    canvas._onSessionSelect(session.workout_date);
+            ...attachChartClick(canvas, recentSessions)
+        }
+    });
+}
+
+function renderRepsChart(canvas, recentSessions, selectedDate) {
+    destroyChart();
+    if (!canvas || !window.Chart || recentSessions.length === 0) {
+        return;
+    }
+
+    const labels = recentSessions.map(s => formatChartDateLabel(s.workout_date));
+    const totals = recentSessions.map(s => s.session_total_reps || 0);
+    const maxSets = recentSessions.map(s => s.max_set_reps || 0);
+    const selectedIndex = recentSessions.findIndex(s => s.workout_date === selectedDate);
+    const pointRadius = recentSessions.map((_, i) => (i === selectedIndex ? 6 : 3));
+
+    activeChart = new window.Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                {
+                    type: 'bar',
+                    label: '총 횟수',
+                    data: totals,
+                    backgroundColor: 'rgba(46, 125, 50, 0.35)',
+                    borderColor: 'rgba(46, 125, 50, 0.55)',
+                    borderWidth: 1,
+                    yAxisID: 'y',
+                    order: 2
+                },
+                {
+                    type: 'line',
+                    label: '최대 1세트',
+                    data: maxSets,
+                    borderColor: '#2e7d32',
+                    backgroundColor: '#2e7d32',
+                    borderWidth: 2,
+                    tension: 0.25,
+                    yAxisID: 'y1',
+                    order: 1,
+                    pointRadius,
+                    pointBackgroundColor: '#2e7d32',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 2
                 }
-            }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        boxWidth: 12,
+                        font: { size: 11 },
+                        usePointStyle: true,
+                        generateLabels(chart) {
+                            return buildLegendLabels(chart, '총 횟수', '최대 1세트');
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const label = ctx.dataset.label || '';
+                            const val = ctx.parsed.y;
+                            return `${label}: ${formatReps(val)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { font: { size: 10 }, maxRotation: 45, minRotation: 0 }
+                },
+                y: {
+                    position: 'left',
+                    beginAtZero: true,
+                    grace: '8%',
+                    title: { display: true, text: '총 횟수', font: { size: 11 } },
+                    ticks: { font: { size: 10 }, precision: 0 }
+                },
+                y1: {
+                    position: 'right',
+                    beginAtZero: true,
+                    grace: '8%',
+                    grid: { drawOnChartArea: false },
+                    title: { display: true, text: '1세트', font: { size: 11 } },
+                    ticks: { font: { size: 10 }, precision: 0 }
+                }
+            },
+            ...attachChartClick(canvas, recentSessions)
         }
     });
 }
@@ -247,12 +504,12 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
     destroyChart();
 
     const analysis = buildWorkoutTypeAnalysis(recordsByDate);
-    const { best, sessions, recentSessions } = analysis;
+    const { mode, best, sessions, recentSessions } = analysis;
 
-    if (sessions.length === 0) {
+    if (sessions.length === 0 || !mode) {
         container.innerHTML = `
             <div class="workout-analysis-empty">
-                <p>무게·횟수가 입력된 세트 기록이 없어 분석할 수 없습니다.</p>
+                <p>횟수 또는 무게·횟수가 입력된 세트 기록이 없어 분석할 수 없습니다.</p>
             </div>
         `;
         return { destroy: destroyChart, refresh: () => {} };
@@ -260,28 +517,48 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
 
     let selectedIndex = sessions.length - 1;
     let viewMode = 'graph';
+    const isRepsMode = mode === 'reps';
 
     const getSelected = () => sessions[selectedIndex] || sessions[sessions.length - 1];
 
     const render = () => {
         destroyChart();
         const selected = getSelected();
+
         const listRows = recentSessions.slice().reverse().map(session => {
             const isActive = session.workout_date === selected.workout_date;
+            if (isRepsMode) {
+                return `
+                <button type="button" class="workout-analysis-list-row ${isActive ? 'is-active' : ''}"
+                    data-date="${escapeHtml(session.workout_date)}">
+                    <span class="workout-analysis-list-date">${escapeHtml(formatNavDate(session.workout_date))}</span>
+                    <span class="workout-analysis-list-stat">총 ${escapeHtml(formatReps(session.session_total_reps))}</span>
+                    <span class="workout-analysis-list-stat">최대 ${escapeHtml(formatReps(session.max_set_reps))}</span>
+                </button>
+            `;
+            }
             return `
                 <button type="button" class="workout-analysis-list-row ${isActive ? 'is-active' : ''}"
                     data-date="${escapeHtml(session.workout_date)}">
                     <span class="workout-analysis-list-date">${escapeHtml(formatNavDate(session.workout_date))}</span>
-                    <span class="workout-analysis-list-stat">최대 ${escapeHtml(formatKg(session.max_weight_kg))}</span>
                     <span class="workout-analysis-list-stat">볼륨 ${escapeHtml(formatKg(session.session_volume_kg))}</span>
+                    <span class="workout-analysis-list-stat">최대 ${escapeHtml(formatKg(session.max_weight_kg))}</span>
                 </button>
             `;
         }).join('');
 
-        container.innerHTML = `
-            <div class="workout-analysis-panel">
-                <section class="workout-analysis-pr">
-                    <h4 class="workout-analysis-section-title">최고 기록</h4>
+        const prSectionHtml = isRepsMode ? `
+                    <div class="workout-analysis-pr-grid workout-analysis-pr-grid--two">
+                        <div class="workout-analysis-pr-card">
+                            <span class="workout-analysis-pr-label">최고 1세트</span>
+                            <span class="workout-analysis-pr-value">${escapeHtml(formatReps(best.max_set_reps))}</span>
+                        </div>
+                        <div class="workout-analysis-pr-card">
+                            <span class="workout-analysis-pr-label">세션 최대 총횟수</span>
+                            <span class="workout-analysis-pr-value">${escapeHtml(formatReps(best.max_session_total_reps))}</span>
+                        </div>
+                    </div>
+        ` : `
                     <div class="workout-analysis-pr-grid">
                         <div class="workout-analysis-pr-card">
                             <span class="workout-analysis-pr-label">예상 1RM</span>
@@ -296,6 +573,39 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
                             <span class="workout-analysis-pr-value">${escapeHtml(formatKg(best.max_session_volume_kg))}</span>
                         </div>
                     </div>
+        `;
+
+        const sessionStatsHtml = isRepsMode ? `
+                        <span class="workout-analysis-session-inline">
+                            <span class="workout-analysis-session-item">
+                                <span class="workout-analysis-session-stat-label">총 횟수</span>
+                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatReps(selected.session_total_reps))}</span>
+                            </span>
+                            <span class="workout-analysis-session-sep" aria-hidden="true">·</span>
+                            <span class="workout-analysis-session-item">
+                                <span class="workout-analysis-session-stat-label">최대 1세트</span>
+                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatReps(selected.max_set_reps))}</span>
+                            </span>
+                        </span>
+        ` : `
+                        <span class="workout-analysis-session-inline">
+                            <span class="workout-analysis-session-item">
+                                <span class="workout-analysis-session-stat-label">볼륨</span>
+                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.session_volume_kg))}</span>
+                            </span>
+                            <span class="workout-analysis-session-sep" aria-hidden="true">·</span>
+                            <span class="workout-analysis-session-item">
+                                <span class="workout-analysis-session-stat-label">최대 부하</span>
+                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.max_weight_kg))}</span>
+                            </span>
+                        </span>
+        `;
+
+        container.innerHTML = `
+            <div class="workout-analysis-panel">
+                <section class="workout-analysis-pr">
+                    <h4 class="workout-analysis-section-title">최고 기록</h4>
+                    ${prSectionHtml}
                 </section>
                 <section class="workout-analysis-overload">
                     <div class="workout-analysis-overload-header">
@@ -314,17 +624,7 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
                         </button>
                     </div>
                     <div class="workout-analysis-session-stats">
-                        <span class="workout-analysis-session-inline">
-                            <span class="workout-analysis-session-item">
-                                <span class="workout-analysis-session-stat-label">최대 부하</span>
-                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.max_weight_kg))}</span>
-                            </span>
-                            <span class="workout-analysis-session-sep" aria-hidden="true">·</span>
-                            <span class="workout-analysis-session-item">
-                                <span class="workout-analysis-session-stat-label">볼륨</span>
-                                <span class="workout-analysis-session-stat-value">${escapeHtml(formatKg(selected.session_volume_kg))}</span>
-                            </span>
-                        </span>
+                        ${sessionStatsHtml}
                     </div>
                     <div class="workout-analysis-chart-wrap ${viewMode === 'graph' ? '' : 'is-hidden'}">
                         <canvas id="workout-analysis-chart"></canvas>
@@ -346,7 +646,11 @@ export function mountWorkoutAnalysisPanel(container, { recordsByDate }) {
                     render();
                 }
             };
-            renderChart(canvas, recentSessions, selected.workout_date);
+            if (isRepsMode) {
+                renderRepsChart(canvas, recentSessions, selected.workout_date);
+            } else {
+                renderWeightChart(canvas, recentSessions, selected.workout_date);
+            }
         }
 
         const prevBtn = container.querySelector('#workout-analysis-prev');

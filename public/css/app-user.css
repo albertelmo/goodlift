@@ -1711,6 +1711,10 @@ body.app-user-active {
     margin-bottom: 12px;
 }
 
+.workout-analysis-pr-grid--two {
+    grid-template-columns: repeat(2, 1fr);
+}
+
 .workout-analysis-pr-card {
     display: flex;
     flex-direction: column;
