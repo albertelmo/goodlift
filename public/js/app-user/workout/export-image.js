@@ -97,7 +97,11 @@ function normalizeDateStr(value) {
 function isRecordCompleted(record) {
     if (record.is_text_record) return !!record.is_completed;
     const type = record.workout_type_type;
-    if (type === '시간') return !!record.is_completed;
+    if (type === '시간') {
+        const timeSets = parseSets(record).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+        if (timeSets.length > 0) return timeSets.every(set => set.is_completed === true);
+        return !!record.is_completed;
+    }
     const sets = parseSets(record);
     if (type === '세트' && sets.length > 0) {
         return sets.every(set => set.is_completed === true);
@@ -187,12 +191,18 @@ function buildRecordItem(record) {
     const type = record.workout_type_type;
 
     if (type === '시간') {
+        const durationSets = parseSets(record).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
         return {
             kind: 'time',
             name,
             completed,
             badges,
             duration: formatWorkoutDuration(record.duration_minutes, record.duration_seconds),
+            sets: durationSets.map(set => ({
+                number: set.set_number,
+                label: `⏱ ${formatWorkoutDuration(set.duration_minutes, set.duration_seconds) || '-'}`,
+                completed: !!set.is_completed
+            })),
             notes
         };
     }
@@ -265,14 +275,18 @@ function measureItemContentWidth(ctx, item) {
     } else {
         maxW = Math.max(maxW, measureTextWidth(ctx, item.name, FONT_BOLD));
 
-        if (item.kind === 'time' && item.duration) {
+        if (item.kind === 'time' && item.sets?.length) {
+            item.sets.forEach(set => {
+                maxW = Math.max(maxW, SET_BADGE_SIZE + 10 + measureTextWidth(ctx, set.label, FONT_SET));
+            });
+        } else if (item.kind === 'time' && item.duration) {
             const durText = `⏱ ${item.duration}`;
             maxW = Math.max(maxW, measureTextWidth(ctx, durText, FONT));
         }
 
         if (item.kind === 'sets' && item.sets?.length) {
             item.sets.forEach(set => {
-                const setText = `${set.weight} × ${set.reps}`;
+                const setText = set.label || `${set.weight} × ${set.reps}`;
                 maxW = Math.max(maxW, SET_BADGE_SIZE + 10 + measureTextWidth(ctx, setText, FONT_SET));
             });
         }
@@ -339,7 +353,9 @@ function measureCard(ctx, item, contentWidth) {
         const nameBlock = measureTextBlock(ctx, item.name, innerWidth, LINE_HEIGHT_NAME);
         height += nameBlock.height + 10;
 
-        if (item.kind === 'time' && item.duration) {
+        if (item.kind === 'time' && item.sets?.length) {
+            height += item.sets.length * SET_ROW_HEIGHT;
+        } else if (item.kind === 'time' && item.duration) {
             height += LINE_HEIGHT_TIME;
         } else if (item.kind === 'sets' && item.sets?.length) {
             height += item.sets.length * SET_ROW_HEIGHT;
@@ -416,7 +432,7 @@ function drawSetRow(ctx, set, x, y) {
     ctx.font = FONT_SET;
     ctx.fillStyle = set.completed ? COLORS.textMuted : COLORS.text;
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${set.weight} × ${set.reps}`, x + SET_BADGE_SIZE + 10, y + SET_ROW_HEIGHT / 2);
+    ctx.fillText(set.label || `${set.weight} × ${set.reps}`, x + SET_BADGE_SIZE + 10, y + SET_ROW_HEIGHT / 2);
 }
 
 function drawCard(ctx, item, x, y, width) {
@@ -459,7 +475,12 @@ function drawCard(ctx, item, x, y, width) {
     });
     cursorY += 10;
 
-    if (item.kind === 'time' && item.duration) {
+    if (item.kind === 'time' && item.sets?.length) {
+        item.sets.forEach(set => {
+            drawSetRow(ctx, set, innerX, cursorY);
+            cursorY += SET_ROW_HEIGHT;
+        });
+    } else if (item.kind === 'time' && item.duration) {
         ctx.font = FONT;
         ctx.fillStyle = COLORS.textMuted;
         ctx.fillText(`⏱ ${item.duration}`, innerX, cursorY);

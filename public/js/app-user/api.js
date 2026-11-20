@@ -385,6 +385,17 @@ export async function updateWorkoutRecord(id, data) {
     return result;
 }
 
+export async function setWorkoutSuperset(id, appUserId, nextId) {
+    const result = await patch(`/workout-records/${id}/superset`, {
+        app_user_id: appUserId,
+        next_id: nextId
+    });
+    if (appUserId) {
+        cache.invalidate(key => key.includes(`/workout-records`) && key.includes(`app_user_id=${appUserId}`));
+    }
+    return result;
+}
+
 /**
  * 운동기록 삭제 (캐시 무효화 포함)
  */

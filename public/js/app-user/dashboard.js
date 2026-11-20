@@ -2362,19 +2362,35 @@ async function showWeeklyWorkoutModal() {
                 const workoutTypeName = escapeHtml(record.workout_type_name || '');
                 
                 if (workoutTypeType === '시간') {
-                    const durLabel = formatWorkoutDuration(record.duration_minutes, record.duration_seconds);
-                    if (durLabel) {
-                    historyHTML += `
-                        <div class="workout-history-item">
-                            <div class="workout-history-item-header">
-                                <div class="workout-history-item-content">
-                                    <div class="workout-history-item-name">${workoutTypeName}</div>
-                                    <span class="workout-history-item-value">⏱ ${durLabel}</span>
+                    const durationSets = (record.sets || []).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+                    const rows = durationSets.length > 0
+                        ? durationSets
+                        : ((Number(record.duration_minutes) || 0) + (Number(record.duration_seconds) || 0) > 0
+                            ? [{ set_number: 1, duration_minutes: record.duration_minutes, duration_seconds: record.duration_seconds, is_completed: record.is_completed }]
+                            : []);
+                    if (rows.length > 0) {
+                        const setsHTML = rows.map((set) => {
+                            const label = formatWorkoutDuration(set.duration_minutes, set.duration_seconds) || '-';
+                            return `
+                                <div class="workout-history-set-item ${set.is_completed ? 'completed' : ''}">
+                                    <span class="workout-history-set-number">${set.set_number} 세트</span>
+                                    <span class="workout-history-set-value">⏱ ${label}</span>
+                                    ${set.is_completed ? '<span class="workout-history-set-check">✓</span>' : ''}
                                 </div>
-                                ${record.is_completed ? '<span class="workout-history-item-badge">완료</span>' : ''}
+                            `;
+                        }).join('');
+                        const allDone = rows.every((set) => set.is_completed);
+                        historyHTML += `
+                            <div class="workout-history-item">
+                                <div class="workout-history-item-header">
+                                    <div class="workout-history-item-content">
+                                        <div class="workout-history-item-name">${workoutTypeName}</div>
+                                    </div>
+                                    ${allDone ? '<span class="workout-history-item-badge">완료</span>' : ''}
+                                </div>
+                                <div class="workout-history-sets">${setsHTML}</div>
                             </div>
-                        </div>
-                    `;
+                        `;
                     }
                 } else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
                     const setsHTML = record.sets.map(set => {

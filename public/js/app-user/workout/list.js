@@ -146,6 +146,8 @@ async function flushRecordSave(recordId) {
                 set_number: set.set_number,
                 weight: set.weight,
                 reps: set.reps,
+                duration_minutes: set.duration_minutes != null ? set.duration_minutes : null,
+                duration_seconds: set.duration_seconds != null ? set.duration_seconds : null,
                 is_completed: set.is_completed || false
             })),
             notes: recordSnapshot.notes
@@ -422,10 +424,10 @@ function renderGroupedWorkoutHistoryHtml(sortedDates, recordsByDate) {
         const dateSummaryText = volumeInfo.hasVolume
             ? `볼륨 : ${formatVolumeKg(volumeInfo.total)}`
             : `${records.length}건`;
-        const recordsHtml = records.map(record => renderWorkoutItem(record, {
+        const recordsHtml = renderDayWorkoutItems(records, {
             suppressControls: true,
             disableGuideButton: true
-        })).join('');
+        });
         return `
             <div class="app-workout-date-section">
                 <div class="app-workout-date-header">
@@ -1290,14 +1292,25 @@ async function render(records, options = {}) {
                                 타이머<span class="app-workout-timer-text">${timerDisplayText}</span>
                             </button>
                             ` : ''}
+                            ${!isReadOnly && !suppressControls ? `
+                            <input type="checkbox" class="app-workout-day-all-checkbox"
+                                   data-date="${normalizedDate}"
+                                   aria-label="이 날짜 운동 모두 완료"
+                                   ${checkAllWorkoutsCompletedForDate(normalizedDate) ? 'checked' : ''}>
+                            ` : ''}
                         </div>
                     </div>
                     <div class="app-workout-items">
             `;
             
             // 3. 운동기록카드 렌더링
-            dateRecords.forEach(record => {
-                html += renderWorkoutItem(record);
+            dateRecords.forEach((record, index) => {
+                const next = dateRecords[index + 1];
+                const prev = dateRecords[index - 1];
+                html += renderWorkoutItem(record, {
+                    supersetTop: !!(next && record.superset_next_id === next.id),
+                    supersetBottom: !!(prev && prev.superset_next_id === record.id)
+                });
             });
             html += `</div></div>`;
         }
@@ -1328,6 +1341,18 @@ async function render(records, options = {}) {
             initializeSortable();
         }
     }
+}
+
+function renderDayWorkoutItems(records, options = {}) {
+    return records.map((record, index) => {
+        const next = records[index + 1];
+        const prev = records[index - 1];
+        return renderWorkoutItem(record, {
+            ...options,
+            supersetTop: !!(next && record.superset_next_id === next.id),
+            supersetBottom: !!(prev && prev.superset_next_id === record.id)
+        });
+    }).join('');
 }
 
 /**
@@ -1371,11 +1396,15 @@ function renderWorkoutLevelBadges(record) {
 function renderWorkoutItem(record, options = {}) {
     const hideControls = suppressControls || options.suppressControls === true;
     const disableGuideButton = options.disableGuideButton === true;
+    const supersetClass = options.supersetTop
+        ? ' app-workout-superset-top'
+        : (options.supersetBottom ? ' app-workout-superset-bottom' : '');
+    const supersetBadge = options.supersetTop ? '<span class="app-superset-badge">수퍼셋</span>' : '';
     // 텍스트 기록인 경우
     if (record.is_text_record) {
         const textContent = record.text_content ? escapeHtml(record.text_content) : '';
         const isCompleted = record.is_completed || false;
-        const cardClass = isCompleted ? 'app-workout-item app-workout-item-all-completed app-workout-item-text' : 'app-workout-item app-workout-item-text';
+        const cardClass = (isCompleted ? 'app-workout-item app-workout-item-all-completed app-workout-item-text' : 'app-workout-item app-workout-item-text') + supersetClass;
         const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
         const checked = isCompleted ? 'checked' : '';
         const badgesHtml = renderWorkoutLevelBadges(record);
@@ -1425,6 +1454,7 @@ function renderWorkoutItem(record, options = {}) {
                         ${topLeftControls}
                         ${topRightControls}
                         <div style="display: flex; flex-direction: column; gap: 6px; width: 100%; padding-top: 28px;">
+                            ${supersetBadge}
                             <div class="app-workout-item-text-content" style="white-space: pre-line; word-wrap: break-word; word-break: break-word;">${textContent}</div>
                         </div>
                     </div>
@@ -1441,20 +1471,63 @@ function renderWorkoutItem(record, options = {}) {
     const sets = record.sets || [];
     
     // 모든 세트/시간이 완료되었는지 확인
+    const durationSets = workoutTypeType === '시간'
+        ? sets.filter((set) => set.duration_minutes != null || set.duration_seconds != null)
+        : [];
     let allCompleted = false;
     if (workoutTypeType === '시간') {
-        allCompleted = record.is_completed || false;
+        allCompleted = durationSets.length > 0
+            ? durationSets.every(set => set.is_completed === true)
+            : (record.is_completed || false);
     } else if (workoutTypeType === '세트' && sets.length > 0) {
-        // 모든 세트가 완료되었는지 확인
         allCompleted = sets.every(set => set.is_completed === true) && sets.length > 0;
     }
     
-    const cardClass = allCompleted ? 'app-workout-item app-workout-item-all-completed' : 'app-workout-item';
+    const cardClass = (allCompleted ? 'app-workout-item app-workout-item-all-completed' : 'app-workout-item') + supersetClass;
     
     let infoHtml = '';
     
     let durationInlineHtml = '';
-    if (workoutTypeType === '시간' && duration) {
+    if (workoutTypeType === '시간' && durationSets.length > 0) {
+        const canRemove = durationSets.length > 1;
+        const allSetsCompleted = durationSets.every(set => set.is_completed === true);
+        const setsInfo = durationSets.map((set) => {
+            const label = formatWorkoutDuration(set.duration_minutes, set.duration_seconds) || '-';
+            const isCompleted = set.is_completed || false;
+            const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
+            const checked = isCompleted ? 'checked' : '';
+            return `
+                <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
+                    <span class="app-workout-item-set-number ${completedClass}">${set.set_number}</span>
+                    <span class="app-workout-item-set-info ${completedClass}">⏱ ${label}</span>
+                    ${!isReadOnly && !hideControls ? `
+                    <input type="checkbox" class="app-workout-item-checkbox" 
+                           data-record-id="${record.id}" 
+                           data-set-id="${set.id}" 
+                           data-type="set" 
+                           ${checked}>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+        infoHtml = `
+            <div class="app-workout-item-sets">
+                ${!isReadOnly && !hideControls ? `
+                <div class="app-workout-item-set-controls" style="display: flex; gap: 16px; align-items: center; justify-content: flex-start; margin-bottom: 8px; height: 24px;">
+                    <button type="button" class="app-workout-item-remove-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: ${canRemove ? 'pointer' : 'not-allowed'}; font-size: 18px; font-weight: bold; line-height: 24px; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box; opacity: ${canRemove ? '1' : '0.5'};" ${!canRemove ? 'disabled' : ''}>−</button>
+                    <span style="font-size: 14px; color: #333; line-height: 24px; height: 24px; display: inline-flex; align-items: center; margin: 0; padding: 0;">세트</span>
+                    <button type="button" class="app-workout-item-add-set-btn" data-record-id="${record.id}" style="width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 18px; font-weight: bold; line-height: 24px; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
+                    <input type="checkbox" class="app-workout-item-all-sets-checkbox" 
+                           data-record-id="${record.id}" 
+                           data-type="all-sets" 
+                           ${allSetsCompleted ? 'checked' : ''}
+                           style="margin-left: 18px; width: 24px; height: 24px; flex-shrink: 0;">
+                </div>
+                ` : ''}
+                ${setsInfo}
+            </div>
+        `;
+    } else if (workoutTypeType === '시간' && duration) {
         const isCompleted = record.is_completed || false;
         const completedClass = isCompleted ? 'app-workout-item-completed' : 'app-workout-item-incomplete';
         const checked = isCompleted ? 'checked' : '';
@@ -1525,7 +1598,7 @@ function renderWorkoutItem(record, options = {}) {
                         </svg>
                     </div>
                     `}
-                    <div style="display: flex; align-items: center; gap: 6px; width: 100%; ${workoutTypeType !== '세트' && !hideControls ? 'margin-top: 28px;' : ''}">
+                    <div style="display: flex; align-items: center; gap: 6px; width: 100%; ${(workoutTypeType === '세트' || durationSets.length > 0 || hideControls) ? '' : 'margin-top: 28px;'}">
                         ${(() => {
                             const guideItem = workoutGuideMap.get(String(record.workout_type_id || ''));
                             if (disableGuideButton) {
@@ -1546,6 +1619,7 @@ function renderWorkoutItem(record, options = {}) {
                         </button>
                         ` : ''}
                         ${renderWorkoutLevelBadges(record)}
+                        ${supersetBadge}
                         ${durationInlineHtml}
                     </div>
                 </div>
@@ -1569,7 +1643,25 @@ function showCompletedCheckModal(record) {
     
     let contentHtml = '';
     
-    if (workoutTypeType === '시간' && duration) {
+    const durationSets = (sets || []).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+    if (workoutTypeType === '시간' && durationSets.length > 0) {
+        contentHtml = '<div class="app-completed-modal-sets">';
+        durationSets.forEach(set => {
+            const label = formatWorkoutDuration(set.duration_minutes, set.duration_seconds) || '-';
+            const checked = set.is_completed ? 'checked' : '';
+            contentHtml += `
+                <div class="app-completed-modal-content-item">
+                    <span class="app-completed-modal-label">${set.set_number} 세트</span>
+                    <div class="app-completed-modal-checkbox-container">
+                        <span>⏱ ${label}</span>
+                        <input type="checkbox" class="app-completed-modal-checkbox" 
+                               data-type="set" data-set-id="${set.id}" ${checked}>
+                    </div>
+                </div>
+            `;
+        });
+        contentHtml += '</div>';
+    } else if (workoutTypeType === '시간' && duration) {
         const checked = isCompleted ? 'checked' : '';
         contentHtml = `
             <div class="app-completed-modal-content-item">
@@ -2054,6 +2146,77 @@ function formatTime(seconds) {
     return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
+function workoutDisplayName(record) {
+    if (record.is_text_record) {
+        const text = String(record.text_content || '텍스트 기록').trim();
+        return text.length > 24 ? `${text.slice(0, 24)}…` : text;
+    }
+    return record.workout_type_name || '운동';
+}
+
+function getSupersetAction(record) {
+    const date = normalizeWorkoutDate(record.workout_date);
+    const sameDay = currentRecords
+        .filter((item) => normalizeWorkoutDate(item.workout_date) === date)
+        .sort((a, b) => {
+            const orderA = a.display_order ?? 999999;
+            const orderB = b.display_order ?? 999999;
+            if (orderA !== orderB) return orderA - orderB;
+            return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+        });
+    const index = sameDay.findIndex((item) => item.id === record.id);
+    if (index < 0) return null;
+    const above = index > 0 ? sameDay[index - 1] : null;
+    if (above && above.superset_next_id === record.id) {
+        return {
+            linked: true,
+            ownerId: above.id,
+            belowId: null
+        };
+    }
+    if (index >= sameDay.length - 1) return null;
+    const below = sameDay[index + 1];
+    if (below.superset_next_id && record.superset_next_id !== below.id) return null;
+    const linked = record.superset_next_id === below.id;
+    return {
+        linked,
+        ownerId: record.id,
+        belowId: below.id,
+        belowName: workoutDisplayName(below)
+    };
+}
+
+function normalizeWorkoutDate(value) {
+    if (value instanceof Date) return formatDate(value);
+    if (typeof value === 'string') return value.split('T')[0];
+    return '';
+}
+
+function applyCompletionToRecord(record, isChecked) {
+    if (record.is_text_record) {
+        record.is_completed = isChecked;
+        return;
+    }
+    const sets = record.sets || [];
+    if (record.workout_type_type === '시간') {
+        const timeSets = sets.filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+        if (timeSets.length > 0) {
+            timeSets.forEach((set) => {
+                set.is_completed = isChecked;
+            });
+            record.is_completed = isChecked;
+            return;
+        }
+        record.is_completed = isChecked;
+        return;
+    }
+    if (record.workout_type_type === '세트') {
+        sets.forEach((set) => {
+            set.is_completed = isChecked;
+        });
+    }
+}
+
 /**
  * 특정 날짜의 모든 운동이 완료되었는지 확인
  */
@@ -2088,6 +2251,10 @@ function checkAllWorkoutsCompletedForDate(dateStr) {
         
         // 시간 운동의 경우
         if (workoutTypeType === '시간') {
+            const timeSets = (record.sets || []).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+            if (timeSets.length > 0) {
+                return timeSets.every(set => set.is_completed === true);
+            }
             return record.is_completed === true;
         }
         // 세트 운동의 경우
@@ -2338,6 +2505,69 @@ function setupClickListeners() {
         });
     }
 
+    if (!isReadOnly) {
+        document.querySelectorAll('.app-workout-day-all-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            checkbox.addEventListener('change', async () => {
+                const isChecked = checkbox.checked;
+                const dateStr = checkbox.getAttribute('data-date');
+                const dateRecords = currentRecords.filter(record => normalizeWorkoutDate(record.workout_date) === dateStr);
+                if (dateRecords.length === 0) {
+                    checkbox.checked = !isChecked;
+                    return;
+                }
+                const snapshot = dateRecords.map(record => JSON.parse(JSON.stringify(record)));
+                dateRecords.forEach(record => applyCompletionToRecord(record, isChecked));
+                await render(currentRecords);
+                scheduleCalendarUpdate();
+                try {
+                    const { updateWorkoutRecord, updateWorkoutRecordCompleted } = await import('../api.js');
+                    await Promise.all(dateRecords.map(record => {
+                        const sets = record.sets || [];
+                        const timeSets = sets.filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+                        const useSets = record.workout_type_type === '세트'
+                            ? sets.length > 0
+                            : (record.workout_type_type === '시간' && timeSets.length > 0);
+                        if (!useSets) {
+                            return updateWorkoutRecordCompleted(record.id, currentAppUserId, isChecked);
+                        }
+                        return updateWorkoutRecord(record.id, {
+                            app_user_id: currentAppUserId,
+                            workout_date: normalizeWorkoutDate(record.workout_date),
+                            workout_type_id: record.workout_type_id,
+                            duration_minutes: record.duration_minutes,
+                            duration_seconds: record.duration_seconds,
+                            sets: sets.map((set, index) => ({
+                                id: set.id,
+                                set_number: set.set_number || index + 1,
+                                weight: set.weight,
+                                reps: set.reps,
+                                duration_minutes: set.duration_minutes != null ? set.duration_minutes : null,
+                                duration_seconds: set.duration_seconds != null ? set.duration_seconds : null,
+                                is_completed: set.is_completed === true
+                            })),
+                            notes: record.notes || null
+                        });
+                    }));
+                    if (isChecked && checkAllWorkoutsCompletedForDate(dateStr)) {
+                        await showCelebrationModal();
+                    }
+                } catch (error) {
+                    console.error('날짜 전체 완료 처리 오류:', error);
+                    snapshot.forEach(prev => {
+                        const index = currentRecords.findIndex(record => record.id === prev.id);
+                        if (index !== -1) currentRecords[index] = prev;
+                    });
+                    await render(currentRecords);
+                    scheduleCalendarUpdate();
+                    alert('완료 상태 업데이트에 실패했습니다.');
+                }
+            });
+        });
+    }
+
     // 복사 버튼 클릭 이벤트 (읽기 전용 모드가 아닌 경우만)
     if (!isReadOnly) {
         const copyButtons = document.querySelectorAll('.app-workout-timer-btn[aria-label="복사"]');
@@ -2406,17 +2636,18 @@ function setupClickListeners() {
                         }
                         
                         const recordToEdit = latestRecord || record;
+                        const supersetAction = getSupersetAction(recordToEdit);
                         
                         // 텍스트 기록인 경우 전용 모달 사용
                         if (recordToEdit.is_text_record === true) {
                             await editModule.showTextRecordEditModal(recordToEdit, currentAppUserId, () => {
                                 loadRecords();
-                            });
+                            }, supersetAction);
                         } else {
                             // 일반 기록인 경우 기존 모달 사용
                             await editModule.showEditModal(recordToEdit, currentAppUserId, () => {
                                 loadRecords();
-                            });
+                            }, supersetAction);
                         }
                     } catch (error) {
                         console.error('수정 모달 열기 오류:', error);
@@ -2710,6 +2941,8 @@ function setupClickListeners() {
                         set_number: record.sets.length + 1,
                         weight: lastSet.weight,
                         reps: lastSet.reps,
+                        duration_minutes: lastSet.duration_minutes != null ? lastSet.duration_minutes : null,
+                        duration_seconds: lastSet.duration_seconds != null ? lastSet.duration_seconds : null,
                         is_completed: false
                     };
                     
@@ -3135,12 +3368,26 @@ async function copyWorkoutRecords(records, targetDate, targetAppUserId = null) {
         
         // 시간 운동인 경우
         if (record.workout_type_type === '시간') {
-            const totalSec = workoutDurationTotalSeconds(record.duration_minutes, record.duration_seconds);
-            if (totalSec > 0) {
-                workoutData.duration_minutes = record.duration_minutes != null ? Number(record.duration_minutes) : 0;
-                workoutData.duration_seconds = record.duration_seconds != null ? Number(record.duration_seconds) : 0;
+            const durationSets = (record.sets || []).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+            if (durationSets.length > 0) {
+                workoutData.sets = durationSets.map((set, index) => ({
+                    set_number: index + 1,
+                    duration_minutes: set.duration_minutes != null ? Number(set.duration_minutes) : 0,
+                    duration_seconds: set.duration_seconds != null ? Number(set.duration_seconds) : 0,
+                    weight: null,
+                    reps: null
+                }));
+                const totalSeconds = workoutData.sets.reduce((sum, set) => sum + set.duration_minutes * 60 + set.duration_seconds, 0);
+                workoutData.duration_minutes = Math.floor(totalSeconds / 60);
+                workoutData.duration_seconds = totalSeconds % 60;
+            } else {
+                const totalSec = workoutDurationTotalSeconds(record.duration_minutes, record.duration_seconds);
+                if (totalSec > 0) {
+                    workoutData.duration_minutes = record.duration_minutes != null ? Number(record.duration_minutes) : 0;
+                    workoutData.duration_seconds = record.duration_seconds != null ? Number(record.duration_seconds) : 0;
+                }
+                workoutData.sets = [];
             }
-            workoutData.sets = [];
         } 
         // 세트 운동인 경우
         else if (record.workout_type_type === '세트' && record.sets && record.sets.length > 0) {
@@ -3316,6 +3563,14 @@ function initializeSortable() {
                             rec.display_order = orderById.get(rec.id);
                         }
                     }
+                    const orderedIds = order.map(item => item.id);
+                    orderedIds.forEach((id, index) => {
+                        const rec = currentRecords.find(item => item.id === id);
+                        const nextId = orderedIds[index + 1];
+                        if (rec?.superset_next_id && rec.superset_next_id !== nextId) {
+                            rec.superset_next_id = null;
+                        }
+                    });
                     await render(currentRecords);
                     
                     // 저장 확인: 캐시 무효화 후 즉시 재조회하여 실제 저장된 순서 확인 (캐시 우회)

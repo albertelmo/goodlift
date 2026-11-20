@@ -287,6 +287,10 @@ function checkAllWorkoutsCompleted(records) {
         
         // 시간 운동의 경우
         if (workoutTypeType === '시간') {
+            const timeSets = (record.sets || []).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+            if (timeSets.length > 0) {
+                return timeSets.every(set => set.is_completed === true);
+            }
             return record.is_completed === true;
         }
         // 세트 운동의 경우

@@ -178,6 +178,16 @@ const createWorkoutRecordsTable = async () => {
         '운동 기록에 duration_seconds 컬럼 추가',
         migrateWorkoutRecordDurationSeconds
       );
+      await runMigration(
+        'add_workout_record_set_durations_20261120',
+        '시간 운동을 세트별 분·초로 저장하고 기존 기록을 1세트로 이전',
+        migrateWorkoutRecordSetDurations
+      );
+      await runMigration(
+        'add_workout_record_superset_next_20261120',
+        '바로 아래 운동과 수퍼셋으로 묶는 superset_next_id 컬럼 추가',
+        migrateWorkoutRecordSupersetNext
+      );
     }
   } catch (error) {
     console.error('[PostgreSQL] 운동기록 테이블 생성 오류:', error);
@@ -203,6 +213,8 @@ const createWorkoutRecordSetsTable = async () => {
           set_number INTEGER NOT NULL,
           weight DECIMAL(10,2),
           reps INTEGER,
+          duration_minutes INTEGER,
+          duration_seconds INTEGER,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           UNIQUE(workout_record_id, set_number)
@@ -572,6 +584,45 @@ const migrateWorkoutRecordDurationSeconds = async () => {
   }
 };
 
+const migrateWorkoutRecordSetDurations = async () => {
+  await pool.query(`ALTER TABLE workout_record_sets ADD COLUMN IF NOT EXISTS duration_minutes INTEGER`);
+  await pool.query(`ALTER TABLE workout_record_sets ADD COLUMN IF NOT EXISTS duration_seconds INTEGER`);
+  const inserted = await pool.query(`
+    INSERT INTO workout_record_sets (
+      workout_record_id,
+      set_number,
+      weight,
+      reps,
+      duration_minutes,
+      duration_seconds,
+      is_completed
+    )
+    SELECT
+      wr.id,
+      1,
+      NULL,
+      NULL,
+      COALESCE(wr.duration_minutes, 0),
+      COALESCE(wr.duration_seconds, 0),
+      COALESCE(wr.is_completed, false)
+    FROM workout_records wr
+    JOIN workout_types wt ON wt.id = wr.workout_type_id
+    WHERE wt.type = '시간'
+      AND COALESCE(wr.is_text_record, false) = false
+      AND (COALESCE(wr.duration_minutes, 0) * 60 + COALESCE(wr.duration_seconds, 0)) > 0
+      AND NOT EXISTS (
+        SELECT 1 FROM workout_record_sets s WHERE s.workout_record_id = wr.id
+      )
+  `);
+  const count = inserted.rowCount || 0;
+  if (count > 0) {
+    console.log(`[PostgreSQL] 시간 운동 ${count}건을 1세트로 이전했습니다.`);
+  }
+};
+
+const migrateWorkoutRecordSupersetNext = async () => {
+  await pool.query(`ALTER TABLE workout_records ADD COLUMN IF NOT EXISTS superset_next_id UUID`);
+};
 
 // 인덱스 생성
 const createWorkoutRecordsIndexes = async () => {
@@ -662,6 +713,7 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
         wr.fatigue_level,
         wr.is_completed,
         wr.display_order,
+        wr.superset_next_id,
         wr.is_text_record,
         wr.text_content,
         wr.created_at,
@@ -722,7 +774,9 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
           workout_record_id,
           set_number, 
           weight, 
-          reps, 
+          reps,
+          duration_minutes,
+          duration_seconds,
           is_completed, 
           created_at, 
           updated_at
@@ -741,6 +795,8 @@ const getWorkoutRecords = async (appUserId, filters = {}) => {
             set_number: set.set_number,
             weight: set.weight,
             reps: set.reps,
+            duration_minutes: set.duration_minutes,
+            duration_seconds: set.duration_seconds,
             is_completed: set.is_completed,
             created_at: set.created_at,
             updated_at: set.updated_at
@@ -775,6 +831,7 @@ const getWorkoutRecordById = async (id, appUserId) => {
         wr.fatigue_level,
         wr.is_completed,
         wr.display_order,
+        wr.superset_next_id,
         wr.is_text_record,
         wr.text_content,
         wr.created_at,
@@ -805,7 +862,7 @@ const getWorkoutRecordById = async (id, appUserId) => {
     
     // 세트 정보 조회 (텍스트 기록이 아닌 경우만, 하지만 항상 조회)
     const sets = await pool.query(`
-      SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
+      SELECT id, set_number, weight, reps, duration_minutes, duration_seconds, is_completed, created_at, updated_at
       FROM workout_record_sets
       WHERE workout_record_id = $1
       ORDER BY set_number ASC
@@ -920,6 +977,93 @@ const assertDurationForTimeType = (minutes, seconds) => {
   }
 };
 
+const sumDurationSets = (sets) => {
+  let total = 0;
+  for (const set of sets) {
+    total += (Number(set.duration_minutes) || 0) * 60 + (Number(set.duration_seconds) || 0);
+  }
+  return {
+    minutes: Math.floor(total / 60),
+    seconds: total % 60,
+    total
+  };
+};
+
+const parseTimeSetsForDb = (sets) => {
+  if (!Array.isArray(sets) || sets.length === 0) return null;
+  const parsed = [];
+  sets.forEach((set, index) => {
+    const hasDuration = set.duration_minutes !== undefined && set.duration_minutes !== null
+      || set.duration_seconds !== undefined && set.duration_seconds !== null;
+    if (!hasDuration) return;
+    const m = parseDurationIntForDb(set.duration_minutes, 0);
+    const s = parseDurationIntForDb(set.duration_seconds, 0);
+    assertDurationForTimeType(m, s);
+    parsed.push({
+      set_number: set.set_number || index + 1,
+      weight: null,
+      reps: null,
+      duration_minutes: m,
+      duration_seconds: s,
+      is_completed: set.is_completed === true
+    });
+  });
+  return parsed.length > 0 ? parsed : null;
+};
+
+const insertWorkoutSets = async (client, workoutRecordId, sets) => {
+  if (!Array.isArray(sets) || sets.length === 0) return;
+  for (const set of sets) {
+    await client.query(`
+      INSERT INTO workout_record_sets (
+        workout_record_id,
+        set_number,
+        weight,
+        reps,
+        duration_minutes,
+        duration_seconds,
+        is_completed
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      workoutRecordId,
+      set.set_number,
+      set.weight !== null && set.weight !== undefined ? set.weight : null,
+      set.reps !== null && set.reps !== undefined ? set.reps : null,
+      set.duration_minutes !== null && set.duration_minutes !== undefined ? set.duration_minutes : null,
+      set.duration_seconds !== null && set.duration_seconds !== undefined ? set.duration_seconds : null,
+      set.is_completed === true
+    ]);
+  }
+};
+
+const syncTimeRecordFromSets = async (client, recordId) => {
+  const typeResult = await client.query(`
+    SELECT wt.type
+    FROM workout_records wr
+    LEFT JOIN workout_types wt ON wt.id = wr.workout_type_id
+    WHERE wr.id = $1
+  `, [recordId]);
+  if (typeResult.rows[0]?.type !== '시간') return;
+  const setsResult = await client.query(`
+    SELECT duration_minutes, duration_seconds, is_completed
+    FROM workout_record_sets
+    WHERE workout_record_id = $1
+  `, [recordId]);
+  const summed = sumDurationSets(setsResult.rows);
+  const allCompleted = setsResult.rows.length > 0
+    && setsResult.rows.every((set) => set.is_completed === true);
+  await client.query(`
+    UPDATE workout_records
+    SET duration_minutes = $2,
+        duration_seconds = $3,
+        is_completed = $4,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = $1
+  `, [recordId, summed.minutes, summed.seconds, allCompleted]);
+};
+
+const SET_SELECT_COLUMNS = `id, workout_record_id, set_number, weight, reps, duration_minutes, duration_seconds, is_completed, created_at, updated_at`;
+
 const resolveStoredDurationsForInsert = async (client, workoutData) => {
   if (workoutData.is_text_record) {
     return { dm: null, ds: null };
@@ -932,10 +1076,27 @@ const resolveStoredDurationsForInsert = async (client, workoutData) => {
   if (wtype !== '시간') {
     return { dm: null, ds: null };
   }
+  const timeSets = parseTimeSetsForDb(workoutData.sets);
+  if (timeSets) {
+    const summed = sumDurationSets(timeSets);
+    assertDurationForTimeType(summed.minutes, summed.seconds);
+    return { dm: summed.minutes, ds: summed.seconds, timeSets };
+  }
   const m = parseDurationIntForDb(workoutData.duration_minutes, 0);
   const s = parseDurationIntForDb(workoutData.duration_seconds, 0);
   assertDurationForTimeType(m, s);
-  return { dm: m, ds: s };
+  return {
+    dm: m,
+    ds: s,
+    timeSets: [{
+      set_number: 1,
+      weight: null,
+      reps: null,
+      duration_minutes: m,
+      duration_seconds: s,
+      is_completed: false
+    }]
+  };
 };
 
 // 운동기록 추가
@@ -945,7 +1106,8 @@ const addWorkoutRecord = async (workoutData) => {
     // 검증
     validateWorkoutRecord(workoutData);
     
-    const { dm, ds } = await resolveStoredDurationsForInsert(client, workoutData);
+    const resolvedDuration = await resolveStoredDurationsForInsert(client, workoutData);
+    const { dm, ds } = resolvedDuration;
     
     await client.query('BEGIN');
     
@@ -987,30 +1149,16 @@ const addWorkoutRecord = async (workoutData) => {
     const insertResult = await client.query(insertQuery, insertValues);
     const workoutRecord = insertResult.rows[0];
     
-    // 세트 데이터 추가 (있는 경우)
-    if (workoutData.sets && Array.isArray(workoutData.sets) && workoutData.sets.length > 0) {
-      for (const set of workoutData.sets) {
-        await client.query(`
-          INSERT INTO workout_record_sets (
-            workout_record_id,
-            set_number,
-            weight,
-            reps
-          ) VALUES ($1, $2, $3, $4)
-        `, [
-          workoutRecord.id,
-          set.set_number,
-          set.weight !== null && set.weight !== undefined ? set.weight : null,
-          set.reps !== null && set.reps !== undefined ? set.reps : null
-        ]);
-      }
+    const setsToInsert = resolvedDuration.timeSets || workoutData.sets;
+    if (setsToInsert && Array.isArray(setsToInsert) && setsToInsert.length > 0) {
+      await insertWorkoutSets(client, workoutRecord.id, setsToInsert);
     }
     
     await client.query('COMMIT');
     
       // 세트 정보 포함하여 반환
     const setsResult = await pool.query(`
-      SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
+      SELECT id, set_number, weight, reps, duration_minutes, duration_seconds, is_completed, created_at, updated_at
       FROM workout_record_sets
       WHERE workout_record_id = $1
       ORDER BY set_number ASC
@@ -1086,7 +1234,8 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
       // 검증
       validateWorkoutRecord(workoutData);
       
-      const { dm, ds } = await resolveStoredDurationsForInsert(client, workoutData);
+      const resolvedDuration = await resolveStoredDurationsForInsert(client, workoutData);
+      const { dm, ds } = resolvedDuration;
       
       // 운동기록 추가
       const insertQuery = `
@@ -1123,23 +1272,9 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
       const insertResult = await client.query(insertQuery, insertValues);
       const workoutRecord = insertResult.rows[0];
       
-      // 세트 데이터 추가 (있는 경우)
-      if (workoutData.sets && Array.isArray(workoutData.sets) && workoutData.sets.length > 0) {
-        for (const set of workoutData.sets) {
-          await client.query(`
-            INSERT INTO workout_record_sets (
-              workout_record_id,
-              set_number,
-              weight,
-              reps
-            ) VALUES ($1, $2, $3, $4)
-          `, [
-            workoutRecord.id,
-            set.set_number,
-            set.weight !== null && set.weight !== undefined ? set.weight : null,
-            set.reps !== null && set.reps !== undefined ? set.reps : null
-          ]);
-        }
+      const setsToInsert = resolvedDuration.timeSets || workoutData.sets;
+      if (setsToInsert && Array.isArray(setsToInsert) && setsToInsert.length > 0) {
+        await insertWorkoutSets(client, workoutRecord.id, setsToInsert);
       }
       
       addedRecords.push(workoutRecord);
@@ -1163,7 +1298,7 @@ const addWorkoutRecordsBatch = async (workoutDataArray) => {
       }
       
       const setsResult = await pool.query(`
-        SELECT id, set_number, weight, reps, is_completed, created_at, updated_at
+        SELECT id, set_number, weight, reps, duration_minutes, duration_seconds, is_completed, created_at, updated_at
         FROM workout_record_sets
         WHERE workout_record_id = $1
         ORDER BY set_number ASC
@@ -1392,24 +1527,11 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
       
       // 새 세트 추가 (완료 상태 보존)
       if (Array.isArray(updates.sets) && updates.sets.length > 0) {
-        for (const set of updates.sets) {
-          await client.query(`
-            INSERT INTO workout_record_sets (
-              workout_record_id,
-              set_number,
-              weight,
-              reps,
-              is_completed
-            ) VALUES ($1, $2, $3, $4, $5)
-          `, [
-            id,
-            set.set_number,
-            set.weight !== null && set.weight !== undefined ? set.weight : null,
-            set.reps !== null && set.reps !== undefined ? set.reps : null,
-            set.is_completed !== undefined ? set.is_completed : false
-          ]);
-        }
+        const timeSets = parseTimeSetsForDb(updates.sets);
+        const setsToWrite = timeSets || updates.sets;
+        await insertWorkoutSets(client, id, setsToWrite);
       }
+      await syncTimeRecordFromSets(client, id);
     }
     
     await client.query('COMMIT');
@@ -1436,9 +1558,63 @@ const updateWorkoutRecord = async (id, appUserId, updates) => {
   }
 };
 
+const setSupersetLink = async (id, appUserId, nextId) => {
+  const currentResult = await pool.query(
+    `SELECT id, workout_date, display_order FROM workout_records WHERE id = $1 AND app_user_id = $2`,
+    [id, appUserId]
+  );
+  if (currentResult.rows.length === 0) {
+    throw new Error('운동기록을 찾을 수 없습니다.');
+  }
+  const current = currentResult.rows[0];
+
+  if (!nextId) {
+    await pool.query(
+      `UPDATE workout_records SET superset_next_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND app_user_id = $2`,
+      [id, appUserId]
+    );
+    return getWorkoutRecordById(id, appUserId);
+  }
+
+  const belowResult = await pool.query(
+    `SELECT id, superset_next_id, display_order
+     FROM workout_records
+     WHERE id = $1 AND app_user_id = $2 AND workout_date = $3`,
+    [nextId, appUserId, current.workout_date]
+  );
+  if (belowResult.rows.length === 0) {
+    throw new Error('아래 운동을 찾을 수 없습니다.');
+  }
+  const below = belowResult.rows[0];
+  if (Number(below.display_order) !== Number(current.display_order) + 1) {
+    throw new Error('바로 아래 운동만 수퍼셋으로 묶을 수 있습니다.');
+  }
+
+  const aboveResult = await pool.query(
+    `SELECT id FROM workout_records WHERE app_user_id = $1 AND superset_next_id = $2`,
+    [appUserId, id]
+  );
+  if (aboveResult.rows.length > 0) {
+    throw new Error('이미 위 운동과 수퍼셋으로 묶여 있습니다.');
+  }
+  if (below.superset_next_id) {
+    throw new Error('아래 운동이 이미 다른 운동과 수퍼셋으로 묶여 있습니다.');
+  }
+
+  await pool.query(
+    `UPDATE workout_records SET superset_next_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND app_user_id = $3`,
+    [nextId, id, appUserId]
+  );
+  return getWorkoutRecordById(id, appUserId);
+};
+
 // 운동기록 삭제
 const deleteWorkoutRecord = async (id, appUserId) => {
   try {
+    await pool.query(
+      `UPDATE workout_records SET superset_next_id = NULL WHERE app_user_id = $1 AND superset_next_id = $2`,
+      [appUserId, id]
+    );
     const query = `
       DELETE FROM workout_records
       WHERE id = $1 AND app_user_id = $2
@@ -1503,6 +1679,7 @@ const updateWorkoutSetCompleted = async (setId, workoutRecordId, appUserId, isCo
     `;
     const result = await pool.query(query, [isCompleted, setId, workoutRecordId]);
     const updatedSet = result.rows[0] || null;
+    await syncTimeRecordFromSets(pool, workoutRecordId);
     const workoutDate = checkResult.rows[0]?.workout_date;
     if (workoutDate) {
       scheduleDailyStatsRefresh(appUserId, workoutDate);
@@ -1794,6 +1971,22 @@ const reorderWorkoutRecords = async (appUserId, workoutDate, order) => {
         });
       }
     }
+
+    await client.query(`
+      UPDATE workout_records wr
+      SET superset_next_id = NULL
+      WHERE wr.app_user_id = $1
+        AND wr.workout_date = $2
+        AND wr.superset_next_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM workout_records nxt
+          WHERE nxt.id = wr.superset_next_id
+            AND nxt.app_user_id = wr.app_user_id
+            AND nxt.workout_date = wr.workout_date
+            AND nxt.display_order = wr.display_order + 1
+        )
+    `, [appUserId, workoutDate]);
     
     await client.query('COMMIT');
     
@@ -1869,6 +2062,7 @@ module.exports = {
   addWorkoutRecordsBatch,
   updateWorkoutRecord,
   deleteWorkoutRecord,
+  setSupersetLink,
   getWorkoutStats,
   getWorkoutYearSummary,
   updateWorkoutRecordCompleted,

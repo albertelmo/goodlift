@@ -641,14 +641,11 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                         <button type="button" class="workout-input-history-btn" data-workout-id="${workout.id}" data-workout-name="${escapeHtml(workout.name)}">최근 기록</button>
                     </div>
                     <div class="workout-input-body">
-                        <div class="app-form-group" style="margin-bottom: 0;">
-                            <label>시간 (분 · 초)</label>
-                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <input type="number" id="workout-input-duration-m-${index}" class="workout-input-duration-m" data-workout-index="${index}" min="0" placeholder="0" value="${workout.durationMinutes != null ? workout.durationMinutes : ''}" inputmode="numeric" style="width: 72px;">
-                                <span style="color: #666;">분</span>
-                                <input type="number" id="workout-input-duration-s-${index}" class="workout-input-duration-s" data-workout-index="${index}" min="0" max="59" placeholder="0" value="${workout.durationSeconds != null ? workout.durationSeconds : ''}" inputmode="numeric" style="width: 72px;">
-                                <span style="color: #666;">초</span>
-                            </div>
+                        <div class="workout-input-sets-container" id="workout-input-sets-${index}"></div>
+                        <div class="workout-input-set-controls" style="display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 12px;">
+                            <button type="button" class="workout-input-remove-set-btn" data-workout-index="${index}" style="width: 32px; height: 32px; border: 1px solid #ddd; background: #fff; color: #333; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">−</button>
+                            <span style="font-size: 14px; color: #333; display: flex; align-items: center; line-height: 1; height: 32px; margin: 0; padding: 0;">세트</span>
+                            <button type="button" class="workout-input-add-set-btn" data-workout-index="${index}" style="width: 32px; height: 32px; border: 1px solid #1976d2; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer; font-size: 20px; font-weight: bold; line-height: 1; display: flex; align-items: center; justify-content: center; padding: 0; margin: 0; box-sizing: border-box;">+</button>
                         </div>
                     </div>
                 </div>
@@ -722,8 +719,12 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
     
     // 초기값 설정: 세트 타입인 경우 기본 세트 1개 추가
     selectedWorkouts.forEach((workout, index) => {
-        if (workout.type === '세트' && workout.sets.length === 0) {
-            workout.sets.push({ set_number: 1, weight: null, reps: null });
+        if (workout.sets.length === 0 && (workout.type === '세트' || workout.type === '시간')) {
+            if (workout.type === '시간') {
+                workout.sets.push({ set_number: 1, duration_minutes: null, duration_seconds: null });
+            } else {
+                workout.sets.push({ set_number: 1, weight: null, reps: null });
+            }
         }
     });
     
@@ -734,7 +735,19 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             e.stopPropagation();
             const workoutIndex = parseInt(btn.getAttribute('data-workout-index'));
             const workout = selectedWorkouts[workoutIndex];
-            if (!workout || workout.type !== '세트') return;
+            if (!workout || (workout.type !== '세트' && workout.type !== '시간')) return;
+
+            if (workout.type === '시간') {
+                const setNumber = workout.sets.length + 1;
+                const lastSet = workout.sets.length > 0 ? workout.sets[workout.sets.length - 1] : null;
+                workout.sets.push({
+                    set_number: setNumber,
+                    duration_minutes: lastSet ? lastSet.duration_minutes : null,
+                    duration_seconds: lastSet ? lastSet.duration_seconds : null
+                });
+                renderWorkoutDurationSets(workoutIndex, selectedWorkouts, workout.sets.length - 1);
+                return;
+            }
             
             const setNumber = workout.sets.length + 1;
             const lastSet = workout.sets.length > 0 ? workout.sets[workout.sets.length - 1] : null;
@@ -768,7 +781,17 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             e.stopPropagation();
             const workoutIndex = parseInt(btn.getAttribute('data-workout-index'));
             const workout = selectedWorkouts[workoutIndex];
-            if (!workout || workout.type !== '세트') return;
+            if (!workout || (workout.type !== '세트' && workout.type !== '시간')) return;
+            if (workout.type === '시간') {
+                if (workout.sets.length > 1) {
+                    workout.sets.pop();
+                    workout.sets.forEach((set, i) => {
+                        set.set_number = i + 1;
+                    });
+                    renderWorkoutDurationSets(workoutIndex, selectedWorkouts, -1);
+                }
+                return;
+            }
             
             // 세트가 1개 이상일 때만 삭제 가능 (최소 1개는 유지)
             if (workout.sets.length > 1) {
@@ -782,6 +805,53 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         });
     });
     
+    function renderWorkoutDurationSets(workoutIndex, workouts, newSetIndex = -1) {
+        const workout = workouts[workoutIndex];
+        if (!workout || workout.type !== '시간') return;
+        const setsContainer = modal.querySelector(`#workout-input-sets-${workoutIndex}`);
+        if (!setsContainer) return;
+        setsContainer.innerHTML = workout.sets.map((set, setIndex) => `
+            <div class="workout-input-set-item" data-set-index="${setIndex}">
+                <div class="workout-input-set-header">
+                    <span class="workout-input-set-number">${set.set_number} 세트</span>
+                </div>
+                <div class="workout-input-set-inputs">
+                    <div class="workout-set-input-group">
+                        <label>분</label>
+                        <input type="number" class="workout-input-set-duration-m" data-workout-index="${workoutIndex}" data-set-index="${setIndex}" min="0" placeholder="0" value="${set.duration_minutes != null ? set.duration_minutes : ''}" inputmode="numeric">
+                    </div>
+                    <div class="workout-set-input-group">
+                        <label>초</label>
+                        <input type="number" class="workout-input-set-duration-s" data-workout-index="${workoutIndex}" data-set-index="${setIndex}" min="0" max="59" placeholder="0" value="${set.duration_seconds != null ? set.duration_seconds : ''}" inputmode="numeric">
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        const removeBtn = modal.querySelector(`.workout-input-remove-set-btn[data-workout-index="${workoutIndex}"]`);
+        if (removeBtn) {
+            const canRemove = workout.sets.length > 1;
+            removeBtn.disabled = !canRemove;
+            removeBtn.style.opacity = canRemove ? '1' : '0.5';
+            removeBtn.style.cursor = canRemove ? 'pointer' : 'not-allowed';
+        }
+        const bind = (selector, field) => {
+            setsContainer.querySelectorAll(selector).forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const wIndex = parseInt(e.target.getAttribute('data-workout-index'), 10);
+                    const sIndex = parseInt(e.target.getAttribute('data-set-index'), 10);
+                    const value = e.target.value.trim();
+                    selectedWorkouts[wIndex].sets[sIndex][field] = value === '' ? null : (Number.isNaN(parseInt(value, 10)) ? null : parseInt(value, 10));
+                });
+            });
+        };
+        bind('.workout-input-set-duration-m', 'duration_minutes');
+        bind('.workout-input-set-duration-s', 'duration_seconds');
+        if (newSetIndex >= 0) {
+            const focusInput = setsContainer.querySelector(`.workout-input-set-duration-m[data-set-index="${newSetIndex}"]`);
+            if (focusInput) focusInput.focus();
+        }
+    }
+
     // 세트 렌더링 함수
     function renderWorkoutSets(workoutIndex, workouts, newSetIndex = -1) {
         const workout = workouts[workoutIndex];
@@ -872,26 +942,12 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
         
     }
     
-    // 시간 입력 이벤트 (분 / 초)
-    modal.querySelectorAll('.workout-input-duration-m').forEach(input => {
-        input.addEventListener('input', (e) => {
-            const workoutIndex = parseInt(e.target.closest('.workout-input-card').getAttribute('data-workout-index'), 10);
-            const value = e.target.value.trim();
-            selectedWorkouts[workoutIndex].durationMinutes = value === '' ? null : (isNaN(parseInt(value, 10)) ? null : parseInt(value, 10));
-        });
-    });
-    modal.querySelectorAll('.workout-input-duration-s').forEach(input => {
-        input.addEventListener('input', (e) => {
-            const workoutIndex = parseInt(e.target.closest('.workout-input-card').getAttribute('data-workout-index'), 10);
-            const value = e.target.value.trim();
-            selectedWorkouts[workoutIndex].durationSeconds = value === '' ? null : (isNaN(parseInt(value, 10)) ? null : parseInt(value, 10));
-        });
-    });
-    
     // 초기 렌더링
     selectedWorkouts.forEach((workout, index) => {
         if (workout.type === '세트') {
             renderWorkoutSets(index, selectedWorkouts);
+        } else if (workout.type === '시간') {
+            renderWorkoutDurationSets(index, selectedWorkouts);
         }
     });
     
@@ -928,15 +984,24 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
                     const workout = selectedWorkouts[workoutIndex];
                     if (workout) {
                         if (workout.type === '시간') {
-                            const totalSec = (Number(record.duration_minutes) || 0) * 60 + (Number(record.duration_seconds) || 0);
-                            if (totalSec > 0) {
-                                workout.durationMinutes = record.duration_minutes != null ? Number(record.duration_minutes) : 0;
-                                workout.durationSeconds = record.duration_seconds != null ? Number(record.duration_seconds) : 0;
-                                const mInput = modal.querySelector(`#workout-input-duration-m-${workoutIndex}`);
-                                const sInput = modal.querySelector(`#workout-input-duration-s-${workoutIndex}`);
-                                if (mInput) mInput.value = workout.durationMinutes;
-                                if (sInput) sInput.value = workout.durationSeconds;
+                            const durationSets = (record.sets || []).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+                            if (durationSets.length > 0) {
+                                workout.sets = durationSets.map((set, idx) => ({
+                                    set_number: idx + 1,
+                                    duration_minutes: set.duration_minutes != null ? Number(set.duration_minutes) : 0,
+                                    duration_seconds: set.duration_seconds != null ? Number(set.duration_seconds) : 0
+                                }));
+                            } else {
+                                const totalSec = (Number(record.duration_minutes) || 0) * 60 + (Number(record.duration_seconds) || 0);
+                                if (totalSec > 0) {
+                                    workout.sets = [{
+                                        set_number: 1,
+                                        duration_minutes: record.duration_minutes != null ? Number(record.duration_minutes) : 0,
+                                        duration_seconds: record.duration_seconds != null ? Number(record.duration_seconds) : 0
+                                    }];
+                                }
                             }
+                            renderWorkoutDurationSets(workoutIndex, selectedWorkouts);
                         } else if (workout.type === '세트' && record.sets && record.sets.length > 0) {
                             // 세트 정보를 불러오기 (체크 상태는 제외)
                             workout.sets = record.sets.map((set, idx) => ({
@@ -971,16 +1036,32 @@ async function showWorkoutInputModal(appUserId, selectedDate, workoutIds, workou
             };
             
             if (workout.type === '시간') {
-                const mStr = workout.durationMinutes != null ? String(workout.durationMinutes) : '';
-                const sStr = workout.durationSeconds != null ? String(workout.durationSeconds) : '';
-                const parsed = parseWorkoutDurationInputs(mStr, sStr);
-                if (!parsed.ok) {
-                    alert(parsed.message);
+                const parsedSets = [];
+                for (const set of workout.sets) {
+                    const parsed = parseWorkoutDurationInputs(
+                        set.duration_minutes != null ? String(set.duration_minutes) : '',
+                        set.duration_seconds != null ? String(set.duration_seconds) : ''
+                    );
+                    if (!parsed.ok) {
+                        alert(`${workout.name}: ${parsed.message}`);
+                        return;
+                    }
+                    parsedSets.push({
+                        set_number: parsedSets.length + 1,
+                        duration_minutes: parsed.minutes,
+                        duration_seconds: parsed.seconds,
+                        weight: null,
+                        reps: null
+                    });
+                }
+                if (parsedSets.length === 0) {
+                    alert(`${workout.name}: 운동 시간을 입력해 주세요.`);
                     return;
                 }
-                workoutData.duration_minutes = parsed.minutes;
-                workoutData.duration_seconds = parsed.seconds;
-                workoutData.sets = [];
+                const totalSeconds = parsedSets.reduce((sum, set) => sum + set.duration_minutes * 60 + set.duration_seconds, 0);
+                workoutData.duration_minutes = Math.floor(totalSeconds / 60);
+                workoutData.duration_seconds = totalSeconds % 60;
+                workoutData.sets = parsedSets;
             } else if (workout.type === '세트') {
                 workoutData.duration_minutes = null;
                 workoutData.duration_seconds = null;
@@ -1585,19 +1666,29 @@ async function showWorkoutHistoryModal(appUserId, workoutId, workoutName, workou
             let recordHTML = '';
             
             if (workoutTypeType === '시간') {
-                const durLabel = formatWorkoutDuration(record.duration_minutes, record.duration_seconds);
-                if (durLabel) {
-                    recordHTML = `
-                    <div class="workout-history-item">
-                        <div class="workout-history-item-header">
-                            <div class="workout-history-item-icon">⏱</div>
-                            <div class="workout-history-item-content">
-                                <span class="workout-history-item-value">${durLabel}</span>
+                const durationSets = (record.sets || []).filter((set) => set.duration_minutes != null || set.duration_seconds != null);
+                const rows = durationSets.length > 0
+                    ? durationSets
+                    : ((Number(record.duration_minutes) || 0) * 60 + (Number(record.duration_seconds) || 0) > 0
+                        ? [{ set_number: 1, duration_minutes: record.duration_minutes, duration_seconds: record.duration_seconds, is_completed: record.is_completed }]
+                        : []);
+                if (rows.length > 0) {
+                    const setsHTML = rows.map((set) => {
+                        const label = formatWorkoutDuration(set.duration_minutes, set.duration_seconds) || '-';
+                        const isCompleted = set.is_completed;
+                        return `
+                            <div class="workout-history-set-item ${isCompleted ? 'completed' : ''}">
+                                <span class="workout-history-set-number">${set.set_number} 세트</span>
+                                <span class="workout-history-set-value">⏱ ${label}</span>
+                                ${isCompleted ? '<span class="workout-history-set-check">✓</span>' : ''}
                             </div>
-                            ${record.is_completed ? '<span class="workout-history-item-badge">완료</span>' : ''}
+                        `;
+                    }).join('');
+                    recordHTML = `
+                        <div class="workout-history-item">
+                            <div class="workout-history-sets">${setsHTML}</div>
                         </div>
-                    </div>
-                `;
+                    `;
                 }
             } else if (workoutTypeType === '세트' && record.sets && record.sets.length > 0) {
                 const setsHTML = record.sets.map(set => {

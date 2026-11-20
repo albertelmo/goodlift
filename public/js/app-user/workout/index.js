@@ -1530,7 +1530,21 @@ function renderRecentListItem(record, utils) {
     
     const badgesHtml = renderRecentListBadges(record);
     let infoHtml = '';
-    if (workoutTypeType === '시간' && duration) {
+    const durationSets = workoutTypeType === '시간'
+        ? sets.filter((set) => set.duration_minutes != null || set.duration_seconds != null)
+        : [];
+    if (workoutTypeType === '시간' && durationSets.length > 0) {
+        const setsInfo = durationSets.map((set) => {
+            const label = formatDur ? formatDur(set.duration_minutes, set.duration_seconds) : null;
+            return `
+                <div class="app-workout-item-set-row" style="display: flex; align-items: center; gap: 8px;">
+                    <span class="app-workout-item-set-number">${set.set_number}</span>
+                    <span class="app-workout-item-set-info">⏱ ${label || '-'}</span>
+                </div>
+            `;
+        }).join('');
+        infoHtml = `<div class="app-workout-item-sets">${setsInfo}</div>`;
+    } else if (workoutTypeType === '시간' && duration) {
         infoHtml = `<div class="app-workout-item-duration-container"><span class="app-workout-item-duration">⏱ ${duration}</span></div>`;
     } else if (workoutTypeType === '세트' && sets.length > 0) {
         const setsInfo = sets.map(set => {

@@ -3685,6 +3685,24 @@ app.patch('/api/workout-records/reorder', async (req, res) => {
   }
 });
 
+app.patch('/api/workout-records/:id/superset', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { app_user_id, next_id } = req.body;
+    if (!app_user_id) {
+      return res.status(400).json({ message: '앱 유저 ID가 필요합니다.' });
+    }
+    if (app_user_id.startsWith('trainer-')) {
+      return res.status(403).json({ message: '트레이너 모드에서는 운동기록을 수정할 수 없습니다.' });
+    }
+    const record = await workoutRecordsDB.setSupersetLink(id, app_user_id, next_id || null);
+    res.json(record);
+  } catch (error) {
+    console.error('[API] 수퍼셋 설정 오류:', error);
+    res.status(400).json({ message: error.message || '수퍼셋 설정 중 오류가 발생했습니다.' });
+  }
+});
+
 // 운동기록 수정
 app.patch('/api/workout-records/:id', async (req, res) => {
     try {
