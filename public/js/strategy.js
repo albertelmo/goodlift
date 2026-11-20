@@ -1801,9 +1801,6 @@ async function showMetricEditModal(metric) {
         <div style="border-top:2px solid #ddd;padding-top:16px;margin-top:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <h4 style="margin:0;color:#1976d2;font-size:1rem;">매출 지표</h4>
-            ${isPTSpecialty ? `
-            <button type="button" id="metric-edit-load-sales-btn" class="header-text-btn" style="background:#e3f2fd !important;color:#1976d2 !important;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
-            ` : ''}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
@@ -1867,51 +1864,6 @@ async function showMetricEditModal(metric) {
         const ptSalesInput = document.getElementById('metric-edit-pt-sales');
         if (ptSalesInput) {
           ptSalesInput.value = this.value;
-        }
-      });
-    }
-    
-    // 매출 불러오기 버튼 이벤트
-    const loadSalesBtn = document.getElementById('metric-edit-load-sales-btn');
-    if (loadSalesBtn) {
-      loadSalesBtn.addEventListener('click', async function() {
-        const month = document.getElementById('metric-edit-month').value;
-        
-        if (!month) {
-          alert('연월 정보가 없습니다.');
-          return;
-        }
-        
-        const btn = this;
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = '불러오는 중...';
-        
-        try {
-          // YYYY-MM 형식으로 변환
-          const yearMonth = month.includes('-') ? month : `${month.substring(0, 4)}-${month.substring(4)}`;
-          
-          // 매출 API 호출
-          const response = await fetch(`/api/sales?yearMonth=${encodeURIComponent(yearMonth)}`);
-          if (!response.ok) {
-            throw new Error('매출 데이터를 불러오는데 실패했습니다.');
-          }
-          
-          const data = await response.json();
-          const totalSales = data.summary?.totalAmount || 0;
-          
-          // 전체 매출 필드에 값 입력 (동기화 로직에 의해 PT 매출에도 자동 반영됨)
-          if (totalSalesInput) {
-            totalSalesInput.value = totalSales;
-            // input 이벤트 트리거하여 동기화
-            totalSalesInput.dispatchEvent(new Event('input'));
-          }
-        } catch (error) {
-          console.error('매출 불러오기 오류:', error);
-          alert('매출 데이터를 불러오는 중 오류가 발생했습니다.');
-        } finally {
-          btn.disabled = false;
-          btn.textContent = originalText;
         }
       });
     }
@@ -2181,9 +2133,6 @@ async function showMetricAddModal() {
         <div style="border-top:2px solid #ddd;padding-top:16px;margin-top:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <h4 style="margin:0;color:#1976d2;font-size:1rem;">매출 지표</h4>
-            <div id="metric-add-load-sales-btn-wrapper" style="display:none;">
-              <button type="button" id="metric-add-load-sales-btn" style="background:#4caf50;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.85rem;white-space:nowrap;">불러오기</button>
-            </div>
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
             <div>
@@ -2231,7 +2180,6 @@ async function showMetricAddModal() {
     const ptTotalMembersWrapper = document.getElementById('metric-add-pt-total-members-wrapper');
     const ptSalesWrapper = document.getElementById('metric-add-pt-sales-wrapper');
     const membershipSalesWrapper = document.getElementById('metric-add-membership-sales-wrapper');
-    const loadSalesBtnWrapper = document.getElementById('metric-add-load-sales-btn-wrapper');
     
     if (membershipSection) {
       membershipSection.style.display = isPTSpecialty ? 'none' : 'block';
@@ -2244,9 +2192,6 @@ async function showMetricAddModal() {
     }
     if (membershipSalesWrapper) {
       membershipSalesWrapper.style.display = isPTSpecialty ? 'none' : 'block';
-    }
-    if (loadSalesBtnWrapper) {
-      loadSalesBtnWrapper.style.display = isPTSpecialty ? 'block' : 'none';
     }
     
     // PT 전문샵의 경우 전체 회원수/매출 변경 시 PT 전체 회원수/매출에도 동일 값 반영
@@ -2335,52 +2280,6 @@ async function showMetricAddModal() {
         } catch (error) {
           console.error('회원수 불러오기 오류:', error);
           alert('회원수 데이터를 불러오는 중 오류가 발생했습니다.');
-        } finally {
-          btn.disabled = false;
-          btn.textContent = originalText;
-        }
-      }
-    });
-    
-    // 매출 불러오기 버튼 이벤트 (이벤트 위임 사용)
-    metricAddModal.addEventListener('click', async function(e) {
-      if (e.target && e.target.id === 'metric-add-load-sales-btn') {
-        const center = document.getElementById('metric-add-center').value;
-        const month = document.getElementById('metric-add-month').value;
-        
-        if (!center || !month) {
-          alert('센터와 연월을 먼저 선택해주세요.');
-          return;
-        }
-        
-        const btn = e.target;
-        const originalText = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = '불러오는 중...';
-        
-        try {
-          // YYYY-MM 형식으로 변환
-          const yearMonth = month.includes('-') ? month : `${month.substring(0, 4)}-${month.substring(4)}`;
-          
-          // 매출 API 호출
-          const response = await fetch(`/api/sales?yearMonth=${encodeURIComponent(yearMonth)}`);
-          if (!response.ok) {
-            throw new Error('매출 데이터를 불러오는데 실패했습니다.');
-          }
-          
-          const data = await response.json();
-          const totalSales = data.summary?.totalAmount || 0;
-          
-          // 전체 매출 필드에 값 입력 (동기화 로직에 의해 PT 매출에도 자동 반영됨)
-          const totalSalesInput = document.getElementById('metric-add-total-sales');
-          if (totalSalesInput) {
-            totalSalesInput.value = totalSales;
-            // input 이벤트 트리거하여 동기화
-            totalSalesInput.dispatchEvent(new Event('input'));
-          }
-        } catch (error) {
-          console.error('매출 불러오기 오류:', error);
-          alert('매출 데이터를 불러오는 중 오류가 발생했습니다.');
         } finally {
           btn.disabled = false;
           btn.textContent = originalText;

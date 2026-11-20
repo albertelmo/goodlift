@@ -1,12 +1,34 @@
-// 매출 탭 (햄버거 메뉴용) - DB 매출 데이터 월별 조회/표시
+// 매출 탭 - DB 매출 데이터 월별 조회/표시
+// 매출2는 같은 화면을 쓰되 API와 상태만 분리한다.
+const stateByApi = new Map();
+
+function apiFor(root) {
+  return root?.dataset?.salesApi || '/api/sales';
+}
+
+function stateFor(root) {
+  const key = apiFor(root);
+  if (!stateByApi.has(key)) {
+    const now = new Date();
+    stateByApi.set(key, {
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      yearMonth: null
+    });
+  }
+  return stateByApi.get(key);
+}
+
 export const sales = {
-  render
+  render(root) {
+    render(root, { apiBase: '/api/sales', title: '💹 매출', ledgerName: '매출' });
+  }
 };
 
-let state = {
-  year: new Date().getFullYear(),
-  month: new Date().getMonth() + 1, // 1-12
-  yearMonth: null // 계산된 값 (YYYY-MM)
+export const sales2 = {
+  render(root) {
+    render(root, { apiBase: '/api/sales2', title: '💹 매출2', ledgerName: '매출2' });
+  }
 };
 
 function escapeHtml(str) {
@@ -91,15 +113,21 @@ function parseAmount(str) {
   return isNegative ? -num : num;
 }
 
-function getYearMonth() {
+function getYearMonth(state) {
   const monthStr = String(state.month).padStart(2, '0');
   return `${state.year}-${monthStr}`;
 }
 
-function render(root) {
+function render(root, options = {}) {
   if (!root) return;
-  
-  state.yearMonth = getYearMonth();
+  if (options.apiBase) root.dataset.salesApi = options.apiBase;
+  if (options.title) root.dataset.salesTitle = options.title;
+  if (options.ledgerName) root.dataset.salesLedgerName = options.ledgerName;
+
+  const state = stateFor(root);
+  const title = root.dataset.salesTitle || '💹 매출';
+  const ledgerName = root.dataset.salesLedgerName || '매출';
+  state.yearMonth = getYearMonth(state);
   
   // 사용자 역할 확인
   const userRole = localStorage.getItem('role');
@@ -109,7 +137,7 @@ function render(root) {
     <div style="padding:20px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;gap:10px;">
-          <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">💹 매출</h3>
+          <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">${title}</h3>
           <button id="sales-search-btn" style="background:#fff;color:#1976d2;border:1px solid #1976d2;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.85rem;font-weight:600;">🔍 검색</button>
         </div>
         <div style="display:flex;align-items:center;gap:10px;position:relative;">
@@ -304,7 +332,7 @@ function render(root) {
     uploadResult.style.color = '#1976d2';
 
     try {
-      const res = await fetch('/api/sales/upload-excel', {
+      const res = await fetch(`${apiFor(root)}/upload-excel`, {
         method: 'POST',
         body: formData
       });
@@ -340,12 +368,12 @@ function render(root) {
   // 전체 삭제 버튼 처리
   const clearAllBtn = root.querySelector('#sales-clear-all-btn');
   clearAllBtn.onclick = async () => {
-    if (!confirm('⚠️ 정말로 모든 매출 데이터를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.')) {
+    if (!confirm(`⚠️ 정말로 모든 ${ledgerName} 데이터를 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
       return;
     }
     
     // 한 번 더 확인
-    if (!confirm('⚠️ 최종 확인: 모든 매출 데이터가 영구적으로 삭제됩니다.\n\n정말 삭제하시겠습니까?')) {
+    if (!confirm(`⚠️ 최종 확인: 모든 ${ledgerName} 데이터가 영구적으로 삭제됩니다.\n\n정말 삭제하시겠습니까?`)) {
       return;
     }
 
@@ -355,7 +383,7 @@ function render(root) {
 
     try {
       const username = localStorage.getItem('username');
-      const res = await fetch('/api/sales/all', {
+      const res = await fetch(`${apiFor(root)}/all`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentUser: username })
@@ -423,7 +451,7 @@ async function loadMonthDetail(root, yearMonth) {
   detailEl.style.display = 'none';
 
   try {
-    const resp = await fetch(`/api/sales?yearMonth=${encodeURIComponent(yearMonth)}`);
+    const resp = await fetch(`${apiFor(root)}?yearMonth=${encodeURIComponent(yearMonth)}`);
     const data = await resp.json();
     const rows = (data && data.sales) ? data.sales : [];
     const summary = data.summary || {};
@@ -664,7 +692,7 @@ function openSalesSearchModal(root) {
     
     try {
       // API 호출
-      let url = '/api/sales';
+      let url = apiFor(root);
       const params = [];
       if (!isAll) {
         params.push(`startDate=${encodeURIComponent(startDate)}`);
@@ -1110,7 +1138,7 @@ function setupEditModal(root) {
     };
     
     try {
-      const res = await fetch(`/api/sales/${saleId}`, {
+      const res = await fetch(`${apiFor(root)}/${saleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1126,7 +1154,7 @@ function setupEditModal(root) {
           modal.style.display = 'none';
           modalBg.style.display = 'none';
           // 데이터 새로고침
-          loadMonthDetail(root, state.yearMonth);
+          loadMonthDetail(root, stateFor(root).yearMonth);
         }, 1000);
       } else {
         resultEl.style.color = '#dc3545';
@@ -1149,7 +1177,7 @@ function setupEditModal(root) {
     }
     
     try {
-      const res = await fetch(`/api/sales/${saleId}`, {
+      const res = await fetch(`${apiFor(root)}/${saleId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1165,7 +1193,7 @@ function setupEditModal(root) {
           modal.style.display = 'none';
           modalBg.style.display = 'none';
           // 데이터 새로고침
-          loadMonthDetail(root, state.yearMonth);
+          loadMonthDetail(root, stateFor(root).yearMonth);
         }, 1000);
       } else {
         resultEl.style.color = '#dc3545';
@@ -1266,7 +1294,7 @@ function setupAddModal(root) {
     };
     
     try {
-      const res = await fetch('/api/sales', {
+      const res = await fetch(apiFor(root), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -1286,7 +1314,7 @@ function setupAddModal(root) {
           form.reset();
           resultEl.textContent = '';
           // 데이터 새로고침
-          loadMonthDetail(root, state.yearMonth);
+          loadMonthDetail(root, stateFor(root).yearMonth);
         }, 1000);
       } else {
         resultEl.style.color = '#dc3545';

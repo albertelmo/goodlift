@@ -881,19 +881,25 @@ const deleteSalary = async (id) => {
 };
 
 // 데이터베이스 초기화
+function settlementTableName(tableName) {
+  if (tableName === 'settlements2') return 'settlements2';
+  return 'settlements';
+}
+
 // 정산 테이블 생성
-const createSettlementTable = async () => {
+const createSettlementTable = async (tableName = 'settlements') => {
+  const table = settlementTableName(tableName);
   try {
     const checkQuery = `
       SELECT table_name 
       FROM information_schema.tables 
-      WHERE table_schema = 'public' AND table_name = 'settlements'
+      WHERE table_schema = 'public' AND table_name = '${table}'
     `;
     const checkResult = await pool.query(checkQuery);
     
     if (checkResult.rows.length === 0) {
       const createQuery = `
-        CREATE TABLE settlements (
+        CREATE TABLE ${table} (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           month VARCHAR(7) NOT NULL UNIQUE,
           profit_amount INTEGER NOT NULL,
@@ -907,11 +913,11 @@ const createSettlementTable = async () => {
       
       // 인덱스 생성
       await pool.query(`
-        CREATE INDEX idx_settlements_month ON settlements(month)
+        CREATE INDEX idx_${table}_month ON ${table}(month)
       `);
       
-      console.log('[PostgreSQL] 정산 테이블이 생성되었습니다.');
-    } else {
+      console.log(`[PostgreSQL] ${table} 테이블이 생성되었습니다.`);
+    } else if (table === 'settlements') {
       // 기존 테이블에 컬럼 추가 (마이그레이션)
       await runMigration(
         'migrate_settlement_20250131',
@@ -1007,11 +1013,12 @@ const migrateSettlementTable = async () => {
 };
 
 // 정산 조회
-const getSettlements = async (filters = {}) => {
+const getSettlements = async (filters = {}, tableName = 'settlements') => {
+  const table = settlementTableName(tableName);
   try {
     let query = `
       SELECT id, month, profit_amount, settlement_amount, created_at, updated_at
-      FROM settlements
+      FROM ${table}
     `;
     const params = [];
     const conditions = [];
@@ -1044,10 +1051,11 @@ const getSettlements = async (filters = {}) => {
 };
 
 // 정산 추가
-const addSettlement = async (settlementData) => {
+const addSettlement = async (settlementData, tableName = 'settlements') => {
+  const table = settlementTableName(tableName);
   try {
     const query = `
-      INSERT INTO settlements (month, profit_amount, settlement_amount)
+      INSERT INTO ${table} (month, profit_amount, settlement_amount)
       VALUES ($1, $2, $3)
       RETURNING id, month, profit_amount, settlement_amount, created_at, updated_at
     `;
@@ -1076,7 +1084,8 @@ const addSettlement = async (settlementData) => {
 };
 
 // 정산 수정
-const updateSettlement = async (id, updates) => {
+const updateSettlement = async (id, updates, tableName = 'settlements') => {
+  const table = settlementTableName(tableName);
   try {
     const updateFields = [];
     const values = [];
@@ -1100,7 +1109,7 @@ const updateSettlement = async (id, updates) => {
     values.push(id);
     
     const query = `
-      UPDATE settlements
+      UPDATE ${table}
       SET ${updateFields.join(', ')}
       WHERE id = $${paramIndex}
       RETURNING id, month, profit_amount, settlement_amount, created_at, updated_at
@@ -1128,10 +1137,11 @@ const updateSettlement = async (id, updates) => {
 };
 
 // 정산 삭제
-const deleteSettlement = async (id) => {
+const deleteSettlement = async (id, tableName = 'settlements') => {
+  const table = settlementTableName(tableName);
   try {
     const query = `
-      DELETE FROM settlements
+      DELETE FROM ${table}
       WHERE id = $1
       RETURNING id
     `;
@@ -1148,11 +1158,12 @@ const deleteSettlement = async (id) => {
 };
 
 // 정산 ID로 조회
-const getSettlementById = async (id) => {
+const getSettlementById = async (id, tableName = 'settlements') => {
+  const table = settlementTableName(tableName);
   try {
     const query = `
       SELECT id, month, profit_amount, settlement_amount, created_at, updated_at
-      FROM settlements
+      FROM ${table}
       WHERE id = $1
     `;
     
@@ -1182,7 +1193,8 @@ const initializeDatabase = async () => {
     await createFixedExpenseTable();
     await createVariableExpenseTable();
     await createSalaryTable();
-    await createSettlementTable();
+    await createSettlementTable('settlements');
+    await createSettlementTable('settlements2');
   } catch (error) {
     console.error('[PostgreSQL] 장부 데이터베이스 초기화 오류:', error);
     throw error;

@@ -9,7 +9,7 @@ import { trainerWeekCalendar } from './trainerWeekCalendar.js';
 import { adminStats } from './adminStats.js';
 import { expense } from './expense.js';
 import { database } from './database.js';
-import { sales } from './sales.js';
+import { sales, sales2 } from './sales.js';
 import { strategy } from './strategy.js';
 import { ledger } from './ledger.js';
 import { trainerLedger } from './trainer-ledger.js';
@@ -639,7 +639,7 @@ const adminTabs = [
     { label: '🎯 상담', id: 'Trial', content: '<div id="trial-root"></div>' },
     { label: '🔄 재등록', id: 'Renew', content: '<div id="renew-root"></div>' },
     { label: '💵 매출', id: 'Sales', content: '<div id="sales-root"></div>' },
-    { label: '📈 전략', id: 'Strategy', content: '<div id="strategy-root"></div>' }
+    { label: '💵 매출2', id: 'Sales2', content: '<div id="sales2-root"></div>' }
 ];
 
 const adminHamburgerItems = [
@@ -647,6 +647,7 @@ const adminHamburgerItems = [
     { label: '👤 회원', id: 'Member', content: '<div class="member-container"><div class="member-mobile-tabs"><button class="member-tab-btn active" data-tab="list">📋 목록</button><button class="member-tab-btn" data-tab="search">🔍 검색</button><button class="member-tab-btn" data-tab="add">➕ 추가</button></div><div class="member-flex-wrap"><div id="member-search" class="member-tab-content"></div><div id="member-add" class="member-tab-content"></div><div id="member-list" class="member-tab-content active"></div></div></div>' },
     { label: '💰 지출', id: 'Expense', content: '<div id="expense-root"></div>' },
     { label: '📊 통계', id: 'Stat', content: '<div id="admin-stats-root"></div>' },
+    { label: '📈 전략', id: 'Strategy', content: '<div id="strategy-root"></div>' },
     { label: '💾 DB', id: 'Database', content: '<div id="database-root"></div>' },
     { label: '👥 트레이너', id: 'Trainer', content: '<div id="trainer-list-loading" style="text-align:center;padding:20px;color:#888;display:none;">불러오는 중...</div><div id="trainer-list"></div>' },
     { label: '📱 유저앱', id: 'UserApp', content: '<div id="user-app-root"></div>' },
@@ -665,7 +666,8 @@ const centerTabs = [
     { label: '📅 오늘', id: 'Today', content: '<div id="admin-day-calendar-root"></div>' },
     { label: '📆 주간', id: 'Week', content: '<div id="admin-week-calendar-root"></div>' },
     { label: '👤 회원', id: 'Member', content: '<div class="member-container"><div class="member-mobile-tabs"><button class="member-tab-btn active" data-tab="list">📋 목록</button><button class="member-tab-btn" data-tab="search">🔍 검색</button><button class="member-tab-btn" data-tab="add">➕ 추가</button></div><div class="member-flex-wrap"><div id="member-search" class="member-tab-content"></div><div id="member-add" class="member-tab-content"></div><div id="member-list" class="member-tab-content active"></div></div></div>' },
-    { label: '💹 매출', id: 'Sales', content: '<div id="sales-root"></div>' }
+    { label: '💹 매출', id: 'Sales', content: '<div id="sales-root"></div>' },
+    { label: '💹 매출2', id: 'Sales2', content: '<div id="sales2-root"></div>' }
 ];
 
 const centerHamburgerItems = [
@@ -943,6 +945,8 @@ function renderTabContent(tabId, tabContent) {
         database.render(tabContent.querySelector('#database-root') || tabContent);
     } else if (tabId === 'Sales') {
         sales.render(tabContent.querySelector('#sales-root') || tabContent);
+    } else if (tabId === 'Sales2') {
+        sales2.render(tabContent.querySelector('#sales2-root') || tabContent);
     } else if (tabId === 'Trainer') {
         trainer.loadList();
     } else if (tabId === 'Web') {

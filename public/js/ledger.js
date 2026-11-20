@@ -299,6 +299,17 @@ async function render(container) {
           <div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터를 불러오는 중...</div>
         </div>
       </div>
+
+      <!-- 월별 정산2 섹션 -->
+      <div id="ledger-settlement2-section" style="background:#fff;border:1px solid #e0e0e0;border-radius:6px;padding:12px;margin-top:16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <h4 id="ledger-settlement2-title" style="margin:0;color:#1976d2;font-size:0.95rem;font-weight:600;">월별 정산2</h4>
+          <button id="ledger-settlement2-add-btn" style="background:#4caf50;color:#fff;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:0.75rem;">추가</button>
+        </div>
+        <div id="ledger-settlement2-list" style="min-height:60px;">
+          <div style="text-align:center;padding:20px;color:#999;font-size:0.75rem;">데이터를 불러오는 중...</div>
+        </div>
+      </div>
       
       ${isSU ? `
       <!-- 트레이너 선택 UI (SU만 표시) -->
@@ -389,6 +400,10 @@ function setupEventListeners(container) {
   document.getElementById('ledger-settlement-add-btn').addEventListener('click', () => {
     showSettlementAddModal();
   });
+
+  document.getElementById('ledger-settlement2-add-btn').addEventListener('click', () => {
+    showSettlementAddModal('/api/settlements2');
+  });
   
   // 이전월 지출 불러오기 버튼
   document.getElementById('ledger-copy-prev-month-btn').addEventListener('click', async () => {
@@ -421,7 +436,7 @@ async function loadLedgerData() {
     const endDate = `${year}-${month}-${lastDay}T23:59:59`;
     
     // 고정지출, 변동지출, 급여, 식대, 구매, 개인지출, 지표(매출), 정산 데이터 가져오기
-    const [fixedResponse, variableResponse, salaryResponse, expensesResponse, metricsResponse, settlementResponse, allSettlementsResponse, trainerExpenseSummary] = await Promise.all([
+    const [fixedResponse, variableResponse, salaryResponse, expensesResponse, metricsResponse, settlementResponse, allSettlementsResponse, trainerExpenseSummary, settlement2Response, allSettlements2Response] = await Promise.all([
       fetch(`/api/fixed-expenses?month=${yearMonth}`),
       fetch(`/api/variable-expenses?month=${yearMonth}`),
       fetch(`/api/salaries?month=${yearMonth}`),
@@ -429,7 +444,9 @@ async function loadLedgerData() {
       fetch(`/api/metrics?month=${yearMonth}`),
       fetch(`/api/settlements?month=${yearMonth}`),
       fetch(`/api/settlements`), // 모든 정산 데이터 (누적 계산용)
-      fetchTrainerExpenseSummaryForMonth(yearMonth)
+      fetchTrainerExpenseSummaryForMonth(yearMonth),
+      fetch(`/api/settlements2?month=${yearMonth}`),
+      fetch(`/api/settlements2`)
     ]);
     
     const fixedExpenses = fixedResponse.ok ? await fixedResponse.json() : [];
@@ -440,6 +457,8 @@ async function loadLedgerData() {
     const metrics = metricsResponse.ok ? await metricsResponse.json() : [];
     const settlements = settlementResponse.ok ? await settlementResponse.json() : [];
     const allSettlements = allSettlementsResponse.ok ? await allSettlementsResponse.json() : [];
+    const settlements2 = settlement2Response.ok ? await settlement2Response.json() : [];
+    const allSettlements2 = allSettlements2Response.ok ? await allSettlements2Response.json() : [];
     
     // 센터별로 그룹화
     const fixedByCenter = {};
@@ -480,6 +499,12 @@ async function loadLedgerData() {
     
     // 월별 정산 렌더링
     renderSettlements(settlements, allSettlements);
+    renderSettlements(settlements2, allSettlements2, {
+      title: '월별 정산2',
+      listId: 'ledger-settlement2-list',
+      titleId: 'ledger-settlement2-title',
+      api: '/api/settlements2'
+    });
     
     // 고정지출 렌더링
     renderFixedExpenses(fixedByCenter, centerOrder);
@@ -705,8 +730,12 @@ async function renderYearlyProfit(currentYearMonth, centerOrder) {
 }
 
 // 정산 렌더링
-function renderSettlements(settlements, allSettlements = []) {
-  const listEl = document.getElementById('ledger-settlement-list');
+function renderSettlements(settlements, allSettlements = [], options = {}) {
+  const listId = options.listId || 'ledger-settlement-list';
+  const titleId = options.titleId || 'ledger-settlement-title';
+  const sectionTitle = options.title || '월별 정산';
+  const api = options.api || '/api/settlements';
+  const listEl = document.getElementById(listId);
   if (!listEl) return;
   
   // 누적 손익액과 누적 정산액 계산
@@ -715,11 +744,11 @@ function renderSettlements(settlements, allSettlements = []) {
   const difference = cumulativeProfit - cumulativeSettlement;
   
   // 제목 업데이트
-  const titleEl = document.getElementById('ledger-settlement-title');
+  const titleEl = document.getElementById(titleId);
   if (titleEl) {
     const differenceFormatted = difference < 0 ? `-${formatNumber(Math.abs(difference))}` : formatNumber(difference);
     const differenceColor = difference < 0 ? '#d32f2f' : '#1976d2';
-    titleEl.innerHTML = `월별 정산 <span style="color:#666;font-size:0.75rem;font-weight:normal;">(누적 손익액 ${formatSignedAmount(cumulativeProfit)}원 - 누적 정산액 ${formatSignedAmount(cumulativeSettlement)}원 = <span style="color:${differenceColor};">${differenceFormatted}원</span>)</span>`;
+    titleEl.innerHTML = `${sectionTitle} <span style="color:#666;font-size:0.75rem;font-weight:normal;">(누적 손익액 ${formatSignedAmount(cumulativeProfit)}원 - 누적 정산액 ${formatSignedAmount(cumulativeSettlement)}원 = <span style="color:${differenceColor};">${differenceFormatted}원</span>)</span>`;
   }
   
   if (settlements.length === 0) {
@@ -753,12 +782,12 @@ function renderSettlements(settlements, allSettlements = []) {
   `;
   
   // 이벤트 리스너 설정 - 행 클릭 시 수정 모달 열기
-  document.querySelectorAll('.ledger-settlement-row').forEach(row => {
+  listEl.querySelectorAll('.ledger-settlement-row').forEach(row => {
     row.addEventListener('click', async () => {
       const settlementId = row.getAttribute('data-settlement-id');
       const settlementData = settlements.find(s => s.id === settlementId);
       if (settlementData) {
-        showSettlementEditModal(settlementData);
+        showSettlementEditModal(settlementData, api);
       }
     });
   });
@@ -1904,13 +1933,14 @@ function closeSalaryEditModal() {
 }
 
 // 정산 추가 모달
-function showSettlementAddModal() {
+function showSettlementAddModal(api = '/api/settlements') {
   const yearMonth = getSelectedYearMonth();
+  const modalTitle = api === '/api/settlements2' ? '정산2 추가' : '정산 추가';
   const modalHTML = `
     <div class="ledger-settlement-add-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
     <div class="ledger-settlement-add-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;width:min(95vw,500px);box-sizing:border-box;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">정산 추가</h3>
+        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">${modalTitle}</h3>
         <button id="ledger-settlement-add-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
       
@@ -1975,7 +2005,7 @@ function showSettlementAddModal() {
         settlementAmount: parseSettlementAmount(settlementAmount)
       };
       
-      const response = await fetch('/api/settlements', {
+      const response = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settlement)
@@ -2005,12 +2035,13 @@ function closeSettlementAddModal() {
 }
 
 // 정산 수정 모달
-function showSettlementEditModal(settlement) {
+function showSettlementEditModal(settlement, api = '/api/settlements') {
+  const modalTitle = api === '/api/settlements2' ? '정산2 수정' : '정산 수정';
   const modalHTML = `
     <div class="ledger-settlement-edit-modal-overlay" style="position:fixed;z-index:1000;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.25);"></div>
     <div class="ledger-settlement-edit-modal" style="position:fixed;z-index:1001;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:24px;border-radius:14px;box-shadow:0 8px 32px #1976d240;width:min(95vw,500px);box-sizing:border-box;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">정산 수정</h3>
+        <h3 style="margin:0;color:#1976d2;font-size:1.2rem;">${modalTitle}</h3>
         <button id="ledger-settlement-edit-modal-close" style="background:none;border:none;font-size:24px;cursor:pointer;color:#666;width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:background-color 0.2s;" onmouseover="this.style.backgroundColor='#f0f0f0'" onmouseout="this.style.backgroundColor='transparent'">×</button>
       </div>
       
@@ -2059,7 +2090,7 @@ function showSettlementEditModal(settlement) {
     if (!confirm('정산을 삭제하시겠습니까?')) return;
     
     try {
-      const response = await fetch(`/api/settlements/${settlement.id}`, {
+      const response = await fetch(`${api}/${settlement.id}`, {
         method: 'DELETE'
       });
       
@@ -2097,7 +2128,7 @@ function showSettlementEditModal(settlement) {
         settlementAmount: parseSettlementAmount(settlementAmount)
       };
       
-      const response = await fetch(`/api/settlements/${settlement.id}`, {
+      const response = await fetch(`${api}/${settlement.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates)
